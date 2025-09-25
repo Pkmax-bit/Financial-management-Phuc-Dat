@@ -83,12 +83,12 @@ export default function RegisterPage() {
             <User className="h-6 w-6 text-blue-600" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
+            Tạo tài khoản mới
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
+            Hoặc{' '}
             <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
-              sign in to your existing account
+              đăng nhập vào tài khoản hiện có
             </Link>
           </p>
         </div>
@@ -119,7 +119,7 @@ export default function RegisterPage() {
           <div className="space-y-4">
             <div>
               <label htmlFor="full_name" className="block text-sm font-medium text-gray-700">
-                Full Name
+                Họ và tên
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -134,14 +134,14 @@ export default function RegisterPage() {
                   value={formData.full_name}
                   onChange={handleInputChange}
                   className="appearance-none relative block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Enter your full name"
+                  placeholder="Nhập họ và tên của bạn"
                 />
               </div>
             </div>
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
+                Địa chỉ email
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -156,14 +156,14 @@ export default function RegisterPage() {
                   value={formData.email}
                   onChange={handleInputChange}
                   className="appearance-none relative block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Enter your email"
+                  placeholder="Nhập email của bạn"
                 />
               </div>
             </div>
 
             <div>
               <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                Role
+                Vai trò
               </label>
               <select
                 id="role"
@@ -172,16 +172,16 @@ export default function RegisterPage() {
                 onChange={handleInputChange}
                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
               >
-                <option value="employee">Employee</option>
-                <option value="manager">Manager</option>
-                <option value="viewer">Viewer</option>
-                <option value="admin">Admin</option>
+                <option value="employee">Nhân viên</option>
+                <option value="manager">Quản lý</option>
+                <option value="viewer">Xem</option>
+                <option value="admin">Quản trị</option>
               </select>
             </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
+                Mật khẩu
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -196,7 +196,7 @@ export default function RegisterPage() {
                   value={formData.password}
                   onChange={handleInputChange}
                   className="appearance-none relative block w-full pl-10 pr-10 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Enter your password"
+                  placeholder="Nhập mật khẩu của bạn"
                 />
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                   <button
@@ -216,7 +216,7 @@ export default function RegisterPage() {
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
+                Xác nhận mật khẩu
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -231,7 +231,7 @@ export default function RegisterPage() {
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
                   className="appearance-none relative block w-full pl-10 pr-10 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Confirm your password"
+                  placeholder="Xác nhận mật khẩu của bạn"
                 />
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                   <button
@@ -259,23 +259,23 @@ export default function RegisterPage() {
               {loading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Creating account...
+                  Đang tạo tài khoản...
                 </div>
               ) : (
-                'Create account'
+                'Tạo tài khoản'
               )}
             </button>
           </div>
 
           <div className="text-center">
             <p className="text-xs text-gray-500">
-              By creating an account, you agree to our{' '}
+              Bằng cách tạo tài khoản, bạn đồng ý với{' '}
               <Link href="/terms" className="text-blue-600 hover:text-blue-500">
-                Terms of Service
+                Điều khoản dịch vụ
               </Link>{' '}
-              and{' '}
+              và{' '}
               <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
-                Privacy Policy
+                Chính sách bảo mật
               </Link>
             </p>
           </div>
