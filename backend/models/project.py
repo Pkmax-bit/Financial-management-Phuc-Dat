@@ -1,0 +1,64 @@
+"""
+Project model definitions
+"""
+
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime, date
+from enum import Enum
+
+class ProjectStatus(str, Enum):
+    PLANNING = "planning"
+    ACTIVE = "active"
+    ON_HOLD = "on_hold"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+class ProjectPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
+
+class Project(BaseModel):
+    """Project model"""
+    id: str
+    project_code: str
+    name: str
+    description: Optional[str] = None
+    customer_id: str
+    manager_id: str
+    start_date: date
+    end_date: Optional[date] = None
+    budget: Optional[float] = None
+    status: ProjectStatus = ProjectStatus.PLANNING
+    priority: ProjectPriority = ProjectPriority.MEDIUM
+    progress: float = 0.0  # 0-100
+    created_at: datetime
+    updated_at: datetime
+
+class ProjectCreate(BaseModel):
+    """Project creation model"""
+    project_code: str
+    name: str
+    description: Optional[str] = None
+    customer_id: str
+    manager_id: str
+    start_date: date
+    end_date: Optional[date] = None
+    budget: Optional[float] = None
+    priority: ProjectPriority = ProjectPriority.MEDIUM
+
+class ProjectUpdate(BaseModel):
+    """Project update model"""
+    project_code: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    customer_id: Optional[str] = None
+    manager_id: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    budget: Optional[float] = None
+    status: Optional[ProjectStatus] = None
+    priority: Optional[ProjectPriority] = None
+    progress: Optional[float] = None
