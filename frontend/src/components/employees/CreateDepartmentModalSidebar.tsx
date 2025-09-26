@@ -31,6 +31,26 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
     budget: ''
   })
 
+  // Auto-generate simple code (3 digits only)
+  const generateCode = (name: string) => {
+    if (!name.trim()) return ''
+    
+    // Generate simple 3-digit code
+    return String(Math.floor(Math.random() * 900) + 100)
+  }
+
+  // Auto-fill code when name changes (simple 3-digit code)
+  const handleNameInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.value
+    const generatedCode = generateCode(name)
+    
+    setFormData(prev => ({
+      ...prev,
+      name: name,
+      code: generatedCode
+    }))
+  }
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -159,12 +179,15 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                onChange={handleNameInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black font-medium"
                 placeholder="Nhập tên phòng ban..."
                 required
                 disabled={submitting}
               />
+              <p className="text-xs text-gray-700 mt-1 font-medium">
+                Mã phòng ban sẽ được tạo tự động: <span className="text-green-600 font-bold">{formData.code || '...'}</span>
+              </p>
             </div>
 
             {/* Department Code */}
@@ -176,8 +199,8 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
               <input
                 type="text"
                 value={formData.code}
-                onChange={(e) => handleInputChange('code', e.target.value.toUpperCase())}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                onChange={(e) => handleInputChange('code', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black font-medium"
                 placeholder="VD: IT, HR, SALES..."
                 required
                 disabled={submitting}

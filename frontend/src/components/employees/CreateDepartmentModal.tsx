@@ -29,6 +29,26 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
     budget: ''
   })
 
+  // Auto-generate simple code (3 digits only)
+  const generateCode = (name: string) => {
+    if (!name.trim()) return ''
+    
+    // Generate simple 3-digit code
+    return String(Math.floor(Math.random() * 900) + 100)
+  }
+
+  // Auto-fill code when name changes (simple 3-digit code)
+  const handleNameInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.value
+    const generatedCode = generateCode(name)
+    
+    setFormData(prev => ({
+      ...prev,
+      name: name,
+      code: generatedCode
+    }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -127,12 +147,15 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              onChange={handleNameInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black font-medium"
               placeholder="Ví dụ: Phòng Nhân sự"
               required
               disabled={submitting}
             />
+            <p className="text-xs text-gray-700 mt-1 font-medium">
+              Mã phòng ban sẽ được tạo tự động: <span className="text-green-600 font-bold">{formData.code || '...'}</span>
+            </p>
           </div>
 
           <div>
@@ -143,9 +166,9 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
             <input
               type="text"
               value={formData.code}
-              onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              placeholder="Ví dụ: HR, IT, SALES"
+              onChange={(e) => setFormData({...formData, code: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black font-medium"
+              placeholder="Ví dụ: 123, 456, 789"
               required
               disabled={submitting}
             />

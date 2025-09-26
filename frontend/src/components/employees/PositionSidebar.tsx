@@ -37,6 +37,50 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
     salary_range_max: ''
   })
 
+  // Auto-generate position code
+  const generatePositionCode = async (positionName: string, departmentId: string) => {
+    if (!positionName.trim() || !departmentId) return ''
+
+    try {
+      // Get department info
+      const department = departments.find(dept => dept.id === departmentId)
+      if (!department) return ''
+
+      // Create base code from department and position
+      const deptCode = department.name
+        .replace(/[^A-Za-z]/g, '') // Remove non-letters
+        .substring(0, 3)
+        .toUpperCase()
+
+      const posCode = positionName
+        .replace(/[^A-Za-z]/g, '') // Remove non-letters
+        .substring(0, 3)
+        .toUpperCase()
+
+      // Check existing codes to avoid duplicates
+      const { data: existingPositions } = await supabase
+        .from('positions')
+        .select('code')
+        .like('code', `${deptCode}${posCode}%`)
+
+      const existingCodes = existingPositions?.map(p => p.code) || []
+      
+      // Find next available number
+      let counter = 1
+      let newCode = `${deptCode}${posCode}${counter.toString().padStart(3, '0')}`
+      
+      while (existingCodes.includes(newCode)) {
+        counter++
+        newCode = `${deptCode}${posCode}${counter.toString().padStart(3, '0')}`
+      }
+
+      return newCode
+    } catch (error) {
+      console.error('Error generating position code:', error)
+      return ''
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
       fetchDepartments()
@@ -67,13 +111,14 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
       return
     }
 
-    if (!formData.code.trim()) {
-      setError('Vui lòng nhập mã chức vụ')
-      return
-    }
 
     if (!formData.department_id) {
       setError('Vui lòng chọn phòng ban')
+      return
+    }
+
+    if (!formData.code) {
+      setError('Mã chức vụ chưa được tạo. Vui lòng kiểm tra lại thông tin.')
       return
     }
 
@@ -102,11 +147,16 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
         is_active: true
       }
 
+      console.log('Creating position with data:', positionData)
+      
       const { error } = await supabase
         .from('positions')
         .insert([positionData])
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
       
       alert('Chức vụ đã được tạo thành công!')
       
@@ -130,6 +180,35 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
       salary_range_max: ''
     })
     setError(null)
+  }
+
+  // Auto-generate code when name or department changes
+  const handleNameChange = async (name: string) => {
+    setFormData(prev => ({ ...prev, name }))
+    
+    if (name.trim() && formData.department_id) {
+      const generatedCode = await generatePositionCode(name, formData.department_id)
+      if (generatedCode) {
+        setFormData(prev => ({ ...prev, code: generatedCode }))
+      }
+    } else {
+      // Clear code if not enough info
+      setFormData(prev => ({ ...prev, code: '' }))
+    }
+  }
+
+  const handleDepartmentChange = async (departmentId: string) => {
+    setFormData(prev => ({ ...prev, department_id: departmentId }))
+    
+    if (departmentId && formData.name.trim()) {
+      const generatedCode = await generatePositionCode(formData.name, departmentId)
+      if (generatedCode) {
+        setFormData(prev => ({ ...prev, code: generatedCode }))
+      }
+    } else {
+      // Clear code if not enough info
+      setFormData(prev => ({ ...prev, code: '' }))
+    }
   }
 
   const handleClose = () => {
@@ -175,33 +254,44 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
                   <Briefcase className="h-4 w-4 inline mr-1" />
                   Tên chức vụ *
                 </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="Ví dụ: Nhân viên Marketing"
-                  required
-                  disabled={submitting}
-                />
+                 <input
+                   type="text"
+                   value={formData.name}
+                   onChange={(e) => handleNameChange(e.target.value)}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                   placeholder="Ví dụ: Nhân viên Marketing"
+                   required
+                   disabled={submitting}
+                 />
               </div>
 
-              {/* Position Code */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Hash className="h-4 w-4 inline mr-1" />
-                  Mã chức vụ *
-                </label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  placeholder="Ví dụ: MKT001, DEV001"
-                  required
-                  disabled={submitting}
-                />
-              </div>
+              {/* Auto-generated Position Code Display */}
+              {formData.code ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <div className="flex items-center">
+                    <Hash className="h-4 w-4 text-blue-600 mr-2" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Mã chức vụ tự động</p>
+                      <p className="text-lg font-bold text-blue-800">{formData.code}</p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        💡 Mã được tạo tự động từ tên chức vụ và phòng ban
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                  <div className="flex items-center">
+                    <Hash className="h-4 w-4 text-gray-400 mr-2" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Mã chức vụ</p>
+                      <p className="text-sm text-gray-500">
+                        📝 Mã sẽ được tạo tự động khi bạn nhập tên chức vụ và chọn phòng ban
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Department */}
               <div>
@@ -209,13 +299,13 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
                   <Building2 className="h-4 w-4 inline mr-1" />
                   Phòng ban *
                 </label>
-                <select
-                  value={formData.department_id}
-                  onChange={(e) => setFormData({...formData, department_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  required
-                  disabled={submitting}
-                >
+                 <select
+                   value={formData.department_id}
+                   onChange={(e) => handleDepartmentChange(e.target.value)}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                   required
+                   disabled={submitting}
+                 >
                   <option value="">Chọn phòng ban</option>
                   {departments.map((dept) => (
                     <option key={dept.id} value={dept.id}>

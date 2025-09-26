@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { 
   Users, 
   Plus, 
-  Search,
+  Search, 
   Edit, 
   Trash2, 
   Eye,
@@ -103,7 +103,7 @@ export default function EmployeesPage() {
         }
         
         console.log('User data loaded successfully:', userData.email)
-        setUser(userData)
+          setUser(userData)
         
         // Store session info for API calls
         setSession(session)
@@ -370,11 +370,11 @@ export default function EmployeesPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
-        <Navigation user={user || undefined} onLogout={handleLogout} />
+    <div className="min-h-screen bg-gray-50">
+      <Navigation user={user || undefined} onLogout={handleLogout} />
 
         {/* Main content */}
-        <div className="pl-64">
+      <div className="pl-64">
         {/* Top navigation */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
@@ -487,14 +487,14 @@ export default function EmployeesPage() {
             >
               <Building2 className="h-4 w-4 mr-2" />
               Quản lý phòng ban
-            </button>
+                </button>
             <button
               onClick={() => setShowPositionManagerSidebar(true)}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
             >
               <Briefcase className="h-4 w-4 mr-2" />
               Quản lý chức vụ
-            </button>
+                </button>
                   <button 
                   onClick={() => setShowCreateModal(true)}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -769,18 +769,18 @@ export default function EmployeesPage() {
                   </p>
                   {employees.length === 0 && (
                     <div className="mt-6">
-                      <button
+                <button
                         onClick={() => setShowCreateModal(true)}
                         className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Thêm nhân viên đầu tiên
-                      </button>
-                        </div>
-                )}
+                </button>
               </div>
+                )}
+                </div>
               )}
-            </div>
+                  </div>
             
             {/* Summary */}
             <div className="flex justify-between items-center text-sm text-gray-600 px-6 py-4 border-t border-gray-200">
@@ -788,10 +788,10 @@ export default function EmployeesPage() {
               <span>
                 Tổng lương: {formatCurrency(filteredEmployees.reduce((sum, e) => sum + (e.salary || 0), 0))}
               </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Modals */}
       {showCreateModal && (
@@ -870,7 +870,7 @@ export default function EmployeesPage() {
           onClose={() => setShowPositionManagerSidebar(false)}
         />
       )}
-      </div>
+    </div>
     </ProtectedRoute>
   )
 }

@@ -32,7 +32,10 @@ CREATE TABLE users (
 CREATE TABLE departments (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
+    budget DECIMAL(15,2),
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -40,9 +43,13 @@ CREATE TABLE departments (
 -- Positions table
 CREATE TABLE positions (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
     department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
+    salary_range_min DECIMAL(12,2),
+    salary_range_max DECIMAL(12,2),
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
