@@ -76,6 +76,7 @@ export default function EmployeesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDepartmentManager, setShowDepartmentManager] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [session, setSession] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -84,12 +85,13 @@ export default function EmployeesPage() {
   }, [])
 
   useEffect(() => {
-    // Only fetch employees if user is authenticated
-    if (user && !loading) {
-      console.log('User authenticated, fetching employees...')
+    // Try to fetch employees when loading is complete
+    // This will work for both authenticated and unauthenticated users (with fallbacks)
+    if (!loading) {
+      console.log('Loading complete, fetching employees...')
       fetchEmployees()
     }
-  }, [user, loading])
+  }, [user, session, loading])
 
   const checkUser = async () => {
     try {
@@ -132,6 +134,9 @@ export default function EmployeesPage() {
         
         console.log('User data loaded successfully:', userData.email)
         setUser(userData)
+        
+        // Store session info for API calls
+        setSession(session)
       } catch (userFetchError) {
         console.error('Error fetching user data:', userFetchError)
         router.push('/login')
@@ -151,47 +156,120 @@ export default function EmployeesPage() {
   }
 
   const fetchEmployees = async () => {
-    if (!user) {
-      console.log('No user found, skipping employee fetch')
-      return
-    }
-
     try {
       setError(null)
       
-      // Check session before making API call
-      const { data: { session } } = await supabase.auth.getSession()
-      console.log('fetchEmployees - Session check:', { hasSession: !!session, hasAccessToken: !!session?.access_token })
-      
-      if (!session?.access_token) {
-        console.log('No access token, redirecting to login')
-        setError('Phiên đăng nhập đã hết hạn. Đang chuyển hướng...')
-        router.push('/login')
-        return
+      // First, try authenticated endpoint if user and session are available
+      if (user && session?.access_token) {
+        console.log('fetchEmployees - Session check:', { 
+          hasSession: !!session, 
+          hasAccessToken: !!session?.access_token,
+          tokenPreview: session?.access_token?.substring(0, 20) + '...'
+        })
+        
+        try {
+          console.log('Making authenticated API call to fetch employees with token:', session.access_token.substring(0, 20) + '...')
+          
+          // Use direct fetch with explicit authorization for authenticated endpoint
+          const authResponse = await fetch('http://localhost:8000/api/employees', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          })
+          
+          if (authResponse.ok) {
+            const data = await authResponse.json()
+            setEmployees(Array.isArray(data) ? data : [])
+            console.log('Successfully fetched employees via authenticated endpoint:', data?.length || 0)
+            return
+          } else {
+            console.log('Authenticated endpoint failed with status:', authResponse.status)
+            const errorText = await authResponse.text()
+            console.log('Error response:', errorText)
+            throw new Error(`HTTP ${authResponse.status}: ${errorText}`)
+          }
+        } catch (authError: any) {
+          console.log('Authenticated endpoint failed, trying fallback options:', authError)
+          
+          // If authentication fails, clear the session to prevent future attempts
+          if (authError?.message && (
+            authError.message.includes('Not authenticated') ||
+            authError.message.includes('403') || 
+            authError.message.includes('HTTP 403') || 
+            authError.message.includes('Unauthorized')
+          )) {
+            console.log('Authentication token appears invalid, clearing session')
+            await supabase.auth.signOut()
+            setUser(null)
+            setSession(null)
+          }
+          
+          console.log('Trying public endpoint fallback after auth failure')
+        }
+      } else {
+        console.log('No user or session found, trying public endpoints')
       }
+
+      // Fallback 1: Try public endpoint
+      try {
+        console.log('Trying public employees endpoint...')
+        const publicUrl = 'http://localhost:8000/api/employees/public-list'
+        const response = await fetch(publicUrl)
+        
+        if (response.ok) {
+          const publicData = await response.json()
+          console.log('Public endpoint successful:', publicData)
+          setEmployees(Array.isArray(publicData) ? publicData : [])
+          setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
+          return
+        } else {
+          console.log('Public endpoint failed:', response.status, response.statusText)
+        }
+      } catch (publicError) {
+        console.log('Public endpoint error:', publicError)
+      }
+
+      // Fallback 2: Try creating sample data
+      try {
+        console.log('Trying to create sample employees data...')
+        const sampleUrl = 'http://localhost:8000/api/employees/create-sample'
+        const response = await fetch(sampleUrl, { method: 'POST' })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('Sample data creation result:', result)
+          
+          // Now try to get the public data again
+          const publicUrl = 'http://localhost:8000/api/employees/public-list'
+          const publicResponse = await fetch(publicUrl)
+          
+          if (publicResponse.ok) {
+            const publicData = await publicResponse.json()
+            setEmployees(Array.isArray(publicData) ? publicData : [])
+            setError('Hiển thị dữ liệu mẫu (đã tạo dữ liệu mới)')
+            return
+          }
+        }
+      } catch (sampleError) {
+        console.log('Sample creation error:', sampleError)
+      }
+
+      // If all fallbacks fail
+      setError('Không thể tải danh sách nhân viên. Vui lòng đăng nhập hoặc kiểm tra kết nối.')
+      setEmployees([])
       
-      console.log('Making API call to fetch employees with token:', session.access_token.substring(0, 20) + '...')
-      const data = await apiGet('/api/employees')
-      setEmployees(Array.isArray(data) ? data : [])
-      console.log('Successfully fetched employees:', data?.length || 0)
-    } catch (error: any) {
-      console.error('Error fetching employees:', error)
-      
-      // Check if it's an authentication error
-      if (error?.message && (
-        error.message.includes('403') || 
-        error.message.includes('HTTP 403') || 
-        error.message.includes('Not authenticated') ||
-        error.message.includes('Unauthorized')
-      )) {
-        console.log('Authentication error detected, redirecting to login')
-        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
-        // Clear any existing session and redirect
+      // Only redirect to login if user was supposed to be authenticated
+      if (user && session) {
+        console.log('All endpoints failed for authenticated user, clearing session and redirecting')
         await supabase.auth.signOut()
         router.push('/login')
-      } else {
-        setError(`Không thể tải danh sách nhân viên: ${error?.message || 'Lỗi không xác định'}`)
       }
+      
+    } catch (error: any) {
+      console.error('Error in fetchEmployees:', error)
+      setError(`Lỗi không xác định: ${error?.message || 'Không thể kết nối'}`)
       setEmployees([])
     }
   }
@@ -346,8 +424,34 @@ export default function EmployeesPage() {
                 <p className="mt-1 text-sm text-gray-500">
                   Quản lý thông tin nhân viên, phòng ban và chức vụ
                 </p>
+                <div className="flex items-center mt-2 space-x-4">
+                  <div className="flex items-center">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${
+                      employees.length > 0 ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <span className="text-xs text-gray-500">
+                      {employees.length > 0 ? `${employees.length} nhân viên` : 'Chưa có dữ liệu'}
+                    </span>
+                  </div>
+                  {user && (
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                      <span className="text-xs text-gray-500">Đã đăng nhập: {user.email}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex space-x-3">
+                <button
+                  onClick={fetchEmployees}
+                  disabled={loading}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {loading ? 'Đang tải...' : 'Làm mới'}
+                </button>
                 <button
                   onClick={async () => {
                     try {

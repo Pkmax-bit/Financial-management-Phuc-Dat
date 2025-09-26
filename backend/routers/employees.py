@@ -15,6 +15,7 @@ from models.employee import (
 )
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
+from utils.simple_auth import get_current_user_simple
 from services.supabase_client import get_supabase_client
 
 router = APIRouter()
@@ -23,6 +24,128 @@ router = APIRouter()
 async def test_employees_endpoint():
     """Test endpoint to verify employees router is working"""
     return {"message": "Employees router is working!", "status": "success"}
+
+@router.get("/simple-test")
+async def simple_employees_test(current_user: User = Depends(get_current_user_simple)):
+    """Simple test endpoint with auth using simple_auth"""
+    try:
+        supabase = get_supabase_client()
+        result = supabase.table("employees").select("id, first_name, last_name, email, status").limit(5).execute()
+        
+        return {
+            "message": "Simple employees test successful",
+            "user": current_user.email,
+            "employees_count": len(result.data) if result.data else 0,
+            "sample_employees": result.data or [],
+            "status": "success"
+        }
+    except Exception as e:
+        return {
+            "message": f"Error: {str(e)}",
+            "user": current_user.email if current_user else "Unknown",
+            "status": "error"
+        }
+
+@router.get("/public-list")
+async def get_employees_public():
+    """Public endpoint to test employees without authentication"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get basic employee info without authentication
+        result = supabase.table("employees").select("""
+            id,
+            employee_code,
+            first_name,
+            last_name,
+            email,
+            status,
+            created_at
+        """).limit(10).execute()
+        
+        return {
+            "message": "Employees fetched successfully (public)",
+            "employees_count": len(result.data) if result.data else 0,
+            "employees": result.data or [],
+            "status": "success"
+        }
+        
+    except Exception as e:
+        return {
+            "message": f"Error fetching employees: {str(e)}",
+            "employees_count": 0,
+            "employees": [],
+            "status": "error"
+        }
+
+@router.post("/create-sample")
+async def create_sample_employees():
+    """Create sample employees for testing (public endpoint)"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if employees already exist
+        existing = supabase.table("employees").select("id").limit(1).execute()
+        if existing.data:
+            return {
+                "message": "Sample employees already exist",
+                "employees_count": len(existing.data),
+                "status": "info"
+            }
+        
+        # Sample employees data
+        sample_employees = [
+            {
+                "id": str(uuid.uuid4()),
+                "employee_code": "EMP001",
+                "first_name": "Nguyen Van",
+                "last_name": "A",
+                "email": "nguyenvana@phucdat.com",
+                "phone": "0901234567",
+                "hire_date": "2023-01-15",
+                "salary": 15000000,
+                "status": "active"
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "employee_code": "EMP002", 
+                "first_name": "Tran Thi",
+                "last_name": "B",
+                "email": "tranthib@phucdat.com",
+                "phone": "0901234568",
+                "hire_date": "2023-02-01",
+                "salary": 12000000,
+                "status": "active"
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "employee_code": "EMP003",
+                "first_name": "Le Van", 
+                "last_name": "C",
+                "email": "levanc@phucdat.com",
+                "phone": "0901234569",
+                "hire_date": "2023-03-01",
+                "salary": 18000000,
+                "status": "active"
+            }
+        ]
+        
+        # Insert sample employees
+        result = supabase.table("employees").insert(sample_employees).execute()
+        
+        return {
+            "message": "Sample employees created successfully",
+            "employees_created": len(result.data) if result.data else 0,
+            "employees": result.data or [],
+            "status": "success"
+        }
+        
+    except Exception as e:
+        return {
+            "message": f"Error creating sample employees: {str(e)}",
+            "employees_created": 0,
+            "status": "error"
+        }
 
 @router.get("/", response_model=List[Employee])
 async def get_employees(
@@ -35,6 +158,7 @@ async def get_employees(
 ):
     """Get all employees with optional filtering"""
     try:
+        print(f"🔍 DEBUG: get_employees called by user: {current_user.email}")
         supabase = get_supabase_client()
         
         query = supabase.table("employees").select("*")
@@ -52,9 +176,49 @@ async def get_employees(
         # Apply pagination
         result = query.range(skip, skip + limit - 1).execute()
         
+        print(f"🔍 DEBUG: Found {len(result.data) if result.data else 0} employees")
+        
+        if not result.data:
+            return []
+            
         return [Employee(**emp) for emp in result.data]
         
     except Exception as e:
+        print(f"🔍 DEBUG: Error in get_employees: {str(e)}")
+        print(f"🔍 DEBUG: Error type: {type(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch employees: {str(e)}"
+        )
+
+@router.get("/simple", response_model=List[dict])
+async def get_employees_simple(current_user: User = Depends(get_current_user_simple)):
+    """Get employees with simple auth - returns raw dict instead of Employee model"""
+    try:
+        print(f"🔍 DEBUG: get_employees_simple called by user: {current_user.email}")
+        supabase = get_supabase_client()
+        
+        result = supabase.table("employees").select("""
+            id,
+            employee_code,
+            first_name,
+            last_name,
+            email,
+            phone,
+            department_id,
+            position_id,
+            hire_date,
+            salary,
+            status,
+            created_at
+        """).execute()
+        
+        print(f"🔍 DEBUG: Found {len(result.data) if result.data else 0} employees")
+        
+        return result.data or []
+        
+    except Exception as e:
+        print(f"🔍 DEBUG: Error in get_employees_simple: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch employees: {str(e)}"

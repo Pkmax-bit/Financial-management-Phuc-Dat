@@ -50,10 +50,11 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard
+from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(auth_test.router, prefix="/api", tags=["Auth Test"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(employees.router, prefix="/api/employees", tags=["Employees"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])

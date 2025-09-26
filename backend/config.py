@@ -38,6 +38,9 @@ class Settings:
     ALGORITHM = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     
+    # Supabase JWT Configuration
+    SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "DIiyyRJCCJrFc2FnmaKroTnzZh2I2JqouXOdhSdqu58SkZ3PTGYkpZFN9WrmP7hGfZbXgD4EdkEoatekEIrX0A==")
+    
     # Application Settings
     DEBUG = os.getenv("DEBUG", "True").lower() == "true"
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")

@@ -55,21 +55,31 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
     """Get current authenticated user using Supabase token"""
     try:
-        supabase = get_supabase_client()
         token = credentials.credentials
+        print(f"🔍 DEBUG: Received token: {token[:50]}...")
         
-        # Verify JWT token directly using PyJWT
+        # Use anon client to verify JWT tokens from frontend
+        from services.supabase_client import get_supabase_anon_client
+        supabase = get_supabase_anon_client()
+        
         try:
-            # Decode the JWT token (Supabase uses RS256 algorithm with their public key)
-            # For now, let's try to decode without verification to get the payload
-            import jwt
+            # Get the user from Supabase using the JWT token
+            user_response = supabase.auth.get_user(token)
             
-            # First, let's try to decode the token without verification to see the structure
-            payload = jwt.decode(token, options={"verify_signature": False})
+            print(f"🔍 DEBUG: Supabase user response type: {type(user_response)}")
+            print(f"🔍 DEBUG: Supabase user response: {user_response}")
             
-            # Extract user information from the token
-            user_id = payload.get("sub")  # Supabase uses 'sub' for user ID
-            email = payload.get("email")
+            if not user_response or not hasattr(user_response, 'user') or not user_response.user:
+                print("🔍 DEBUG: No user found in Supabase response")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token"
+                )
+            
+            user_id = user_response.user.id
+            email = user_response.user.email
+            
+            print(f"🔍 DEBUG: Extracted user_id: {user_id}, email: {email}")
             
             if not user_id or not email:
                 raise HTTPException(
@@ -77,35 +87,26 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                     detail="Invalid token payload"
                 )
             
-            # Additional verification: check if token is expired
-            exp = payload.get("exp")
-            if exp:
-                import time
-                current_time = int(time.time())
-                if current_time > exp:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Token has expired"
-                    )
-            
-        except jwt.DecodeError:
+        except HTTPException:
+            raise
+        except Exception as auth_error:
+            print(f"🔍 DEBUG: Supabase auth error: {str(auth_error)}")
+            print(f"🔍 DEBUG: Auth error type: {type(auth_error)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token format"
+                detail=f"Token verification failed: {str(auth_error)}"
             )
-        except Exception as decode_error:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Token verification failed: {str(decode_error)}"
-            )
+        
+        # Use service client for database operations
+        supabase = get_supabase_client()
         
         # Get user profile from our users table
         result = supabase.table("users").select("*").eq("id", user_id).execute()
         
         if not result.data:
             # Create user profile if it doesn't exist
-            user_metadata = payload.get("user_metadata", {})
-            app_metadata = payload.get("app_metadata", {})
+            user_metadata = user_response.user.user_metadata or {}
+            app_metadata = user_response.user.app_metadata or {}
             
             user_data = {
                 "id": user_id,
@@ -198,3 +199,56 @@ def require_manager_or_admin(current_user: User = Depends(get_current_user)) -> 
             detail="Requires manager or admin role"
         )
     return current_user
+
+def require_role_permission(required_permission: str):
+    """Decorator to require specific permission based on role"""
+    def permission_checker(current_user: User = Depends(get_current_user)) -> User:
+        role_permissions = {
+            "admin": ["read", "write", "delete", "approve", "manage_users", "system_config"],
+            "manager": ["read", "write", "approve", "manage_team"],
+            "employee": ["read", "write_own", "submit"],
+            "viewer": ["read"]
+        }
+        
+        user_permissions = role_permissions.get(current_user.role, [])
+        
+        if required_permission not in user_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requires {required_permission} permission"
+            )
+        return current_user
+    return permission_checker
+
+def can_access_entity(entity_type: str, entity_id: str):
+    """Check if user can access specific entity based on business rules"""
+    def access_checker(current_user: User = Depends(get_current_user)) -> User:
+        # Admin can access everything
+        if current_user.role == "admin":
+            return current_user
+            
+        # Add entity-specific access logic here
+        # For example: employees can only access their own expenses
+        if entity_type == "expense":
+            # Check if expense belongs to current user
+            from services.supabase_client import get_supabase_client
+            supabase = get_supabase_client()
+            
+            # Get employee record for current user
+            employee_result = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
+            if not employee_result.data:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employee record not found")
+            
+            employee_id = employee_result.data[0]["id"]
+            
+            # Check if expense belongs to this employee
+            expense_result = supabase.table("expenses").select("employee_id").eq("id", entity_id).execute()
+            if not expense_result.data:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+                
+            if expense_result.data[0]["employee_id"] != employee_id:
+                if current_user.role not in ["manager", "admin"]:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        
+        return current_user
+    return access_checker
