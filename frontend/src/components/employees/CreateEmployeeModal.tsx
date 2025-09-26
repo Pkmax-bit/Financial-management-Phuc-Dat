@@ -6,36 +6,25 @@ import {
   User, 
   Mail, 
   Phone, 
-  Calendar,
-  DollarSign,
-  Building2,
-  Briefcase,
-  
   UserPlus,
   Eye,
-  EyeOff
+  EyeOff,
+  Building2,
+  Briefcase
 } from 'lucide-react'
-import { apiGet, apiPost } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 interface Department {
   id: string
   name: string
-  description?: string
+  code: string
 }
 
 interface Position {
   id: string
-  title: string
-  description?: string
+  name: string
+  code: string
   department_id?: string
-}
-
-interface Employee {
-  id: string
-  first_name: string
-  last_name: string
-  full_name: string
-  email: string
 }
 
 interface CreateEmployeeModalProps {
@@ -47,13 +36,12 @@ interface CreateEmployeeModalProps {
 export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: CreateEmployeeModalProps) {
   const [departments, setDepartments] = useState<Department[]>([])
   const [positions, setPositions] = useState<Position[]>([])
-  const [managers, setManagers] = useState<Employee[]>([])
   const [filteredPositions, setFilteredPositions] = useState<Position[]>([])
-  const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Form data
+  // Form data - simplified
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -61,9 +49,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
     phone: '',
     department_id: '',
     position_id: '',
-    hire_date: new Date().toISOString().split('T')[0],
-    salary: '',
-    manager_id: '',
+    hire_date: new Date().toISOString().split('T')[0], // Add hire_date
     password: '123456' // Default password
   })
 
@@ -71,7 +57,6 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
     if (isOpen) {
       fetchDepartments()
       fetchPositions()
-      fetchManagers()
     }
   }, [isOpen])
 
@@ -92,8 +77,14 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
 
   const fetchDepartments = async () => {
     try {
-      const data = await apiGet('/api/employees/departments/')
-      setDepartments(data)
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      setDepartments(data || [])
     } catch (error) {
       console.error('Error fetching departments:', error)
     }
@@ -101,37 +92,102 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
 
   const fetchPositions = async () => {
     try {
-      const data = await apiGet('/api/employees/positions/')
-      setPositions(data)
-      setFilteredPositions(data)
+      const { data, error } = await supabase
+        .from('positions')
+        .select('id, name, code, department_id')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      setPositions(data || [])
+      setFilteredPositions(data || [])
     } catch (error) {
       console.error('Error fetching positions:', error)
     }
   }
 
-  const fetchManagers = async () => {
-    try {
-      const data = await apiGet('/api/employees/')
-      // Filter only active employees who can be managers
-      const activeEmployees = data.filter((emp: unknown) => (emp as { status: string }).status === 'active')
-      setManagers(activeEmployees)
-    } catch (error) {
-      console.error('Error fetching managers:', error)
-    }
+  // Generate employee code
+  const generateEmployeeCode = () => {
+    const timestamp = Date.now().toString().slice(-6) // Last 6 digits of timestamp
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+    return `EMP${timestamp}${random}`
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
     
-    if (!formData.first_name || !formData.last_name || !formData.email || !formData.hire_date) {
-      alert('Vui lòng điền đầy đủ thông tin bắt buộc')
+    if (!formData.first_name || !formData.last_name || !formData.email) {
+      setError('Vui lòng điền đầy đủ thông tin bắt buộc')
+      return
+    }
+
+    if (!formData.hire_date) {
+      setError('Ngày vào làm là bắt buộc')
+      return
+    }
+
+    if (formData.password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự')
       return
     }
 
     try {
       setSubmitting(true)
 
+      // Create user account using signup
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: undefined // Skip email confirmation for now
+        }
+      })
+
+      if (authError) throw authError
+
+      if (!authData.user) {
+        throw new Error('Không thể tạo tài khoản người dùng')
+      }
+
+      console.log('User created successfully:', authData.user.id)
+      console.log('User email:', authData.user.email)
+
+      // Check if user exists in users table, create if not
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (userError || !userData) {
+        console.log('User not found in users table, creating user record...')
+        
+        // Create user record in users table
+        const { error: createUserError } = await supabase
+          .from('users')
+          .insert([{
+            id: authData.user.id,
+            email: authData.user.email,
+            full_name: `${formData.first_name} ${formData.last_name}`,
+            role: 'employee',
+            is_active: true
+          }])
+
+        if (createUserError) {
+          console.error('Error creating user record:', createUserError)
+          throw new Error('Không thể tạo bản ghi người dùng trong hệ thống')
+        }
+
+        console.log('User record created successfully')
+      } else {
+        console.log('User verified in users table:', userData.id)
+      }
+
+      // Create employee record
       const employeeData = {
+        user_id: authData.user.id,
+        employee_code: generateEmployeeCode(),
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email,
@@ -139,22 +195,46 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
         department_id: formData.department_id || null,
         position_id: formData.position_id || null,
         hire_date: formData.hire_date,
-        salary: formData.salary ? parseFloat(formData.salary) : null,
-        manager_id: formData.manager_id || null,
-        password: formData.password
+        status: 'active'
       }
 
-      await apiPost('/api/employees/', employeeData)
+      console.log('Creating employee with data:', employeeData)
+      console.log('User ID:', authData.user.id)
+      console.log('Employee code:', employeeData.employee_code)
+
+      const { error: employeeError } = await supabase
+        .from('employees')
+        .insert([employeeData])
+
+      if (employeeError) throw employeeError
       
       // Show success message with password info
-      alert(`Nhân viên đã được tạo thành công!\n\nThông tin đăng nhập:\nEmail: ${formData.email}\nMật khẩu mặc định: ${formData.password}\n\nVui lòng thông báo cho nhân viên thay đổi mật khẩu sau lần đăng nhập đầu tiên.`)
+      alert(`Nhân viên đã được tạo thành công!\n\nThông tin nhân viên:\nMã nhân viên: ${employeeData.employee_code}\nEmail: ${formData.email}\nMật khẩu mặc định: ${formData.password}\n\nVui lòng thông báo cho nhân viên thay đổi mật khẩu sau lần đăng nhập đầu tiên.`)
       
       onSuccess()
       onClose()
       resetForm()
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error creating employee:', error)
-      alert('Có lỗi xảy ra khi tạo nhân viên: ' + ((error as Error).message || 'Unknown error'))
+      
+      // Handle specific error cases
+      if (error.message?.includes('User already registered')) {
+        setError('Email này đã được sử dụng. Vui lòng chọn email khác.')
+      } else if (error.message?.includes('Invalid email')) {
+        setError('Email không hợp lệ. Vui lòng kiểm tra lại.')
+      } else if (error.message?.includes('Password should be at least')) {
+        setError('Mật khẩu phải có ít nhất 6 ký tự.')
+      } else if (error.message?.includes('employee_code')) {
+        setError('Có lỗi xảy ra khi tạo mã nhân viên. Vui lòng thử lại.')
+      } else if (error.message?.includes('not-null constraint')) {
+        setError('Thiếu thông tin bắt buộc. Vui lòng kiểm tra lại form.')
+      } else if (error.message?.includes('foreign key constraint')) {
+        setError('Có lỗi xảy ra với dữ liệu liên kết. Vui lòng thử lại.')
+      } else if (error.message?.includes('user_id_fkey')) {
+        setError('Tài khoản người dùng chưa được tạo đúng cách. Vui lòng thử lại.')
+      } else {
+        setError(error.message || 'Có lỗi xảy ra khi tạo nhân viên')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -169,22 +249,24 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
       department_id: '',
       position_id: '',
       hire_date: new Date().toISOString().split('T')[0],
-      salary: '',
-      manager_id: '',
       password: '123456'
     })
+    setError(null)
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
+    <div className="fixed top-16 right-4 z-50 w-full max-w-2xl">
       <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Tạo nhân viên mới</h2>
+        <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Tạo nhân viên mới</h2>
+            <p className="text-sm font-semibold text-gray-700">Thêm nhân viên vào hệ thống</p>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
             disabled={submitting}
           >
             <X className="h-6 w-6" />
@@ -192,62 +274,77 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3">
+              <p className="text-sm text-red-800 font-semibold">{error}</p>
+            </div>
+          )}
+
           {/* Basic Information */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Thông tin cơ bản</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin cơ bản</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <User className="h-4 w-4 inline mr-1" />
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  <User className="h-4 w-4 inline mr-2 text-blue-600" />
                   Họ *
                 </label>
                 <input
                   type="text"
                   value={formData.first_name}
                   onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                  placeholder="Nhập họ..."
                   required
+                  disabled={submitting}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <User className="h-4 w-4 inline mr-1" />
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  <User className="h-4 w-4 inline mr-2 text-blue-600" />
                   Tên *
                 </label>
                 <input
                   type="text"
                   value={formData.last_name}
                   onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                  placeholder="Nhập tên..."
                   required
+                  disabled={submitting}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Mail className="h-4 w-4 inline mr-1" />
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  <Mail className="h-4 w-4 inline mr-2 text-green-600" />
                   Email *
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 font-semibold placeholder-gray-500"
+                  placeholder="Nhập email..."
                   required
+                  disabled={submitting}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Phone className="h-4 w-4 inline mr-1" />
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  <Phone className="h-4 w-4 inline mr-2 text-purple-600" />
                   Số điện thoại
                 </label>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 font-semibold placeholder-gray-500"
+                  placeholder="Nhập số điện thoại..."
+                  disabled={submitting}
                 />
               </div>
             </div>
@@ -255,106 +352,95 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
 
           {/* Work Information */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Thông tin công việc</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin công việc</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Building2 className="h-4 w-4 inline mr-1" />
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  <Building2 className="h-4 w-4 inline mr-2 text-blue-600" />
                   Phòng ban
                 </label>
                 <select
                   value={formData.department_id}
                   onChange={(e) => setFormData({...formData, department_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold"
+                  disabled={submitting}
                 >
                   <option value="">Chọn phòng ban</option>
                   {departments.map((dept) => (
                     <option key={dept.id} value={dept.id}>
-                      {dept.name}
+                      {dept.name} ({dept.code})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Briefcase className="h-4 w-4 inline mr-1" />
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  <Briefcase className="h-4 w-4 inline mr-2 text-green-600" />
                   Chức vụ
                 </label>
                 <select
                   value={formData.position_id}
                   onChange={(e) => setFormData({...formData, position_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  disabled={!formData.department_id}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 font-semibold"
+                  disabled={!formData.department_id || submitting}
                 >
                   <option value="">Chọn chức vụ</option>
                   {filteredPositions.map((pos) => (
                     <option key={pos.id} value={pos.id}>
-                      {pos.title}
+                      {pos.name} ({pos.code})
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Calendar className="h-4 w-4 inline mr-1" />
-                  Ngày vào làm *
-                </label>
+              {/* Hidden hire_date field */}
+              <div className="hidden">
                 <input
                   type="date"
                   value={formData.hire_date}
                   onChange={(e) => setFormData({...formData, hire_date: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  required
                 />
               </div>
+            </div>
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <DollarSign className="h-4 w-4 inline mr-1" />
-                  Mức lương (VND)
-                </label>
-                <input
-                  type="number"
-                  value={formData.salary}
-                  onChange={(e) => setFormData({...formData, salary: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  min="0"
-                  step="100000"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <User className="h-4 w-4 inline mr-1" />
-                  Quản lý trực tiếp
-                </label>
-                <select
-                  value={formData.manager_id}
-                  onChange={(e) => setFormData({...formData, manager_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                >
-                  <option value="">Chọn quản lý</option>
-                  {managers.map((manager) => (
-                    <option key={manager.id} value={manager.id}>
-                      {manager.full_name} ({manager.email})
-                    </option>
-                  ))}
-                </select>
+          {/* Employee Code Display */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Mã nhân viên</h3>
+            <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start">
+                <User className="h-5 w-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-gray-900">
+                    Mã nhân viên sẽ được tạo tự động khi tạo tài khoản.
+                  </p>
+                  <p className="text-xs text-gray-700 mt-1 font-medium">
+                    Mã nhân viên: <span className="text-green-600 font-bold">{generateEmployeeCode()}</span>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Login Information */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Thông tin đăng nhập</h3>
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <p className="text-sm text-blue-800">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin đăng nhập</h3>
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start">
+                <Mail className="h-5 w-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-gray-900">
                     Tài khoản đăng nhập sẽ được tạo tự động với email và mật khẩu mặc định.
+                  </p>
+                  <p className="text-xs text-gray-700 mt-1 font-medium">
                     Nhân viên nên thay đổi mật khẩu sau lần đăng nhập đầu tiên.
+                  </p>
+                  <p className="text-xs text-orange-600 mt-1 font-medium">
+                    ⚠️ Mật khẩu phải có ít nhất 6 ký tự.
+                  </p>
+                  <p className="text-xs text-green-600 mt-1 font-medium">
+                    ✅ Hệ thống sẽ tự động tạo bản ghi người dùng và nhân viên.
                   </p>
                 </div>
               </div>
@@ -362,19 +448,19 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Email đăng nhập
                 </label>
                 <input
                   type="text"
                   value={formData.email}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-900 font-semibold"
                   disabled
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
                   Mật khẩu mặc định
                 </label>
                 <div className="relative">
@@ -382,12 +468,16 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                     type={showPassword ? "text" : "password"}
                     value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 pr-12 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold"
+                    minLength={6}
+                    placeholder="Nhập mật khẩu (ít nhất 6 ký tự)..."
+                    disabled={submitting}
                   />
                   <button
                     type="button"
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={submitting}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4 text-gray-400" />
@@ -401,18 +491,18 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+          <div className="flex justify-end space-x-4 pt-6 border-t-2 border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-6 py-3 text-sm font-semibold text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
               disabled={submitting}
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+              className="inline-flex items-center px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 border border-transparent rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
               disabled={submitting}
             >
               <UserPlus className="h-4 w-4 mr-2" />

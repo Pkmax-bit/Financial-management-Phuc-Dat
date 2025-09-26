@@ -147,6 +147,48 @@ async def create_sample_employees():
             "status": "error"
         }
 
+@router.get("/public-departments")
+async def get_departments_public():
+    """Public endpoint to get departments without authentication"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("departments").select("*").execute()
+        
+        return {
+            "message": "Departments fetched successfully",
+            "departments": result.data or [],
+            "status": "success"
+        }
+        
+    except Exception as e:
+        return {
+            "message": f"Error fetching departments: {str(e)}",
+            "departments": [],
+            "status": "error"
+        }
+
+@router.get("/public-positions")
+async def get_positions_public():
+    """Public endpoint to get positions without authentication"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("positions").select("*").execute()
+        
+        return {
+            "message": "Positions fetched successfully",
+            "positions": result.data or [],
+            "status": "success"
+        }
+        
+    except Exception as e:
+        return {
+            "message": f"Error fetching positions: {str(e)}",
+            "positions": [],
+            "status": "error"
+        }
+
 @router.get("/", response_model=List[Employee])
 async def get_employees(
     skip: int = Query(0, ge=0),
