@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export default function DebugSessionPage() {
-  const [sessionInfo, setSessionInfo] = useState<any>(null)
+  const [sessionInfo, setSessionInfo] = useState<unknown>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
@@ -34,7 +34,7 @@ export default function DebugSessionPage() {
       })
     } catch (err) {
       setSessionInfo({
-        error: err instanceof Error ? err.message : 'Unknown error'
+        error: err instanceof Error ? (err as Error).message : 'Unknown error'
       })
     } finally {
       setLoading(false)
@@ -62,7 +62,7 @@ export default function DebugSessionPage() {
   }
 
   const testAuthEndpoint = async () => {
-    if (!sessionInfo?.session?.access_token_preview) {
+    if (!(sessionInfo as { session?: { access_token_preview?: string } })?.session?.access_token_preview) {
       alert('No access token available')
       return
     }

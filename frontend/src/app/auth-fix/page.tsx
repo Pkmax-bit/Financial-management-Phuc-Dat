@@ -23,13 +23,13 @@ export default function AuthFixPage() {
         }
       })
 
-      if (signUpError && !signUpError.message.includes('already registered')) {
+      if (signUpError && !(signUpError as Error).message.includes('already registered')) {
         throw signUpError
       }
 
       setResult(`✅ User created or already exists: ${signUpData.user?.email || 'admin@phucdat.com'}`)
-    } catch (error: any) {
-      setResult(`❌ Error creating user: ${error.message}`)
+    } catch (error: unknown) {
+      setResult(`❌ Error creating user: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -45,8 +45,8 @@ export default function AuthFixPage() {
       if (error) throw error
 
       setResult(`✅ Login successful: ${data.user?.email}, Token: ${data.session?.access_token?.substring(0, 30)}...`)
-    } catch (error: any) {
-      setResult(`❌ Login error: ${error.message}`)
+    } catch (error: unknown) {
+      setResult(`❌ Login error: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -68,36 +68,36 @@ export default function AuthFixPage() {
       try {
         const tokenInfo = await apiGet('/api/auth-test/token-info')
         setResult(prev => prev + `\n\n✅ Token Info: ${JSON.stringify(tokenInfo, null, 2)}`)
-      } catch (error: any) {
-        setResult(prev => prev + `\n\n❌ Token Info Error: ${error.message}`)
+      } catch (error: unknown) {
+        setResult(prev => prev + `\n\n❌ Token Info Error: ${(error as Error).message}`)
       }
       
       // Test simple auth endpoint
       try {
         const simpleAuth = await apiGet('/api/auth-test/simple-auth')
         setResult(prev => prev + `\n\n✅ Simple Auth: ${JSON.stringify(simpleAuth, null, 2)}`)
-      } catch (error: any) {
-        setResult(prev => prev + `\n\n❌ Simple Auth Error: ${error.message}`)
+      } catch (error: unknown) {
+        setResult(prev => prev + `\n\n❌ Simple Auth Error: ${(error as Error).message}`)
       }
       
       // Test employees simple endpoint
       try {
         const employeesSimple = await apiGet('/api/employees/simple-test')
         setResult(prev => prev + `\n\n✅ Employees Simple: ${JSON.stringify(employeesSimple, null, 2)}`)
-      } catch (error: any) {
-        setResult(prev => prev + `\n\n❌ Employees Simple Error: ${error.message}`)
+      } catch (error: unknown) {
+        setResult(prev => prev + `\n\n❌ Employees Simple Error: ${(error as Error).message}`)
       }
       
       // Test employees original endpoint
       try {
         const employees = await apiGet('/api/employees')
         setResult(prev => prev + `\n\n✅ Employees API: ${Array.isArray(employees) ? `Found ${employees.length} employees` : JSON.stringify(employees)}`)
-      } catch (error: any) {
-        setResult(prev => prev + `\n\n❌ Employees API Error: ${error.message}`)
+      } catch (error: unknown) {
+        setResult(prev => prev + `\n\n❌ Employees API Error: ${(error as Error).message}`)
       }
       
-    } catch (error: any) {
-      setResult(prev => prev + `\n\n❌ API Test Error: ${error.message}`)
+    } catch (error: unknown) {
+      setResult(prev => prev + `\n\n❌ API Test Error: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -113,8 +113,8 @@ export default function AuthFixPage() {
       
       setResult(prev => prev + `\n\n✅ Public Employees: ${JSON.stringify(data, null, 2)}`)
       
-    } catch (error: any) {
-      setResult(prev => prev + `\n\n❌ Public Employees Error: ${error.message}`)
+    } catch (error: unknown) {
+      setResult(prev => prev + `\n\n❌ Public Employees Error: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -130,8 +130,8 @@ export default function AuthFixPage() {
 - User: ${user ? user.email : 'None'}  
 - Access Token: ${session?.access_token ? 'Present' : 'Missing'}
 - Token Preview: ${session?.access_token?.substring(0, 50)}...`)
-    } catch (error: any) {
-      setResult(`❌ Auth check error: ${error.message}`)
+    } catch (error: unknown) {
+      setResult(`❌ Auth check error: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -176,8 +176,8 @@ export default function AuthFixPage() {
         
         setResult(`✅ User created in database: ${JSON.stringify(newUser, null, 2)}`)
       }
-    } catch (error: any) {
-      setResult(`❌ Database error: ${error.message}`)
+    } catch (error: unknown) {
+      setResult(`❌ Database error: ${(error as Error).message}`)
     }
     setLoading(false)
   }

@@ -53,7 +53,7 @@ export default function RegisterPage() {
       })
 
       if (error) {
-        setError(error.message)
+        setError((error as Error).message)
       } else if (data.user) {
         setSuccess('Registration successful! Please check your email to verify your account.')
         // Optionally redirect to login page

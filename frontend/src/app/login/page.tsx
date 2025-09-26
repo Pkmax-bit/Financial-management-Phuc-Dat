@@ -28,7 +28,7 @@ export default function LoginPage() {
       })
 
       if (error) {
-        setError(error.message)
+        setError((error as Error).message)
       } else if (data.user) {
         // Redirect to dashboard
         router.push('/dashboard')

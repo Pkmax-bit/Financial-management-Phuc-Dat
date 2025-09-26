@@ -32,7 +32,7 @@ interface Bill {
   total_amount: number
   currency: string
   status: 'draft' | 'sent' | 'received' | 'approved' | 'paid' | 'overdue' | 'cancelled'
-  items: any[]
+  items: unknown[]
   notes?: string
   payment_terms?: string
   received_at?: string
@@ -89,16 +89,21 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
           id,
           bill_number,
           vendor_id,
-          project_id,
           issue_date,
           due_date,
-          amount,
+          subtotal,
+          tax_rate,
+          tax_amount,
+          total_amount,
           currency,
           status,
-          paid_amount,
-          paid_date,
-          description,
-          receipt_url,
+          items,
+          notes,
+          payment_terms,
+          received_at,
+          approved_at,
+          paid_at,
+          created_by,
           created_at,
           updated_at
         `)

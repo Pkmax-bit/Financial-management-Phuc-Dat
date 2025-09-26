@@ -32,7 +32,7 @@ interface Quote {
   total_amount: number
   currency: string
   status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'closed'
-  items: any[]
+  items: unknown[]
   notes?: string
   terms_and_conditions?: string
   sent_at?: string

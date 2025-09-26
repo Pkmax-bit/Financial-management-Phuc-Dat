@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -40,7 +40,7 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
-  const [salesStats, setSalesStats] = useState<any>({})
+  const [salesStats, setSalesStats] = useState<unknown>({})
   const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
   const router = useRouter()
 
@@ -146,22 +146,22 @@ export default function SalesPage() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'draft':
-        return 'Nháp'
+        return 'NhÃ¡p'
       case 'sent':
-        return 'Đã gửi'
+        return 'ÄÃ£ gá»­i'
       case 'approved':
-        return 'Đã duyệt'
+        return 'ÄÃ£ duyá»‡t'
       case 'rejected':
-        return 'Từ chối'
+        return 'Tá»« chá»‘i'
       default:
         return status
     }
   }
 
   // Extract stats from API response
-  const revenue = salesStats.revenue || {}
-  const invoicesStats = salesStats.invoices || {}
-  const quotesStats = salesStats.quotes || {}
+  const revenue = (salesStats as Record<string, unknown>).revenue || {}
+  const invoicesStats = (salesStats as Record<string, unknown>).invoices || {}
+  const quotesStats = (salesStats as Record<string, unknown>).quotes || {}
 
   if (loading) {
     return (
@@ -194,14 +194,14 @@ export default function SalesPage() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Sales Center</h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Trung tâm chỉ huy cho toàn bộ quy trình tạo ra doanh thu - từ báo giá đến thu tiền
+                  Trung tÃ¢m chá»‰ huy cho toÃ n bá»™ quy trÃ¬nh táº¡o ra doanh thu - tá»« bÃ¡o giÃ¡ Ä‘áº¿n thu tiá»n
                 </p>
               </div>
               {activeTab !== 'overview' && (
                 <div className="flex space-x-3">
                   <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                     <Download className="h-4 w-4 mr-2" />
-                    Xuất Excel
+                    Xuáº¥t Excel
                   </button>
                   {(activeTab === 'quotes' || activeTab === 'all-sales') && (
                     <button 
@@ -209,7 +209,7 @@ export default function SalesPage() {
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Tạo báo giá
+                      Táº¡o bÃ¡o giÃ¡
                     </button>
                   )}
                   {(activeTab === 'invoices' || activeTab === 'all-sales') && (
@@ -218,7 +218,7 @@ export default function SalesPage() {
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Tạo hóa đơn
+                      Táº¡o hÃ³a Ä‘Æ¡n
                     </button>
                   )}
                   {activeTab === 'customers' && (
@@ -227,7 +227,7 @@ export default function SalesPage() {
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Thêm khách hàng
+                      ThÃªm khÃ¡ch hÃ ng
                     </button>
                   )}
                   {activeTab === 'products' && (
@@ -236,7 +236,7 @@ export default function SalesPage() {
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Thêm sản phẩm
+                      ThÃªm sáº£n pháº©m
                     </button>
                   )}
                 </div>
@@ -253,12 +253,12 @@ export default function SalesPage() {
                     <FileText className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Tổng báo giá</p>
+                    <p className="text-sm font-medium text-gray-600">Tá»•ng bÃ¡o giÃ¡</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {quotesStats.total || 0}
+                      {(quotesStats as Record<string, unknown>).total as number || 0}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {String(Object.values(quotesStats.by_status || {}).reduce((a: any, b: any) => a + b, 0))} báo giá
+                      {String(Object.values((quotesStats as Record<string, unknown>).by_status || {}).reduce((a: unknown, b: unknown) => (a as number) + (b as number), 0))} bÃ¡o giÃ¡
                     </p>
                   </div>
                 </div>
@@ -270,11 +270,11 @@ export default function SalesPage() {
                     <Receipt className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Tổng doanh thu</p>
+                    <p className="text-sm font-medium text-gray-600">Tá»•ng doanh thu</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(revenue.total || 0)}
+                      {formatCurrency((revenue as Record<string, unknown>).total as number || 0)}
                     </p>
-                    <p className="text-sm text-gray-500">{invoicesStats.total || 0} hóa đơn</p>
+                    <p className="text-sm text-gray-500">{(invoicesStats as Record<string, unknown>).total as number || 0} hÃ³a Ä‘Æ¡n</p>
                   </div>
                 </div>
               </div>
@@ -285,11 +285,11 @@ export default function SalesPage() {
                     <CheckCircle className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Đã thanh toán</p>
+                    <p className="text-sm font-medium text-gray-600">ÄÃ£ thanh toÃ¡n</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(revenue.paid || 0)}
+                      {formatCurrency((revenue as Record<string, unknown>).paid as number || 0)}
                     </p>
-                    <p className="text-sm text-gray-500">Đã thu</p>
+                    <p className="text-sm text-gray-500">ÄÃ£ thu</p>
                   </div>
                 </div>
               </div>
@@ -300,12 +300,12 @@ export default function SalesPage() {
                     <Clock className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Chờ thanh toán</p>
+                    <p className="text-sm font-medium text-gray-600">Chá» thanh toÃ¡n</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(revenue.pending || 0)}
+                      {formatCurrency((revenue as Record<string, unknown>).pending as number || 0)}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {invoicesStats.overdue || 0} quá hạn
+                      {(invoicesStats as Record<string, unknown>).overdue as number || 0} quÃ¡ háº¡n
                     </p>
                   </div>
                 </div>
@@ -325,7 +325,7 @@ export default function SalesPage() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Tổng quan
+                  Tá»•ng quan
                 </button>
                 <button
                   onClick={() => setActiveTab('all-sales')}
@@ -335,7 +335,7 @@ export default function SalesPage() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Tất cả giao dịch
+                  Táº¥t cáº£ giao dá»‹ch
                 </button>
                 <button
                   onClick={() => setActiveTab('invoices')}
@@ -345,7 +345,7 @@ export default function SalesPage() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Hóa đơn ({invoicesStats.total || 0})
+                  HÃ³a Ä‘Æ¡n ({(invoicesStats as Record<string, unknown>).total as number || 0})
                 </button>
                 <button
                   onClick={() => setActiveTab('quotes')}
@@ -355,7 +355,7 @@ export default function SalesPage() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Báo giá ({String(Object.values(quotesStats.by_status || {}).reduce((a: any, b: any) => a + b, 0))})
+                  BÃ¡o giÃ¡ ({String(Object.values((quotesStats as Record<string, unknown>).by_status || {}).reduce((a: unknown, b: unknown) => (a as number) + (b as number), 0))})
                 </button>
                 <button
                   onClick={() => setActiveTab('customers')}
@@ -365,7 +365,7 @@ export default function SalesPage() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Khách hàng
+                  KhÃ¡ch hÃ ng
                 </button>
                 <button
                   onClick={() => setActiveTab('products')}
@@ -375,7 +375,7 @@ export default function SalesPage() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Sản phẩm & Dịch vụ
+                  Sáº£n pháº©m & Dá»‹ch vá»¥
                 </button>
               </nav>
             </div>
@@ -390,12 +390,12 @@ export default function SalesPage() {
                   <input
                     type="text"
                     placeholder={
-                      activeTab === 'all-sales' ? 'Tìm kiếm tất cả giao dịch...' :
-                      activeTab === 'quotes' ? 'Tìm kiếm báo giá...' : 
-                      activeTab === 'invoices' ? 'Tìm kiếm hóa đơn...' : 
-                      activeTab === 'customers' ? 'Tìm kiếm khách hàng...' :
-                      activeTab === 'products' ? 'Tìm kiếm sản phẩm...' :
-                      'Tìm kiếm...'
+                      activeTab === 'all-sales' ? 'TÃ¬m kiáº¿m táº¥t cáº£ giao dá»‹ch...' :
+                      activeTab === 'quotes' ? 'TÃ¬m kiáº¿m bÃ¡o giÃ¡...' : 
+                      activeTab === 'invoices' ? 'TÃ¬m kiáº¿m hÃ³a Ä‘Æ¡n...' : 
+                      activeTab === 'customers' ? 'TÃ¬m kiáº¿m khÃ¡ch hÃ ng...' :
+                      activeTab === 'products' ? 'TÃ¬m kiáº¿m sáº£n pháº©m...' :
+                      'TÃ¬m kiáº¿m...'
                     }
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}

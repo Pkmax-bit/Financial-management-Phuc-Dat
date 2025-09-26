@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -33,7 +33,7 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
-  const [expensesStats, setExpensesStats] = useState<any>({})
+  const [expensesStats, setExpensesStats] = useState<unknown>({})
   const router = useRouter()
 
   useEffect(() => {
@@ -148,7 +148,7 @@ export default function ExpensesPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Đang tải...</p>
+          <p className="mt-4 text-gray-600">Äang táº£i...</p>
         </div>
       </div>
     )
@@ -163,9 +163,9 @@ export default function ExpensesPage() {
           <div className="space-y-8">
           {/* Header */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Quản lý Chi phí</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Quáº£n lÃ½ Chi phÃ­</h1>
             <p className="mt-2 text-gray-600">
-              Theo dõi và quản lý chi phí, hóa đơn nhà cung cấp và nhà cung cấp
+              Theo dÃµi vÃ  quáº£n lÃ½ chi phÃ­, hÃ³a Ä‘Æ¡n nhÃ  cung cáº¥p vÃ  nhÃ  cung cáº¥p
             </p>
           </div>
 
@@ -177,12 +177,12 @@ export default function ExpensesPage() {
                   <Receipt className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tổng chi phí</p>
+                  <p className="text-sm font-medium text-gray-600">Tá»•ng chi phÃ­</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(expensesStats.total_expenses || 0)}
+                    {formatCurrency(((expensesStats as Record<string, unknown>).total_expenses as number) || 0)}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {expensesStats.expenses_count || 0} phiếu chi
+                    {((expensesStats as Record<string, unknown>).expenses_count as number) || 0} phiáº¿u chi
                   </p>
                 </div>
               </div>
@@ -194,11 +194,11 @@ export default function ExpensesPage() {
                   <FileText className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Hóa đơn NCC</p>
+                  <p className="text-sm font-medium text-gray-600">HÃ³a Ä‘Æ¡n NCC</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(expensesStats.total_bills || 0)}
+                    {formatCurrency(((expensesStats as Record<string, unknown>).total_bills as number) || 0)}
                   </p>
-                  <p className="text-sm text-gray-500">{expensesStats.bills_count || 0} hóa đơn</p>
+                  <p className="text-sm text-gray-500">{((expensesStats as Record<string, unknown>).bills_count as number) || 0} hÃ³a Ä‘Æ¡n</p>
                 </div>
               </div>
             </div>
@@ -209,12 +209,12 @@ export default function ExpensesPage() {
                   <Clock className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Chờ duyệt</p>
+                  <p className="text-sm font-medium text-gray-600">Chá» duyá»‡t</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(expensesStats.pending_amount || 0)}
+                    {formatCurrency(((expensesStats as Record<string, unknown>).pending_amount as number) || 0)}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {expensesStats.pending_count || 0} phiếu
+                    {((expensesStats as Record<string, unknown>).pending_count as number) || 0} phiáº¿u
                   </p>
                 </div>
               </div>
@@ -226,12 +226,12 @@ export default function ExpensesPage() {
                   <Building2 className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Nhà cung cấp</p>
+                  <p className="text-sm font-medium text-gray-600">NhÃ  cung cáº¥p</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {expensesStats.vendors_count || 0}
+                    {((expensesStats as Record<string, unknown>).vendors_count as number) || 0}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {expensesStats.active_vendors || 0} hoạt động
+                    {((expensesStats as Record<string, unknown>).active_vendors as number) || 0} hoáº¡t Ä‘á»™ng
                   </p>
                 </div>
               </div>
@@ -252,7 +252,7 @@ export default function ExpensesPage() {
                     }`}
                   >
                     <Receipt className="w-4 h-4 inline mr-1" />
-                    Chi phí ({expensesStats.expenses_count || 0})
+                    Chi phÃ­ ({((expensesStats as Record<string, unknown>).expenses_count as number) || 0})
                   </button>
                   <button
                     onClick={() => setActiveTab('bills')}
@@ -263,7 +263,7 @@ export default function ExpensesPage() {
                     }`}
                   >
                     <FileText className="w-4 h-4 inline mr-1" />
-                    Hóa đơn NCC ({expensesStats.bills_count || 0})
+                    HÃ³a Ä‘Æ¡n NCC ({((expensesStats as Record<string, unknown>).bills_count as number) || 0})
                   </button>
                   <button
                     onClick={() => setActiveTab('vendors')}
@@ -274,7 +274,7 @@ export default function ExpensesPage() {
                     }`}
                   >
                     <Building2 className="w-4 h-4 inline mr-1" />
-                    Nhà cung cấp ({expensesStats.vendors_count || 0})
+                    NhÃ  cung cáº¥p ({((expensesStats as Record<string, unknown>).vendors_count as number) || 0})
                   </button>
                 </nav>
               </div>
@@ -290,10 +290,10 @@ export default function ExpensesPage() {
                   type="text"
                   placeholder={
                     activeTab === 'expenses' 
-                      ? 'Tìm kiếm chi phí...' 
+                      ? 'TÃ¬m kiáº¿m chi phÃ­...' 
                       : activeTab === 'bills' 
-                      ? 'Tìm kiếm hóa đơn NCC...' 
-                      : 'Tìm kiếm nhà cung cấp...'
+                      ? 'TÃ¬m kiáº¿m hÃ³a Ä‘Æ¡n NCC...' 
+                      : 'TÃ¬m kiáº¿m nhÃ  cung cáº¥p...'
                   }
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -330,3 +330,7 @@ export default function ExpensesPage() {
     </div>
   )
 }
+
+
+
+

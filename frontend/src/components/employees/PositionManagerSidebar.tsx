@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { 
-  Building2, 
+  Briefcase, 
   Plus, 
   Search, 
   Edit, 
@@ -11,128 +11,141 @@ import {
   Calendar,
   X,
   DollarSign,
-  AlertCircle
+  TrendingUp,
+  AlertCircle,
+  Building2
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import CreateDepartmentModal from './CreateDepartmentModal'
-import DepartmentModal from './DepartmentModal'
+import CreatePositionModal from './CreatePositionModal'
+import PositionModal from './PositionModal'
 
-interface Department {
+interface Position {
   id: string
   name: string
   code: string
   description: string | null
-  budget: number | null
+  department_id: string | null
+  salary_range_min: number | null
+  salary_range_max: number | null
   is_active: boolean
   created_at: string
   updated_at: string
   employee_count?: number
+  department_name?: string
 }
 
-interface DepartmentManagerProps {
+interface PositionManagerProps {
   isOpen: boolean
   onClose: () => void
 }
 
-export default function DepartmentManager({ isOpen, onClose }: DepartmentManagerProps) {
-  const [departments, setDepartments] = useState<Department[]>([])
+export default function PositionManagerSidebar({ isOpen, onClose }: PositionManagerProps) {
+  const [positions, setPositions] = useState<Position[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null)
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen) {
-      fetchDepartments()
+      fetchPositions()
     }
   }, [isOpen])
 
-  const fetchDepartments = async () => {
+  const fetchPositions = async () => {
     try {
       setLoading(true)
       setError(null)
       
       const { data, error } = await supabase
-        .from('departments')
+        .from('positions')
         .select(`
           id,
           name,
           code,
           description,
-          budget,
+          department_id,
+          salary_range_min,
+          salary_range_max,
           is_active,
           created_at,
-          updated_at
+          updated_at,
+          departments(name)
         `)
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      // Get employee count for each department
-      const departmentsWithCount = await Promise.all(
-        (data || []).map(async (dept) => {
+      // Get employee count for each position
+      const positionsWithCount = await Promise.all(
+        (data || []).map(async (pos) => {
           const { count } = await supabase
             .from('employees')
             .select('*', { count: 'exact', head: true })
-            .eq('department_id', dept.id)
+            .eq('position_id', pos.id)
           
           return {
-            ...dept,
-            employee_count: count || 0
+            ...pos,
+            employee_count: count || 0,
+            department_name: (pos.departments as { name?: string })?.name || 'Chưa phân bổ'
           }
         })
       )
 
-      setDepartments(departmentsWithCount)
+      setPositions(positionsWithCount)
     } catch (error: unknown) {
-      console.error('Error fetching departments:', error)
-      setError((error as Error).message || 'Không thể tải danh sách phòng ban')
-      setDepartments([])
+      console.error('Error fetching positions:', error)
+      setError((error as Error).message || 'Không thể tải danh sách chức vụ')
+      setPositions([])
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async (departmentId: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa phòng ban này?')) {
+  const handleDelete = async (positionId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa chức vụ này?')) {
       return
     }
 
     try {
-      // Check if department has employees
+      // Check if position has employees
       const { count } = await supabase
         .from('employees')
         .select('*', { count: 'exact', head: true })
-        .eq('department_id', departmentId)
+        .eq('position_id', positionId)
 
       if (count && count > 0) {
-        alert(`Không thể xóa phòng ban này vì có ${count} nhân viên. Vui lòng chuyển nhân viên sang phòng ban khác trước.`)
+        alert(`Không thể xóa chức vụ này vì có ${count} nhân viên. Vui lòng chuyển nhân viên sang chức vụ khác trước.`)
         return
       }
 
       const { error } = await supabase
-        .from('departments')
+        .from('positions')
         .delete()
-        .eq('id', departmentId)
+        .eq('id', positionId)
 
       if (error) throw error
       
-      fetchDepartments()
+      fetchPositions()
     } catch (error: unknown) {
-      console.error('Error deleting department:', error)
-      alert((error as Error).message || 'Không thể xóa phòng ban')
+      console.error('Error deleting position:', error)
+      alert((error as Error).message || 'Không thể xóa chức vụ')
     }
   }
 
-  const filteredDepartments = departments.filter(dept =>
-    dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    dept.code.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredPositions = positions.filter(pos =>
+    pos.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    pos.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    pos.department_name?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const totalEmployees = departments.reduce((sum, dept) => sum + (dept.employee_count || 0), 0)
-  const totalBudget = departments.reduce((sum, dept) => sum + (dept.budget || 0), 0)
+  const totalEmployees = positions.reduce((sum, pos) => sum + (pos.employee_count || 0), 0)
+  const avgSalaryMin = positions.length > 0 ? 
+    positions.reduce((sum, pos) => sum + (pos.salary_range_min || 0), 0) / positions.length : 0
+  const avgSalaryMax = positions.length > 0 ? 
+    positions.reduce((sum, pos) => sum + (pos.salary_range_max || 0), 0) / positions.length : 0
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -141,33 +154,44 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
     }).format(amount)
   }
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+  }
+
   if (!isOpen) return null
 
   return (
     <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
-      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+      {/* Right Sidebar - No overlay to not block interface */}
+      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Quản lý phòng ban</h2>
-            <p className="text-sm text-gray-500 mt-1">Tạo và quản lý các phòng ban trong công ty</p>
+            <h2 className="text-xl font-semibold text-gray-900">Quản lý chức vụ</h2>
+            <p className="text-sm text-gray-500 mt-1">Tạo và quản lý các chức vụ trong công ty</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[80vh]">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-blue-50 rounded-lg p-4">
+            <div className="bg-purple-50 rounded-lg p-4">
               <div className="flex items-center">
-                <Building2 className="h-8 w-8 text-blue-600" />
+                <Briefcase className="h-8 w-8 text-purple-600" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-blue-900">Tổng phòng ban</p>
-                  <p className="text-2xl font-bold text-blue-600">{departments.length}</p>
+                  <p className="text-sm font-medium text-purple-900">Tổng chức vụ</p>
+                  <p className="text-2xl font-bold text-purple-600">{positions.length}</p>
                 </div>
               </div>
             </div>
@@ -180,12 +204,17 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                 </div>
               </div>
             </div>
-            <div className="bg-purple-50 rounded-lg p-4">
+            <div className="bg-blue-50 rounded-lg p-4">
               <div className="flex items-center">
-                <DollarSign className="h-8 w-8 text-purple-600" />
+                <DollarSign className="h-8 w-8 text-blue-600" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-purple-900">Tổng ngân sách</p>
-                  <p className="text-2xl font-bold text-purple-600">{formatCurrency(totalBudget)}</p>
+                  <p className="text-sm font-medium text-blue-900">Lương TB</p>
+                  <p className="text-lg font-bold text-blue-600">
+                    {avgSalaryMin > 0 && avgSalaryMax > 0 ? 
+                      `${formatCurrency(avgSalaryMin)} - ${formatCurrency(avgSalaryMax)}` : 
+                      'Chưa set'
+                    }
+                  </p>
                 </div>
               </div>
             </div>
@@ -195,20 +224,20 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Tạo phòng ban mới
+              Tạo chức vụ mới
             </button>
             
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
                 type="text"
-                placeholder="Tìm kiếm phòng ban..."
+                placeholder="Tìm kiếm chức vụ..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
             </div>
           </div>
@@ -225,10 +254,10 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
             </div>
           )}
 
-          {/* Departments List */}
+          {/* Positions List */}
           {loading ? (
             <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
               <p className="mt-2 text-gray-600">Đang tải...</p>
             </div>
           ) : (
@@ -238,16 +267,19 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Phòng ban
+                        Chức vụ
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Mã PB
+                        Mã CV
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Phòng ban
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Nhân viên
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Ngân sách
+                        Mức lương
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Trạng thái
@@ -258,64 +290,73 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredDepartments.length === 0 ? (
+                    {filteredPositions.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                          Không có phòng ban nào
+                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                          Không có chức vụ nào
                         </td>
                       </tr>
                     ) : (
-                      filteredDepartments.map((department) => (
-                        <tr key={department.id} className="hover:bg-gray-50">
+                      filteredPositions.map((position) => (
+                        <tr key={position.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <Building2 className="h-5 w-5 text-gray-400 mr-3" />
+                              <Briefcase className="h-5 w-5 text-gray-400 mr-3" />
                               <div>
                                 <div className="text-sm font-medium text-gray-900">
-                                  {department.name}
+                                  {position.name}
                                 </div>
-                                {department.description && (
+                                {position.description && (
                                   <div className="text-sm text-gray-500 truncate max-w-xs">
-                                    {department.description}
+                                    {position.description}
                                   </div>
                                 )}
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {department.code}
+                            {position.code}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center text-sm text-gray-900">
+                              <Building2 className="h-4 w-4 text-gray-400 mr-1" />
+                              {position.department_name}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center text-sm text-gray-900">
                               <Users className="h-4 w-4 text-gray-400 mr-1" />
-                              {department.employee_count || 0}
+                              {position.employee_count || 0}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {department.budget ? formatCurrency(department.budget) : 'Chưa set'}
+                            {position.salary_range_min && position.salary_range_max ? 
+                              `${formatCurrency(position.salary_range_min)} - ${formatCurrency(position.salary_range_max)}` : 
+                              'Chưa set'
+                            }
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              department.is_active
+                              position.is_active
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {department.is_active ? 'Hoạt động' : 'Ngừng hoạt động'}
+                              {position.is_active ? 'Hoạt động' : 'Ngừng hoạt động'}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => {
-                                  setSelectedDepartment(department)
+                                  setSelectedPosition(position)
                                   setShowEditModal(true)
                                 }}
-                                className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
+                                className="text-purple-600 hover:text-purple-900 p-1 hover:bg-purple-50 rounded"
                               >
                                 <Edit className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => handleDelete(department.id)}
+                                onClick={() => handleDelete(position.id)}
                                 className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -330,43 +371,34 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
               </div>
             </div>
           )}
-
-          <div className="flex justify-end mt-6">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Đóng
-            </button>
-          </div>
         </div>
+
+        {/* Create Position Modal */}
+        <CreatePositionModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            fetchPositions()
+            setShowCreateModal(false)
+          }}
+        />
+
+        {/* Edit Position Modal */}
+        <PositionModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false)
+            setSelectedPosition(null)
+          }}
+          onSuccess={() => {
+            fetchPositions()
+            setShowEditModal(false)
+            setSelectedPosition(null)
+          }}
+          position={selectedPosition}
+          isEdit={true}
+        />
       </div>
-
-      {/* Create Department Modal */}
-      <CreateDepartmentModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={() => {
-          fetchDepartments()
-          setShowCreateModal(false)
-        }}
-      />
-
-      {/* Edit Department Modal */}
-      <DepartmentModal
-        isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false)
-          setSelectedDepartment(null)
-        }}
-        onSuccess={() => {
-          fetchDepartments()
-          setShowEditModal(false)
-          setSelectedDepartment(null)
-        }}
-        department={selectedDepartment}
-        isEdit={true}
-      />
     </div>
   )
 }

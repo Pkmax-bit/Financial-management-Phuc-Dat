@@ -3,19 +3,27 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface TestResult {
+  test: string
+  status: 'success' | 'error' | 'warning'
+  message: string
+  data?: unknown
+  timestamp: string
+}
+
 export default function SupabaseTestPage() {
   const [connectionStatus, setConnectionStatus] = useState<string>('Checking...')
   const [authStatus, setAuthStatus] = useState<string>('Not tested')
   const [databaseStatus, setDatabaseStatus] = useState<string>('Not tested')
-  const [configStatus, setConfigStatus] = useState<any>({})
-  const [sessionInfo, setSessionInfo] = useState<any>(null)
-  const [testResults, setTestResults] = useState<any[]>([])
+  const [configStatus, setConfigStatus] = useState<unknown>({})
+  const [sessionInfo, setSessionInfo] = useState<unknown>(null)
+  const [testResults, setTestResults] = useState<TestResult[]>([])
 
   useEffect(() => {
     testSupabaseConnection()
   }, [])
 
-  const addTestResult = (test: string, status: 'success' | 'error' | 'warning', message: string, data?: any) => {
+  const addTestResult = (test: string, status: 'success' | 'error' | 'warning', message: string, data?: unknown) => {
     setTestResults(prev => [...prev, { test, status, message, data, timestamp: new Date().toLocaleTimeString() }])
   }
 
@@ -48,14 +56,14 @@ export default function SupabaseTestPage() {
       const { data, error } = await supabase.from('users').select('count').limit(1)
       
       if (error) {
-        addTestResult('Connection Test', 'warning', `Connection works but query failed: ${error.message}`, error)
+        addTestResult('Connection Test', 'warning', `Connection works but query failed: ${(error as Error).message}`, error)
         setConnectionStatus('⚠️ Connected (RLS Active)')
       } else {
         addTestResult('Connection Test', 'success', 'Connection and basic query successful')
         setConnectionStatus('✅ Connected')
       }
-    } catch (error: any) {
-      addTestResult('Connection Test', 'error', `Connection failed: ${error.message}`, error)
+    } catch (error: unknown) {
+      addTestResult('Connection Test', 'error', `Connection failed: ${(error as Error).message}`, error)
       setConnectionStatus('❌ Connection Failed')
     }
 
@@ -66,7 +74,7 @@ export default function SupabaseTestPage() {
       const { data: { session }, error } = await supabase.auth.getSession()
       
       if (error) {
-        addTestResult('Auth Test', 'error', `Auth error: ${error.message}`, error)
+        addTestResult('Auth Test', 'error', `Auth error: ${(error as Error).message}`, error)
         setAuthStatus('❌ Auth Error')
       } else if (session) {
         addTestResult('Auth Test', 'success', `User authenticated: ${session.user.email}`)
@@ -80,8 +88,8 @@ export default function SupabaseTestPage() {
         addTestResult('Auth Test', 'warning', 'No active session')
         setAuthStatus('⚠️ Not Authenticated')
       }
-    } catch (error: any) {
-      addTestResult('Auth Test', 'error', `Auth check failed: ${error.message}`, error)
+    } catch (error: unknown) {
+      addTestResult('Auth Test', 'error', `Auth check failed: ${(error as Error).message}`, error)
       setAuthStatus('❌ Auth Check Failed')
     }
 
@@ -97,19 +105,19 @@ export default function SupabaseTestPage() {
           const { data, error } = await supabase.from(table).select('count').limit(1)
           
           if (error) {
-            tableResults.push(`${table}: ❌ ${error.message}`)
+            tableResults.push(`${table}: ❌ ${(error as Error).message}`)
           } else {
             tableResults.push(`${table}: ✅ Accessible`)
           }
-        } catch (e: any) {
-          tableResults.push(`${table}: ❌ ${e.message}`)
+        } catch (e: unknown) {
+          tableResults.push(`${table}: ❌ ${(e as Error).message}`)
         }
       }
 
       addTestResult('Database Test', 'success', 'Table access test completed', tableResults)
       setDatabaseStatus('✅ Tables Checked')
-    } catch (error: any) {
-      addTestResult('Database Test', 'error', `Database test failed: ${error.message}`, error)
+    } catch (error: unknown) {
+      addTestResult('Database Test', 'error', `Database test failed: ${(error as Error).message}`, error)
       setDatabaseStatus('❌ Database Error')
     }
   }
@@ -124,14 +132,14 @@ export default function SupabaseTestPage() {
       })
 
       if (error) {
-        addTestResult('Login Test', 'error', `Login failed: ${error.message}`, error)
+        addTestResult('Login Test', 'error', `Login failed: ${(error as Error).message}`, error)
       } else {
         addTestResult('Login Test', 'success', `Login successful: ${data.user.email}`)
         // Refresh connection test
         setTimeout(() => testSupabaseConnection(), 1000)
       }
-    } catch (error: any) {
-      addTestResult('Login Test', 'error', `Login error: ${error.message}`, error)
+    } catch (error: unknown) {
+      addTestResult('Login Test', 'error', `Login error: ${(error as Error).message}`, error)
     }
   }
 
@@ -141,8 +149,8 @@ export default function SupabaseTestPage() {
       addTestResult('Logout Test', 'success', 'Logged out successfully')
       setSessionInfo(null)
       setTimeout(() => testSupabaseConnection(), 1000)
-    } catch (error: any) {
-      addTestResult('Logout Test', 'error', `Logout error: ${error.message}`, error)
+    } catch (error: unknown) {
+      addTestResult('Logout Test', 'error', `Logout error: ${(error as Error).message}`, error)
     }
   }
 
@@ -244,7 +252,7 @@ export default function SupabaseTestPage() {
                   </span>
                 </div>
                 <p className="text-sm mt-1">{result.message}</p>
-                {result.data && (
+                {Boolean(result.data) && (
                   <details className="mt-2">
                     <summary className="text-xs text-gray-600 cursor-pointer">Show Details</summary>
                     <pre className="text-xs bg-gray-100 p-2 mt-1 rounded overflow-auto">

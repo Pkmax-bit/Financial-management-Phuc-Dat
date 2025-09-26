@@ -49,7 +49,7 @@ export default function FilesPage() {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<unknown>(null)
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 

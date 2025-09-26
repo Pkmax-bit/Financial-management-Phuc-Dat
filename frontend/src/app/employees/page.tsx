@@ -5,66 +5,29 @@ import { useRouter } from 'next/navigation'
 import { 
   Users, 
   Plus, 
-  Search, 
-  Filter, 
+  Search,
   Edit, 
   Trash2, 
   Eye,
   Building2,
+  Briefcase,
   Mail,
-  Calendar,
   DollarSign
 } from 'lucide-react'
 import { Employee } from '@/types'
 import { supabase } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
 import CreateEmployeeModal from '@/components/employees/CreateEmployeeModal'
-import DepartmentModal from '@/components/employees/DepartmentModal'
-import { apiGet } from '@/lib/api'
+
+import DepartmentManagerSidebar from '@/components/employees/DepartmentManagerSidebar'
+import CreateDepartmentModalSidebar from '@/components/employees/CreateDepartmentModalSidebar'
+import PositionManager from '@/components/employees/PositionManager'
+import PositionManagerSidebar from '@/components/employees/PositionManagerSidebar'
+import DepartmentSidebar from '@/components/employees/DepartmentSidebar'
+import PositionSidebar from '@/components/employees/PositionSidebar'
+
 import ProtectedRoute from '@/components/ProtectedRoute'
 
-// Temporary DepartmentManager component
-function DepartmentManager() {
-  const [showDepartmentModal, setShowDepartmentModal] = useState(false)
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Quản lý phòng ban</h3>
-          <p className="text-sm text-gray-500">Tạo và quản lý các phòng ban trong công ty</p>
-        </div>
-        <button 
-          onClick={() => setShowDepartmentModal(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Tạo phòng ban
-        </button>
-      </div>
-
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h4 className="text-sm font-medium text-gray-900">Danh sách phòng ban</h4>
-        </div>
-        <div className="p-6">
-          <p className="text-sm text-gray-500">Chức năng quản lý phòng ban sẽ được phát triển trong tương lai.</p>
-        </div>
-      </div>
-
-      {showDepartmentModal && (
-      <DepartmentModal
-        isOpen={showDepartmentModal}
-        onClose={() => setShowDepartmentModal(false)}
-        onSuccess={() => {
-          setShowDepartmentModal(false)
-            // Add any additional logic needed after department creation
-        }}
-      />
-      )}
-    </div>
-  )
-}
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -74,9 +37,16 @@ export default function EmployeesPage() {
   const [sortBy, setSortBy] = useState('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showDepartmentManager, setShowDepartmentManager] = useState(false)
-  const [user, setUser] = useState<any>(null)
-  const [session, setSession] = useState<any>(null)
+
+  const [showPositionManager, setShowPositionManager] = useState(false)
+  const [showDepartmentSidebar, setShowDepartmentSidebar] = useState(false)
+  const [showPositionSidebar, setShowPositionSidebar] = useState(false)
+  // New sidebar states
+  const [showDepartmentManagerSidebar, setShowDepartmentManagerSidebar] = useState(false)
+  const [showCreateDepartmentSidebar, setShowCreateDepartmentSidebar] = useState(false)
+  const [showPositionManagerSidebar, setShowPositionManagerSidebar] = useState(false)
+  const [user, setUser] = useState<unknown>(null)
+  const [session, setSession] = useState<unknown>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -160,22 +130,22 @@ export default function EmployeesPage() {
       setError(null)
       
       // First, try authenticated endpoint if user and session are available
-      if (user && session?.access_token) {
+      if (user && (session as { access_token?: string })?.access_token) {
         console.log('fetchEmployees - Session check:', { 
           hasSession: !!session, 
-          hasAccessToken: !!session?.access_token,
-          tokenPreview: session?.access_token?.substring(0, 20) + '...'
+          hasAccessToken: !!(session as { access_token?: string })?.access_token,
+          tokenPreview: (session as { access_token?: string })?.access_token?.substring(0, 20) + '...'
         })
         
         try {
-          console.log('Making authenticated API call to fetch employees with token:', session.access_token.substring(0, 20) + '...')
+          console.log('Making authenticated API call to fetch employees with token:', (session as { access_token?: string }).access_token?.substring(0, 20) + '...')
           
           // Use direct fetch with explicit authorization for authenticated endpoint
           const authResponse = await fetch('http://localhost:8000/api/employees', {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`
+              'Authorization': `Bearer ${(session as { access_token?: string }).access_token}`
             }
           })
           
@@ -190,15 +160,15 @@ export default function EmployeesPage() {
             console.log('Error response:', errorText)
             throw new Error(`HTTP ${authResponse.status}: ${errorText}`)
           }
-        } catch (authError: any) {
+        } catch (authError: unknown) {
           console.log('Authenticated endpoint failed, trying fallback options:', authError)
           
           // If authentication fails, clear the session to prevent future attempts
-          if (authError?.message && (
-            authError.message.includes('Not authenticated') ||
-            authError.message.includes('403') || 
-            authError.message.includes('HTTP 403') || 
-            authError.message.includes('Unauthorized')
+          if ((authError as Error)?.message && (
+            (authError as Error).message.includes('Not authenticated') ||
+            (authError as Error).message.includes('403') || 
+            (authError as Error).message.includes('HTTP 403') || 
+            (authError as Error).message.includes('Unauthorized')
           )) {
             console.log('Authentication token appears invalid, clearing session')
             await supabase.auth.signOut()
@@ -267,9 +237,9 @@ export default function EmployeesPage() {
         router.push('/login')
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in fetchEmployees:', error)
-      setError(`Lỗi không xác định: ${error?.message || 'Không thể kết nối'}`)
+      setError(`Lỗi không xác định: ${(error as Error)?.message || 'Không thể kết nối'}`)
       setEmployees([])
     }
   }
@@ -436,7 +406,7 @@ export default function EmployeesPage() {
                   {user && (
                     <div className="flex items-center">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                      <span className="text-xs text-gray-500">Đã đăng nhập: {user.email}</span>
+                      <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email}</span>
                     </div>
                   )}
                 </div>
@@ -461,7 +431,7 @@ export default function EmployeesPage() {
                       console.log('Debug Info:', {
                         session: session?.user?.email || 'No session',
                         authUser: authUser?.email || 'No auth user',
-                        userState: user?.email || 'No user state',
+                        userState: (user as { email?: string })?.email || 'No user state',
                         token: session?.access_token ? 'Present' : 'Missing'
                       })
                       
@@ -497,13 +467,34 @@ export default function EmployeesPage() {
                   </svg>
                   Làm mới
                 </button>
-                <button
-                  onClick={() => setShowDepartmentManager(true)}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  <Building2 className="h-4 w-4 mr-2" />
-                  Quản lý phòng ban
-                </button>
+            <button
+              onClick={() => setShowCreateDepartmentSidebar(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Tạo phòng ban
+            </button>
+            <button
+              onClick={() => setShowPositionSidebar(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <Briefcase className="h-4 w-4 mr-2" />
+              Tạo chức vụ
+            </button>
+            <button
+              onClick={() => setShowDepartmentManagerSidebar(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Quản lý phòng ban
+            </button>
+            <button
+              onClick={() => setShowPositionManagerSidebar(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <Briefcase className="h-4 w-4 mr-2" />
+              Quản lý chức vụ
+            </button>
                   <button 
                   onClick={() => setShowCreateModal(true)}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -811,35 +802,73 @@ export default function EmployeesPage() {
         />
       )}
 
-      {showDepartmentManager && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowDepartmentManager(false)}></div>
-            
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-            
-            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full sm:p-6">
-              <div className="absolute top-0 right-0 pt-4 pr-4">
-                <button
-                  type="button"
-                  className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
-                  onClick={() => setShowDepartmentManager(false)}
-                >
-                  <span className="sr-only">Close</span>
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="sm:flex sm:items-start">
-                <div className="w-full">
-                  <DepartmentManager />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Department Manager Modal - Disabled, using sidebar version instead */}
+      {/* {showDepartmentManager && (
+        <DepartmentManager
+          isOpen={showDepartmentManager}
+          onClose={() => setShowDepartmentManager(false)}
+        />
+      )} */}
+
+      {/* Position Manager Modal */}
+      {showPositionManager && (
+        <PositionManager
+          isOpen={showPositionManager}
+          onClose={() => setShowPositionManager(false)}
+        />
+      )}
+
+      {/* Department Sidebar */}
+      {showDepartmentSidebar && (
+        <DepartmentSidebar
+          isOpen={showDepartmentSidebar}
+          onClose={() => setShowDepartmentSidebar(false)}
+          onSuccess={() => {
+            setShowDepartmentSidebar(false)
+            // Refresh data if needed
+          }}
+        />
+      )}
+
+      {/* Position Sidebar */}
+      {showPositionSidebar && (
+        <PositionSidebar
+          isOpen={showPositionSidebar}
+          onClose={() => setShowPositionSidebar(false)}
+          onSuccess={() => {
+            setShowPositionSidebar(false)
+            // Refresh data if needed
+          }}
+        />
+      )}
+
+      {/* New Right Sidebar Components */}
+      {/* Department Manager Sidebar */}
+      {showDepartmentManagerSidebar && (
+        <DepartmentManagerSidebar
+          isOpen={showDepartmentManagerSidebar}
+          onClose={() => setShowDepartmentManagerSidebar(false)}
+        />
+      )}
+
+      {/* Create Department Sidebar */}
+      {showCreateDepartmentSidebar && (
+        <CreateDepartmentModalSidebar
+          isOpen={showCreateDepartmentSidebar}
+          onClose={() => setShowCreateDepartmentSidebar(false)}
+          onSuccess={() => {
+            setShowCreateDepartmentSidebar(false)
+            fetchEmployees() // Refresh employees data
+          }}
+        />
+      )}
+
+      {/* Position Manager Sidebar */}
+      {showPositionManagerSidebar && (
+        <PositionManagerSidebar
+          isOpen={showPositionManagerSidebar}
+          onClose={() => setShowPositionManagerSidebar(false)}
+        />
       )}
       </div>
     </ProtectedRoute>

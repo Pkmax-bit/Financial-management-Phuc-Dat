@@ -222,7 +222,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
               </label>
               <select
                 value={formData.payment_method}
-                onChange={(e) => setFormData({...formData, payment_method: e.target.value as any})}
+                onChange={(e) => setFormData({...formData, payment_method: e.target.value as 'cash' | 'card' | 'bank_transfer' | 'check' | 'digital_wallet' | 'other'})}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               >

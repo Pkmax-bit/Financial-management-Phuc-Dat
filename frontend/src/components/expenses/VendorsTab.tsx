@@ -80,17 +80,14 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
         .from('vendors')
         .select(`
           id,
-          vendor_code,
           name,
-          contact_person,
+          company_name,
           email,
           phone,
           address,
-          city,
-          country,
           tax_id,
           payment_terms,
-          is_active,
+          status,
           notes,
           created_at,
           updated_at

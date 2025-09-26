@@ -244,7 +244,7 @@ export type Database = {
           status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
           payment_status: 'pending' | 'partial' | 'paid' | 'overdue'
           paid_amount: number
-          items: any
+          items: unknown
           notes: string | null
           created_at: string
           updated_at: string
@@ -264,7 +264,7 @@ export type Database = {
           status?: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
           payment_status?: 'pending' | 'partial' | 'paid' | 'overdue'
           paid_amount?: number
-          items?: any
+          items?: unknown
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -284,7 +284,7 @@ export type Database = {
           status?: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
           payment_status?: 'pending' | 'partial' | 'paid' | 'overdue'
           paid_amount?: number
-          items?: any
+          items?: unknown
           notes?: string | null
           created_at?: string
           updated_at?: string

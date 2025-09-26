@@ -40,7 +40,7 @@ export default function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showTimeEntryModal, setShowTimeEntryModal] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<unknown>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -385,11 +385,11 @@ export default function ProjectsPage() {
                         <div className="flex items-center mt-1 text-sm text-gray-500">
                           <DollarSign className="h-4 w-4 mr-1" />
                           Budget: {formatCurrency(project.budget)}
-                          {project.actual_cost && (
+                          {Boolean(((project as unknown) as Record<string, unknown>).actual_cost) && (
                             <>
                               <span className="mx-2">•</span>
                               <DollarSign className="h-4 w-4 mr-1" />
-                              Actual: {formatCurrency(project.actual_cost)}
+                              Actual: {formatCurrency(((project as unknown) as Record<string, unknown>).actual_cost as number)}
                             </>
                           )}
                         </div>

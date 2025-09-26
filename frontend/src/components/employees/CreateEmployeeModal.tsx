@@ -10,7 +10,7 @@ import {
   DollarSign,
   Building2,
   Briefcase,
-  Save,
+  
   UserPlus,
   Eye,
   EyeOff
@@ -113,7 +113,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
     try {
       const data = await apiGet('/api/employees/')
       // Filter only active employees who can be managers
-      const activeEmployees = data.filter((emp: any) => emp.status === 'active')
+      const activeEmployees = data.filter((emp: unknown) => (emp as { status: string }).status === 'active')
       setManagers(activeEmployees)
     } catch (error) {
       console.error('Error fetching managers:', error)
@@ -152,9 +152,9 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
       onSuccess()
       onClose()
       resetForm()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating employee:', error)
-      alert('Có lỗi xảy ra khi tạo nhân viên: ' + (error.message || 'Unknown error'))
+      alert('Có lỗi xảy ra khi tạo nhân viên: ' + ((error as Error).message || 'Unknown error'))
     } finally {
       setSubmitting(false)
     }
@@ -178,8 +178,8 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
+      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Tạo nhân viên mới</h2>
           <button
@@ -205,7 +205,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                   type="text"
                   value={formData.first_name}
                   onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   required
                 />
               </div>
@@ -219,7 +219,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                   type="text"
                   value={formData.last_name}
                   onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   required
                 />
               </div>
@@ -233,7 +233,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   required
                 />
               </div>
@@ -247,7 +247,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
             </div>
@@ -265,7 +265,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                 <select
                   value={formData.department_id}
                   onChange={(e) => setFormData({...formData, department_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 >
                   <option value="">Chọn phòng ban</option>
                   {departments.map((dept) => (
@@ -284,7 +284,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                 <select
                   value={formData.position_id}
                   onChange={(e) => setFormData({...formData, position_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   disabled={!formData.department_id}
                 >
                   <option value="">Chọn chức vụ</option>
@@ -305,7 +305,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                   type="date"
                   value={formData.hire_date}
                   onChange={(e) => setFormData({...formData, hire_date: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   required
                 />
               </div>
@@ -319,7 +319,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                   type="number"
                   value={formData.salary}
                   onChange={(e) => setFormData({...formData, salary: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   min="0"
                   step="100000"
                 />
@@ -333,7 +333,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                 <select
                   value={formData.manager_id}
                   onChange={(e) => setFormData({...formData, manager_id: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 >
                   <option value="">Chọn quản lý</option>
                   {managers.map((manager) => (

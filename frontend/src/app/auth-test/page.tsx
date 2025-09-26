@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { apiGet } from '@/lib/api'
 
 export default function AuthTestPage() {
-  const [session, setSession] = useState<any>(null)
-  const [user, setUser] = useState<any>(null)
+  const [session, setSession] = useState<unknown>(null)
+  const [user, setUser] = useState<unknown>(null)
   const [testResult, setTestResult] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
@@ -30,13 +30,13 @@ export default function AuthTestPage() {
       })
       
       if (result.error) {
-        setTestResult(`Login Error: ${result.error.message}`)
+        setTestResult(`Login Error: ${(result.error as Error).message}`)
       } else {
         setTestResult('Login Successful!')
         await checkAuth()
       }
-    } catch (error: any) {
-      setTestResult(`Login Exception: ${error.message}`)
+    } catch (error: unknown) {
+      setTestResult(`Login Exception: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -47,8 +47,8 @@ export default function AuthTestPage() {
       const response = await fetch('/api/auth-test/public')
       const data = await response.json()
       setTestResult(`Public API Success: ${JSON.stringify(data, null, 2)}`)
-    } catch (error: any) {
-      setTestResult(`Public API Error: ${error.message}`)
+    } catch (error: unknown) {
+      setTestResult(`Public API Error: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -58,8 +58,8 @@ export default function AuthTestPage() {
     try {
       const data = await apiGet('/api/auth-test/token-info')
       setTestResult(`Token Info Success: ${JSON.stringify(data, null, 2)}`)
-    } catch (error: any) {
-      setTestResult(`Token Info Error: ${error.message}`)
+    } catch (error: unknown) {
+      setTestResult(`Token Info Error: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -69,8 +69,8 @@ export default function AuthTestPage() {
     try {
       const data = await apiGet('/api/employees')
       setTestResult(`Protected API Success: Found ${data.length} employees`)
-    } catch (error: any) {
-      setTestResult(`Protected API Error: ${error.message}`)
+    } catch (error: unknown) {
+      setTestResult(`Protected API Error: ${(error as Error).message}`)
     }
     setLoading(false)
   }
@@ -86,8 +86,8 @@ export default function AuthTestPage() {
             <h2 className="text-lg font-semibold mb-4">Authentication Status</h2>
             <div className="space-y-2 text-sm">
               <p><strong>Session:</strong> {session ? 'Active' : 'None'}</p>
-              <p><strong>User:</strong> {user ? user.email : 'None'}</p>
-              <p><strong>Access Token:</strong> {session?.access_token ? 'Present' : 'Missing'}</p>
+              <p><strong>User:</strong> {user ? (user as { email?: string }).email : 'None'}</p>
+              <p><strong>Access Token:</strong> {(session as { access_token?: string })?.access_token ? 'Present' : 'Missing'}</p>
             </div>
             <button
               onClick={checkAuth}

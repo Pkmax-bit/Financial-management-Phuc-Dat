@@ -11,6 +11,7 @@ import {
   Calendar,
   X,
   DollarSign,
+  TrendingUp,
   AlertCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -29,12 +30,12 @@ interface Department {
   employee_count?: number
 }
 
-interface DepartmentManagerProps {
+interface DepartmentManagerSidebarProps {
   isOpen: boolean
   onClose: () => void
 }
 
-export default function DepartmentManager({ isOpen, onClose }: DepartmentManagerProps) {
+export default function DepartmentManagerSidebar({ isOpen, onClose }: DepartmentManagerSidebarProps) {
   const [departments, setDepartments] = useState<Department[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -86,9 +87,9 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
       )
 
       setDepartments(departmentsWithCount)
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('Error fetching departments:', error)
-      setError((error as Error).message || 'Không thể tải danh sách phòng ban')
+      setError(error instanceof Error ? (error as Error).message : 'Không thể tải danh sách phòng ban')
       setDepartments([])
     } finally {
       setLoading(false)
@@ -120,9 +121,9 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
       if (error) throw error
       
       fetchDepartments()
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('Error deleting department:', error)
-      alert((error as Error).message || 'Không thể xóa phòng ban')
+      alert(error instanceof Error ? (error as Error).message : 'Không thể xóa phòng ban')
     }
   }
 
@@ -133,6 +134,7 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
 
   const totalEmployees = departments.reduce((sum, dept) => sum + (dept.employee_count || 0), 0)
   const totalBudget = departments.reduce((sum, dept) => sum + (dept.budget || 0), 0)
+  const activeDepartments = departments.filter(dept => dept.is_active).length
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -141,28 +143,38 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
     }).format(amount)
   }
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+  }
+
   if (!isOpen) return null
 
   return (
     <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
-      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+      {/* Right Sidebar - No overlay to not block interface */}
+      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Quản lý phòng ban</h2>
-            <p className="text-sm text-gray-500 mt-1">Tạo và quản lý các phòng ban trong công ty</p>
+            <p className="text-sm text-gray-500 mt-1">Quản lý tất cả phòng ban trong công ty</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[80vh]">
+        <div className="p-6 overflow-y-auto max-h-[75vh]">
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-blue-50 rounded-lg p-4">
+            <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
               <div className="flex items-center">
                 <Building2 className="h-8 w-8 text-blue-600" />
                 <div className="ml-3">
@@ -171,7 +183,7 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                 </div>
               </div>
             </div>
-            <div className="bg-green-50 rounded-lg p-4">
+            <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
               <div className="flex items-center">
                 <Users className="h-8 w-8 text-green-600" />
                 <div className="ml-3">
@@ -180,12 +192,12 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                 </div>
               </div>
             </div>
-            <div className="bg-purple-50 rounded-lg p-4">
+            <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
               <div className="flex items-center">
-                <DollarSign className="h-8 w-8 text-purple-600" />
+                <TrendingUp className="h-8 w-8 text-purple-600" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-purple-900">Tổng ngân sách</p>
-                  <p className="text-2xl font-bold text-purple-600">{formatCurrency(totalBudget)}</p>
+                  <p className="text-sm font-medium text-purple-900">Đang hoạt động</p>
+                  <p className="text-2xl font-bold text-purple-600">{activeDepartments}</p>
                 </div>
               </div>
             </div>
@@ -195,7 +207,7 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
               <Plus className="w-4 h-4 mr-2" />
               Tạo phòng ban mới
@@ -232,109 +244,99 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
               <p className="mt-2 text-gray-600">Đang tải...</p>
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Phòng ban
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Mã PB
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Nhân viên
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Ngân sách
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Trạng thái
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Thao tác
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredDepartments.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                          Không có phòng ban nào
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredDepartments.map((department) => (
-                        <tr key={department.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <Building2 className="h-5 w-5 text-gray-400 mr-3" />
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                  {department.name}
-                                </div>
-                                {department.description && (
-                                  <div className="text-sm text-gray-500 truncate max-w-xs">
-                                    {department.description}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {department.code}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center text-sm text-gray-900">
-                              <Users className="h-4 w-4 text-gray-400 mr-1" />
-                              {department.employee_count || 0}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {department.budget ? formatCurrency(department.budget) : 'Chưa set'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              department.is_active
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {department.is_active ? 'Hoạt động' : 'Ngừng hoạt động'}
+            <div className="space-y-4">
+              {filteredDepartments.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p>Không có phòng ban nào</p>
+                </div>
+              ) : (
+                filteredDepartments.map((department) => (
+                  <div key={department.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-3 flex-1">
+                        <div className="p-2 bg-blue-50 rounded-lg">
+                          <Building2 className="h-5 w-5 text-blue-600" />
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <h3 className="text-lg font-medium text-gray-900 truncate">
+                              {department.name}
+                            </h3>
+                            <span className="text-sm text-gray-500 font-mono">
+                              {department.code}
                             </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedDepartment(department)
-                                  setShowEditModal(true)
-                                }}
-                                className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(department.id)}
-                                className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                          </div>
+                          
+                          {department.description && (
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {department.description}
+                            </p>
+                          )}
+                          
+                          <div className="flex items-center space-x-4 mt-2">
+                            <div className="flex items-center text-sm text-gray-500">
+                              <Users className="h-4 w-4 mr-1" />
+                              {department.employee_count || 0} nhân viên
                             </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            
+                            {department.budget && (
+                              <div className="flex items-center text-sm text-gray-500">
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                {formatCurrency(department.budget)}
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center text-sm text-gray-500">
+                              <Calendar className="h-4 w-4 mr-1" />
+                              {formatDate(department.created_at)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2 ml-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          department.is_active
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {department.is_active ? 'Hoạt động' : 'Ngừng hoạt động'}
+                        </span>
+                        
+                        <button
+                          onClick={() => {
+                            setSelectedDepartment(department)
+                            setShowEditModal(true)
+                          }}
+                          className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition-colors"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        
+                        <button
+                          onClick={() => handleDelete(department.id)}
+                          className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
+        </div>
 
-          <div className="flex justify-end mt-6">
+        {/* Footer */}
+        <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
+          <div className="flex justify-between items-center text-sm text-gray-600">
+            <span>Tổng cộng {filteredDepartments.length} phòng ban</span>
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
               Đóng
             </button>

@@ -16,9 +16,9 @@ import {
 } from 'lucide-react'
 
 interface OverviewTabProps {
-  quotesStats: any
-  invoicesStats: any
-  revenue: any
+  quotesStats: unknown
+  invoicesStats: unknown
+  revenue: unknown
 }
 
 export default function OverviewTab({ quotesStats, invoicesStats, revenue }: OverviewTabProps) {
@@ -30,10 +30,10 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
   }
 
   // Calculate income tracker data (QuickBooks style)
-  const uninvoicedActivity = revenue.uninvoiced || 0 // Các hoạt động chưa lập hóa đơn
-  const unpaidInvoices = revenue.pending || 0 // Hóa đơn chưa thanh toán
-  const overdueAmount = revenue.overdue || 0 // Hóa đơn quá hạn
-  const recentlyPaid = revenue.paid || 0 // Đã thanh toán trong 30 ngày qua
+  const uninvoicedActivity = (revenue as Record<string, unknown>).uninvoiced as number || 0 // Các hoạt động chưa lập hóa đơn
+  const unpaidInvoices = (revenue as Record<string, unknown>).pending as number || 0 // Hóa đơn chưa thanh toán
+  const overdueAmount = (revenue as Record<string, unknown>).overdue as number || 0 // Hóa đơn quá hạn
+  const recentlyPaid = (revenue as Record<string, unknown>).paid as number || 0 // Đã thanh toán trong 30 ngày qua
   
   // Calculate total pipeline
   const totalPipeline = uninvoicedActivity + unpaidInvoices
@@ -189,7 +189,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
                 <span className="text-gray-600">Tổng hóa đơn</span>
               </div>
               <div className="text-right">
-                <p className="font-semibold text-gray-900">{invoicesStats.total || 0}</p>
+                <p className="font-semibold text-gray-900">{(invoicesStats as Record<string, unknown>).total as number || 0}</p>
                 <p className="text-sm text-gray-500">hóa đơn</p>
               </div>
             </div>
@@ -200,7 +200,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
                 <span className="text-gray-600">Tổng báo giá</span>
               </div>
               <div className="text-right">
-                <p className="font-semibold text-gray-900">{quotesStats.total || 0}</p>
+                <p className="font-semibold text-gray-900">{(quotesStats as { total: number }).total || 0}</p>
                 <p className="text-sm text-gray-500">báo giá</p>
               </div>
             </div>
@@ -211,7 +211,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
                 <span className="text-gray-600">Hóa đơn quá hạn</span>
               </div>
               <div className="text-right">
-                <p className="font-semibold text-red-600">{invoicesStats.overdue || 0}</p>
+                <p className="font-semibold text-red-600">{(invoicesStats as { overdue: number }).overdue || 0}</p>
                 <p className="text-sm text-gray-500">hóa đơn</p>
               </div>
             </div>
@@ -223,7 +223,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
               </div>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">
-                  {quotesStats.total > 0 ? ((invoicesStats.total / quotesStats.total) * 100).toFixed(1) : 0}%
+                  {(quotesStats as { total: number }).total > 0 ? (((invoicesStats as { total: number }).total / (quotesStats as { total: number }).total) * 100).toFixed(1) : 0}%
                 </p>
                 <p className="text-sm text-gray-500">báo giá → hóa đơn</p>
               </div>
@@ -245,20 +245,20 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
               { name: 'Doanh nghiệp DEF', amount: 28000000, count: 6 },
               { name: 'Công ty GHI', amount: 22000000, count: 5 },
               { name: 'Tập đoàn JKL', amount: 18000000, count: 4 }
-            ].map((customer: any, index: number) => (
+            ].map((customer: unknown, index: number) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
                     <Users className="h-4 w-4 text-gray-600" />
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">{customer.name}</p>
-                    <p className="text-sm text-gray-500">{customer.email}</p>
+                    <p className="font-medium text-gray-900">{(customer as { name: string }).name}</p>
+                    <p className="text-sm text-gray-500">{(customer as { email: string }).email}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-gray-900">{formatCurrency(customer.balance)}</p>
-                  <p className="text-sm text-gray-500">{customer.invoices_count} hóa đơn</p>
+                  <p className="font-semibold text-gray-900">{formatCurrency((customer as { balance: number }).balance)}</p>
+                  <p className="text-sm text-gray-500">{(customer as { invoices_count: number }).invoices_count} hóa đơn</p>
                 </div>
               </div>
             )) || (

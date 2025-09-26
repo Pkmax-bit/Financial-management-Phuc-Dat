@@ -30,7 +30,7 @@ interface Notification {
   type: 'info' | 'warning' | 'error' | 'success'
   read: boolean
   created_at: string
-  data?: any
+  data?: unknown
 }
 
 export default function NotificationsPage() {
@@ -41,7 +41,7 @@ export default function NotificationsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [showSystemAlertModal, setShowSystemAlertModal] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<unknown>(null)
   const router = useRouter()
 
   useEffect(() => {

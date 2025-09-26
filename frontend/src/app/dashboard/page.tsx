@@ -40,12 +40,12 @@ interface DashboardStats {
   paidLast30Days: number
   pendingBills: number
   expensesByCategory: { category: string; amount: number; color: string }[]
-  recentTransactions: any[]
+  recentTransactions: unknown[]
   bankAccounts: { name: string; balance: number; type: string }[]
 }
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null)
+    const [user, setUser] = useState<unknown>(null)
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activeWidget, setActiveWidget] = useState('overview')

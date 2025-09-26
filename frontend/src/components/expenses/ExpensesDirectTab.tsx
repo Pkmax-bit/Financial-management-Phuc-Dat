@@ -72,9 +72,9 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
       
       console.log('Expenses fetched successfully:', data?.length || 0)
       setExpenses(data || [])
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching expenses:', error)
-      setError(`Không thể tải danh sách chi phí: ${error.message}`)
+      setError(`Không thể tải danh sách chi phí: ${(error as Error).message}`)
     } finally {
       setLoading(false)
     }

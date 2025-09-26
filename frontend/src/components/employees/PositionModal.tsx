@@ -3,121 +3,153 @@
 import { useState, useEffect } from 'react'
 import { 
   X, 
-  Building2, 
+  Briefcase, 
   Save,
-  FileText,
   DollarSign,
-  Hash
+  Hash,
+  Building2
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
-interface Department {
+interface Position {
   id: string
   name: string
   code: string
   description: string | null
-  budget: number | null
+  department_id: string | null
+  salary_range_min: number | null
+  salary_range_max: number | null
   is_active: boolean
 }
 
-interface DepartmentModalProps {
+interface PositionModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  department?: Department | null
+  position?: Position | null
   isEdit?: boolean
 }
 
-export default function DepartmentModal({ isOpen, onClose, onSuccess, department, isEdit = false }: DepartmentModalProps) {
+export default function PositionModal({ isOpen, onClose, onSuccess, position, isEdit = false }: PositionModalProps) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([])
 
   // Form data
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     description: '',
-    budget: '',
+    department_id: '',
+    salary_range_min: '',
+    salary_range_max: '',
     is_active: true
   })
 
   useEffect(() => {
-    if (isOpen && department && isEdit) {
-      setFormData({
-        name: department.name,
-        code: department.code,
-        description: department.description || '',
-        budget: department.budget?.toString() || '',
-        is_active: department.is_active
-      })
-    } else if (isOpen && !isEdit) {
-      resetForm()
+    if (isOpen) {
+      fetchDepartments()
+      if (position && isEdit) {
+        setFormData({
+          name: position.name,
+          code: position.code,
+          description: position.description || '',
+          department_id: position.department_id || '',
+          salary_range_min: position.salary_range_min?.toString() || '',
+          salary_range_max: position.salary_range_max?.toString() || '',
+          is_active: position.is_active
+        })
+      } else if (!isEdit) {
+        resetForm()
+      }
     }
-  }, [isOpen, department, isEdit])
+  }, [isOpen, position, isEdit])
+
+  const fetchDepartments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
+
+      if (error) throw error
+      setDepartments(data || [])
+    } catch (err) {
+      console.error('Error fetching departments:', err)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     
     if (!formData.name.trim()) {
-      setError('Vui lòng nhập tên phòng ban')
+      setError('Vui lòng nhập tên chức vụ')
       return
     }
 
     if (!formData.code.trim()) {
-      setError('Vui lòng nhập mã phòng ban')
+      setError('Vui lòng nhập mã chức vụ')
+      return
+    }
+
+    if (!formData.department_id) {
+      setError('Vui lòng chọn phòng ban')
       return
     }
 
     try {
       setSubmitting(true)
 
-      // Check if code already exists (for create) or exists for other departments (for edit)
-      const { data: existingDept } = await supabase
-        .from('departments')
+      // Check if code already exists (for create) or exists for other positions (for edit)
+      const { data: existingPos } = await supabase
+        .from('positions')
         .select('id')
         .eq('code', formData.code.trim())
-        .neq('id', isEdit && department ? department.id : '')
+        .neq('id', isEdit && position ? position.id : '')
         .single()
 
-      if (existingDept) {
-        setError('Mã phòng ban đã tồn tại. Vui lòng chọn mã khác.')
+      if (existingPos) {
+        setError('Mã chức vụ đã tồn tại. Vui lòng chọn mã khác.')
         return
       }
 
-      const departmentData = {
+      const positionData = {
         name: formData.name.trim(),
         code: formData.code.trim(),
         description: formData.description.trim() || null,
-        budget: formData.budget ? parseFloat(formData.budget) : null,
+        department_id: formData.department_id,
+        salary_range_min: formData.salary_range_min ? parseFloat(formData.salary_range_min) : null,
+        salary_range_max: formData.salary_range_max ? parseFloat(formData.salary_range_max) : null,
         is_active: formData.is_active
       }
 
-      if (isEdit && department) {
-        // Update existing department
+      if (isEdit && position) {
+        // Update existing position
         const { error } = await supabase
-          .from('departments')
-          .update(departmentData)
-          .eq('id', department.id)
+          .from('positions')
+          .update(positionData)
+          .eq('id', position.id)
 
         if (error) throw error
-        alert('Phòng ban đã được cập nhật thành công!')
+        alert('Chức vụ đã được cập nhật thành công!')
       } else {
-        // Create new department
+        // Create new position
         const { error } = await supabase
-          .from('departments')
-          .insert([departmentData])
+          .from('positions')
+          .insert([positionData])
 
         if (error) throw error
-        alert('Phòng ban đã được tạo thành công!')
+        alert('Chức vụ đã được tạo thành công!')
       }
       
       onSuccess()
       onClose()
       resetForm()
     } catch (err) {
-      console.error('Error saving department:', err)
-      setError((err as Error).message || 'Có lỗi xảy ra khi lưu phòng ban')
+      console.error('Error saving position:', err)
+      setError((err as Error).message || 'Có lỗi xảy ra khi lưu chức vụ')
     } finally {
       setSubmitting(false)
     }
@@ -128,7 +160,9 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
       name: '',
       code: '',
       description: '',
-      budget: '',
+      department_id: '',
+      salary_range_min: '',
+      salary_range_max: '',
       is_active: true
     })
     setError(null)
@@ -146,7 +180,7 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
       <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {isEdit ? 'Sửa phòng ban' : 'Tạo phòng ban mới'}
+            {isEdit ? 'Sửa chức vụ' : 'Tạo chức vụ mới'}
           </h2>
           <button
             onClick={handleClose}
@@ -165,64 +199,103 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
             </div>
           )}
 
-          {/* Department Name */}
+          {/* Position Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Building2 className="h-4 w-4 inline mr-1" />
-              Tên phòng ban *
+              <Briefcase className="h-4 w-4 inline mr-1" />
+              Tên chức vụ *
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({...formData, name: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              placeholder="Ví dụ: Phòng Nhân sự"
+              placeholder="Ví dụ: Nhân viên Marketing"
               required
               maxLength={255}
               disabled={submitting}
             />
           </div>
 
-          {/* Department Code */}
+          {/* Position Code */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Hash className="h-4 w-4 inline mr-1" />
-              Mã phòng ban *
+              Mã chức vụ *
             </label>
             <input
               type="text"
               value={formData.code}
               onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              placeholder="Ví dụ: HR, IT, SALES"
+              placeholder="Ví dụ: MKT001, DEV001"
               required
               maxLength={50}
               disabled={submitting}
             />
           </div>
 
-          {/* Budget */}
+          {/* Department */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              <DollarSign className="h-4 w-4 inline mr-1" />
-              Ngân sách (VND)
+              <Building2 className="h-4 w-4 inline mr-1" />
+              Phòng ban *
             </label>
-            <input
-              type="number"
-              value={formData.budget}
-              onChange={(e) => setFormData({...formData, budget: e.target.value})}
+            <select
+              value={formData.department_id}
+              onChange={(e) => setFormData({...formData, department_id: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              placeholder="Ví dụ: 100000000"
-              min="0"
-              step="1000"
+              required
               disabled={submitting}
-            />
+            >
+              <option value="">Chọn phòng ban</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Department Description */}
+          {/* Salary Range */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <DollarSign className="h-4 w-4 inline mr-1" />
+                Lương tối thiểu
+              </label>
+              <input
+                type="number"
+                value={formData.salary_range_min}
+                onChange={(e) => setFormData({...formData, salary_range_min: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                placeholder="Ví dụ: 5000000"
+                min="0"
+                step="1000"
+                disabled={submitting}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <DollarSign className="h-4 w-4 inline mr-1" />
+                Lương tối đa
+              </label>
+              <input
+                type="number"
+                value={formData.salary_range_max}
+                onChange={(e) => setFormData({...formData, salary_range_max: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                placeholder="Ví dụ: 10000000"
+                min="0"
+                step="1000"
+                disabled={submitting}
+              />
+            </div>
+          </div>
+
+          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              <FileText className="h-4 w-4 inline mr-1" />
               Mô tả
             </label>
             <textarea
@@ -230,7 +303,7 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
               onChange={(e) => setFormData({...formData, description: e.target.value})}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              placeholder="Mô tả ngắn gọn về chức năng và nhiệm vụ của phòng ban..."
+              placeholder="Mô tả về trách nhiệm và yêu cầu của chức vụ..."
               maxLength={1000}
               disabled={submitting}
             />
@@ -250,7 +323,7 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
               disabled={submitting}
             />
             <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900">
-              Phòng ban đang hoạt động
+              Chức vụ đang hoạt động
             </label>
           </div>
 
@@ -259,7 +332,7 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
             <div className="flex">
               <div className="ml-3">
                 <p className="text-sm text-blue-800">
-                  Sau khi tạo phòng ban, bạn có thể tạo các chức vụ thuộc phòng ban này và phân công nhân viên.
+                  Sau khi tạo chức vụ, bạn có thể phân công nhân viên vào chức vụ này.
                 </p>
               </div>
             </div>
@@ -281,7 +354,7 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
               disabled={submitting}
             >
               <Save className="h-4 w-4 mr-2" />
-              {submitting ? (isEdit ? 'Đang cập nhật...' : 'Đang tạo...') : (isEdit ? 'Cập nhật phòng ban' : 'Tạo phòng ban')}
+              {submitting ? (isEdit ? 'Đang cập nhật...' : 'Đang tạo...') : (isEdit ? 'Cập nhật chức vụ' : 'Tạo chức vụ')}
             </button>
           </div>
         </form>

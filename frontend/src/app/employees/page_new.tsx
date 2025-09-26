@@ -55,6 +55,7 @@ function DepartmentManager() {
         <DepartmentModal 
           isOpen={showDepartmentModal}
           onClose={() => setShowDepartmentModal(false)}
+          onSuccess={() => setShowDepartmentModal(false)}
         />
       )}
     </div>
@@ -70,7 +71,7 @@ export default function EmployeesPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDepartmentManager, setShowDepartmentManager] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<unknown>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -113,13 +114,14 @@ export default function EmployeesPage() {
         .from('employees')
         .select(`
           id,
+          user_id,
           employee_code,
           first_name,
           last_name,
           email,
           phone,
-          position,
-          department,
+          department_id,
+          position_id,
           salary,
           hire_date,
           status,
@@ -211,8 +213,8 @@ export default function EmployeesPage() {
           bValue = b.salary || 0
           break
         case 'department':
-          aValue = a.department?.toLowerCase() || ''
-          bValue = b.department?.toLowerCase() || ''
+          aValue = a.department_id?.toLowerCase() || ''
+          bValue = b.department_id?.toLowerCase() || ''
           break
         case 'hire_date':
           aValue = a.hire_date ? new Date(a.hire_date).getTime() : 0
@@ -325,7 +327,7 @@ export default function EmployeesPage() {
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-600">Phòng ban</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {new Set(filteredEmployees.map(e => e.department).filter(Boolean)).size}
+                    {new Set(filteredEmployees.map(e => e.department_id).filter(Boolean)).size}
                   </p>
                 </div>
               </div>
@@ -452,8 +454,8 @@ export default function EmployeesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          <div className="font-medium">{employee.position || 'N/A'}</div>
-                          <div className="text-xs text-gray-500">{employee.department || 'N/A'}</div>
+                          <div className="font-medium">{employee.position_id || 'N/A'}</div>
+                          <div className="text-xs text-gray-500">{employee.department_id || 'N/A'}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { apiGet } from '@/lib/api'
 
 export default function AuthTestPage() {
-  const [sessionInfo, setSessionInfo] = useState<any>(null)
-  const [userInfo, setUserInfo] = useState<any>(null)
+  const [sessionInfo, setSessionInfo] = useState<unknown>(null)
+  const [userInfo, setUserInfo] = useState<unknown>(null)
   const [loading, setLoading] = useState(false)
   const [apiTestResult, setApiTestResult] = useState<string>('')
 
@@ -36,7 +36,7 @@ export default function AuthTestPage() {
       })
       
       if (error) {
-        alert('Login error: ' + error.message)
+        alert('Login error: ' + (error as Error).message)
       } else {
         alert('Login successful!')
         checkSession()
@@ -52,8 +52,8 @@ export default function AuthTestPage() {
       setApiTestResult('Testing...')
       const data = await apiGet('/api/employees')
       setApiTestResult('✅ API Success: ' + JSON.stringify(data, null, 2))
-    } catch (error: any) {
-      setApiTestResult('❌ API Error: ' + error.message)
+    } catch (error: unknown) {
+      setApiTestResult('❌ API Error: ' + (error as Error).message)
     }
   }
 

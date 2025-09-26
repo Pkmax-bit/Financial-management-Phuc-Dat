@@ -28,26 +28,19 @@ import { supabase } from '@/lib/supabase'
 
 interface Expense {
   id: string
-  expense_number: string
+  expense_code: string
+  employee_id: string
+  project_id?: string
+  category: 'travel' | 'meals' | 'accommodation' | 'transportation' | 'supplies' | 'equipment' | 'training' | 'other'
   description: string
   amount: number
-  category: string
-  date: string
-  payment_method: 'cash' | 'debit_card' | 'credit_card' | 'check' | 'bank_transfer'
-  transaction_type: 'expense' | 'check' | 'credit_card_credit'
-  status: 'pending' | 'approved' | 'rejected' | 'paid'
-  is_billable: boolean
-  is_reimbursable: boolean
-  customer_id?: string
-  vendor_id?: string
-  vendor_name?: string
-  project_id?: string
+  currency: string
+  expense_date: string
   receipt_url?: string
-  has_receipt: boolean
+  status: 'pending' | 'approved' | 'rejected' | 'paid'
+  approved_by?: string
+  approved_at?: string
   notes?: string
-  account_id?: string
-  account_name?: string
-  created_by: string
   created_at: string
   updated_at: string
 }
@@ -99,7 +92,6 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
           expense_code,
           employee_id,
           project_id,
-          vendor_id,
           category,
           description,
           amount,
@@ -109,7 +101,6 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
           status,
           approved_by,
           approved_at,
-          rejected_reason,
           notes,
           created_at,
           updated_at
@@ -245,7 +236,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
 
   // Filter expenses based on search term
   const filteredExpenses = expenses.filter(expense => {
-    const matchesSearch = expense.expense_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = expense.expense_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       expense.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       expense.category?.toLowerCase().includes(searchTerm.toLowerCase())
     
@@ -343,42 +334,34 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
               filteredExpenses.map((expense) => (
                 <tr key={expense.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="font-medium">{formatDate(expense.date)}</div>
+                    <div className="font-medium">{formatDate(expense.expense_date)}</div>
                     <div className="text-xs text-gray-500">
-                      {getTransactionTypeText(expense.transaction_type || 'expense')}
+                      Expense
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     <div>
-                      <div className="font-medium">{expense.vendor_name || expense.description}</div>
+                      <div className="font-medium">{expense.description}</div>
                       <div className="text-sm text-gray-600 mt-1">{expense.description}</div>
                       {expense.notes && (
                         <div className="text-xs text-gray-500 mt-1">{expense.notes}</div>
                       )}
-                      {expense.account_name && (
-                        <div className="text-xs text-gray-500 mt-1">Tài khoản: {expense.account_name}</div>
+                      {expense.notes && (
+                        <div className="text-xs text-gray-500 mt-1">Ghi chú: {expense.notes}</div>
                       )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="font-medium">{getCategoryText(expense.category)}</div>
                     <div className="flex items-center mt-1 space-x-1">
-                      {expense.is_billable && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                          Billable
-                        </span>
-                      )}
-                      {expense.is_reimbursable && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                          Reimbursable
-                        </span>
-                      )}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                        {expense.category}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">
-                      {getPaymentMethodIcon(expense.payment_method)}
-                      <span className="ml-1">{getPaymentMethodText(expense.payment_method)}</span>
+                      <span>{expense.currency}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -389,7 +372,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">
-                      {expense.has_receipt ? (
+                      {expense.receipt_url ? (
                         <div className="flex items-center text-green-600">
                           <Paperclip className="h-4 w-4 mr-1" />
                           <span className="text-xs">Có</span>
@@ -416,7 +399,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      {!expense.has_receipt && (
+                      {!expense.receipt_url && (
                         <button 
                           className="text-gray-400 hover:text-blue-600" 
                           title="Đính kèm chứng từ"

@@ -37,7 +37,7 @@ interface Invoice {
   payment_status: 'pending' | 'partial' | 'paid' | 'overdue' | 'refunded'
   paid_amount: number
   payment_terms?: string
-  items: any[]
+  items: unknown[]
   notes?: string
   terms_and_conditions?: string
   sent_at?: string
