@@ -83,14 +83,120 @@ export default function DashboardPage() {
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await fetch('/api/dashboard/stats')
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data)
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        router.push('/login')
+        return
       }
+
+      // Use Supabase client to fetch dashboard stats
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          total_amount,
+          payment_status,
+          paid_date,
+          status,
+          due_date
+        `)
+
+      if (error) throw error
+
+      // Calculate stats from the data
+      const now = new Date()
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      
+      const paidInvoices = data?.filter(invoice => 
+        invoice.payment_status === 'paid' && 
+        invoice.paid_date && 
+        new Date(invoice.paid_date) >= thirtyDaysAgo
+      ) || []
+      
+      const totalRevenue = paidInvoices.reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
+      
+      const openInvoices = data?.filter(invoice => 
+        invoice.payment_status === 'pending' || invoice.payment_status === 'partial'
+      ) || []
+      
+      const overdueInvoices = data?.filter(invoice => 
+        invoice.due_date && 
+        new Date(invoice.due_date) < now && 
+        (invoice.payment_status === 'pending' || invoice.payment_status === 'partial')
+      ) || []
+
+      // Fetch expenses data
+      const { data: expensesData } = await supabase
+        .from('expenses')
+        .select('amount, category, status')
+        .gte('expense_date', thirtyDaysAgo.toISOString().split('T')[0])
+
+      const totalExpenses = expensesData?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
+      
+      // Fetch bills data
+      const { data: billsData } = await supabase
+        .from('bills')
+        .select('amount, status')
+
+      const pendingBills = billsData?.filter(bill => 
+        bill.status === 'pending' || bill.status === 'partial'
+      ) || []
+
+      // Fetch bank accounts
+      const { data: bankAccountsData } = await supabase
+        .from('bank_accounts')
+        .select('account_name, balance, account_type')
+        .eq('is_active', true)
+
+      const bankAccounts = bankAccountsData?.map(account => ({
+        name: account.account_name || 'Unknown Account',
+        balance: account.balance || 0,
+        type: account.account_type || 'Banking Account'
+      })) || []
+
+      const cashBalance = bankAccounts.reduce((sum, account) => sum + account.balance, 0)
+
+      // Calculate expenses by category
+      const expensesByCategory = expensesData?.reduce((acc, expense) => {
+        const category = expense.category || 'other'
+        if (!acc[category]) {
+          acc[category] = { category, amount: 0, color: getCategoryColor(category) }
+        }
+        acc[category].amount += expense.amount || 0
+        return acc
+      }, {} as Record<string, { category: string; amount: number; color: string }>) || {}
+
+      const expensesByCategoryArray = Object.values(expensesByCategory)
+
+      setStats({
+        totalRevenue,
+        totalExpenses,
+        profitLoss: totalRevenue - totalExpenses,
+        cashBalance,
+        openInvoices: openInvoices.length,
+        overdueInvoices: overdueInvoices.length,
+        paidLast30Days: totalRevenue,
+        pendingBills: pendingBills.length,
+        expensesByCategory: expensesByCategoryArray,
+        recentTransactions: [],
+        bankAccounts
+      })
     } catch (error) {
       console.error('Error fetching dashboard stats:', error)
     }
+  }
+
+  const getCategoryColor = (category: string) => {
+    const colors = {
+      'travel': '#3B82F6',
+      'meals': '#10B981', 
+      'accommodation': '#F59E0B',
+      'transportation': '#8B5CF6',
+      'supplies': '#EF4444',
+      'equipment': '#06B6D4',
+      'training': '#84CC16',
+      'other': '#6B7280'
+    }
+    return colors[category as keyof typeof colors] || '#6B7280'
   }
 
   const handleLogout = async () => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   Receipt, 
   Plus, 
@@ -23,6 +24,7 @@ import {
   Download,
   Upload
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 interface Expense {
   id: string
@@ -59,19 +61,63 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const router = useRouter()
 
   useEffect(() => {
-    fetchExpenses()
+    checkUser()
   }, [])
+
+  const checkUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (authUser) {
+        // User is authenticated, proceed to fetch expenses
+        fetchExpenses()
+      } else {
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Error checking user:', error)
+      router.push('/login')
+    }
+  }
 
   const fetchExpenses = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/expenses/expenses')
-      if (response.ok) {
-        const data = await response.json()
-        setExpenses(data.expenses || [])
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        router.push('/login')
+        return
       }
+
+      const { data, error } = await supabase
+        .from('expenses')
+        .select(`
+          id,
+          expense_code,
+          employee_id,
+          project_id,
+          vendor_id,
+          category,
+          description,
+          amount,
+          currency,
+          expense_date,
+          receipt_url,
+          status,
+          approved_by,
+          approved_at,
+          rejected_reason,
+          notes,
+          created_at,
+          updated_at
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setExpenses(data || [])
     } catch (error) {
       console.error('Error fetching expenses:', error)
     } finally {

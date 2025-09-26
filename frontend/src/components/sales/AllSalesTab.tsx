@@ -28,8 +28,9 @@ interface Transaction {
   customer_name: string
   date: string
   amount: number
-  status: string
+  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'closed' | 'open' | 'overdue' | 'paid' | 'pending' | 'completed'
   due_date?: string
+  payment_status?: 'pending' | 'partial' | 'paid'
 }
 
 export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {

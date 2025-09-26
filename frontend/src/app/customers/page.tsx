@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Customer } from '@/types'
 import { 
   Building2, 
   Plus, 
@@ -69,11 +70,19 @@ export default function CustomersPage() {
   const router = useRouter()
 
   const defaultCustomerForm = {
+    customer_code: '',
     name: '',
+    type: 'individual',
     email: '',
     phone: '',
     address: '',
-    tax_code: ''
+    city: '',
+    country: 'Vietnam',
+    tax_id: '',
+    credit_limit: 0,
+    payment_terms: 30,
+    notes: '',
+    assigned_to: ''
   }
 
   const [addForm, setAddForm] = useState(defaultCustomerForm)
@@ -155,7 +164,25 @@ export default function CustomersPage() {
     try {
       const { data, error } = await supabase
         .from('customers')
-        .select('*')
+        .select(`
+          id,
+          customer_code,
+          name,
+          type,
+          email,
+          phone,
+          address,
+          city,
+          country,
+          tax_id,
+          status,
+          credit_limit,
+          payment_terms,
+          notes,
+          assigned_to,
+          created_at,
+          updated_at
+        `)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -190,14 +217,20 @@ export default function CustomersPage() {
   const openEditModal = (customer: Customer) => {
     setSelectedCustomer(customer)
     setEditForm({
-      name: customer.name || '',
       customer_code: customer.customer_code || '',
+      name: customer.name || '',
+      type: customer.type || 'individual',
       email: customer.email || '',
       phone: customer.phone || '',
-      address: (customer as any).address || '',
-      city: (customer as any).city || '',
-      type: (customer as any).type || 'individual',
-      status: (customer as any).status || 'active'
+      address: customer.address || '',
+      city: customer.city || '',
+      country: customer.country || 'Vietnam',
+      tax_id: customer.tax_id || '',
+      credit_limit: customer.credit_limit || 0,
+      payment_terms: customer.payment_terms || 30,
+      notes: customer.notes || '',
+      assigned_to: customer.assigned_to || '',
+      status: customer.status || 'active'
     })
     setEditError('')
     setShowEditModal(true)
@@ -210,9 +243,41 @@ export default function CustomersPage() {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (!authUser) throw new Error('Chưa đăng nhập')
+      
+      // Check if customer_code already exists
+      const { data: existingCustomer } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('customer_code', addForm.customer_code)
+        .single()
+      
+      if (existingCustomer) {
+        setAddError('Mã khách hàng đã tồn tại. Vui lòng chọn mã khác.')
+        return
+      }
+      
+      // Prepare customer data according to database schema
+      const customerData = {
+        customer_code: addForm.customer_code,
+        name: addForm.name,
+        type: addForm.type,
+        email: addForm.email || null,
+        phone: addForm.phone || null,
+        address: addForm.address || null,
+        city: addForm.city || null,
+        country: addForm.country || 'Vietnam',
+        tax_id: addForm.tax_id || null,
+        status: 'active',
+        credit_limit: addForm.credit_limit || 0,
+        payment_terms: addForm.payment_terms || 30,
+        notes: addForm.notes || null,
+        assigned_to: addForm.assigned_to || null
+      }
+      
       const { error } = await supabase
         .from('customers')
-        .insert([{ ...addForm, user_id: authUser.id }])
+        .insert([customerData])
+      
       if (error) throw error
       setShowAddModal(false)
       setNotice({ type: 'success', text: 'Thêm khách hàng thành công' })
@@ -230,10 +295,29 @@ export default function CustomersPage() {
     setEditSaving(true)
     setEditError('')
     try {
+      // Prepare update data according to database schema
+      const updateData = {
+        customer_code: editForm.customer_code,
+        name: editForm.name,
+        type: editForm.type,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+        address: editForm.address || null,
+        city: editForm.city || null,
+        country: editForm.country || 'Vietnam',
+        tax_id: editForm.tax_id || null,
+        status: editForm.status || 'active',
+        credit_limit: editForm.credit_limit || 0,
+        payment_terms: editForm.payment_terms || 30,
+        notes: editForm.notes || null,
+        assigned_to: editForm.assigned_to || null
+      }
+      
       const { error } = await supabase
         .from('customers')
-        .update({ ...editForm })
+        .update(updateData)
         .eq('id', selectedCustomer.id)
+      
       if (error) throw error
       setShowEditModal(false)
       setNotice({ type: 'success', text: 'Cập nhật khách hàng thành công' })
@@ -585,16 +669,16 @@ export default function CustomersPage() {
                         KHÁCH HÀNG
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        EMAIL
+                        LOẠI
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ĐIỆN THOẠI
+                        LIÊN HỆ
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ĐỊA CHỈ
+                        TÀI CHÍNH
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        MÃ SỐ THUẾ
+                        TRẠNG THÁI
                       </th>
                       <th scope="col" className="relative px-6 py-3">
                         <span className="sr-only">Hành động</span>
@@ -615,14 +699,45 @@ export default function CustomersPage() {
                                 <div className="text-sm font-medium text-gray-900">
                                   {customer.name}
                                 </div>
-                              <div className="text-sm text-gray-500">ID: {customer.id.slice(0, 8)}</div>
+                                <div className="text-sm text-gray-500">Mã: {customer.customer_code || customer.id.slice(0, 8)}</div>
                               </div>
                             </div>
                           </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.email || '—'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.phone || '—'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.address || '—'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.tax_code || '—'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeColor(customer.type)}`}>
+                            {customer.type === 'individual' ? 'Cá nhân' :
+                             customer.type === 'company' ? 'Công ty' : 'Cơ quan nhà nước'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {customer.email && (
+                              <div className="flex items-center">
+                                <Mail className="h-3 w-3 mr-1 text-gray-400" />
+                                {customer.email}
+                              </div>
+                            )}
+                            {customer.phone && (
+                              <div className="flex items-center mt-1">
+                                <Phone className="h-3 w-3 mr-1 text-gray-400" />
+                                {customer.phone}
+                              </div>
+                            )}
+                            {!customer.email && !customer.phone && <span className="text-gray-400">—</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            <div>Hạn mức: {formatCurrency(customer.credit_limit || 0)}</div>
+                            <div className="text-xs text-gray-500">Thanh toán: {customer.payment_terms || 30} ngày</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(customer.status)}`}>
+                            {customer.status === 'active' ? 'Hoạt động' :
+                             customer.status === 'inactive' ? 'Ngừng hoạt động' : 'Tiềm năng'}
+                          </span>
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
@@ -736,7 +851,21 @@ export default function CustomersPage() {
               <form onSubmit={createCustomer} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Tên/Công ty</label>
+                    <label className="block text-sm font-medium text-gray-700">Mã khách hàng *</label>
+                    <input name="customer_code" value={addForm.customer_code} onChange={handleAddChange} required
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Loại khách hàng</label>
+                    <select name="type" value={addForm.type} onChange={handleAddChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                      <option value="individual">Cá nhân</option>
+                      <option value="company">Công ty</option>
+                      <option value="government">Cơ quan nhà nước</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Tên/Công ty *</label>
                     <input name="name" value={addForm.name} onChange={handleAddChange} required
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
@@ -750,6 +879,11 @@ export default function CustomersPage() {
                     <input name="phone" value={addForm.phone} onChange={handleAddChange}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Thành phố</label>
+                    <input name="city" value={addForm.city} onChange={handleAddChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700">Địa chỉ</label>
                     <input name="address" value={addForm.address} onChange={handleAddChange}
@@ -757,8 +891,42 @@ export default function CustomersPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Mã số thuế</label>
-                    <input name="tax_code" value={addForm.tax_code} onChange={handleAddChange}
+                    <input name="tax_id" value={addForm.tax_id} onChange={handleAddChange}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Quốc gia</label>
+                    <input name="country" value={addForm.country} onChange={handleAddChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                </div>
+                
+                {/* Financial Information */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin tài chính</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Hạn mức tín dụng (VND)</label>
+                      <input name="credit_limit" type="number" value={addForm.credit_limit} onChange={handleAddChange}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Điều khoản thanh toán (ngày)</label>
+                      <input name="payment_terms" type="number" value={addForm.payment_terms} onChange={handleAddChange}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Additional Information */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin bổ sung</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
+                      <textarea name="notes" value={addForm.notes} onChange={handleAddChange} rows={3}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
                   </div>
                 </div>
 
@@ -803,8 +971,19 @@ export default function CustomersPage() {
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="space-y-3">
                       <div>
+                        <label className="block text-sm font-medium text-gray-700">Mã khách hàng</label>
+                        <p className="text-sm text-gray-900">{selectedCustomer.customer_code || selectedCustomer.id.slice(0, 8)}</p>
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700">Tên/Công ty</label>
                         <p className="text-sm text-gray-900">{selectedCustomer.name}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Loại khách hàng</label>
+                        <p className="text-sm text-gray-900">
+                          {selectedCustomer.type === 'individual' ? 'Cá nhân' :
+                           selectedCustomer.type === 'company' ? 'Công ty' : 'Cơ quan nhà nước'}
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Email</label>
@@ -815,38 +994,51 @@ export default function CustomersPage() {
                         <p className="text-sm text-gray-900">{selectedCustomer.phone || 'N/A'}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Địa chỉ xuất hóa đơn</label>
+                        <label className="block text-sm font-medium text-gray-700">Địa chỉ</label>
                         <p className="text-sm text-gray-900">{selectedCustomer.address || 'N/A'}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Địa chỉ giao hàng</label>
-                        <p className="text-sm text-gray-900">Sẽ được cập nhật</p>
+                        <label className="block text-sm font-medium text-gray-700">Thành phố</label>
+                        <p className="text-sm text-gray-900">{selectedCustomer.city || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Quốc gia</label>
+                        <p className="text-sm text-gray-900">{selectedCustomer.country || 'Vietnam'}</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Terms & Tax Info */}
+                {/* Financial & Tax Info */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Điều khoản & Thông tin Thuế</h4>
+                  <h4 className="font-medium text-gray-900">Thông tin Tài chính & Thuế</h4>
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Điều khoản thanh toán</label>
-                        <p className="text-sm text-gray-900">Net 30</p>
+                        <label className="block text-sm font-medium text-gray-700">Hạn mức tín dụng</label>
+                        <p className="text-sm text-gray-900">{formatCurrency(selectedCustomer.credit_limit || 0)}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Phương thức giao hàng</label>
-                        <p className="text-sm text-gray-900">Tiêu chuẩn</p>
+                        <label className="block text-sm font-medium text-gray-700">Điều khoản thanh toán</label>
+                        <p className="text-sm text-gray-900">{selectedCustomer.payment_terms || 30} ngày</p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Mã số thuế</label>
-                        <p className="text-sm text-gray-900">Sẽ được cập nhật</p>
+                        <p className="text-sm text-gray-900">{selectedCustomer.tax_id || 'N/A'}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Trạng thái miễn thuế</label>
-                        <p className="text-sm text-gray-900">Không</p>
+                        <label className="block text-sm font-medium text-gray-700">Trạng thái</label>
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(selectedCustomer.status)}`}>
+                          {selectedCustomer.status === 'active' ? 'Hoạt động' :
+                           selectedCustomer.status === 'inactive' ? 'Ngừng hoạt động' : 'Tiềm năng'}
+                        </span>
                       </div>
+                      {selectedCustomer.notes && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
+                          <p className="text-sm text-gray-900">{selectedCustomer.notes}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1057,8 +1249,22 @@ export default function CustomersPage() {
               <form onSubmit={updateCustomer} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
+                    <label className="block text-sm font-medium text-gray-700">Mã khách hàng</label>
+                    <input name="customer_code" value={editForm.customer_code} onChange={handleEditChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Loại khách hàng</label>
+                    <select name="type" value={editForm.type} onChange={handleEditChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                      <option value="individual">Cá nhân</option>
+                      <option value="company">Công ty</option>
+                      <option value="government">Cơ quan nhà nước</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700">Tên/Công ty</label>
-                    <input name="name" value={editForm.name} onChange={handleEditChange} required
+                    <input name="name" value={editForm.name} onChange={handleEditChange}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
                   <div>
@@ -1071,6 +1277,11 @@ export default function CustomersPage() {
                     <input name="phone" value={editForm.phone} onChange={handleEditChange}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Thành phố</label>
+                    <input name="city" value={editForm.city} onChange={handleEditChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700">Địa chỉ</label>
                     <input name="address" value={editForm.address} onChange={handleEditChange}
@@ -1078,8 +1289,42 @@ export default function CustomersPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Mã số thuế</label>
-                    <input name="tax_code" value={(editForm as any).tax_code || ''} onChange={handleEditChange}
+                    <input name="tax_id" value={editForm.tax_id} onChange={handleEditChange}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Quốc gia</label>
+                    <input name="country" value={editForm.country} onChange={handleEditChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                </div>
+                
+                {/* Financial Information */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin tài chính</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Hạn mức tín dụng (VND)</label>
+                      <input name="credit_limit" type="number" value={editForm.credit_limit} onChange={handleEditChange}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Điều khoản thanh toán (ngày)</label>
+                      <input name="payment_terms" type="number" value={editForm.payment_terms} onChange={handleEditChange}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Additional Information */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin bổ sung</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
+                      <textarea name="notes" value={editForm.notes} onChange={handleEditChange} rows={3}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
                   </div>
                 </div>
 

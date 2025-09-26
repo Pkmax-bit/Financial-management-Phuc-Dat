@@ -935,6 +935,11 @@ async def create_sales_receipt(
             detail=f"Failed to create sales receipt: {str(e)}"
         )
 
+@router.get("/test")
+async def test_sales_endpoint():
+    """Test endpoint to verify sales router is working"""
+    return {"message": "Sales router is working!", "status": "success"}
+
 @router.get("/dashboard/stats")
 async def get_sales_dashboard_stats(
     start_date: Optional[date] = Query(None),

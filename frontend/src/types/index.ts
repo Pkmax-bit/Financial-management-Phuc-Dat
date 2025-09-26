@@ -43,7 +43,10 @@ export interface Customer {
   country?: string
   tax_id?: string
   status: 'active' | 'inactive' | 'prospect'
+  credit_limit: number
+  payment_terms: number
   notes?: string
+  assigned_to?: string
   created_at: string
   updated_at: string
 }

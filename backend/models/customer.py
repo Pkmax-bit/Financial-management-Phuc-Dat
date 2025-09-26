@@ -30,7 +30,10 @@ class Customer(BaseModel):
     country: Optional[str] = None
     tax_id: Optional[str] = None
     status: CustomerStatus = CustomerStatus.ACTIVE
+    credit_limit: float = 0.0
+    payment_terms: int = 30  # days
     notes: Optional[str] = None
+    assigned_to: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -45,7 +48,10 @@ class CustomerCreate(BaseModel):
     city: Optional[str] = None
     country: Optional[str] = None
     tax_id: Optional[str] = None
+    credit_limit: float = 0.0
+    payment_terms: int = 30
     notes: Optional[str] = None
+    assigned_to: Optional[str] = None
 
 class CustomerUpdate(BaseModel):
     """Customer update model"""
@@ -59,4 +65,7 @@ class CustomerUpdate(BaseModel):
     country: Optional[str] = None
     tax_id: Optional[str] = None
     status: Optional[CustomerStatus] = None
+    credit_limit: Optional[float] = None
+    payment_terms: Optional[int] = None
     notes: Optional[str] = None
+    assigned_to: Optional[str] = None

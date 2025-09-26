@@ -26,14 +26,17 @@ class Project(BaseModel):
     project_code: str
     name: str
     description: Optional[str] = None
-    customer_id: str
-    manager_id: str
+    customer_id: Optional[str] = None
+    manager_id: Optional[str] = None
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None
+    actual_cost: float = 0.0
     status: ProjectStatus = ProjectStatus.PLANNING
     priority: ProjectPriority = ProjectPriority.MEDIUM
-    progress: float = 0.0  # 0-100
+    progress: float = 0.0
+    billing_type: str = "fixed"  # fixed, hourly, milestone
+    hourly_rate: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -42,12 +45,14 @@ class ProjectCreate(BaseModel):
     project_code: str
     name: str
     description: Optional[str] = None
-    customer_id: str
-    manager_id: str
+    customer_id: Optional[str] = None
+    manager_id: Optional[str] = None
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None
     priority: ProjectPriority = ProjectPriority.MEDIUM
+    billing_type: str = "fixed"
+    hourly_rate: Optional[float] = None
 
 class ProjectUpdate(BaseModel):
     """Project update model"""
@@ -59,6 +64,9 @@ class ProjectUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     budget: Optional[float] = None
+    actual_cost: Optional[float] = None
     status: Optional[ProjectStatus] = None
     priority: Optional[ProjectPriority] = None
     progress: Optional[float] = None
+    billing_type: Optional[str] = None
+    hourly_rate: Optional[float] = None

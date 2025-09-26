@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   Building2, 
   Plus, 
@@ -16,6 +17,7 @@ import {
   FileText,
   Download
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 interface Vendor {
   id: string
@@ -43,19 +45,60 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const router = useRouter()
 
   useEffect(() => {
-    fetchVendors()
+    checkUser()
   }, [])
+
+  const checkUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (authUser) {
+        // User is authenticated, proceed to fetch vendors
+        fetchVendors()
+      } else {
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Error checking user:', error)
+      router.push('/login')
+    }
+  }
 
   const fetchVendors = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/expenses/vendors')
-      if (response.ok) {
-        const data = await response.json()
-        setVendors(data.vendors || [])
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        router.push('/login')
+        return
       }
+
+      const { data, error } = await supabase
+        .from('vendors')
+        .select(`
+          id,
+          vendor_code,
+          name,
+          contact_person,
+          email,
+          phone,
+          address,
+          city,
+          country,
+          tax_id,
+          payment_terms,
+          is_active,
+          notes,
+          created_at,
+          updated_at
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setVendors(data || [])
     } catch (error) {
       console.error('Error fetching vendors:', error)
     } finally {

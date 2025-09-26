@@ -27,6 +27,7 @@ import InvoicesTab from '@/components/sales/InvoicesTab'
 import PaymentsTab from '@/components/sales/PaymentsTab'
 import CustomersTab from '@/components/sales/CustomersTab'
 import ProductsServicesTab from '@/components/sales/ProductsServicesTab'
+import { apiGet } from '@/lib/api'
 
 interface User {
   full_name?: string
@@ -40,12 +41,23 @@ export default function SalesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const [salesStats, setSalesStats] = useState<any>({})
+  const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     checkUser()
     fetchSalesStats()
   }, [])
+
+  useEffect(() => {
+    if (shouldOpenCreateModal && activeTab === 'quotes') {
+      // Reset the flag after a short delay to allow the modal to open
+      const timer = setTimeout(() => {
+        setShouldOpenCreateModal(false)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [shouldOpenCreateModal, activeTab])
 
 
 
@@ -80,11 +92,8 @@ export default function SalesPage() {
   const fetchSalesStats = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/sales/dashboard/stats')
-      if (response.ok) {
-        const stats = await response.json()
-        setSalesStats(stats)
-      }
+      const stats = await apiGet('/api/sales/dashboard/stats')
+      setSalesStats(stats)
     } catch (error) {
       console.error('Error fetching sales stats:', error)
     } finally {
@@ -93,8 +102,9 @@ export default function SalesPage() {
   }
 
   const handleCreateQuote = () => {
-    // Navigate to create quote page or open modal
-    console.log('Create quote')
+    // Set active tab to quotes and trigger create modal
+    setActiveTab('quotes')
+    setShouldOpenCreateModal(true)
   }
 
   const handleCreateInvoice = () => {
@@ -171,7 +181,7 @@ export default function SalesPage() {
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
             <div className="flex items-center">
-              <h2 className="text-2xl font-semibold text-gray-900">Quản lý bán hàng</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">Sales Center</h2>
             </div>
           </div>
         </div>
@@ -182,9 +192,9 @@ export default function SalesPage() {
           <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Trung tâm Bán hàng</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Sales Center</h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Quản lý toàn bộ quy trình từ báo giá đến thu tiền
+                  Trung tâm chỉ huy cho toàn bộ quy trình tạo ra doanh thu - từ báo giá đến thu tiền
                 </p>
               </div>
               {activeTab !== 'overview' && (
@@ -193,7 +203,7 @@ export default function SalesPage() {
                     <Download className="h-4 w-4 mr-2" />
                     Xuất Excel
                   </button>
-                  {(activeTab === 'quotes' || activeTab === 'all_sales') && (
+                  {(activeTab === 'quotes' || activeTab === 'all-sales') && (
                     <button 
                       onClick={handleCreateQuote}
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -202,13 +212,31 @@ export default function SalesPage() {
                       Tạo báo giá
                     </button>
                   )}
-                  {(activeTab === 'invoices' || activeTab === 'all_sales') && (
+                  {(activeTab === 'invoices' || activeTab === 'all-sales') && (
                     <button 
                       onClick={handleCreateInvoice}
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Tạo hóa đơn
+                    </button>
+                  )}
+                  {activeTab === 'customers' && (
+                    <button 
+                      onClick={() => console.log('Create customer')}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Thêm khách hàng
+                    </button>
+                  )}
+                  {activeTab === 'products' && (
+                    <button 
+                      onClick={() => console.log('Create product')}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Thêm sản phẩm
                     </button>
                   )}
                 </div>
@@ -290,14 +318,24 @@ export default function SalesPage() {
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex space-x-8 px-6">
                 <button
-                  onClick={() => setActiveTab('quotes')}
+                  onClick={() => setActiveTab('overview')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'quotes'
+                    activeTab === 'overview'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Báo giá ({String(Object.values(quotesStats.by_status || {}).reduce((a: any, b: any) => a + b, 0))})
+                  Tổng quan
+                </button>
+                <button
+                  onClick={() => setActiveTab('all-sales')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'all-sales'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Tất cả giao dịch
                 </button>
                 <button
                   onClick={() => setActiveTab('invoices')}
@@ -310,36 +348,65 @@ export default function SalesPage() {
                   Hóa đơn ({invoicesStats.total || 0})
                 </button>
                 <button
-                  onClick={() => setActiveTab('payments')}
+                  onClick={() => setActiveTab('quotes')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'payments'
+                    activeTab === 'quotes'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Thanh toán
+                  Báo giá ({String(Object.values(quotesStats.by_status || {}).reduce((a: any, b: any) => a + b, 0))})
+                </button>
+                <button
+                  onClick={() => setActiveTab('customers')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'customers'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Khách hàng
+                </button>
+                <button
+                  onClick={() => setActiveTab('products')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'products'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Sản phẩm & Dịch vụ
                 </button>
               </nav>
             </div>
 
-            {/* Search Bar */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+            {/* Search Bar - Only show for non-overview tabs */}
+            {activeTab !== 'overview' && (
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder={
+                      activeTab === 'all-sales' ? 'Tìm kiếm tất cả giao dịch...' :
+                      activeTab === 'quotes' ? 'Tìm kiếm báo giá...' : 
+                      activeTab === 'invoices' ? 'Tìm kiếm hóa đơn...' : 
+                      activeTab === 'customers' ? 'Tìm kiếm khách hàng...' :
+                      activeTab === 'products' ? 'Tìm kiếm sản phẩm...' :
+                      'Tìm kiếm...'
+                    }
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-                <input
-                  type="text"
-                  placeholder={activeTab === 'quotes' ? 'Tìm kiếm báo giá...' : activeTab === 'invoices' ? 'Tìm kiếm hóa đơn...' : 'Tìm kiếm thanh toán...'}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
               </div>
-            </div>
+            )}
 
             {/* Tab Content */}
-            <div className={`${activeTab === 'overview' ? '' : 'bg-white rounded-lg shadow p-6'}`}>
+            <div className={`${activeTab === 'overview' ? '' : 'p-6'}`}>
               {activeTab === 'overview' && (
                 <OverviewTab 
                   quotesStats={quotesStats}
@@ -358,10 +425,11 @@ export default function SalesPage() {
                   onCreateInvoice={handleCreateInvoice}
                 />
               )}
-              {activeTab === 'estimates' && (
+              {activeTab === 'quotes' && (
                 <QuotesTab 
                   searchTerm={searchTerm}
                   onCreateQuote={handleCreateQuote}
+                  shouldOpenCreateModal={shouldOpenCreateModal}
                 />
               )}
               {activeTab === 'customers' && (

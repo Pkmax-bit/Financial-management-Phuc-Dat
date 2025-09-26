@@ -84,11 +84,48 @@ export default function ExpensesPage() {
 
   const fetchExpensesStats = async () => {
     try {
-      const response = await fetch('/api/expenses/stats')
-      if (response.ok) {
-        const data = await response.json()
-        setExpensesStats(data)
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        router.push('/login')
+        return
       }
+
+      // Fetch expenses data
+      const { data: expensesData } = await supabase
+        .from('expenses')
+        .select('amount, status')
+
+      const totalExpenses = expensesData?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
+      const expensesCount = expensesData?.length || 0
+      const pendingAmount = expensesData?.filter(e => e.status === 'pending').reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
+      const pendingCount = expensesData?.filter(e => e.status === 'pending').length || 0
+
+      // Fetch bills data
+      const { data: billsData } = await supabase
+        .from('bills')
+        .select('amount, status')
+
+      const totalBills = billsData?.reduce((sum, bill) => sum + (bill.amount || 0), 0) || 0
+      const billsCount = billsData?.length || 0
+
+      // Fetch vendors data
+      const { data: vendorsData } = await supabase
+        .from('vendors')
+        .select('id, is_active')
+
+      const vendorsCount = vendorsData?.length || 0
+      const activeVendors = vendorsData?.filter(v => v.is_active).length || 0
+
+      setExpensesStats({
+        total_expenses: totalExpenses,
+        expenses_count: expensesCount,
+        pending_amount: pendingAmount,
+        pending_count: pendingCount,
+        total_bills: totalBills,
+        bills_count: billsCount,
+        vendors_count: vendorsCount,
+        active_vendors: activeVendors
+      })
     } catch (error) {
       console.error('Error fetching expenses stats:', error)
     }

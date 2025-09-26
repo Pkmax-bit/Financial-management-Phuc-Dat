@@ -35,7 +35,7 @@ async def get_dashboard_stats(
         paid_invoices = supabase.table("invoices")\
             .select("total_amount")\
             .eq("payment_status", "paid")\
-            .gte("payment_date", thirty_days_ago.isoformat())\
+            .gte("paid_date", thirty_days_ago.isoformat())\
             .execute()
         total_revenue = sum(invoice["total_amount"] for invoice in paid_invoices.data)
         
@@ -130,8 +130,9 @@ async def get_dashboard_stats(
                         "balance": account.get("balance", 0),
                         "type": account.get("account_type", "Banking Account")
                     })
-        except:
+        except Exception as e:
             # If bank_accounts table doesn't exist, use placeholder
+            print(f"Bank accounts not available: {e}")
             pass
         
         return {

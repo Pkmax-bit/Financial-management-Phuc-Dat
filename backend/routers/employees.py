@@ -8,12 +8,21 @@ from typing import List, Optional
 from datetime import datetime, date
 import uuid
 
-from models.employee import Employee, EmployeeCreate, EmployeeUpdate
+from models.employee import (
+    Employee, EmployeeCreate, EmployeeUpdate, EmployeeResponse, 
+    Department, Position, DepartmentCreate, DepartmentUpdate, 
+    PositionCreate, PositionUpdate
+)
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
 from services.supabase_client import get_supabase_client
 
 router = APIRouter()
+
+@router.get("/test")
+async def test_employees_endpoint():
+    """Test endpoint to verify employees router is working"""
+    return {"message": "Employees router is working!", "status": "success"}
 
 @router.get("/", response_model=List[Employee])
 async def get_employees(
@@ -78,46 +87,182 @@ async def get_employee(
             detail=f"Failed to fetch employee: {str(e)}"
         )
 
-@router.post("/", response_model=Employee)
+@router.post("/", response_model=EmployeeResponse)
 async def create_employee(
     employee_data: EmployeeCreate,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Create a new employee"""
+    """Create a new employee with default password 123456"""
     try:
         supabase = get_supabase_client()
         
-        # Check if employee code already exists
-        existing = supabase.table("employees").select("id").eq("employee_code", employee_data.employee_code).execute()
-        if existing.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Employee code already exists"
-            )
-        
-        # Check if email already exists
-        existing_email = supabase.table("employees").select("id").eq("email", employee_data.email).execute()
-        if existing_email.data:
+        # Check if email already exists in users table
+        existing_user = supabase.table("users").select("id").eq("email", employee_data.email).execute()
+        if existing_user.data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already exists"
             )
         
-        # Create employee record
-        employee_dict = employee_data.dict()
-        employee_dict["id"] = str(uuid.uuid4())
-        employee_dict["created_at"] = datetime.utcnow().isoformat()
-        employee_dict["updated_at"] = datetime.utcnow().isoformat()
+        # Check if email already exists in employees table
+        existing_employee = supabase.table("employees").select("id").eq("email", employee_data.email).execute()
+        if existing_employee.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee with this email already exists"
+            )
         
-        result = supabase.table("employees").insert(employee_dict).execute()
+        # Generate employee code if not provided
+        if not employee_data.employee_code:
+            # Generate employee code: EMP + year + month + random 4 digits
+            from datetime import datetime
+            import random
+            now = datetime.now()
+            employee_code = f"EMP{now.year}{now.month:02d}{random.randint(1000, 9999)}"
+            
+            # Ensure unique employee code
+            while True:
+                existing_code = supabase.table("employees").select("id").eq("employee_code", employee_code).execute()
+                if not existing_code.data:
+                    break
+                employee_code = f"EMP{now.year}{now.month:02d}{random.randint(1000, 9999)}"
+        else:
+            employee_code = employee_data.employee_code
+            # Check if employee code already exists
+            existing_code = supabase.table("employees").select("id").eq("employee_code", employee_code).execute()
+            if existing_code.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Employee code already exists"
+                )
         
-        if result.data:
+        # Create user account in Supabase Auth with default password
+        default_password = "123456"
+        
+        try:
+            # Create user in Supabase Auth
+            auth_response = supabase.auth.admin.create_user({
+                "email": employee_data.email,
+                "password": default_password,
+                "email_confirm": True,
+                "user_metadata": {
+                    "full_name": f"{employee_data.first_name} {employee_data.last_name}",
+                    "role": "employee"
+                }
+            })
+            
+            if not auth_response.user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to create user account"
+                )
+            
+            user_id = auth_response.user.id
+            
+        except Exception as auth_error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to create user account: {str(auth_error)}"
+            )
+        
+        try:
+            # Create user record in users table
+            user_record = {
+                "id": user_id,
+                "email": employee_data.email,
+                "full_name": f"{employee_data.first_name} {employee_data.last_name}",
+                "role": "employee",
+                "is_active": True,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            supabase.table("users").insert(user_record).execute()
+            
+        except Exception as user_error:
+            # If user table creation fails, delete the auth user
+            try:
+                supabase.auth.admin.delete_user(user_id)
+            except:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to create user record: {str(user_error)}"
+            )
+        
+        try:
+            # Create employee record
+            employee_dict = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "employee_code": employee_code,
+                "first_name": employee_data.first_name,
+                "last_name": employee_data.last_name,
+                "email": employee_data.email,
+                "phone": employee_data.phone,
+                "department_id": employee_data.department_id,
+                "position_id": employee_data.position_id,
+                "hire_date": employee_data.hire_date.isoformat(),
+                "salary": employee_data.salary,
+                "status": "active",
+                "manager_id": employee_data.manager_id,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            result = supabase.table("employees").insert(employee_dict).execute()
+            
+            if not result.data:
+                raise Exception("No data returned from insert")
+            
+            # Get the created employee with joined data
+            employee_with_details = supabase.table("employees")\
+                .select("""
+                    *,
+                    departments:department_id(name),
+                    positions:position_id(title),
+                    managers:manager_id(first_name, last_name)
+                """)\
+                .eq("id", result.data[0]["id"])\
+                .execute()
+            
+            if employee_with_details.data:
+                emp_data = employee_with_details.data[0]
+                return EmployeeResponse(
+                    id=emp_data["id"],
+                    user_id=emp_data["user_id"],
+                    employee_code=emp_data["employee_code"],
+                    first_name=emp_data["first_name"],
+                    last_name=emp_data["last_name"],
+                    full_name=f"{emp_data['first_name']} {emp_data['last_name']}",
+                    email=emp_data["email"],
+                    phone=emp_data["phone"],
+                    department_id=emp_data["department_id"],
+                    department_name=emp_data["departments"]["name"] if emp_data.get("departments") else None,
+                    position_id=emp_data["position_id"],
+                    position_title=emp_data["positions"]["title"] if emp_data.get("positions") else None,
+                    hire_date=datetime.fromisoformat(emp_data["hire_date"].replace('Z', '+00:00')).date(),
+                    salary=emp_data["salary"],
+                    status=emp_data["status"],
+                    manager_id=emp_data["manager_id"],
+                    manager_name=f"{emp_data['managers']['first_name']} {emp_data['managers']['last_name']}" if emp_data.get("managers") else None,
+                    created_at=datetime.fromisoformat(emp_data["created_at"].replace('Z', '+00:00')),
+                    updated_at=datetime.fromisoformat(emp_data["updated_at"].replace('Z', '+00:00'))
+                )
+            
             return Employee(**result.data[0])
-        
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to create employee"
-        )
+            
+        except Exception as emp_error:
+            # If employee creation fails, clean up user and auth
+            try:
+                supabase.table("users").delete().eq("id", user_id).execute()
+                supabase.auth.admin.delete_user(user_id)
+            except:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to create employee: {str(emp_error)}"
+            )
         
     except HTTPException:
         raise
@@ -256,34 +401,43 @@ async def get_positions(current_user: User = Depends(get_current_user)):
             detail=f"Failed to fetch positions: {str(e)}"
         )
 
-@router.post("/departments/")
+@router.post("/departments/", response_model=Department)
 async def create_department(
-    name: str,
-    description: Optional[str] = None,
+    department_data: DepartmentCreate,
     current_user: User = Depends(require_manager_or_admin)
 ):
     """Create a new department"""
     try:
         supabase = get_supabase_client()
         
-        department_data = {
+        # Check if department name already exists
+        existing = supabase.table("departments").select("id").eq("name", department_data.name).execute()
+        if existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Department name already exists"
+            )
+        
+        department_dict = {
             "id": str(uuid.uuid4()),
-            "name": name,
-            "description": description,
+            "name": department_data.name,
+            "description": department_data.description,
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         }
         
-        result = supabase.table("departments").insert(department_data).execute()
+        result = supabase.table("departments").insert(department_dict).execute()
         
         if result.data:
-            return result.data[0]
+            return Department(**result.data[0])
         
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to create department"
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

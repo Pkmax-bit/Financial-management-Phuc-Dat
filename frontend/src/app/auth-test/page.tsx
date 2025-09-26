@@ -1,0 +1,126 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { apiGet } from '@/lib/api'
+
+export default function AuthTestPage() {
+  const [session, setSession] = useState<any>(null)
+  const [user, setUser] = useState<any>(null)
+  const [testResult, setTestResult] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { user } } = await supabase.auth.getUser()
+    setSession(session)
+    setUser(user)
+  }
+
+  const testLogin = async () => {
+    setLoading(true)
+    try {
+      const result = await supabase.auth.signInWithPassword({
+        email: 'admin@example.com',
+        password: 'admin123'
+      })
+      
+      if (result.error) {
+        setTestResult(`Login Error: ${result.error.message}`)
+      } else {
+        setTestResult('Login Successful!')
+        await checkAuth()
+      }
+    } catch (error: any) {
+      setTestResult(`Login Exception: ${error.message}`)
+    }
+    setLoading(false)
+  }
+
+  const testAPI = async () => {
+    setLoading(true)
+    try {
+      const data = await apiGet('/api/employees/test')
+      setTestResult(`API Test Success: ${JSON.stringify(data)}`)
+    } catch (error: any) {
+      setTestResult(`API Test Error: ${error.message}`)
+    }
+    setLoading(false)
+  }
+
+  const testProtectedAPI = async () => {
+    setLoading(true)
+    try {
+      const data = await apiGet('/api/employees')
+      setTestResult(`Protected API Success: Found ${data.length} employees`)
+    } catch (error: any) {
+      setTestResult(`Protected API Error: ${error.message}`)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold mb-8">Authentication Test Page</h1>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Auth Status */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-lg font-semibold mb-4">Authentication Status</h2>
+            <div className="space-y-2 text-sm">
+              <p><strong>Session:</strong> {session ? 'Active' : 'None'}</p>
+              <p><strong>User:</strong> {user ? user.email : 'None'}</p>
+              <p><strong>Access Token:</strong> {session?.access_token ? 'Present' : 'Missing'}</p>
+            </div>
+            <button
+              onClick={checkAuth}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Refresh Status
+            </button>
+          </div>
+
+          {/* Test Actions */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-lg font-semibold mb-4">Test Actions</h2>
+            <div className="space-y-2">
+              <button
+                onClick={testLogin}
+                disabled={loading}
+                className="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+              >
+                Test Login
+              </button>
+              <button
+                onClick={testAPI}
+                disabled={loading}
+                className="w-full px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+              >
+                Test Unprotected API
+              </button>
+              <button
+                onClick={testProtectedAPI}
+                disabled={loading}
+                className="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+              >
+                Test Protected API
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Test Result */}
+        {testResult && (
+          <div className="mt-6 bg-gray-800 text-green-400 p-4 rounded-lg font-mono text-sm">
+            <pre>{testResult}</pre>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

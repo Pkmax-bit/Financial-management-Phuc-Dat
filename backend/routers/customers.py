@@ -23,6 +23,23 @@ CUSTOMER_LEVELS = {
     "platinum": {"min_revenue": 100000000, "discount": 0.15}  # 100M VND
 }
 
+@router.get("/test")
+async def test_customers_endpoint():
+    """Test endpoint to verify customers router is working"""
+    return {"message": "Customers router is working!", "status": "success"}
+
+@router.get("/auth-test")
+async def test_auth(current_user: User = Depends(get_current_user)):
+    """Test endpoint to verify authentication is working"""
+    return {
+        "message": "Authentication is working!",
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "role": current_user.role
+        }
+    }
+
 @router.get("/", response_model=List[Customer])
 async def get_customers(
     skip: int = Query(0, ge=0),

@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   CheckCircle
 } from 'lucide-react'
+import CreateInvoiceModal from './CreateInvoiceModal'
+import { apiGet, apiPost } from '@/lib/api'
 
 interface Invoice {
   id: string
@@ -60,6 +62,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   useEffect(() => {
     fetchInvoices()
@@ -68,11 +71,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
   const fetchInvoices = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/sales/invoices')
-      if (response.ok) {
-        const data = await response.json()
-        setInvoices(data)
-      }
+      const data = await apiGet('/api/sales/invoices')
+      setInvoices(data)
     } catch (error) {
       console.error('Error fetching invoices:', error)
     } finally {
@@ -236,8 +236,73 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
     )
   }
 
+  // Calculate invoice status totals
+  const overdueAmount = invoices
+    .filter(invoice => isOverdue(invoice.due_date, invoice.payment_status))
+    .reduce((sum, invoice) => sum + invoice.total_amount, 0)
+  
+  const notDueYetAmount = invoices
+    .filter(invoice => !isOverdue(invoice.due_date, invoice.payment_status) && invoice.payment_status !== 'paid')
+    .reduce((sum, invoice) => sum + invoice.total_amount, 0)
+  
+  const paidAmount = invoices
+    .filter(invoice => invoice.payment_status === 'paid')
+    .reduce((sum, invoice) => sum + invoice.total_amount, 0)
+
   return (
     <div className="space-y-4">
+      {/* Invoice Status Bar - QuickBooks Style */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Trạng thái hóa đơn</h3>
+        
+        {/* Visual Status Bar */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+            <span>Tổng giá trị hóa đơn</span>
+            <span>Tổng: {formatCurrency(overdueAmount + notDueYetAmount + paidAmount)}</span>
+          </div>
+          <div className="flex h-8 rounded-lg overflow-hidden">
+            <div 
+              className="bg-red-500 flex items-center justify-center text-white text-xs font-medium"
+              style={{ width: `${(overdueAmount + notDueYetAmount + paidAmount) > 0 ? (overdueAmount / (overdueAmount + notDueYetAmount + paidAmount)) * 100 : 0}%` }}
+            >
+              {overdueAmount > 0 && 'Overdue'}
+            </div>
+            <div 
+              className="bg-orange-500 flex items-center justify-center text-white text-xs font-medium"
+              style={{ width: `${(overdueAmount + notDueYetAmount + paidAmount) > 0 ? (notDueYetAmount / (overdueAmount + notDueYetAmount + paidAmount)) * 100 : 0}%` }}
+            >
+              {notDueYetAmount > 0 && 'Not due yet'}
+            </div>
+            <div 
+              className="bg-green-500 flex items-center justify-center text-white text-xs font-medium"
+              style={{ width: `${(overdueAmount + notDueYetAmount + paidAmount) > 0 ? (paidAmount / (overdueAmount + notDueYetAmount + paidAmount)) * 100 : 0}%` }}
+            >
+              {paidAmount > 0 && 'Paid'}
+            </div>
+          </div>
+        </div>
+
+        {/* Status Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="text-center p-3 bg-red-50 rounded-lg">
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(overdueAmount)}</div>
+            <div className="text-sm text-gray-600">Overdue</div>
+            <div className="text-xs text-gray-500">Quá hạn thanh toán</div>
+          </div>
+          <div className="text-center p-3 bg-orange-50 rounded-lg">
+            <div className="text-2xl font-bold text-orange-600">{formatCurrency(notDueYetAmount)}</div>
+            <div className="text-sm text-gray-600">Not due yet</div>
+            <div className="text-xs text-gray-500">Chưa tới hạn</div>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(paidAmount)}</div>
+            <div className="text-sm text-gray-600">Paid</div>
+            <div className="text-xs text-gray-500">Đã thanh toán</div>
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="flex items-center justify-between">
         <div className="flex space-x-2">
@@ -304,7 +369,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
         </div>
 
         <button
-          onClick={onCreateInvoice}
+          onClick={() => setShowCreateModal(true)}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -455,7 +520,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
             </p>
             <div className="mt-6">
               <button
-                onClick={onCreateInvoice}
+                onClick={() => setShowCreateModal(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -465,6 +530,16 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
           </div>
         )}
       </div>
+
+      {/* Create Invoice Modal */}
+      <CreateInvoiceModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          fetchInvoices()
+          setShowCreateModal(false)
+        }}
+      />
     </div>
   )
 }

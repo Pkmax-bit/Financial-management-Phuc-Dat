@@ -15,6 +15,8 @@ import {
   DollarSign,
   Clock
 } from 'lucide-react'
+import CreateQuoteModal from './CreateQuoteModal'
+import { apiGet, apiPost } from '@/lib/api'
 
 interface Quote {
   id: string
@@ -45,25 +47,30 @@ interface Quote {
 interface QuotesTabProps {
   searchTerm: string
   onCreateQuote: () => void
+  shouldOpenCreateModal?: boolean
 }
 
-export default function QuotesTab({ searchTerm, onCreateQuote }: QuotesTabProps) {
+export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateModal }: QuotesTabProps) {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   useEffect(() => {
     fetchQuotes()
   }, [])
 
+  useEffect(() => {
+    if (shouldOpenCreateModal) {
+      setShowCreateModal(true)
+    }
+  }, [shouldOpenCreateModal])
+
   const fetchQuotes = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/sales/quotes')
-      if (response.ok) {
-        const data = await response.json()
-        setQuotes(data)
-      }
+      const data = await apiGet('/api/sales/quotes')
+      setQuotes(data)
     } catch (error) {
       console.error('Error fetching quotes:', error)
     } finally {
@@ -73,17 +80,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote }: QuotesTabProps)
 
   const sendQuote = async (quoteId: string) => {
     try {
-      const response = await fetch(`/api/sales/quotes/${quoteId}/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        fetchQuotes() // Refresh list
-        // Show success message
-      }
+      await apiPost(`/api/sales/quotes/${quoteId}/send`, {})
+      fetchQuotes() // Refresh list
+      // Show success message
     } catch (error) {
       console.error('Error sending quote:', error)
     }
@@ -226,7 +225,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote }: QuotesTabProps)
         </div>
 
         <button
-          onClick={onCreateQuote}
+          onClick={() => setShowCreateModal(true)}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -362,6 +361,17 @@ export default function QuotesTab({ searchTerm, onCreateQuote }: QuotesTabProps)
           </div>
         )}
       </div>
+
+      {showCreateModal && (
+        <CreateQuoteModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            fetchQuotes()
+            setShowCreateModal(false)
+          }}
+        />
+      )}
     </div>
   )
 }

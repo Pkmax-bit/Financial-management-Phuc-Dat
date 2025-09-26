@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   FileText, 
   Plus, 
@@ -16,6 +17,7 @@ import {
   Building2,
   AlertTriangle
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 interface Bill {
   id: string
@@ -50,19 +52,60 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
   const [bills, setBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const router = useRouter()
 
   useEffect(() => {
-    fetchBills()
+    checkUser()
   }, [])
+
+  const checkUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (authUser) {
+        // User is authenticated, proceed to fetch bills
+        fetchBills()
+      } else {
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Error checking user:', error)
+      router.push('/login')
+    }
+  }
 
   const fetchBills = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/expenses/bills')
-      if (response.ok) {
-        const data = await response.json()
-        setBills(data.bills || [])
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        router.push('/login')
+        return
       }
+
+      const { data, error } = await supabase
+        .from('bills')
+        .select(`
+          id,
+          bill_number,
+          vendor_id,
+          project_id,
+          issue_date,
+          due_date,
+          amount,
+          currency,
+          status,
+          paid_amount,
+          paid_date,
+          description,
+          receipt_url,
+          created_at,
+          updated_at
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setBills(data || [])
     } catch (error) {
       console.error('Error fetching bills:', error)
     } finally {

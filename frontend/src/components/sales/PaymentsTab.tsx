@@ -13,6 +13,8 @@ import {
   Clock,
   XCircle
 } from 'lucide-react'
+import CreatePaymentModal from './CreatePaymentModal'
+import { apiGet } from '@/lib/api'
 
 interface Payment {
   id: string
@@ -44,6 +46,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   useEffect(() => {
     fetchPayments()
@@ -52,11 +55,8 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
   const fetchPayments = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/sales/payments')
-      if (response.ok) {
-        const data = await response.json()
-        setPayments(data)
-      }
+      const data = await apiGet('/api/sales/payments')
+      setPayments(data)
     } catch (error) {
       console.error('Error fetching payments:', error)
     } finally {
@@ -262,7 +262,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
         </div>
 
         <button
-          onClick={onCreatePayment}
+          onClick={() => setShowCreateModal(true)}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -370,7 +370,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
               </p>
               <div className="mt-6">
                 <button
-                  onClick={onCreatePayment}
+                  onClick={() => setShowCreateModal(true)}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -381,6 +381,17 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
           )}
         </div>
       </div>
+
+      {showCreateModal && (
+        <CreatePaymentModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            fetchPayments()
+            setShowCreateModal(false)
+          }}
+        />
+      )}
     </div>
   )
 }

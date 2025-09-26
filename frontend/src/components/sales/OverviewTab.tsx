@@ -29,11 +29,14 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
     }).format(amount)
   }
 
-  // Calculate income tracker data
-  const uninvoicedActivity = revenue.uninvoiced || 0
-  const unpaidInvoices = revenue.pending || 0
-  const recentlyPaid = revenue.paid_last_30_days || 0
-  const overdueAmount = revenue.overdue || 0
+  // Calculate income tracker data (QuickBooks style)
+  const uninvoicedActivity = revenue.uninvoiced || 0 // Các hoạt động chưa lập hóa đơn
+  const unpaidInvoices = revenue.pending || 0 // Hóa đơn chưa thanh toán
+  const overdueAmount = revenue.overdue || 0 // Hóa đơn quá hạn
+  const recentlyPaid = revenue.paid || 0 // Đã thanh toán trong 30 ngày qua
+  
+  // Calculate total pipeline
+  const totalPipeline = uninvoicedActivity + unpaidInvoices
 
   // Shortcuts data
   const shortcuts = [
@@ -69,14 +72,14 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
 
   return (
     <div className="space-y-6">
-      {/* Income Tracker */}
+      {/* Income Tracker - QuickBooks Style */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Thanh theo dõi thu nhập</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">Thanh theo dõi thu nhập (Income Tracker)</h3>
         
         {/* Income Flow Visualization */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Dòng tiền bán hàng (30 ngày qua)</span>
+            <span className="text-sm text-gray-600">Dòng chảy thu nhập (Income Pipeline)</span>
             <span className="text-sm font-medium text-gray-900">
               Tổng: {formatCurrency(uninvoicedActivity + unpaidInvoices + recentlyPaid)}
             </span>
@@ -118,39 +121,42 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
             </div>
           </div>
 
-          {/* Legend */}
+          {/* Legend - QuickBooks Style */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-yellow-500 rounded mr-2"></div>
+            <div className="flex items-center p-3 bg-yellow-50 rounded-lg">
+              <div className="w-4 h-4 bg-yellow-500 rounded mr-3"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Chưa lập hóa đơn</p>
+                <p className="text-sm font-medium text-gray-900">Uninvoiced Activity</p>
                 <p className="text-lg font-bold text-yellow-600">{formatCurrency(uninvoicedActivity)}</p>
+                <p className="text-xs text-gray-500">Chi phí, giờ làm có thể tính phí</p>
               </div>
             </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-orange-500 rounded mr-2"></div>
+            <div className="flex items-center p-3 bg-orange-50 rounded-lg">
+              <div className="w-4 h-4 bg-orange-500 rounded mr-3"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Hóa đơn chưa thanh toán</p>
+                <p className="text-sm font-medium text-gray-900">Unpaid Invoices</p>
                 <p className="text-lg font-bold text-orange-600">{formatCurrency(unpaidInvoices)}</p>
                 {overdueAmount > 0 && (
-                  <p className="text-xs text-red-600">Quá hạn: {formatCurrency(overdueAmount)}</p>
+                  <p className="text-xs text-red-600">Overdue: {formatCurrency(overdueAmount)}</p>
                 )}
+                <p className="text-xs text-gray-500">Chưa tới hạn</p>
               </div>
             </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-green-500 rounded mr-2"></div>
+            <div className="flex items-center p-3 bg-green-50 rounded-lg">
+              <div className="w-4 h-4 bg-green-500 rounded mr-3"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Đã thanh toán gần đây</p>
+                <p className="text-sm font-medium text-gray-900">Recently Paid</p>
                 <p className="text-lg font-bold text-green-600">{formatCurrency(recentlyPaid)}</p>
+                <p className="text-xs text-gray-500">30 ngày qua</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions - Shortcuts */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Lối tắt nhanh</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Lối tắt (Shortcuts)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {shortcuts.map((shortcut, index) => (
             <button
