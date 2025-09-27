@@ -141,8 +141,8 @@ export default function SalesPage() {
   }
 
   const handleCreateInvoice = () => {
-    // Navigate to create invoice page or open modal
-    console.log('Create invoice')
+    setActiveTab('invoices')
+    setShouldOpenCreateModal(true)
   }
 
   const handleCreatePayment = () => {
@@ -536,6 +536,7 @@ export default function SalesPage() {
                 <InvoicesTab 
                   searchTerm={searchTerm}
                   onCreateInvoice={handleCreateInvoice}
+                  shouldOpenCreateModal={shouldOpenCreateModal}
                 />
               )}
               {activeTab === 'quotes' && (

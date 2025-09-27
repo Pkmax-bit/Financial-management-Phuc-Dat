@@ -88,3 +88,16 @@ body {
 .hover\:scrollbar-thumb-blue-400:hover::-webkit-scrollbar-thumb {
   background: #60a5fa;
 }
+
+/* Green scrollbar styles */
+.scrollbar-thumb-green-300::-webkit-scrollbar-thumb {
+  background: #86efac;
+}
+
+.scrollbar-track-green-100::-webkit-scrollbar-track {
+  background: #dcfce7;
+}
+
+.hover\:scrollbar-thumb-green-400:hover::-webkit-scrollbar-thumb {
+  background: #4ade80;
+}

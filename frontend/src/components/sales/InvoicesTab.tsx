@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   CheckCircle
 } from 'lucide-react'
-import CreateInvoiceModal from './CreateInvoiceModal'
+import CreateInvoiceSidebar from './CreateInvoiceSidebar'
 import { apiGet, apiPost } from '@/lib/api'
 
 interface Invoice {
@@ -56,9 +56,10 @@ interface Invoice {
 interface InvoicesTabProps {
   searchTerm: string
   onCreateInvoice: () => void
+  shouldOpenCreateModal?: boolean // Prop to control modal opening from parent
 }
 
-export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTabProps) {
+export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCreateModal }: InvoicesTabProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
@@ -67,6 +68,12 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
   useEffect(() => {
     fetchInvoices()
   }, [])
+
+  useEffect(() => {
+    if (shouldOpenCreateModal) {
+      setShowCreateModal(true)
+    }
+  }, [shouldOpenCreateModal])
 
   const fetchInvoices = async () => {
     try {
@@ -531,8 +538,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice }: InvoicesTab
         )}
       </div>
 
-      {/* Create Invoice Modal */}
-      <CreateInvoiceModal
+      {/* Create Invoice Sidebar */}
+      <CreateInvoiceSidebar
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => {
