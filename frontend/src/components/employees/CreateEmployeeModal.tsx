@@ -13,6 +13,7 @@ import {
   Briefcase
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { employeeApi } from '@/lib/api'
 
 interface Department {
   id: string
@@ -77,13 +78,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
 
   const fetchDepartments = async () => {
     try {
-      const { data, error } = await supabase
-        .from('departments')
-        .select('id, name, code')
-        .eq('is_active', true)
-        .order('name', { ascending: true })
-
-      if (error) throw error
+      const data = await employeeApi.getDepartments()
       setDepartments(data || [])
     } catch (error) {
       console.error('Error fetching departments:', error)
@@ -92,13 +87,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
 
   const fetchPositions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('positions')
-        .select('id, name, code, department_id')
-        .eq('is_active', true)
-        .order('name', { ascending: true })
-
-      if (error) throw error
+      const data = await employeeApi.getPositions()
       setPositions(data || [])
       setFilteredPositions(data || [])
     } catch (error) {
@@ -135,81 +124,27 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
     try {
       setSubmitting(true)
 
-      // Create user account using signup
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: undefined // Skip email confirmation for now
-        }
-      })
-
-      if (authError) throw authError
-
-      if (!authData.user) {
-        throw new Error('Không thể tạo tài khoản người dùng')
-      }
-
-      console.log('User created successfully:', authData.user.id)
-      console.log('User email:', authData.user.email)
-
-      // Check if user exists in users table, create if not
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', authData.user.id)
-        .single()
-
-      if (userError || !userData) {
-        console.log('User not found in users table, creating user record...')
-        
-        // Create user record in users table
-        const { error: createUserError } = await supabase
-          .from('users')
-          .insert([{
-            id: authData.user.id,
-            email: authData.user.email,
-            full_name: `${formData.first_name} ${formData.last_name}`,
-            role: 'employee',
-            is_active: true
-          }])
-
-        if (createUserError) {
-          console.error('Error creating user record:', createUserError)
-          throw new Error('Không thể tạo bản ghi người dùng trong hệ thống')
-        }
-
-        console.log('User record created successfully')
-      } else {
-        console.log('User verified in users table:', userData.id)
-      }
-
-      // Create employee record
+      // Prepare employee data for API
       const employeeData = {
-        user_id: authData.user.id,
-        employee_code: generateEmployeeCode(),
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email,
-        phone: formData.phone || null,
-        department_id: formData.department_id || null,
-        position_id: formData.position_id || null,
+        phone: formData.phone || undefined,
+        department_id: formData.department_id || undefined,
+        position_id: formData.position_id || undefined,
         hire_date: formData.hire_date,
-        status: 'active'
+        employee_code: generateEmployeeCode()
       }
 
-      console.log('Creating employee with data:', employeeData)
-      console.log('User ID:', authData.user.id)
-      console.log('Employee code:', employeeData.employee_code)
+      console.log('Creating employee via API with data:', employeeData)
 
-      const { error: employeeError } = await supabase
-        .from('employees')
-        .insert([employeeData])
-
-      if (employeeError) throw employeeError
+      // Use API to create employee
+      const result = await employeeApi.createEmployee(employeeData)
+      
+      console.log('Employee created successfully via API:', result)
       
       // Show success message with password info
-      alert(`Nhân viên đã được tạo thành công!\n\nThông tin nhân viên:\nMã nhân viên: ${employeeData.employee_code}\nEmail: ${formData.email}\nMật khẩu mặc định: ${formData.password}\n\nVui lòng thông báo cho nhân viên thay đổi mật khẩu sau lần đăng nhập đầu tiên.`)
+      alert(`Nhân viên đã được tạo thành công!\n\nThông tin nhân viên:\nMã nhân viên: ${result.employee_code || employeeData.employee_code}\nEmail: ${formData.email}\nMật khẩu mặc định: ${formData.password}\n\nVui lòng thông báo cho nhân viên thay đổi mật khẩu sau lần đăng nhập đầu tiên.`)
       
       onSuccess()
       onClose()
@@ -218,20 +153,20 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
       console.error('Error creating employee:', error)
       
       // Handle specific error cases
-      if (error.message?.includes('User already registered')) {
+      if (error.message?.includes('Email already exists')) {
         setError('Email này đã được sử dụng. Vui lòng chọn email khác.')
+      } else if (error.message?.includes('Employee code already exists')) {
+        setError('Mã nhân viên đã tồn tại. Vui lòng thử lại.')
       } else if (error.message?.includes('Invalid email')) {
         setError('Email không hợp lệ. Vui lòng kiểm tra lại.')
       } else if (error.message?.includes('Password should be at least')) {
         setError('Mật khẩu phải có ít nhất 6 ký tự.')
-      } else if (error.message?.includes('employee_code')) {
-        setError('Có lỗi xảy ra khi tạo mã nhân viên. Vui lòng thử lại.')
       } else if (error.message?.includes('not-null constraint')) {
         setError('Thiếu thông tin bắt buộc. Vui lòng kiểm tra lại form.')
       } else if (error.message?.includes('foreign key constraint')) {
         setError('Có lỗi xảy ra với dữ liệu liên kết. Vui lòng thử lại.')
-      } else if (error.message?.includes('user_id_fkey')) {
-        setError('Tài khoản người dùng chưa được tạo đúng cách. Vui lòng thử lại.')
+      } else if (error.message?.includes('Failed to create user account')) {
+        setError('Không thể tạo tài khoản người dùng. Vui lòng thử lại.')
       } else {
         setError(error.message || 'Có lỗi xảy ra khi tạo nhân viên')
       }

@@ -14,6 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { employeeApi } from '@/lib/api'
 import CreateDepartmentModal from './CreateDepartmentModal'
 import DepartmentModal from './DepartmentModal'
 
@@ -54,23 +55,9 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
       setLoading(true)
       setError(null)
       
-      const { data, error } = await supabase
-        .from('departments')
-        .select(`
-          id,
-          name,
-          code,
-          description,
-          budget,
-          is_active,
-          created_at,
-          updated_at
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-
-      // Get employee count for each department
+      const data = await employeeApi.getDepartments()
+      
+      // Get employee count for each department using direct supabase call
       const departmentsWithCount = await Promise.all(
         (data || []).map(async (dept) => {
           const { count } = await supabase

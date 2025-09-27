@@ -16,6 +16,7 @@ import {
   Building2
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { employeeApi } from '@/lib/api'
 import CreatePositionModal from './CreatePositionModal'
 import PositionModal from './PositionModal'
 
@@ -58,13 +59,7 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
 
   const fetchDepartments = async () => {
     try {
-      const { data, error } = await supabase
-        .from('departments')
-        .select('id, name')
-        .eq('is_active', true)
-        .order('name')
-
-      if (error) throw error
+      const data = await employeeApi.getDepartments()
       setDepartments(data || [])
     } catch (err: unknown) {
       console.error('Error fetching departments:', err)
@@ -76,26 +71,9 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
       setLoading(true)
       setError(null)
       
-      const { data, error } = await supabase
-        .from('positions')
-        .select(`
-          id,
-          name,
-          code,
-          description,
-          department_id,
-          salary_range_min,
-          salary_range_max,
-          is_active,
-          created_at,
-          updated_at,
-          departments!inner(name)
-        `)
-        .order('created_at', { ascending: false })
+      const data = await employeeApi.getPositions()
 
-      if (error) throw error
-
-      // Get employee count for each position
+      // Get employee count for each position using direct supabase call
       const positionsWithCount = await Promise.all(
         (data || []).map(async (pos) => {
           const { count } = await supabase
@@ -107,7 +85,7 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
           return {
             ...pos,
             employee_count: count || 0,
-            department_name: (pos.departments as { name?: string })?.name || 'Không xác định'
+            department_name: pos.department_name || 'Không xác định'
           }
         })
       )

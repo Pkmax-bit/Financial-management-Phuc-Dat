@@ -321,7 +321,6 @@ async def create_employee(
         # Generate employee code if not provided
         if not employee_data.employee_code:
             # Generate employee code: EMP + year + month + random 4 digits
-            from datetime import datetime
             import random
             now = datetime.now()
             employee_code = f"EMP{now.year}{now.month:02d}{random.randint(1000, 9999)}"
@@ -426,7 +425,7 @@ async def create_employee(
                 .select("""
                     *,
                     departments:department_id(name),
-                    positions:position_id(title),
+                    positions:position_id(name),
                     managers:manager_id(first_name, last_name)
                 """)\
                 .eq("id", result.data[0]["id"])\
@@ -446,7 +445,7 @@ async def create_employee(
                     department_id=emp_data["department_id"],
                     department_name=emp_data["departments"]["name"] if emp_data.get("departments") else None,
                     position_id=emp_data["position_id"],
-                    position_title=emp_data["positions"]["title"] if emp_data.get("positions") else None,
+                    position_title=emp_data["positions"]["name"] if emp_data.get("positions") else None,
                     hire_date=datetime.fromisoformat(emp_data["hire_date"].replace('Z', '+00:00')).date(),
                     salary=emp_data["salary"],
                     status=emp_data["status"],
@@ -663,7 +662,8 @@ async def create_position(
         
         position_data = {
             "id": str(uuid.uuid4()),
-            "title": title,
+            "name": title,
+            "code": f"POS{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "description": description,
             "department_id": department_id,
             "created_at": datetime.utcnow().isoformat(),

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Employee } from '@/types'
 import { supabase } from '@/lib/supabase'
+import { employeeApi } from '@/lib/api'
 import Navigation from '@/components/Navigation'
 import CreateEmployeeModal from '@/components/employees/CreateEmployeeModal'
 
@@ -131,37 +132,15 @@ export default function EmployeesPage() {
       
       // First, try authenticated endpoint if user and session are available
       if (user && (session as { access_token?: string })?.access_token) {
-        console.log('fetchEmployees - Session check:', { 
-          hasSession: !!session, 
-          hasAccessToken: !!(session as { access_token?: string })?.access_token,
-          tokenPreview: (session as { access_token?: string })?.access_token?.substring(0, 20) + '...'
-        })
+        console.log('fetchEmployees - Using API service with authentication')
         
         try {
-          console.log('Making authenticated API call to fetch employees with token:', (session as { access_token?: string }).access_token?.substring(0, 20) + '...')
-          
-          // Use direct fetch with explicit authorization for authenticated endpoint
-          const authResponse = await fetch('http://localhost:8000/api/employees', {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${(session as { access_token?: string }).access_token}`
-            }
-          })
-          
-          if (authResponse.ok) {
-            const data = await authResponse.json()
-            setEmployees(Array.isArray(data) ? data : [])
-            console.log('Successfully fetched employees via authenticated endpoint:', data?.length || 0)
-            return
-          } else {
-            console.log('Authenticated endpoint failed with status:', authResponse.status)
-            const errorText = await authResponse.text()
-            console.log('Error response:', errorText)
-            throw new Error(`HTTP ${authResponse.status}: ${errorText}`)
-          }
+          const data = await employeeApi.getEmployees()
+          setEmployees(Array.isArray(data) ? data : [])
+          console.log('Successfully fetched employees via API:', data?.length || 0)
+          return
         } catch (authError: unknown) {
-          console.log('Authenticated endpoint failed, trying fallback options:', authError)
+          console.log('Authenticated API failed, trying fallback options:', authError)
           
           // If authentication fails, clear the session to prevent future attempts
           if ((authError as Error)?.message && (
@@ -176,7 +155,17 @@ export default function EmployeesPage() {
             setSession(null)
           }
           
-          console.log('Trying public endpoint fallback after auth failure')
+          console.log('Trying simple auth fallback')
+        }
+
+        // Try simple auth endpoint
+        try {
+          const data = await employeeApi.getEmployeesSimple()
+          setEmployees(Array.isArray(data) ? data : [])
+          console.log('Successfully fetched employees via simple auth:', data?.length || 0)
+          return
+        } catch (simpleError) {
+          console.log('Simple auth failed:', simpleError)
         }
       } else {
         console.log('No user or session found, trying public endpoints')
@@ -185,18 +174,11 @@ export default function EmployeesPage() {
       // Fallback 1: Try public endpoint
       try {
         console.log('Trying public employees endpoint...')
-        const publicUrl = 'http://localhost:8000/api/employees/public-list'
-        const response = await fetch(publicUrl)
-        
-        if (response.ok) {
-          const publicData = await response.json()
-          console.log('Public endpoint successful:', publicData)
-          setEmployees(Array.isArray(publicData) ? publicData : [])
-          setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
-          return
-        } else {
-          console.log('Public endpoint failed:', response.status, response.statusText)
-        }
+        const data = await employeeApi.getEmployeesPublic()
+        setEmployees(Array.isArray(data) ? data : [])
+        setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
+        console.log('Public endpoint successful:', data?.length || 0)
+        return
       } catch (publicError) {
         console.log('Public endpoint error:', publicError)
       }
@@ -204,24 +186,14 @@ export default function EmployeesPage() {
       // Fallback 2: Try creating sample data
       try {
         console.log('Trying to create sample employees data...')
-        const sampleUrl = 'http://localhost:8000/api/employees/create-sample'
-        const response = await fetch(sampleUrl, { method: 'POST' })
+        const result = await employeeApi.createSampleEmployees()
+        console.log('Sample data creation result:', result)
         
-        if (response.ok) {
-          const result = await response.json()
-          console.log('Sample data creation result:', result)
-          
-          // Now try to get the public data again
-          const publicUrl = 'http://localhost:8000/api/employees/public-list'
-          const publicResponse = await fetch(publicUrl)
-          
-          if (publicResponse.ok) {
-            const publicData = await publicResponse.json()
-            setEmployees(Array.isArray(publicData) ? publicData : [])
-            setError('Hiển thị dữ liệu mẫu (đã tạo dữ liệu mới)')
-            return
-          }
-        }
+        // Now try to get the public data again
+        const data = await employeeApi.getEmployeesPublic()
+        setEmployees(Array.isArray(data) ? data : [])
+        setError('Hiển thị dữ liệu mẫu (đã tạo dữ liệu mới)')
+        return
       } catch (sampleError) {
         console.log('Sample creation error:', sampleError)
       }
@@ -304,14 +276,16 @@ export default function EmployeesPage() {
       if (typeof window !== 'undefined' && 
           window.confirm(`Bạn có chắc chắn muốn xóa nhân viên ${employee.first_name} ${employee.last_name}?`)) {
         console.log('Delete employee:', employeeId)
-        // TODO: Implement delete API call
-        // await apiDelete(`/api/employees/${employeeId}`)
-        // fetchEmployees()
+        
+        await employeeApi.deleteEmployee(employeeId)
+        console.log('Employee deleted successfully')
+        
+        // Refresh the employee list
+        await fetchEmployees()
       }
     } catch (error) {
       console.error('Error deleting employee:', error)
-      // Show error in UI instead of alert
-      setError('Có lỗi xảy ra khi xóa nhân viên. Vui lòng thử lại.')
+      setError(`Có lỗi xảy ra khi xóa nhân viên: ${(error as Error)?.message || 'Không thể xóa nhân viên'}`)
     }
   }
 
