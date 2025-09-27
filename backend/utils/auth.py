@@ -6,6 +6,7 @@ JWT token handling, password hashing, and user authentication
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
+from jwt import PyJWTError
 import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -31,14 +32,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 def verify_token(token: str) -> dict:
     """Verify JWT token and return payload"""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        # Use Supabase JWT secret for verification
+        payload = jwt.decode(token, settings.SUPABASE_JWT_SECRET, algorithms=["HS256"])
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired"
         )
-    except jwt.JWTError:
+    except PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"

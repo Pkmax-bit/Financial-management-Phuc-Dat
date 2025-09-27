@@ -21,6 +21,7 @@ import Navigation from '@/components/Navigation'
 import ExpensesTab from '@/components/expenses/ExpensesTab'
 import BillsTab from '@/components/expenses/BillsTab'
 import VendorsTab from '@/components/expenses/VendorsTab'
+import { expensesApi, billsApi, vendorsApi } from '@/lib/api'
 
 interface User {
   full_name?: string
@@ -90,31 +91,22 @@ export default function ExpensesPage() {
         return
       }
 
-      // Fetch expenses data
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('amount, status')
-
-      const totalExpenses = expensesData?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
+      // Fetch expenses data via API
+      const expensesData = await expensesApi.getExpenses()
+      const totalExpenses = expensesData?.reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0) || 0
       const expensesCount = expensesData?.length || 0
-      const pendingAmount = expensesData?.filter(e => e.status === 'pending').reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
-      const pendingCount = expensesData?.filter(e => e.status === 'pending').length || 0
+      const pendingAmount = expensesData?.filter((e: any) => e.status === 'pending').reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0) || 0
+      const pendingCount = expensesData?.filter((e: any) => e.status === 'pending').length || 0
 
-      // Fetch bills data
-      const { data: billsData } = await supabase
-        .from('bills')
-        .select('amount, status')
-
-      const totalBills = billsData?.reduce((sum, bill) => sum + (bill.amount || 0), 0) || 0
+      // Fetch bills data via API
+      const billsData = await billsApi.getBills()
+      const totalBills = billsData?.reduce((sum: number, bill: any) => sum + (bill.amount || 0), 0) || 0
       const billsCount = billsData?.length || 0
 
-      // Fetch vendors data
-      const { data: vendorsData } = await supabase
-        .from('vendors')
-        .select('id, is_active')
-
+      // Fetch vendors data via API
+      const vendorsData = await vendorsApi.getVendors()
       const vendorsCount = vendorsData?.length || 0
-      const activeVendors = vendorsData?.filter(v => v.is_active).length || 0
+      const activeVendors = vendorsData?.filter((v: any) => v.is_active).length || 0
 
       setExpensesStats({
         total_expenses: totalExpenses,

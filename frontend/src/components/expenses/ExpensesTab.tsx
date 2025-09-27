@@ -25,6 +25,7 @@ import {
   Upload
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { expensesApi } from '@/lib/api'
 
 interface Expense {
   id: string
@@ -85,29 +86,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
         return
       }
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .select(`
-          id,
-          expense_code,
-          employee_id,
-          project_id,
-          category,
-          description,
-          amount,
-          currency,
-          expense_date,
-          receipt_url,
-          status,
-          approved_by,
-          approved_at,
-          notes,
-          created_at,
-          updated_at
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      const data = await expensesApi.getExpenses()
       setExpenses(data || [])
     } catch (error) {
       console.error('Error fetching expenses:', error)
@@ -118,16 +97,8 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
 
   const approveExpense = async (expenseId: string) => {
     try {
-      const response = await fetch(`/api/expenses/expenses/${expenseId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        fetchExpenses() // Refresh list
-      }
+      await expensesApi.approveExpense(expenseId)
+      fetchExpenses() // Refresh list
     } catch (error) {
       console.error('Error approving expense:', error)
     }
@@ -135,16 +106,8 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
 
   const rejectExpense = async (expenseId: string) => {
     try {
-      const response = await fetch(`/api/expenses/expenses/${expenseId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        fetchExpenses() // Refresh list
-      }
+      await expensesApi.rejectExpense(expenseId)
+      fetchExpenses() // Refresh list
     } catch (error) {
       console.error('Error rejecting expense:', error)
     }

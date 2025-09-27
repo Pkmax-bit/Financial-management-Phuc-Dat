@@ -29,9 +29,6 @@ import PositionManagerSidebar from '@/components/employees/PositionManagerSideba
 import DepartmentSidebar from '@/components/employees/DepartmentSidebar'
 import PositionSidebar from '@/components/employees/PositionSidebar'
 
-import ProtectedRoute from '@/components/ProtectedRoute'
-
-
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,8 +48,7 @@ export default function EmployeesPage() {
   const [showDepartmentManagerSidebar, setShowDepartmentManagerSidebar] = useState(false)
   const [showCreateDepartmentSidebar, setShowCreateDepartmentSidebar] = useState(false)
   const [showPositionManagerSidebar, setShowPositionManagerSidebar] = useState(false)
-  const [user, setUser] = useState<unknown>(null)
-  const [session, setSession] = useState<unknown>(null)
+  const [user, setUser] = useState<{ email?: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -60,63 +56,26 @@ export default function EmployeesPage() {
     checkUser()
   }, [])
 
-  useEffect(() => {
-    // Try to fetch employees when loading is complete
-    // This will work for both authenticated and unauthenticated users (with fallbacks)
-    if (!loading) {
-      console.log('Loading complete, fetching employees...')
-      fetchEmployees()
-    }
-  }, [user, session, loading])
-
   const checkUser = async () => {
     try {
-      setLoading(true)
-      console.log('Checking user authentication...')
+      const { data: { user: authUser } } = await supabase.auth.getUser()
       
-      // Get current session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      console.log('Session check result:', { hasSession: !!session, sessionError })
-      
-      if (sessionError || !session) {
-        console.log('No valid session found, redirecting to login')
-        router.push('/login')
-        return
-      }
-
-      // Get user from session
-      const authUser = session.user
-      if (!authUser) {
-        console.log('No auth user found, redirecting to login')
-        router.push('/login')
-        return
-      }
-
-      console.log('Auth user found:', authUser.email)
-
-      // Get user data from our users table
-      try {
-        const { data: userData, error: userError } = await supabase
+      if (authUser) {
+        const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('id', authUser.id)
           .single()
         
-        if (userError || !userData) {
-          console.log('User data not found in database, redirecting to login', userError)
-          router.push('/login')
-          return
-        }
-        
-        console.log('User data loaded successfully:', userData.email)
+        if (userData) {
           setUser(userData)
-        
-        // Store session info for API calls
-        setSession(session)
-      } catch (userFetchError) {
-        console.error('Error fetching user data:', userFetchError)
+          // Fetch employees after user is set
+          fetchEmployees()
+        } else {
+          router.push('/login')
+        }
+      } else {
         router.push('/login')
-        return
       }
     } catch (error) {
       console.error('Error checking user:', error)
@@ -134,89 +93,39 @@ export default function EmployeesPage() {
   const fetchEmployees = async () => {
     try {
       setError(null)
+      console.log('Fetching employees...')
       
-      // First, try authenticated endpoint if user and session are available
-      if (user && (session as { access_token?: string })?.access_token) {
-        console.log('fetchEmployees - Using API service with authentication')
-        
-        try {
-          const data = await employeeApi.getEmployees()
-          setEmployees(Array.isArray(data) ? data : [])
-          console.log('Successfully fetched employees via API:', data?.length || 0)
-          return
-        } catch (authError: unknown) {
-          console.log('Authenticated API failed, trying fallback options:', authError)
-          
-          // If authentication fails, clear the session to prevent future attempts
-          if ((authError as Error)?.message && (
-            (authError as Error).message.includes('Not authenticated') ||
-            (authError as Error).message.includes('403') || 
-            (authError as Error).message.includes('HTTP 403') || 
-            (authError as Error).message.includes('Unauthorized')
-          )) {
-            console.log('Authentication token appears invalid, clearing session')
-            await supabase.auth.signOut()
-            setUser(null)
-            setSession(null)
-          }
-          
-          console.log('Trying simple auth fallback')
-        }
-
-        // Try simple auth endpoint
-        try {
-          const data = await employeeApi.getEmployeesSimple()
-          setEmployees(Array.isArray(data) ? data : [])
-          console.log('Successfully fetched employees via simple auth:', data?.length || 0)
-          return
-        } catch (simpleError) {
-          console.log('Simple auth failed:', simpleError)
-        }
-      } else {
-        console.log('No user or session found, trying public endpoints')
-      }
-
-      // Fallback 1: Try public endpoint
+      // Try authenticated endpoint first
       try {
-        console.log('Trying public employees endpoint...')
-        const data = await employeeApi.getEmployeesPublic()
-        setEmployees(Array.isArray(data) ? data : [])
-        setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
-        console.log('Public endpoint successful:', data?.length || 0)
+      const data = await employeeApi.getEmployees()
+      setEmployees(Array.isArray(data) ? data.map(emp => ({
+        ...emp,
+        status: emp.status as 'active' | 'inactive' | 'terminated' | 'on_leave'
+      })) : [])
+        console.log('Successfully fetched employees via authenticated API:', data?.length || 0)
         return
-      } catch (publicError) {
-        console.log('Public endpoint error:', publicError)
-      }
-
-      // Fallback 2: Try creating sample data
-      try {
-        console.log('Trying to create sample employees data...')
-        const result = await employeeApi.createSampleEmployees()
-        console.log('Sample data creation result:', result)
+      } catch (authError) {
+        console.log('Authenticated API failed, trying public endpoint:', authError)
         
-        // Now try to get the public data again
-        const data = await employeeApi.getEmployeesPublic()
-        setEmployees(Array.isArray(data) ? data : [])
-        setError('Hiển thị dữ liệu mẫu (đã tạo dữ liệu mới)')
-        return
-      } catch (sampleError) {
-        console.log('Sample creation error:', sampleError)
-      }
-
-      // If all fallbacks fail
-      setError('Không thể tải danh sách nhân viên. Vui lòng đăng nhập hoặc kiểm tra kết nối.')
-      setEmployees([])
-      
-      // Only redirect to login if user was supposed to be authenticated
-      if (user && session) {
-        console.log('All endpoints failed for authenticated user, clearing session and redirecting')
-        await supabase.auth.signOut()
-        router.push('/login')
+        // Fallback to public endpoint
+        try {
+          const data = await employeeApi.getEmployeesPublic()
+          setEmployees(Array.isArray(data) ? data.map(emp => ({
+            ...emp,
+            status: emp.status as 'active' | 'inactive' | 'terminated' | 'on_leave'
+          })) : [])
+          setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
+          console.log('Successfully fetched employees via public API:', data?.length || 0)
+          return
+        } catch (publicError) {
+          console.log('Public API also failed:', publicError)
+          throw publicError
+        }
       }
       
     } catch (error: unknown) {
-      console.error('Error in fetchEmployees:', error)
-      setError(`Lỗi không xác định: ${(error as Error)?.message || 'Không thể kết nối'}`)
+      console.error('Error fetching employees:', error)
+      setError(`Lỗi không thể tải danh sách nhân viên: ${(error as Error)?.message || 'Không thể kết nối'}`)
       setEmployees([])
     }
   }
@@ -350,21 +259,18 @@ export default function EmployeesPage() {
       }
     })
 
-  if (loading || !user) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">
-            {loading ? 'Đang xác thực người dùng...' : 'Đang chuyển hướng...'}
-          </p>
+          <p className="text-gray-600">Đang tải...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <ProtectedRoute>
     <div className="min-h-screen bg-gray-50">
       <Navigation user={user || undefined} onLogout={handleLogout} />
 
@@ -401,7 +307,7 @@ export default function EmployeesPage() {
                   {user && (
                     <div className="flex items-center">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                      <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email}</span>
+                      <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
                     </div>
                   )}
                 </div>
@@ -420,17 +326,14 @@ export default function EmployeesPage() {
                 <button
                   onClick={async () => {
                     try {
-                      const { data: { session } } = await supabase.auth.getSession()
                       const { data: { user: authUser } } = await supabase.auth.getUser()
                       
                       console.log('Debug Info:', {
-                        session: session?.user?.email || 'No session',
                         authUser: authUser?.email || 'No auth user',
-                        userState: (user as { email?: string })?.email || 'No user state',
-                        token: session?.access_token ? 'Present' : 'Missing'
+                        userState: (user as { email?: string })?.email || 'No user state'
                       })
                       
-                      if (!session) {
+                      if (!authUser) {
                         console.log('Attempting login...')
                         const loginResult = await supabase.auth.signInWithPassword({
                           email: 'admin@example.com',
@@ -818,7 +721,10 @@ export default function EmployeesPage() {
           }}
           onEdit={handleEditFromDetail}
           onDelete={handleDeleteFromDetail}
-          employee={selectedEmployee}
+          employee={selectedEmployee ? {
+            ...selectedEmployee,
+            status: selectedEmployee.status as 'active' | 'inactive' | 'terminated' | 'on_leave'
+          } : null}
         />
       )}
 
@@ -891,6 +797,5 @@ export default function EmployeesPage() {
         />
       )}
     </div>
-    </ProtectedRoute>
   )
 }

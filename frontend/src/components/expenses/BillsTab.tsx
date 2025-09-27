@@ -18,6 +18,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { billsApi } from '@/lib/api'
 
 interface Bill {
   id: string
@@ -83,33 +84,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
         return
       }
 
-      const { data, error } = await supabase
-        .from('bills')
-        .select(`
-          id,
-          bill_number,
-          vendor_id,
-          issue_date,
-          due_date,
-          subtotal,
-          tax_rate,
-          tax_amount,
-          total_amount,
-          currency,
-          status,
-          items,
-          notes,
-          payment_terms,
-          received_at,
-          approved_at,
-          paid_at,
-          created_by,
-          created_at,
-          updated_at
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      const data = await billsApi.getBills()
       setBills(data || [])
     } catch (error) {
       console.error('Error fetching bills:', error)
@@ -120,16 +95,8 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
 
   const approveBill = async (billId: string) => {
     try {
-      const response = await fetch(`/api/expenses/bills/${billId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        fetchBills() // Refresh list
-      }
+      await billsApi.approveBill(billId)
+      fetchBills() // Refresh list
     } catch (error) {
       console.error('Error approving bill:', error)
     }
@@ -137,16 +104,8 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
 
   const payBill = async (billId: string) => {
     try {
-      const response = await fetch(`/api/expenses/bills/${billId}/pay`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        fetchBills() // Refresh list
-      }
+      await billsApi.payBill(billId)
+      fetchBills() // Refresh list
     } catch (error) {
       console.error('Error paying bill:', error)
     }

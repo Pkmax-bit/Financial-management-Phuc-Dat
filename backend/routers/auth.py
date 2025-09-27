@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 import bcrypt
 import jwt
+from jwt import PyJWTError
 from pydantic import BaseModel, EmailStr
 
 from config import settings
@@ -222,11 +223,9 @@ async def login(login_data: UserLogin):
                     "last_login": datetime.utcnow().isoformat()
                 }).eq("id", user["id"]).execute()
                 
-                # Create JWT token
-                access_token = create_access_token(data={"sub": user["email"], "user_id": user["id"]})
-                
+                # Return Supabase JWT token instead of creating our own
                 return Token(
-                    access_token=access_token,
+                    access_token=auth_response.session.access_token,
                     token_type="bearer",
                     expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
                 )
@@ -455,3 +454,27 @@ async def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Delete failed: {str(e)}"
         )
+
+@router.get("/debug-token")
+async def debug_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Debug endpoint to test JWT token verification"""
+    try:
+        token = credentials.credentials
+        print(f"🔍 DEBUG: Received token: {token[:50]}...")
+        
+        # Try to verify with Supabase JWT secret
+        try:
+            payload = jwt.decode(token, settings.SUPABASE_JWT_SECRET, algorithms=["HS256"])
+            print(f"🔍 DEBUG: JWT payload: {payload}")
+            return {
+                "status": "success",
+                "message": "Token verified successfully",
+                "payload": payload
+            }
+        except jwt.ExpiredSignatureError:
+            return {"status": "error", "message": "Token has expired"}
+        except PyJWTError as e:
+            return {"status": "error", "message": f"Invalid token: {str(e)}"}
+        
+    except Exception as e:
+        return {"status": "error", "message": f"Debug failed: {str(e)}"}

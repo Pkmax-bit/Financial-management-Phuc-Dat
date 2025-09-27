@@ -18,6 +18,7 @@ import {
   Download
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { vendorsApi } from '@/lib/api'
 
 interface Vendor {
   id: string
@@ -76,25 +77,7 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
         return
       }
 
-      const { data, error } = await supabase
-        .from('vendors')
-        .select(`
-          id,
-          name,
-          company_name,
-          email,
-          phone,
-          address,
-          tax_id,
-          payment_terms,
-          status,
-          notes,
-          created_at,
-          updated_at
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      const data = await vendorsApi.getVendors()
       setVendors(data || [])
     } catch (error) {
       console.error('Error fetching vendors:', error)
