@@ -35,6 +35,7 @@ export default function ExpensesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const [expensesStats, setExpensesStats] = useState<unknown>({})
+  const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -44,8 +45,8 @@ export default function ExpensesPage() {
 
   // Create handlers for the tab components
   const handleCreateExpense = () => {
-    // Navigate to create expense page or open modal
-    console.log('Create expense')
+    setActiveTab('expenses')
+    setShouldOpenCreateModal(true)
   }
 
   const handleCreateBill = () => {
@@ -406,25 +407,58 @@ export default function ExpensesPage() {
               </div>
             </div>
 
-            {/* Search Bar */}
+            {/* Search Bar and Actions */}
             <div className="px-6 py-4 border-b border-gray-200">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+              <div className="flex items-center justify-between">
+                <div className="relative flex-1 mr-4">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder={
+                      activeTab === 'expenses' 
+                        ? 'Tìm kiếm chi phí...' 
+                        : activeTab === 'bills' 
+                        ? 'Tìm kiếm hóa đơn NCC...' 
+                        : 'Tìm kiếm nhà cung cấp...'
+                    }
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-                <input
-                  type="text"
-                  placeholder={
-                    activeTab === 'expenses' 
-                      ? 'Tìm kiếm chi phí...' 
-                      : activeTab === 'bills' 
-                      ? 'Tìm kiếm hóa đơn NCC...' 
-                      : 'Tìm kiếm nhà cung cấp...'
-                  }
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
+                
+                {/* Action Buttons */}
+                <div className="flex space-x-2">
+                  {activeTab === 'expenses' && (
+                    <button 
+                      onClick={handleCreateExpense}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Tạo chi phí
+                    </button>
+                  )}
+                  {activeTab === 'bills' && (
+                    <button 
+                      onClick={handleCreateBill}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Tạo hóa đơn NCC
+                    </button>
+                  )}
+                  {activeTab === 'vendors' && (
+                    <button 
+                      onClick={handleCreateVendor}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Thêm nhà cung cấp
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -434,6 +468,7 @@ export default function ExpensesPage() {
                 <ExpensesTab 
                   searchTerm={searchTerm}
                   onCreateExpense={handleCreateExpense}
+                  shouldOpenCreateModal={shouldOpenCreateModal}
                 />
               )}
               {activeTab === 'bills' && (

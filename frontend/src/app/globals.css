@@ -101,3 +101,16 @@ body {
 .hover\:scrollbar-thumb-green-400:hover::-webkit-scrollbar-thumb {
   background: #4ade80;
 }
+
+/* Orange scrollbar styles */
+.scrollbar-thumb-orange-300::-webkit-scrollbar-thumb {
+  background: #fdba74;
+}
+
+.scrollbar-track-orange-100::-webkit-scrollbar-track {
+  background: #fed7aa;
+}
+
+.hover\:scrollbar-thumb-orange-400:hover::-webkit-scrollbar-thumb {
+  background: #fb923c;
+}

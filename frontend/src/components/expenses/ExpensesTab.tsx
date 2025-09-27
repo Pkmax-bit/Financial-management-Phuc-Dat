@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { expensesApi } from '@/lib/api'
+import CreateExpenseSidebar from './CreateExpenseSidebar'
 
 interface Expense {
   id: string
@@ -49,17 +50,25 @@ interface Expense {
 interface ExpensesTabProps {
   searchTerm: string
   onCreateExpense: () => void
+  shouldOpenCreateModal?: boolean // Prop to control modal opening from parent
 }
 
-export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTabProps) {
+export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCreateModal }: ExpensesTabProps) {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     checkUser()
   }, [])
+
+  useEffect(() => {
+    if (shouldOpenCreateModal) {
+      setShowCreateModal(true)
+    }
+  }, [shouldOpenCreateModal])
 
   const checkUser = async () => {
     try {
@@ -402,6 +411,16 @@ export default function ExpensesTab({ searchTerm, onCreateExpense }: ExpensesTab
           </tbody>
         </table>
       </div>
+
+      {/* Create Expense Sidebar */}
+      <CreateExpenseSidebar
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          fetchExpenses()
+          setShowCreateModal(false)
+        }}
+      />
     </div>
   )
 }
