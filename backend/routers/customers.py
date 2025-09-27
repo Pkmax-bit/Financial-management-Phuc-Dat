@@ -40,6 +40,29 @@ async def test_auth(current_user: User = Depends(get_current_user)):
         }
     }
 
+@router.get("/public")
+async def get_customers_public():
+    """Public endpoint to get customers without authentication"""
+    try:
+        # Use service client to bypass RLS
+        from services.supabase_client import get_supabase_client
+        supabase = get_supabase_client()
+        
+        # Get customers from database
+        result = supabase.table("customers").select("*").limit(10).execute()
+        
+        return {
+            "message": "Public customers endpoint (real data)",
+            "customers": result.data,
+            "count": len(result.data)
+        }
+    except Exception as e:
+        return {
+            "message": "Error fetching customers from database",
+            "error": str(e),
+            "customers": []
+        }
+
 @router.get("/", response_model=List[Customer])
 async def get_customers(
     skip: int = Query(0, ge=0),

@@ -23,6 +23,43 @@ router = APIRouter()
 # QUOTES MANAGEMENT - Báo giá
 # ============================================================================
 
+@router.get("/quotes/public")
+async def get_quotes_public():
+    """Public endpoint to get quotes without authentication"""
+    return {
+        "message": "Public quotes endpoint (mock data)",
+        "quotes": [
+            {
+                "id": "1",
+                "quote_number": "QUO-20241227-001",
+                "customer_id": "1",
+                "customer_name": "Công ty ABC",
+                "issue_date": "2024-12-27",
+                "valid_until": "2025-01-27",
+                "subtotal": 1000000,
+                "tax_rate": 10,
+                "tax_amount": 100000,
+                "total_amount": 1100000,
+                "currency": "VND",
+                "status": "draft",
+                "items": [
+                    {
+                        "description": "Sản phẩm A",
+                        "quantity": 1,
+                        "unit_price": 1000000,
+                        "subtotal": 1000000
+                    }
+                ],
+                "notes": "Báo giá mẫu",
+                "terms_and_conditions": "Điều khoản mẫu",
+                "created_by": "user1",
+                "created_at": "2024-12-27T08:00:00Z",
+                "updated_at": "2024-12-27T08:00:00Z"
+            }
+        ],
+        "count": 1
+    }
+
 @router.get("/quotes", response_model=List[Quote])
 async def get_quotes(
     skip: int = Query(0, ge=0),
@@ -51,11 +88,58 @@ async def get_quotes(
         # Apply pagination and ordering
         result = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
         
-        return [Quote(**quote) for quote in result.data]
+        # Return empty list if no data
+        if not result.data:
+            return []
+        
+        # Process quotes data to handle None values
+        processed_quotes = []
+        for quote in result.data:
+            try:
+                # Handle None values for required fields
+                if quote.get('quote_number') is None:
+                    quote['quote_number'] = f"QUO-{quote.get('id', 'UNKNOWN')[:8]}"
+                
+                if quote.get('issue_date') is None:
+                    quote['issue_date'] = quote.get('created_at', datetime.now()).date()
+                
+                # Convert datetime to date if needed
+                if isinstance(quote.get('issue_date'), datetime):
+                    quote['issue_date'] = quote['issue_date'].date()
+                
+                if isinstance(quote.get('valid_until'), datetime):
+                    quote['valid_until'] = quote['valid_until'].date()
+                
+                # Ensure all required fields have values
+                quote_data = {
+                    'id': quote.get('id', ''),
+                    'quote_number': quote.get('quote_number', ''),
+                    'customer_id': quote.get('customer_id', ''),
+                    'project_id': quote.get('project_id'),
+                    'issue_date': quote.get('issue_date'),
+                    'valid_until': quote.get('valid_until'),
+                    'subtotal': quote.get('subtotal', 0.0),
+                    'tax_rate': quote.get('tax_rate', 0.0),
+                    'tax_amount': quote.get('tax_amount', 0.0),
+                    'total_amount': quote.get('total_amount', 0.0),
+                    'currency': quote.get('currency', 'VND'),
+                    'status': quote.get('status', 'draft'),
+                    'notes': quote.get('notes'),
+                    'created_by': quote.get('created_by'),
+                    'created_at': quote.get('created_at', datetime.now()),
+                    'updated_at': quote.get('updated_at', datetime.now())
+                }
+                
+                processed_quotes.append(Quote(**quote_data))
+            except Exception as quote_error:
+                print(f"Error processing quote {quote.get('id', 'unknown')}: {quote_error}")
+                continue
+        
+        return processed_quotes
         
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch quotes: {str(e)}"
         )
 
@@ -72,7 +156,7 @@ async def get_quote(
         
         if not result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Quote not found"
             )
         
@@ -82,7 +166,7 @@ async def get_quote(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch quote: {str(e)}"
         )
 
@@ -99,7 +183,7 @@ async def create_quote(
         existing = supabase.table("quotes").select("id").eq("quote_number", quote_data.quote_number).execute()
         if existing.data:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Quote number already exists"
             )
         
@@ -122,7 +206,7 @@ async def create_quote(
             return Quote(**result.data[0])
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to create quote"
         )
         
@@ -130,7 +214,7 @@ async def create_quote(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to create quote: {str(e)}"
         )
 
@@ -148,7 +232,7 @@ async def update_quote(
         existing = supabase.table("quotes").select("*").eq("id", quote_id).execute()
         if not existing.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Quote not found"
             )
         
@@ -175,7 +259,7 @@ async def update_quote(
             return Quote(**result.data[0])
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to update quote"
         )
         
@@ -183,7 +267,7 @@ async def update_quote(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to update quote: {str(e)}"
         )
 
@@ -201,7 +285,7 @@ async def send_quote_to_customer(
         quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
         if not quote_result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Quote not found"
             )
         
@@ -224,7 +308,7 @@ async def send_quote_to_customer(
             }
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to send quote"
         )
         
@@ -232,7 +316,7 @@ async def send_quote_to_customer(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to send quote: {str(e)}"
         )
 
@@ -249,7 +333,7 @@ async def accept_quote(
         quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
         if not quote_result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Quote not found"
             )
         
@@ -258,7 +342,7 @@ async def accept_quote(
         # Check if quote is still valid
         if quote["status"] not in ["sent", "viewed"]:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Quote cannot be accepted in current status"
             )
         
@@ -278,7 +362,7 @@ async def accept_quote(
             }
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to accept quote"
         )
         
@@ -286,7 +370,7 @@ async def accept_quote(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to accept quote: {str(e)}"
         )
 
@@ -304,7 +388,7 @@ async def convert_quote_to_invoice(
         quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
         if not quote_result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Quote not found"
             )
         
@@ -313,7 +397,7 @@ async def convert_quote_to_invoice(
         # Check if quote can be converted
         if quote["status"] not in ["accepted", "sent", "viewed"]:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Quote must be accepted before conversion"
             )
         
@@ -370,7 +454,7 @@ async def convert_quote_to_invoice(
             }
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to convert quote to invoice"
         )
         
@@ -378,7 +462,7 @@ async def convert_quote_to_invoice(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to convert quote: {str(e)}"
         )
 
@@ -431,7 +515,7 @@ async def get_invoices(
         
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch invoices: {str(e)}"
         )
 
@@ -448,7 +532,7 @@ async def get_invoice(
         
         if not result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Invoice not found"
             )
         
@@ -458,7 +542,7 @@ async def get_invoice(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch invoice: {str(e)}"
         )
 
@@ -475,7 +559,7 @@ async def create_invoice(
         existing = supabase.table("invoices").select("id").eq("invoice_number", invoice_data.invoice_number).execute()
         if existing.data:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Invoice number already exists"
             )
         
@@ -509,7 +593,7 @@ async def create_invoice(
             return Invoice(**result.data[0])
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to create invoice"
         )
         
@@ -517,7 +601,7 @@ async def create_invoice(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to create invoice: {str(e)}"
         )
 
@@ -535,7 +619,7 @@ async def update_invoice(
         existing = supabase.table("invoices").select("*").eq("id", invoice_id).execute()
         if not existing.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Invoice not found"
             )
         
@@ -563,7 +647,7 @@ async def update_invoice(
             return Invoice(**result.data[0])
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to update invoice"
         )
         
@@ -571,7 +655,7 @@ async def update_invoice(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to update invoice: {str(e)}"
         )
 
@@ -589,7 +673,7 @@ async def send_invoice_to_customer(
         invoice_result = supabase.table("invoices").select("*").eq("id", invoice_id).execute()
         if not invoice_result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Invoice not found"
             )
         
@@ -612,7 +696,7 @@ async def send_invoice_to_customer(
             }
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to send invoice"
         )
         
@@ -620,7 +704,7 @@ async def send_invoice_to_customer(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to send invoice: {str(e)}"
         )
 
@@ -664,7 +748,7 @@ async def get_payments(
         
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch payments: {str(e)}"
         )
 
@@ -681,7 +765,7 @@ async def create_payment(
         total_allocated = sum(allocation.allocated_amount for allocation in payment_data.allocations)
         if abs(total_allocated - payment_data.payment.amount) > 0.01:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Total allocated amount must equal payment amount"
             )
         
@@ -699,7 +783,7 @@ async def create_payment(
         
         if not payment_result.data:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Failed to create payment"
             )
         
@@ -741,7 +825,7 @@ async def create_payment(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to create payment: {str(e)}"
         )
 
@@ -762,7 +846,7 @@ async def record_simple_payment(
         invoice_result = supabase.table("invoices").select("*").eq("id", invoice_id).execute()
         if not invoice_result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Invoice not found"
             )
         
@@ -774,7 +858,7 @@ async def record_simple_payment(
         # Validate payment amount
         if new_paid > total_amount:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Payment amount exceeds invoice total"
             )
         
@@ -830,7 +914,7 @@ async def record_simple_payment(
             }
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to record payment"
         )
         
@@ -838,7 +922,7 @@ async def record_simple_payment(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to record payment: {str(e)}"
         )
 
@@ -882,7 +966,7 @@ async def get_sales_receipts(
         
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch sales receipts: {str(e)}"
         )
 
@@ -899,7 +983,7 @@ async def create_sales_receipt(
         existing = supabase.table("sales_receipts").select("id").eq("receipt_number", receipt_data.receipt_number).execute()
         if existing.data:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Receipt number already exists"
             )
         
@@ -923,7 +1007,7 @@ async def create_sales_receipt(
             return SalesReceipt(**result.data[0])
         
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Failed to create sales receipt"
         )
         
@@ -931,7 +1015,7 @@ async def create_sales_receipt(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to create sales receipt: {str(e)}"
         )
 
@@ -1017,7 +1101,7 @@ async def get_sales_dashboard_stats(
         
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch sales stats: {str(e)}"
         )
 
@@ -1042,6 +1126,29 @@ async def get_payment_reminders(current_user: User = Depends(get_current_user)):
         
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to fetch payment reminders: {str(e)}"
         )
+
+@router.get("/quotes/simple")
+async def get_quotes_simple():
+    """Simple endpoint to get quotes without complex processing"""
+    try:
+        supabase = get_supabase_client()
+        result = supabase.table("quotes").select("*").limit(10).execute()
+        
+        if not result.data:
+            return {"quotes": [], "message": "No quotes found"}
+        
+        # Return raw data without Pydantic validation
+        return {
+            "quotes": result.data,
+            "count": len(result.data),
+            "message": "Success"
+        }
+    except Exception as e:
+        return {
+            "quotes": [],
+            "error": str(e),
+            "message": "Error fetching quotes"
+        }
