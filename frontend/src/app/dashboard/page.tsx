@@ -49,11 +49,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activeWidget, setActiveWidget] = useState('overview')
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
     checkUser()
-    fetchDashboardStats()
   }, [])
 
   const checkUser = async () => {
@@ -69,6 +69,10 @@ export default function DashboardPage() {
         
         if (userData) {
           setUser(userData)
+          // Fetch dashboard stats after user is set
+          fetchDashboardStats()
+        } else {
+          router.push('/login')
         }
       } else {
         router.push('/login')
@@ -83,105 +87,151 @@ export default function DashboardPage() {
 
   const fetchDashboardStats = async () => {
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) {
-        router.push('/login')
+      setLoading(true)
+      setError(null)
+      console.log('Fetching dashboard stats...')
+      
+      // Try authenticated endpoint first
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        if (!authUser) {
+          router.push('/login')
+          return
+        }
+
+        // Use Supabase client to fetch dashboard stats
+        const { data, error } = await supabase
+          .from('invoices')
+          .select(`
+            total_amount,
+            payment_status,
+            paid_date,
+            status,
+            due_date
+          `)
+
+        if (error) throw error
+
+        // Calculate stats from the data
+        const now = new Date()
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        
+        const paidInvoices = data?.filter(invoice => 
+          invoice.payment_status === 'paid' && 
+          invoice.paid_date && 
+          new Date(invoice.paid_date) >= thirtyDaysAgo
+        ) || []
+        
+        const totalRevenue = paidInvoices.reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
+        
+        const openInvoices = data?.filter(invoice => 
+          invoice.payment_status === 'pending' || invoice.payment_status === 'partial'
+        ) || []
+        
+        const overdueInvoices = data?.filter(invoice => 
+          invoice.due_date && 
+          new Date(invoice.due_date) < now && 
+          (invoice.payment_status === 'pending' || invoice.payment_status === 'partial')
+        ) || []
+
+        // Fetch expenses data
+        const { data: expensesData } = await supabase
+          .from('expenses')
+          .select('amount, category, status')
+          .gte('expense_date', thirtyDaysAgo.toISOString().split('T')[0])
+
+        const totalExpenses = expensesData?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
+        
+        // Fetch bills data
+        const { data: billsData } = await supabase
+          .from('bills')
+          .select('amount, status')
+
+        const pendingBills = billsData?.filter(bill => 
+          bill.status === 'pending' || bill.status === 'partial'
+        ) || []
+
+        // Fetch bank accounts
+        const { data: bankAccountsData } = await supabase
+          .from('bank_accounts')
+          .select('account_name, balance, account_type')
+          .eq('is_active', true)
+
+        const bankAccounts = bankAccountsData?.map(account => ({
+          name: account.account_name || 'Unknown Account',
+          balance: account.balance || 0,
+          type: account.account_type || 'Banking Account'
+        })) || []
+
+        const cashBalance = bankAccounts.reduce((sum, account) => sum + account.balance, 0)
+
+        // Calculate expenses by category
+        const expensesByCategory = expensesData?.reduce((acc, expense) => {
+          const category = expense.category || 'other'
+          if (!acc[category]) {
+            acc[category] = { category, amount: 0, color: getCategoryColor(category) }
+          }
+          acc[category].amount += expense.amount || 0
+          return acc
+        }, {} as Record<string, { category: string; amount: number; color: string }>) || {}
+
+        const expensesByCategoryArray = Object.values(expensesByCategory)
+
+        setStats({
+          totalRevenue,
+          totalExpenses,
+          profitLoss: totalRevenue - totalExpenses,
+          cashBalance,
+          openInvoices: openInvoices.length,
+          overdueInvoices: overdueInvoices.length,
+          paidLast30Days: totalRevenue,
+          pendingBills: pendingBills.length,
+          expensesByCategory: expensesByCategoryArray,
+          recentTransactions: [],
+          bankAccounts
+        })
+        console.log('Successfully fetched dashboard stats via authenticated API')
+        return
+      } catch (authError) {
+        console.log('Authenticated API failed, using fallback data:', authError)
+        
+        // Fallback to default stats
+        setStats({
+          totalRevenue: 0,
+          totalExpenses: 0,
+          profitLoss: 0,
+          cashBalance: 0,
+          openInvoices: 0,
+          overdueInvoices: 0,
+          paidLast30Days: 0,
+          pendingBills: 0,
+          expensesByCategory: [],
+          recentTransactions: [],
+          bankAccounts: []
+        })
+        setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
+        console.log('Using fallback dashboard stats')
         return
       }
-
-      // Use Supabase client to fetch dashboard stats
-      const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          total_amount,
-          payment_status,
-          paid_date,
-          status,
-          due_date
-        `)
-
-      if (error) throw error
-
-      // Calculate stats from the data
-      const now = new Date()
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
       
-      const paidInvoices = data?.filter(invoice => 
-        invoice.payment_status === 'paid' && 
-        invoice.paid_date && 
-        new Date(invoice.paid_date) >= thirtyDaysAgo
-      ) || []
-      
-      const totalRevenue = paidInvoices.reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0)
-      
-      const openInvoices = data?.filter(invoice => 
-        invoice.payment_status === 'pending' || invoice.payment_status === 'partial'
-      ) || []
-      
-      const overdueInvoices = data?.filter(invoice => 
-        invoice.due_date && 
-        new Date(invoice.due_date) < now && 
-        (invoice.payment_status === 'pending' || invoice.payment_status === 'partial')
-      ) || []
-
-      // Fetch expenses data
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('amount, category, status')
-        .gte('expense_date', thirtyDaysAgo.toISOString().split('T')[0])
-
-      const totalExpenses = expensesData?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0
-      
-      // Fetch bills data
-      const { data: billsData } = await supabase
-        .from('bills')
-        .select('amount, status')
-
-      const pendingBills = billsData?.filter(bill => 
-        bill.status === 'pending' || bill.status === 'partial'
-      ) || []
-
-      // Fetch bank accounts
-      const { data: bankAccountsData } = await supabase
-        .from('bank_accounts')
-        .select('account_name, balance, account_type')
-        .eq('is_active', true)
-
-      const bankAccounts = bankAccountsData?.map(account => ({
-        name: account.account_name || 'Unknown Account',
-        balance: account.balance || 0,
-        type: account.account_type || 'Banking Account'
-      })) || []
-
-      const cashBalance = bankAccounts.reduce((sum, account) => sum + account.balance, 0)
-
-      // Calculate expenses by category
-      const expensesByCategory = expensesData?.reduce((acc, expense) => {
-        const category = expense.category || 'other'
-        if (!acc[category]) {
-          acc[category] = { category, amount: 0, color: getCategoryColor(category) }
-        }
-        acc[category].amount += expense.amount || 0
-        return acc
-      }, {} as Record<string, { category: string; amount: number; color: string }>) || {}
-
-      const expensesByCategoryArray = Object.values(expensesByCategory)
-
-      setStats({
-        totalRevenue,
-        totalExpenses,
-        profitLoss: totalRevenue - totalExpenses,
-        cashBalance,
-        openInvoices: openInvoices.length,
-        overdueInvoices: overdueInvoices.length,
-        paidLast30Days: totalRevenue,
-        pendingBills: pendingBills.length,
-        expensesByCategory: expensesByCategoryArray,
-        recentTransactions: [],
-        bankAccounts
-      })
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching dashboard stats:', error)
+      setError(`Lỗi không thể tải thống kê dashboard: ${(error as Error)?.message || 'Không thể kết nối'}`)
+      setStats({
+        totalRevenue: 0,
+        totalExpenses: 0,
+        profitLoss: 0,
+        cashBalance: 0,
+        openInvoices: 0,
+        overdueInvoices: 0,
+        paidLast30Days: 0,
+        pendingBills: 0,
+        expensesByCategory: [],
+        recentTransactions: [],
+        bankAccounts: []
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -259,10 +309,54 @@ export default function DashboardPage() {
           <div className="space-y-8">
             {/* Header */}
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Tổng quan kinh doanh</h1>
-              <p className="mt-2 text-gray-600">
-                Nắm bắt tình hình tài chính và thực hiện các công việc hàng ngày
-              </p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">Tổng quan kinh doanh</h1>
+                  <p className="mt-2 text-gray-600">
+                    Nắm bắt tình hình tài chính và thực hiện các công việc hàng ngày
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm text-red-800">{error}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      console.log('=== DASHBOARD DEBUG INFO ===')
+                      console.log('User:', user)
+                      console.log('Loading:', loading)
+                      console.log('Error:', error)
+                      console.log('Stats:', stats)
+                      console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+                      console.log('Supabase Anon Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Not set')
+                      console.log('========================')
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Debug
+                  </button>
+                  <button
+                    onClick={() => {
+                      setError(null)
+                      fetchDashboardStats()
+                    }}
+                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
             </div>
 
           {/* Quick Actions */}

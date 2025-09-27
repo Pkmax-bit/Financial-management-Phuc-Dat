@@ -185,43 +185,48 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
   const total_amount = formData.subtotal + tax_amount - formData.discount_amount
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
+      {/* Right Sidebar - No overlay to not block interface */}
+      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Tạo Báo giá mới</h2>
-            <p className="text-sm text-gray-600">Tạo và gửi báo giá cho khách hàng</p>
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
+          <div className="flex items-center">
+            <FileText className="h-6 w-6 text-blue-600 mr-3" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Tạo Báo giá mới</h2>
+              <p className="text-sm text-gray-500 mt-1">Tạo và gửi báo giá cho khách hàng</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            disabled={submitting}
+            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="px-6 py-4 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6">
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Số báo giá</label>
+              <label className="block text-sm font-semibold text-gray-900">Số báo giá</label>
               <input
                 type="text"
                 value={formData.quote_number}
                 onChange={(e) => setFormData({ ...formData, quote_number: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
                 placeholder="QUO-20241225-ABC123"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Khách hàng</label>
+              <label className="block text-sm font-semibold text-gray-900">Khách hàng</label>
               <select
                 value={formData.customer_id}
                 onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
                 required
               >
                 <option value="">Chọn khách hàng</option>
@@ -234,22 +239,22 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Ngày phát hành</label>
+              <label className="block text-sm font-semibold text-gray-900">Ngày phát hành</label>
               <input
                 type="date"
                 value={formData.issue_date}
                 onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Ngày hết hạn</label>
+              <label className="block text-sm font-semibold text-gray-900">Ngày hết hạn</label>
               <input
                 type="date"
                 value={formData.expiry_date}
                 onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
               />
             </div>
           </div>
@@ -270,13 +275,13 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
 
             <div className="overflow-x-auto">
               <table className="min-w-full border border-gray-300">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-100">
                   <tr>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Mô tả</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Số lượng</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Đơn giá</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Thành tiền</th>
-                    <th className="px-4 py-2 text-center text-sm font-medium text-gray-700">Hành động</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Mô tả</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Số lượng</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Đơn giá</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Thành tiền</th>
+                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">Hành động</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -287,7 +292,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                           type="text"
                           value={item.description}
                           onChange={(e) => updateItem(index, 'description', e.target.value)}
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
                           placeholder="Mô tả sản phẩm/dịch vụ"
                         />
                       </td>
@@ -296,7 +301,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                           type="number"
                           value={item.quantity}
                           onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right"
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
                           min="0"
                           step="0.01"
                         />
@@ -306,7 +311,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                           type="number"
                           value={item.unit_price}
                           onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right"
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
                           min="0"
                           step="1000"
                         />
@@ -335,18 +340,18 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
           <div className="flex justify-end">
             <div className="w-80 space-y-3">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Tổng phụ:</span>
-                <span className="text-sm font-medium">{formatCurrency(formData.subtotal)}</span>
+                <span className="text-sm font-semibold text-gray-900">Tổng phụ:</span>
+                <span className="text-sm font-semibold text-gray-900">{formatCurrency(formData.subtotal)}</span>
               </div>
               
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Thuế VAT:</span>
+                <span className="text-sm font-semibold text-gray-900">Thuế VAT:</span>
                 <div className="flex items-center space-x-2">
                   <input
                     type="number"
                     value={formData.tax_rate}
                     onChange={(e) => setFormData({ ...formData, tax_rate: parseFloat(e.target.value) || 0 })}
-                    className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-right"
+                    className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
                     min="0"
                     max="100"
                     step="0.1"
@@ -359,12 +364,12 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
               </div>
 
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Giảm giá:</span>
+                <span className="text-sm font-semibold text-gray-900">Giảm giá:</span>
                 <input
                   type="number"
                   value={formData.discount_amount}
                   onChange={(e) => setFormData({ ...formData, discount_amount: parseFloat(e.target.value) || 0 })}
-                  className="w-32 border border-gray-300 rounded px-2 py-1 text-sm text-right"
+                  className="w-32 border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
                   min="0"
                   step="1000"
                 />
@@ -384,22 +389,22 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
           {/* Additional Info */}
           <div className="grid grid-cols-1 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Điều khoản & Điều kiện</label>
+              <label className="block text-sm font-semibold text-gray-900">Điều khoản & Điều kiện</label>
               <textarea
                 value={formData.terms_and_conditions}
                 onChange={(e) => setFormData({ ...formData, terms_and_conditions: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
                 rows={3}
                 placeholder="Điều khoản và điều kiện..."
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
+              <label className="block text-sm font-semibold text-gray-900">Ghi chú</label>
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
                 rows={2}
                 placeholder="Ghi chú thêm..."
               />
@@ -408,32 +413,43 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-          >
-            Hủy
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSubmit(false)}
-            disabled={submitting || !formData.customer_id || items.some(item => !item.description)}
-            className="px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-md hover:bg-gray-700 disabled:opacity-50 flex items-center"
-          >
-            <Save className="w-4 h-4 mr-1" />
-            {submitting ? 'Đang lưu...' : 'Lưu nháp'}
-          </button>
+        <div className="flex flex-col gap-3 pt-4 border-t border-gray-200 p-6">
           <button
             type="button"
             onClick={() => handleSubmit(true)}
             disabled={submitting || !formData.customer_id || items.some(item => !item.description)}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
+            className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send className="w-4 h-4 mr-1" />
-            {submitting ? 'Đang gửi...' : 'Lưu & Gửi'}
+            {submitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Đang tạo...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4 mr-2" />
+                Tạo báo giá
+              </>
+            )}
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => handleSubmit(false)}
+            disabled={submitting || !formData.customer_id || items.some(item => !item.description)}
+            className="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Lưu nháp
+          </button>
+          
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            Hủy
           </button>
         </div>
       </div>

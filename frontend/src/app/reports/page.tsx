@@ -28,6 +28,7 @@ export default function ReportsPage() {
   const [dateRange, setDateRange] = useState('30')
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<unknown>(null)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -47,6 +48,8 @@ export default function ReportsPage() {
         
         if (userData) {
           setUser(userData)
+        } else {
+          router.push('/login')
         }
       } else {
         router.push('/login')
@@ -54,6 +57,8 @@ export default function ReportsPage() {
     } catch (error) {
       console.error('Error checking user:', error)
       router.push('/login')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -435,8 +440,52 @@ export default function ReportsPage() {
                 <p className="mt-1 text-sm text-gray-500">
                   Thông tin chi tiết về hiệu suất kinh doanh của bạn
                 </p>
+                <div className="flex items-center mt-2 space-x-4">
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                    <span className="text-xs text-gray-500">Dữ liệu mẫu</span>
+                  </div>
+                  {user && (
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                      <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex space-x-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data: { user: authUser } } = await supabase.auth.getUser()
+                      
+                      console.log('Debug Info:', {
+                        authUser: authUser?.email || 'No auth user',
+                        userState: (user as { email?: string })?.email || 'No user state'
+                      })
+                      
+                      if (!authUser) {
+                        console.log('Attempting login...')
+                        const loginResult = await supabase.auth.signInWithPassword({
+                          email: 'admin@example.com',
+                          password: 'admin123'
+                        })
+                        
+                        if (loginResult.data.session) {
+                          console.log('Login successful, reloading...')
+                          window.location.reload()
+                        } else {
+                          console.error('Login failed:', loginResult.error?.message)
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Debug error:', error)
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100"
+                >
+                  {user ? 'Debug Auth' : 'Login & Debug'}
+                </button>
                 <select
                   value={dateRange}
                   onChange={(e) => setDateRange(e.target.value)}
@@ -454,6 +503,40 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm text-red-700">{error}</p>
+                  {error.includes('đăng nhập') && (
+                    <p className="text-xs text-red-600 mt-1">
+                      <button
+                        onClick={() => router.push('/login')}
+                        className="underline hover:no-underline"
+                      >
+                        Nhấn vào đây để đăng nhập
+                      </button>
+                    </p>
+                  )}
+                </div>
+                <div className="ml-auto pl-3">
+                  <button
+                    onClick={() => setError(null)}
+                    className="text-sm text-red-600 hover:text-red-500 font-medium"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="mb-6">

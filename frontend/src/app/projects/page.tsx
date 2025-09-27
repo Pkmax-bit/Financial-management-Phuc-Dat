@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { Project } from '@/types'
 import { supabase } from '@/lib/supabase'
+import { projectApi } from '@/lib/api'
 import Navigation from '@/components/Navigation'
 
 export default function ProjectsPage() {
@@ -41,11 +42,11 @@ export default function ProjectsPage() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showTimeEntryModal, setShowTimeEntryModal] = useState(false)
   const [user, setUser] = useState<unknown>(null)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
     checkUser()
-    fetchProjects()
   }, [])
 
   const checkUser = async () => {
@@ -61,6 +62,10 @@ export default function ProjectsPage() {
         
         if (userData) {
           setUser(userData)
+          // Fetch projects after user is set
+          fetchProjects()
+        } else {
+          router.push('/login')
         }
       } else {
         router.push('/login')
@@ -68,6 +73,8 @@ export default function ProjectsPage() {
     } catch (error) {
       console.error('Error checking user:', error)
       router.push('/login')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -78,15 +85,36 @@ export default function ProjectsPage() {
 
   const fetchProjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setProjects(data || [])
-    } catch (error) {
+      setLoading(true)
+      setError(null)
+      console.log('Fetching projects...')
+      
+      // Try authenticated endpoint first
+      try {
+        const data = await projectApi.getProjects()
+        setProjects(Array.isArray(data) ? data : [])
+        console.log('Successfully fetched projects via authenticated API:', data?.length || 0)
+        return
+      } catch (authError) {
+        console.log('Authenticated API failed, trying public endpoint:', authError)
+        
+        // Fallback to public endpoint
+        try {
+          const data = await projectApi.getProjectsPublic()
+          setProjects(Array.isArray(data) ? data : [])
+          setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
+          console.log('Successfully fetched projects via public API:', data?.length || 0)
+          return
+        } catch (publicError) {
+          console.log('Public API also failed:', publicError)
+          throw publicError
+        }
+      }
+      
+    } catch (error: unknown) {
       console.error('Error fetching projects:', error)
+      setError(`Lỗi không thể tải danh sách dự án: ${(error as Error)?.message || 'Không thể kết nối'}`)
+      setProjects([])
     } finally {
       setLoading(false)
     }
@@ -193,8 +221,66 @@ export default function ProjectsPage() {
                 <p className="mt-1 text-sm text-gray-500">
                   Quản lý dự án, theo dõi thời gian và giám sát lợi nhuận
                 </p>
+                <div className="flex items-center mt-2 space-x-4">
+                  <div className="flex items-center">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${
+                      projects.length > 0 ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <span className="text-xs text-gray-500">
+                      {projects.length > 0 ? `${projects.length} dự án` : 'Chưa có dữ liệu'}
+                    </span>
+                  </div>
+                  {user && (
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                      <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex space-x-3">
+                <button
+                  onClick={fetchProjects}
+                  disabled={loading}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {loading ? 'Đang tải...' : 'Làm mới'}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data: { user: authUser } } = await supabase.auth.getUser()
+                      
+                      console.log('Debug Info:', {
+                        authUser: authUser?.email || 'No auth user',
+                        userState: (user as { email?: string })?.email || 'No user state'
+                      })
+                      
+                      if (!authUser) {
+                        console.log('Attempting login...')
+                        const loginResult = await supabase.auth.signInWithPassword({
+                          email: 'admin@example.com',
+                          password: 'admin123'
+                        })
+                        
+                        if (loginResult.data.session) {
+                          console.log('Login successful, reloading...')
+                          window.location.reload()
+                        } else {
+                          console.error('Login failed:', loginResult.error?.message)
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Debug error:', error)
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100"
+                >
+                  {user ? 'Debug Auth' : 'Login & Debug'}
+                </button>
                 <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                   <Upload className="h-4 w-4 mr-2" />
                   Import
@@ -213,6 +299,40 @@ export default function ProjectsPage() {
               </div>
             </div>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm text-red-700">{error}</p>
+                  {error.includes('đăng nhập') && (
+                    <p className="text-xs text-red-600 mt-1">
+                      <button
+                        onClick={() => router.push('/login')}
+                        className="underline hover:no-underline"
+                      >
+                        Nhấn vào đây để đăng nhập
+                      </button>
+                    </p>
+                  )}
+                </div>
+                <div className="ml-auto pl-3">
+                  <button
+                    onClick={fetchProjects}
+                    className="text-sm text-red-600 hover:text-red-500 font-medium"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">

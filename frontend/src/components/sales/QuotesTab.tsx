@@ -15,7 +15,7 @@ import {
   DollarSign,
   Clock
 } from 'lucide-react'
-import CreateQuoteModal from './CreateQuoteModal'
+import CreateQuoteSidebar from './CreateQuoteSidebar'
 import { apiGet, apiPost } from '@/lib/api'
 
 interface Quote {
@@ -362,16 +362,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         )}
       </div>
 
-      {showCreateModal && (
-        <CreateQuoteModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            fetchQuotes()
-            setShowCreateModal(false)
-          }}
-        />
-      )}
+      <CreateQuoteSidebar
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          fetchQuotes()
+        }}
+      />
     </div>
   )
 }

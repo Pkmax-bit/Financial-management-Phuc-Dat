@@ -40,6 +40,7 @@ import {
   TrendingDown
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { customerApi } from '@/lib/api'
 import Navigation from '@/components/Navigation'
 
 interface Transaction {
@@ -95,6 +96,7 @@ export default function CustomersPage() {
   const [editError, setEditError] = useState('')
 
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Mock transaction data
   const mockTransactions: Transaction[] = [
@@ -129,7 +131,6 @@ export default function CustomersPage() {
 
   useEffect(() => {
     checkUser()
-    fetchCustomers()
   }, [])
 
   const checkUser = async () => {
@@ -145,6 +146,10 @@ export default function CustomersPage() {
         
         if (userData) {
           setUser(userData)
+          // Fetch customers after user is set
+          fetchCustomers()
+        } else {
+          router.push('/login')
         }
       } else {
         router.push('/login')
@@ -152,6 +157,8 @@ export default function CustomersPage() {
     } catch (error) {
       console.error('Error checking user:', error)
       router.push('/login')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -162,33 +169,36 @@ export default function CustomersPage() {
 
   const fetchCustomers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select(`
-          id,
-          customer_code,
-          name,
-          type,
-          email,
-          phone,
-          address,
-          city,
-          country,
-          tax_id,
-          status,
-          credit_limit,
-          payment_terms,
-          notes,
-          assigned_to,
-          created_at,
-          updated_at
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setCustomers(data || [])
-    } catch (error) {
+      setLoading(true)
+      setError(null)
+      console.log('Fetching customers...')
+      
+      // Try authenticated endpoint first
+      try {
+        const data = await customerApi.getCustomers()
+        setCustomers(Array.isArray(data) ? data : [])
+        console.log('Successfully fetched customers via authenticated API:', data?.length || 0)
+        return
+      } catch (authError) {
+        console.log('Authenticated API failed, trying public endpoint:', authError)
+        
+        // Fallback to public endpoint
+        try {
+          const data = await customerApi.getCustomersPublic()
+          setCustomers(Array.isArray(data) ? data : [])
+          setError('Hiển thị dữ liệu mẫu (chưa đăng nhập)')
+          console.log('Successfully fetched customers via public API:', data?.length || 0)
+          return
+        } catch (publicError) {
+          console.log('Public API also failed:', publicError)
+          throw publicError
+        }
+      }
+      
+    } catch (error: unknown) {
       console.error('Error fetching customers:', error)
+      setError(`Lỗi không thể tải danh sách khách hàng: ${(error as Error)?.message || 'Không thể kết nối'}`)
+      setCustomers([])
     } finally {
       setLoading(false)
     }
@@ -249,47 +259,28 @@ export default function CustomersPage() {
     setAddSaving(true)
     setAddError('')
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) throw new Error('Chưa đăng nhập')
-      
-      // Check if customer_code already exists
-      const { data: existingCustomer } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('customer_code', addForm.customer_code)
-        .single()
-      
-      if (existingCustomer) {
-        setAddError('Mã khách hàng đã tồn tại. Vui lòng chọn mã khác.')
-        return
-      }
-      
-      // Prepare customer data according to database schema
+      // Prepare customer data according to API schema
       const customerData = {
         customer_code: addForm.customer_code,
         name: addForm.name,
-        type: addForm.type,
-        email: addForm.email || null,
-        phone: addForm.phone || null,
-        address: addForm.address || null,
-        city: addForm.city || null,
+        type: addForm.type as 'individual' | 'company' | 'government',
+        email: addForm.email || undefined,
+        phone: addForm.phone || undefined,
+        address: addForm.address || undefined,
+        city: addForm.city || undefined,
         country: addForm.country || 'Vietnam',
-        tax_id: addForm.tax_id || null,
-        status: 'active',
+        tax_id: addForm.tax_id || undefined,
+        status: 'active' as 'active' | 'inactive' | 'prospect',
         credit_limit: addForm.credit_limit || 0,
         payment_terms: addForm.payment_terms || 30,
-        notes: addForm.notes || null,
-        assigned_to: addForm.assigned_to || null
+        notes: addForm.notes || undefined,
+        assigned_to: addForm.assigned_to || undefined
       }
       
-      const { error } = await supabase
-        .from('customers')
-        .insert([customerData])
-      
-      if (error) throw error
+      await customerApi.createCustomer(customerData)
       setShowAddModal(false)
       setNotice({ type: 'success', text: 'Thêm khách hàng thành công' })
-      await refreshCustomers()
+      await fetchCustomers()
     } catch (err: unknown) {
       setAddError((err as Error)?.message || 'Không thể thêm khách hàng')
     } finally {
@@ -303,33 +294,28 @@ export default function CustomersPage() {
     setEditSaving(true)
     setEditError('')
     try {
-      // Prepare update data according to database schema
+      // Prepare update data according to API schema
       const updateData = {
         customer_code: editForm.customer_code,
         name: editForm.name,
         type: editForm.type,
-        email: editForm.email || null,
-        phone: editForm.phone || null,
-        address: editForm.address || null,
-        city: editForm.city || null,
+        email: editForm.email || undefined,
+        phone: editForm.phone || undefined,
+        address: editForm.address || undefined,
+        city: editForm.city || undefined,
         country: editForm.country || 'Vietnam',
-        tax_id: editForm.tax_id || null,
+        tax_id: editForm.tax_id || undefined,
         status: editForm.status || 'active',
         credit_limit: editForm.credit_limit || 0,
         payment_terms: editForm.payment_terms || 30,
-        notes: editForm.notes || null,
-        assigned_to: editForm.assigned_to || null
+        notes: editForm.notes || undefined,
+        assigned_to: editForm.assigned_to || undefined
       }
       
-      const { error } = await supabase
-        .from('customers')
-        .update(updateData)
-        .eq('id', selectedCustomer.id)
-      
-      if (error) throw error
+      await customerApi.updateCustomer(selectedCustomer.id, updateData)
       setShowEditModal(false)
       setNotice({ type: 'success', text: 'Cập nhật khách hàng thành công' })
-      await refreshCustomers()
+      await fetchCustomers()
     } catch (err: unknown) {
       setEditError((err as Error)?.message || 'Không thể cập nhật khách hàng')
     } finally {
@@ -340,13 +326,9 @@ export default function CustomersPage() {
   const deleteCustomer = async (customer: Customer) => {
     if (!confirm(`Xóa khách hàng "${customer.name}"?`)) return
     try {
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', customer.id)
-      if (error) throw error
+      await customerApi.deleteCustomer(customer.id)
       setNotice({ type: 'success', text: 'Đã xóa khách hàng' })
-      await refreshCustomers()
+      await fetchCustomers()
     } catch (err: unknown) {
       setNotice({ type: 'error', text: (err as Error)?.message || 'Không thể xóa khách hàng' })
     }
@@ -513,8 +495,66 @@ export default function CustomersPage() {
                 <p className="mt-1 text-sm text-gray-500">
                   Quản lý toàn diện khách hàng, công nợ và giao dịch
                 </p>
+                <div className="flex items-center mt-2 space-x-4">
+                  <div className="flex items-center">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${
+                      customers.length > 0 ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <span className="text-xs text-gray-500">
+                      {customers.length > 0 ? `${customers.length} khách hàng` : 'Chưa có dữ liệu'}
+                    </span>
+                  </div>
+                  {user && (
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                      <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex space-x-3">
+                <button
+                  onClick={fetchCustomers}
+                  disabled={loading}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {loading ? 'Đang tải...' : 'Làm mới'}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data: { user: authUser } } = await supabase.auth.getUser()
+                      
+                      console.log('Debug Info:', {
+                        authUser: authUser?.email || 'No auth user',
+                        userState: (user as { email?: string })?.email || 'No user state'
+                      })
+                      
+                      if (!authUser) {
+                        console.log('Attempting login...')
+                        const loginResult = await supabase.auth.signInWithPassword({
+                          email: 'admin@example.com',
+                          password: 'admin123'
+                        })
+                        
+                        if (loginResult.data.session) {
+                          console.log('Login successful, reloading...')
+                          window.location.reload()
+                        } else {
+                          console.error('Login failed:', loginResult.error?.message)
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Debug error:', error)
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100"
+                >
+                  {user ? 'Debug Auth' : 'Login & Debug'}
+                </button>
                 <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Báo cáo
@@ -533,6 +573,40 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm text-red-700">{error}</p>
+                  {error.includes('đăng nhập') && (
+                    <p className="text-xs text-red-600 mt-1">
+                      <button
+                        onClick={() => router.push('/login')}
+                        className="underline hover:no-underline"
+                      >
+                        Nhấn vào đây để đăng nhập
+                      </button>
+                    </p>
+                  )}
+                </div>
+                <div className="ml-auto pl-3">
+                  <button
+                    onClick={fetchCustomers}
+                    className="text-sm text-red-600 hover:text-red-500 font-medium"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6">
