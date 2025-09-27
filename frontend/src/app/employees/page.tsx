@@ -19,6 +19,8 @@ import { supabase } from '@/lib/supabase'
 import { employeeApi } from '@/lib/api'
 import Navigation from '@/components/Navigation'
 import CreateEmployeeModal from '@/components/employees/CreateEmployeeModal'
+import EditEmployeeSidebar from '@/components/employees/EditEmployeeSidebar'
+import EmployeeDetailSidebar from '@/components/employees/EmployeeDetailSidebar'
 
 import DepartmentManagerSidebar from '@/components/employees/DepartmentManagerSidebar'
 import CreateDepartmentModalSidebar from '@/components/employees/CreateDepartmentModalSidebar'
@@ -38,6 +40,9 @@ export default function EmployeesPage() {
   const [sortBy, setSortBy] = useState('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditSidebar, setShowEditSidebar] = useState(false)
+  const [showDetailSidebar, setShowDetailSidebar] = useState(false)
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
 
   const [showPositionManager, setShowPositionManager] = useState(false)
   const [showDepartmentSidebar, setShowDepartmentSidebar] = useState(false)
@@ -255,17 +260,24 @@ export default function EmployeesPage() {
   }
 
   const handleViewEmployee = (employeeId: string) => {
-    // Navigate to employee detail page (will be implemented later)
-    router.push(`/employees/${employeeId}`)
+    const employee = employees.find(e => e.id === employeeId)
+    if (employee) {
+      setSelectedEmployee(employee)
+      setShowDetailSidebar(true)
+    }
   }
 
   const handleEditEmployee = (employeeId: string) => {
-    // Find the employee and open edit modal (will be implemented later)
     const employee = employees.find(e => e.id === employeeId)
     if (employee) {
-      console.log('Edit employee:', employee)
-      // TODO: Implement edit modal
+      setSelectedEmployee(employee)
+      setShowEditSidebar(true)
     }
+  }
+
+  const handleEditFromDetail = (employee: Employee) => {
+    setSelectedEmployee(employee)
+    setShowEditSidebar(true)
   }
 
   const handleDeleteEmployee = async (employeeId: string) => {
@@ -274,7 +286,7 @@ export default function EmployeesPage() {
 
     try {
       if (typeof window !== 'undefined' && 
-          window.confirm(`Bạn có chắc chắn muốn xóa nhân viên ${employee.first_name} ${employee.last_name}?`)) {
+          window.confirm(`Bạn có chắc chắn muốn xóa nhân viên ${employee.first_name} ${employee.last_name}?\n\nHành động này không thể hoàn tác!`)) {
         console.log('Delete employee:', employeeId)
         
         await employeeApi.deleteEmployee(employeeId)
@@ -282,11 +294,20 @@ export default function EmployeesPage() {
         
         // Refresh the employee list
         await fetchEmployees()
+        
+        // Close any open sidebars
+        setShowDetailSidebar(false)
+        setShowEditSidebar(false)
+        setSelectedEmployee(null)
       }
     } catch (error) {
       console.error('Error deleting employee:', error)
       setError(`Có lỗi xảy ra khi xóa nhân viên: ${(error as Error)?.message || 'Không thể xóa nhân viên'}`)
     }
+  }
+
+  const handleDeleteFromDetail = (employeeId: string) => {
+    handleDeleteEmployee(employeeId)
   }
 
   // Filter and sort employees
@@ -769,10 +790,35 @@ export default function EmployeesPage() {
 
       {/* Modals */}
       {showCreateModal && (
-      <CreateEmployeeModal
+        <CreateEmployeeModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           onSuccess={fetchEmployees}
+        />
+      )}
+
+      {showEditSidebar && selectedEmployee && (
+        <EditEmployeeSidebar
+          isOpen={showEditSidebar}
+          onClose={() => {
+            setShowEditSidebar(false)
+            setSelectedEmployee(null)
+          }}
+          onSuccess={fetchEmployees}
+          employee={selectedEmployee}
+        />
+      )}
+
+      {showDetailSidebar && selectedEmployee && (
+        <EmployeeDetailSidebar
+          isOpen={showDetailSidebar}
+          onClose={() => {
+            setShowDetailSidebar(false)
+            setSelectedEmployee(null)
+          }}
+          onEdit={handleEditFromDetail}
+          onDelete={handleDeleteFromDetail}
+          employee={selectedEmployee}
         />
       )}
 
