@@ -50,7 +50,7 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting
+from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_reports, balance_sheet, drill_down, cash_flow, sales_customer, expenses_vendor, general_ledger
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -67,6 +67,13 @@ app.include_router(expense_claims.router, tags=["Expense Claims"])
 app.include_router(budgeting.router, tags=["Budgeting"])
 app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+app.include_router(pl_reports.router, prefix="/api/reports/financial", tags=["P&L Reports"])
+app.include_router(balance_sheet.router, prefix="/api/reports/financial", tags=["Balance Sheet"])
+app.include_router(drill_down.router, prefix="/api/reports/financial", tags=["Drill-Down Reports"])
+app.include_router(cash_flow.router, prefix="/api/reports/financial", tags=["Cash Flow Statement"])
+app.include_router(sales_customer.router, prefix="/api/reports/sales", tags=["Sales by Customer"])
+app.include_router(expenses_vendor.router, prefix="/api/reports/expenses", tags=["Expenses by Vendor"])
+app.include_router(general_ledger.router, prefix="/api/reports/accountant", tags=["General Ledger"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(files.router, prefix="/api/files", tags=["Files"])
 

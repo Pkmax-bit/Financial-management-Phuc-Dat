@@ -17,11 +17,23 @@ import {
   FileText,
   Clock,
   Target,
-  AlertCircle
+  AlertCircle,
+  Building2,
+  CreditCard,
+  PiggyBank,
+  BookOpen,
+  Calculator,
+  Scale
 } from 'lucide-react'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
+import PLReportModal from '@/components/reports/PLReportModal'
+import BalanceSheetModal from '@/components/reports/BalanceSheetModal'
+import CashFlowModal from '@/components/reports/CashFlowModal'
+import SalesByCustomerModal from '@/components/reports/SalesByCustomerModal'
+import ExpensesByVendorModal from '@/components/reports/ExpensesByVendorModal'
+import GeneralLedgerModal from '@/components/reports/GeneralLedgerModal'
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState('overview')
@@ -29,6 +41,33 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<unknown>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showPLModal, setShowPLModal] = useState(false)
+  const [plDateRange, setPLDateRange] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  })
+  const [showBalanceSheetModal, setShowBalanceSheetModal] = useState(false)
+  const [balanceSheetDate, setBalanceSheetDate] = useState(new Date().toISOString().split('T')[0])
+  const [showCashFlowModal, setShowCashFlowModal] = useState(false)
+  const [cashFlowDateRange, setCashFlowDateRange] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  })
+  const [showSalesByCustomerModal, setShowSalesByCustomerModal] = useState(false)
+  const [salesByCustomerDateRange, setSalesByCustomerDateRange] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  })
+  const [showExpensesByVendorModal, setShowExpensesByVendorModal] = useState(false)
+  const [expensesByVendorDateRange, setExpensesByVendorDateRange] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  })
+  const [showGeneralLedgerModal, setShowGeneralLedgerModal] = useState(false)
+  const [generalLedgerDateRange, setGeneralLedgerDateRange] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  })
   const router = useRouter()
 
   useEffect(() => {
@@ -123,6 +162,12 @@ export default function ReportsPage() {
   const tabs = [
     { id: 'overview', name: 'Tổng quan', icon: BarChart3 },
     { id: 'financial', name: 'Tài chính', icon: DollarSign },
+    { id: 'pl-report', name: 'P&L Report', icon: FileText },
+    { id: 'balance-sheet', name: 'Balance Sheet', icon: Building2 },
+    { id: 'cash-flow', name: 'Cash Flow', icon: TrendingUp },
+    { id: 'sales-customer', name: 'Doanh thu KH', icon: Users },
+    { id: 'expenses-vendor', name: 'Chi phí NCC', icon: Building2 },
+    { id: 'general-ledger', name: 'Sổ cái', icon: BookOpen },
     { id: 'customers', name: 'Khách hàng', icon: Users },
     { id: 'projects', name: 'Dự án', icon: FolderOpen },
     { id: 'expenses', name: 'Chi phí', icon: Receipt }
@@ -398,12 +443,760 @@ export default function ReportsPage() {
     </div>
   )
 
+  const renderBalanceSheetTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Bảng Cân đối Kế toán</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Bức ảnh chụp nhanh về tình hình tài chính của công ty tại một thời điểm cụ thể
+            </p>
+          </div>
+          <button
+            onClick={() => setShowBalanceSheetModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Building2 className="h-4 w-4 mr-2" />
+            Xem Bảng Cân đối
+          </button>
+        </div>
+
+        {/* Date Selector */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tính đến ngày
+          </label>
+          <input
+            type="date"
+            value={balanceSheetDate}
+            onChange={(e) => setBalanceSheetDate(e.target.value)}
+            className="w-full md:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Balance Sheet Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Building2 className="h-8 w-8 text-blue-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-blue-900">Tài sản</h4>
+                <p className="text-xs text-blue-700">Tài sản ngắn hạn và dài hạn của công ty</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <CreditCard className="h-8 w-8 text-red-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-red-900">Nợ phải trả</h4>
+                <p className="text-xs text-red-700">Các khoản nợ ngắn hạn và dài hạn</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <PiggyBank className="h-8 w-8 text-green-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-green-900">Vốn chủ sở hữu</h4>
+                <p className="text-xs text-green-700">Vốn đầu tư và lợi nhuận giữ lại</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Thao tác nhanh</h4>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setBalanceSheetDate(new Date().toISOString().split('T')[0])}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Hôm nay
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate())
+                setBalanceSheetDate(lastMonth.toISOString().split('T')[0])
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng trước
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const endOfLastYear = new Date(today.getFullYear() - 1, 11, 31)
+                setBalanceSheetDate(endOfLastYear.toISOString().split('T')[0])
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Cuối năm trước
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderPLReportTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Báo cáo Kết quả Kinh doanh (P&L)</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Báo cáo tài chính chuẩn mực thể hiện lợi nhuận của công ty
+            </p>
+          </div>
+          <button
+            onClick={() => setShowPLModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Xem báo cáo P&L
+          </button>
+        </div>
+
+        {/* Date Range Selector */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Từ ngày
+            </label>
+            <input
+              type="date"
+              value={plDateRange.startDate}
+              onChange={(e) => setPLDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Đến ngày
+            </label>
+            <input
+              type="date"
+              value={plDateRange.endDate}
+              onChange={(e) => setPLDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* P&L Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <DollarSign className="h-8 w-8 text-green-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-green-900">Doanh thu</h4>
+                <p className="text-xs text-green-700">Tổng hợp doanh thu từ bán hàng và dịch vụ</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <BarChart3 className="h-8 w-8 text-red-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-red-900">Giá vốn hàng bán</h4>
+                <p className="text-xs text-red-700">Chi phí trực tiếp tạo ra sản phẩm/dịch vụ</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <TrendingUp className="h-8 w-8 text-blue-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-blue-900">Lợi nhuận ròng</h4>
+                <p className="text-xs text-blue-700">Kết quả cuối cùng sau tất cả chi phí</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Thao tác nhanh</h4>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                const today = new Date()
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                setPLDateRange({
+                  startDate: lastMonth.toISOString().split('T')[0],
+                  endDate: new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng trước
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+                setPLDateRange({
+                  startDate: thisMonth.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng này
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisYear = new Date(today.getFullYear(), 0, 1)
+                setPLDateRange({
+                  startDate: thisYear.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Năm này
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderCashFlowTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Báo cáo Lưu chuyển Tiền tệ</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Báo cáo chi tiết về các dòng tiền vào và ra của công ty theo 3 hoạt động chính
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCashFlowModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Xem Cash Flow
+          </button>
+        </div>
+
+        {/* Date Range Selector */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Từ ngày
+            </label>
+            <input
+              type="date"
+              value={cashFlowDateRange.startDate}
+              onChange={(e) => setCashFlowDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Đến ngày
+            </label>
+            <input
+              type="date"
+              value={cashFlowDateRange.endDate}
+              onChange={(e) => setCashFlowDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Cash Flow Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <TrendingUp className="h-8 w-8 text-blue-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-blue-900">Hoạt động Kinh doanh</h4>
+                <p className="text-xs text-blue-700">Dòng tiền từ hoạt động sản xuất kinh doanh chính</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Target className="h-8 w-8 text-purple-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-purple-900">Hoạt động Đầu tư</h4>
+                <p className="text-xs text-purple-700">Mua bán tài sản cố định và đầu tư dài hạn</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <PiggyBank className="h-8 w-8 text-green-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-green-900">Hoạt động Tài chính</h4>
+                <p className="text-xs text-green-700">Vay/trả nợ, góp vốn và chia cổ tức</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Thao tác nhanh</h4>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                const today = new Date()
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                setCashFlowDateRange({
+                  startDate: lastMonth.toISOString().split('T')[0],
+                  endDate: new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng trước
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+                setCashFlowDateRange({
+                  startDate: thisMonth.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng này
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisYear = new Date(today.getFullYear(), 0, 1)
+                setCashFlowDateRange({
+                  startDate: thisYear.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Năm này
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderSalesByCustomerTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Báo cáo Doanh thu theo Khách hàng</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Xếp hạng khách hàng theo tổng doanh thu và phân tích hiệu suất
+            </p>
+          </div>
+          <button
+            onClick={() => setShowSalesByCustomerModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Users className="h-4 w-4 mr-2" />
+            Xem báo cáo
+          </button>
+        </div>
+
+        {/* Date Range Selector */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Từ ngày
+            </label>
+            <input
+              type="date"
+              value={salesByCustomerDateRange.startDate}
+              onChange={(e) => setSalesByCustomerDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Đến ngày
+            </label>
+            <input
+              type="date"
+              value={salesByCustomerDateRange.endDate}
+              onChange={(e) => setSalesByCustomerDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Sales by Customer Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Users className="h-8 w-8 text-blue-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-blue-900">Xếp hạng Khách hàng</h4>
+                <p className="text-xs text-blue-700">Sắp xếp theo tổng doanh thu từ cao đến thấp</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <DollarSign className="h-8 w-8 text-green-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-green-900">Phân tích Doanh thu</h4>
+                <p className="text-xs text-green-700">Tổng doanh thu, giá trị trung bình, giao dịch lớn nhất</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <BarChart3 className="h-8 w-8 text-purple-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-purple-900">Thống kê Chi tiết</h4>
+                <p className="text-xs text-purple-700">Số lượng giao dịch, khách hàng mới, khách hàng quay lại</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Thao tác nhanh</h4>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                const today = new Date()
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                setSalesByCustomerDateRange({
+                  startDate: lastMonth.toISOString().split('T')[0],
+                  endDate: new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng trước
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+                setSalesByCustomerDateRange({
+                  startDate: thisMonth.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng này
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisYear = new Date(today.getFullYear(), 0, 1)
+                setSalesByCustomerDateRange({
+                  startDate: thisYear.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Năm này
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderExpensesByVendorTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Báo cáo Chi phí theo Nhà cung cấp</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Xếp hạng nhà cung cấp theo tổng chi phí và phân tích hiệu suất
+            </p>
+          </div>
+          <button
+            onClick={() => setShowExpensesByVendorModal(true)}
+            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            <Building2 className="h-4 w-4 mr-2" />
+            Xem báo cáo
+          </button>
+        </div>
+
+        {/* Date Range Selector */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Từ ngày
+            </label>
+            <input
+              type="date"
+              value={expensesByVendorDateRange.startDate}
+              onChange={(e) => setExpensesByVendorDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Đến ngày
+            </label>
+            <input
+              type="date"
+              value={expensesByVendorDateRange.endDate}
+              onChange={(e) => setExpensesByVendorDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+        </div>
+
+        {/* Expenses by Vendor Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-red-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Building2 className="h-8 w-8 text-red-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-red-900">Xếp hạng Nhà cung cấp</h4>
+                <p className="text-xs text-red-700">Sắp xếp theo tổng chi phí từ cao đến thấp</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-orange-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <DollarSign className="h-8 w-8 text-orange-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-orange-900">Phân tích Chi phí</h4>
+                <p className="text-xs text-orange-700">Tổng chi phí, giá trị trung bình, giao dịch lớn nhất</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <BarChart3 className="h-8 w-8 text-purple-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-purple-900">Thống kê Chi tiết</h4>
+                <p className="text-xs text-purple-700">Số lượng giao dịch, nhà cung cấp mới, nhà cung cấp hoạt động</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Thao tác nhanh</h4>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                const today = new Date()
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                setExpensesByVendorDateRange({
+                  startDate: lastMonth.toISOString().split('T')[0],
+                  endDate: new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng trước
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+                setExpensesByVendorDateRange({
+                  startDate: thisMonth.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng này
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisYear = new Date(today.getFullYear(), 0, 1)
+                setExpensesByVendorDateRange({
+                  startDate: thisYear.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Năm này
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderGeneralLedgerTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Báo cáo Sổ cái</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Bản ghi chi tiết, theo thứ tự thời gian của tất cả các giao dịch kế toán
+            </p>
+          </div>
+          <button
+            onClick={() => setShowGeneralLedgerModal(true)}
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          >
+            <BookOpen className="h-4 w-4 mr-2" />
+            Xem sổ cái
+          </button>
+        </div>
+
+        {/* Date Range Selector */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Từ ngày
+            </label>
+            <input
+              type="date"
+              value={generalLedgerDateRange.startDate}
+              onChange={(e) => setGeneralLedgerDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Đến ngày
+            </label>
+            <input
+              type="date"
+              value={generalLedgerDateRange.endDate}
+              onChange={(e) => setGeneralLedgerDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+
+        {/* General Ledger Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-indigo-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <BookOpen className="h-8 w-8 text-indigo-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-indigo-900">Sổ cái chi tiết</h4>
+                <p className="text-xs text-indigo-700">Bản ghi theo thứ tự thời gian của tất cả giao dịch</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Calculator className="h-8 w-8 text-blue-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-blue-900">Số dư lũy kế</h4>
+                <p className="text-xs text-blue-700">Tính toán số dư sau mỗi giao dịch</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Scale className="h-8 w-8 text-green-600" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-green-900">Kiểm tra cân đối</h4>
+                <p className="text-xs text-green-700">Đảm bảo tổng Nợ = tổng Có</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Thao tác nhanh</h4>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                const today = new Date()
+                const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                setGeneralLedgerDateRange({
+                  startDate: lastMonth.toISOString().split('T')[0],
+                  endDate: new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng trước
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+                setGeneralLedgerDateRange({
+                  startDate: thisMonth.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Tháng này
+            </button>
+            <button
+              onClick={() => {
+                const today = new Date()
+                const thisYear = new Date(today.getFullYear(), 0, 1)
+                setGeneralLedgerDateRange({
+                  startDate: thisYear.toISOString().split('T')[0],
+                  endDate: today.toISOString().split('T')[0]
+                })
+              }}
+              className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Năm này
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
         return renderOverviewTab()
       case 'financial':
         return renderFinancialTab()
+      case 'pl-report':
+        return renderPLReportTab()
+      case 'balance-sheet':
+        return renderBalanceSheetTab()
+      case 'cash-flow':
+        return renderCashFlowTab()
+      case 'sales-customer':
+        return renderSalesByCustomerTab()
+      case 'expenses-vendor':
+        return renderExpensesByVendorTab()
+      case 'general-ledger':
+        return renderGeneralLedgerTab()
       case 'customers':
         return renderCustomersTab()
       case 'projects':
@@ -567,6 +1360,53 @@ export default function ReportsPage() {
           {renderTabContent()}
         </div>
       </div>
+
+      {/* P&L Report Modal */}
+      <PLReportModal
+        isOpen={showPLModal}
+        onClose={() => setShowPLModal(false)}
+        startDate={plDateRange.startDate}
+        endDate={plDateRange.endDate}
+      />
+
+      {/* Balance Sheet Modal */}
+      <BalanceSheetModal
+        isOpen={showBalanceSheetModal}
+        onClose={() => setShowBalanceSheetModal(false)}
+        asOfDate={balanceSheetDate}
+      />
+
+      {/* Cash Flow Modal */}
+      <CashFlowModal
+        isOpen={showCashFlowModal}
+        onClose={() => setShowCashFlowModal(false)}
+        startDate={cashFlowDateRange.startDate}
+        endDate={cashFlowDateRange.endDate}
+      />
+
+      {/* Sales by Customer Modal */}
+      <SalesByCustomerModal
+        isOpen={showSalesByCustomerModal}
+        onClose={() => setShowSalesByCustomerModal(false)}
+        startDate={salesByCustomerDateRange.startDate}
+        endDate={salesByCustomerDateRange.endDate}
+      />
+
+      {/* Expenses by Vendor Modal */}
+      <ExpensesByVendorModal
+        isOpen={showExpensesByVendorModal}
+        onClose={() => setShowExpensesByVendorModal(false)}
+        startDate={expensesByVendorDateRange.startDate}
+        endDate={expensesByVendorDateRange.endDate}
+      />
+
+      {/* General Ledger Modal */}
+      <GeneralLedgerModal
+        isOpen={showGeneralLedgerModal}
+        onClose={() => setShowGeneralLedgerModal(false)}
+        startDate={generalLedgerDateRange.startDate}
+        endDate={generalLedgerDateRange.endDate}
+      />
     </div>
   )
 }

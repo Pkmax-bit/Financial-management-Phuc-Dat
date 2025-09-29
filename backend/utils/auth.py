@@ -68,11 +68,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             # Get the user from Supabase using the JWT token
             user_response = supabase.auth.get_user(token)
             
-            print(f"🔍 DEBUG: Supabase user response type: {type(user_response)}")
-            print(f"🔍 DEBUG: Supabase user response: {user_response}")
+            # print(f"🔍 DEBUG: Supabase user response type: {type(user_response)}")
+            # print(f"🔍 DEBUG: Supabase user response: {user_response}")
             
             if not user_response or not hasattr(user_response, 'user') or not user_response.user:
-                print("🔍 DEBUG: No user found in Supabase response")
+                # print("🔍 DEBUG: No user found in Supabase response")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid token"
@@ -92,8 +92,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         except HTTPException:
             raise
         except Exception as auth_error:
-            print(f"🔍 DEBUG: Supabase auth error: {str(auth_error)}")
-            print(f"🔍 DEBUG: Auth error type: {type(auth_error)}")
+            # print(f"🔍 DEBUG: Supabase auth error: {str(auth_error)}")
+            # print(f"🔍 DEBUG: Auth error type: {type(auth_error)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Token verification failed: {str(auth_error)}"
