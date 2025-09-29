@@ -15,6 +15,7 @@ class TransactionType(str, Enum):
     PAYMENT = "payment"
     SALES_RECEIPT = "sales_receipt"
     EXPENSE = "expense"
+    EXPENSE_CLAIM = "expense_claim"
     REFUND = "refund"
     ADJUSTMENT = "adjustment"
 

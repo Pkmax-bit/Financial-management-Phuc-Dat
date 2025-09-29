@@ -221,6 +221,101 @@ class JournalService:
             
         except Exception as e:
             raise Exception(f"Error reversing journal entry: {str(e)}")
+    
+    async def create_expense_claim_approval_journal_entry(self, claim_data: dict, user_id: str) -> JournalEntry:
+        """Create journal entry when expense claim is approved"""
+        try:
+            from decimal import Decimal
+            
+            # Get expense claim details
+            claim_id = claim_data["id"]
+            total_amount = Decimal(str(claim_data["total_amount"]))
+            
+            # Create journal entry lines
+            lines = [
+                # Debit: Expense Account (based on category)
+                JournalEntryLine(
+                    account_code="621",  # Chi phí công tác
+                    account_name="Chi phí công tác",
+                    debit_amount=total_amount,
+                    credit_amount=Decimal("0"),
+                    description=f"Chi phí hoàn ứng - {claim_data['claim_number']}"
+                ),
+                # Credit: Employee Reimbursements Payable
+                JournalEntryLine(
+                    account_code="331",  # Phải trả người lao động
+                    account_name="Phải trả người lao động",
+                    debit_amount=Decimal("0"),
+                    credit_amount=total_amount,
+                    description=f"Hoàn ứng nhân viên - {claim_data['claim_number']}"
+                )
+            ]
+            
+            # Create journal entry
+            entry_data = JournalEntryCreate(
+                entry_date=datetime.now().date(),
+                description=f"Phê duyệt hoàn ứng {claim_data['claim_number']}",
+                transaction_type=TransactionType.EXPENSE_CLAIM,
+                transaction_id=claim_id,
+                lines=lines
+            )
+            
+            return await self.create_journal_entry(entry_data, user_id)
+            
+        except Exception as e:
+            raise Exception(f"Error creating expense claim approval journal entry: {str(e)}")
+    
+    async def create_expense_claim_payment_journal_entry(self, claim_data: dict, user_id: str) -> JournalEntry:
+        """Create journal entry when expense claim is paid"""
+        try:
+            from decimal import Decimal
+            
+            # Get expense claim details
+            claim_id = claim_data["id"]
+            total_amount = Decimal(str(claim_data["total_amount"]))
+            payment_method = claim_data.get("payment_method", "cash")
+            
+            # Determine cash/bank account based on payment method
+            if payment_method == "bank_transfer":
+                cash_account_code = "112"  # Tiền gửi ngân hàng
+                cash_account_name = "Tiền gửi ngân hàng"
+            else:
+                cash_account_code = "111"  # Tiền mặt
+                cash_account_name = "Tiền mặt"
+            
+            # Create journal entry lines
+            lines = [
+                # Debit: Employee Reimbursements Payable
+                JournalEntryLine(
+                    account_code="331",  # Phải trả người lao động
+                    account_name="Phải trả người lao động",
+                    debit_amount=total_amount,
+                    credit_amount=Decimal("0"),
+                    description=f"Thanh toán hoàn ứng - {claim_data['claim_number']}"
+                ),
+                # Credit: Cash/Bank Account
+                JournalEntryLine(
+                    account_code=cash_account_code,
+                    account_name=cash_account_name,
+                    debit_amount=Decimal("0"),
+                    credit_amount=total_amount,
+                    description=f"Thanh toán hoàn ứng - {claim_data['claim_number']}"
+                )
+            ]
+            
+            # Create journal entry
+            entry_data = JournalEntryCreate(
+                entry_date=datetime.now().date(),
+                description=f"Thanh toán hoàn ứng {claim_data['claim_number']}",
+                transaction_type=TransactionType.EXPENSE_CLAIM,
+                transaction_id=claim_id,
+                lines=lines
+            )
+            
+            return await self.create_journal_entry(entry_data, user_id)
+            
+        except Exception as e:
+            raise Exception(f"Error creating expense claim payment journal entry: {str(e)}")
 
 # Global instance
 journal_service = JournalService()

@@ -19,7 +19,8 @@ import {
   ArrowDownRight,
   PieChart,
   BarChart3,
-  CheckCircle
+  CheckCircle,
+  HelpCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
@@ -354,6 +355,13 @@ export default function DashboardPage() {
                     className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
                   >
                     Refresh
+                  </button>
+                  <button
+                    onClick={() => router.push('/support')}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    Hỗ trợ
                   </button>
                 </div>
               </div>

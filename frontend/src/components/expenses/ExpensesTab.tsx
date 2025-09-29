@@ -51,9 +51,10 @@ interface ExpensesTabProps {
   searchTerm: string
   onCreateExpense: () => void
   shouldOpenCreateModal?: boolean // Prop to control modal opening from parent
+  onCloseCreateModal?: () => void // Prop to close modal from parent
 }
 
-export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCreateModal }: ExpensesTabProps) {
+export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCreateModal, onCloseCreateModal }: ExpensesTabProps) {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
@@ -275,9 +276,9 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Danh mục
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Phương thức
-              </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tiền tệ
+                  </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Số tiền
               </th>
@@ -415,10 +416,14 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
       {/* Create Expense Sidebar */}
       <CreateExpenseSidebar
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false)
+          onCloseCreateModal?.()
+        }}
         onSuccess={() => {
           fetchExpenses()
           setShowCreateModal(false)
+          onCloseCreateModal?.()
         }}
       />
     </div>

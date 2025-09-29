@@ -14,8 +14,10 @@ import {
   LogOut,
   Package,
   FileSpreadsheet,
-  DollarSign
+  DollarSign,
+  HelpCircle
 } from 'lucide-react'
+import SupportCenterButton from './SupportCenterButton'
 
 interface NavigationProps {
   user?: {
@@ -130,6 +132,11 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
             </button>
           )
         })}
+        
+        {/* Support Center Button */}
+        <div className="pt-4 border-t border-gray-200">
+          <SupportCenterButton />
+        </div>
       </nav>
 
       {/* User Profile */}

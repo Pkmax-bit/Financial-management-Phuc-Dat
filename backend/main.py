@@ -50,7 +50,7 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos
+from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -62,6 +62,9 @@ app.include_router(sales.router, prefix="/api/sales", tags=["Sales"])
 app.include_router(sales_receipts.router, tags=["Sales Receipts"])
 app.include_router(credit_memos.router, tags=["Credit Memos"])
 app.include_router(expenses.router, prefix="/api/expenses", tags=["Expenses"])
+app.include_router(purchase_orders.router, tags=["Purchase Orders"])
+app.include_router(expense_claims.router, tags=["Expense Claims"])
+app.include_router(budgeting.router, tags=["Budgeting"])
 app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
