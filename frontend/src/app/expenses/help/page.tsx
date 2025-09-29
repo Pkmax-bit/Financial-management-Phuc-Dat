@@ -258,8 +258,8 @@ export default function ExpensesHelpPage() {
                         <h3 className="font-semibold text-gray-900 mb-2">Thiết lập Nhà cung cấp</h3>
                         <p className="text-gray-600 text-sm mb-2">Thêm thông tin các nhà cung cấp mà doanh nghiệp thường xuyên làm việc</p>
                         <ul className="text-sm text-gray-600 space-y-1">
-                          <li>• Vào tab "Nhà cung cấp"</li>
-                          <li>• Nhấn "Tạo nhà cung cấp"</li>
+                          <li>• Vào tab &quot;Nhà cung cấp&quot;</li>
+                          <li>• Nhấn &quot;Tạo nhà cung cấp&quot;</li>
                           <li>• Điền đầy đủ thông tin liên hệ và tài chính</li>
                         </ul>
                       </div>
@@ -273,8 +273,8 @@ export default function ExpensesHelpPage() {
                         <h3 className="font-semibold text-gray-900 mb-2">Tạo Ngân sách</h3>
                         <p className="text-gray-600 text-sm mb-2">Thiết lập ngân sách cho các danh mục chi phí chính</p>
                         <ul className="text-sm text-gray-600 space-y-1">
-                          <li>• Vào tab "Quản lý ngân sách"</li>
-                          <li>• Nhấn "Tạo ngân sách"</li>
+                          <li>• Vào tab &quot;Quản lý ngân sách&quot;</li>
+                          <li>• Nhấn &quot;Tạo ngân sách&quot;</li>
                           <li>• Chọn chu kỳ và thiết lập các dòng ngân sách</li>
                         </ul>
                       </div>
@@ -288,8 +288,8 @@ export default function ExpensesHelpPage() {
                         <h3 className="font-semibold text-gray-900 mb-2">Ghi nhận Chi phí</h3>
                         <p className="text-gray-600 text-sm mb-2">Bắt đầu ghi nhận các khoản chi phí phát sinh</p>
                         <ul className="text-sm text-gray-600 space-y-1">
-                          <li>• Vào tab "Chi phí"</li>
-                          <li>• Nhấn "Tạo chi phí"</li>
+                          <li>• Vào tab &quot;Chi phí&quot;</li>
+                          <li>• Nhấn &quot;Tạo chi phí&quot;</li>
                           <li>• Điền thông tin và đính kèm chứng từ</li>
                         </ul>
                       </div>

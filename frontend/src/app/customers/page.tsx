@@ -66,7 +66,7 @@ export default function CustomersPage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [showQuickActionModal, setShowQuickActionModal] = useState(false)
   const [quickActionType, setQuickActionType] = useState<'invoice' | 'payment' | 'estimate' | 'reminder'>('invoice')
-  const [user, setUser] = useState<unknown>(null)
+  const [user, setUser] = useState<{ email?: string; full_name?: string; role?: string } | null>(null)
   const router = useRouter()
 
   const defaultCustomerForm = {
@@ -507,7 +507,7 @@ export default function CustomersPage() {
                   {user && (
                     <div className="flex items-center">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                      <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
+                      <span className="text-xs text-gray-500">Đã đăng nhập: {user?.email || 'Unknown'}</span>
                     </div>
                   )}
                 </div>

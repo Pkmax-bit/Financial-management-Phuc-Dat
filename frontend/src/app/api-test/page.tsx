@@ -4,19 +4,19 @@ import { useState } from 'react'
 import { employeeApi } from '@/lib/api'
 
 export default function ApiTestPage() {
-  const [results, setResults] = useState<any>({})
+  const [results, setResults] = useState<Record<string, { success: boolean; data?: unknown; error?: string }>>({})
   const [loading, setLoading] = useState(false)
 
-  const testApi = async (testName: string, testFunction: () => Promise<any>) => {
+  const testApi = async (testName: string, testFunction: () => Promise<unknown>) => {
     try {
       setLoading(true)
       console.log(`Testing ${testName}...`)
       const result = await testFunction()
-      setResults(prev => ({ ...prev, [testName]: { success: true, data: result } }))
+      setResults((prev: Record<string, { success: boolean; data?: unknown; error?: string }>) => ({ ...prev, [testName]: { success: true, data: result } }))
       console.log(`${testName} success:`, result)
     } catch (error) {
       console.error(`${testName} error:`, error)
-      setResults(prev => ({ ...prev, [testName]: { success: false, error: (error as Error).message } }))
+      setResults((prev: Record<string, { success: boolean; data?: unknown; error?: string }>) => ({ ...prev, [testName]: { success: false, error: (error as Error).message } }))
     } finally {
       setLoading(false)
     }
@@ -62,10 +62,10 @@ export default function ApiTestPage() {
           <h2 className="text-xl font-semibold mb-4">Test Results</h2>
           
           {Object.keys(results).length === 0 ? (
-            <p className="text-gray-500">No tests run yet. Click "Run All Tests" to start.</p>
+            <p className="text-gray-500">No tests run yet. Click &quot;Run All Tests&quot; to start.</p>
           ) : (
             <div className="space-y-4">
-              {Object.entries(results).map(([testName, result]: [string, any]) => (
+              {Object.entries(results).map(([testName, result]: [string, { success: boolean; data?: unknown; error?: string }]) => (
                 <div key={testName} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-semibold">{testName}</h3>

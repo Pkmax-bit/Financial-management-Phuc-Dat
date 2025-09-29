@@ -159,12 +159,12 @@ export default function ExpensesGuidePage() {
 
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">📝 Các bước tạo chi phí:</h3>
                 <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-6">
-                  <li>Nhấn <strong>"Tạo chi phí"</strong> trong tab Chi phí</li>
+                  <li>Nhấn <strong>&quot;Tạo chi phí&quot;</strong> trong tab Chi phí</li>
                   <li>Điền thông tin cơ bản: ngày, mô tả, số tiền</li>
                   <li>Chọn danh mục chi phí phù hợp</li>
                   <li>Đính kèm hóa đơn/chứng từ (nếu có)</li>
                   <li>Chọn người phê duyệt</li>
-                  <li>Nhấn <strong>"Tạo chi phí"</strong></li>
+                  <li>Nhấn <strong>&quot;Tạo chi phí&quot;</strong></li>
                 </ol>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">

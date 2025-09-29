@@ -52,7 +52,7 @@ export default function ExpensesPage() {
   const [shouldOpenCreateClaimModal, setShouldOpenCreateClaimModal] = useState(false)
   const [shouldOpenCreateBudgetModal, setShouldOpenCreateBudgetModal] = useState(false)
   const [shouldOpenBudgetReportModal, setShouldOpenBudgetReportModal] = useState(false)
-  const [selectedBudget, setSelectedBudget] = useState<any>(null)
+  const [selectedBudget, setSelectedBudget] = useState<{ id: string; name: string; [key: string]: unknown } | null>(null)
   const [shouldOpenQuickGuide, setShouldOpenQuickGuide] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -126,20 +126,20 @@ export default function ExpensesPage() {
       try {
         // Fetch expenses data via API
         const expensesData = await expensesApi.getExpenses()
-        const totalExpenses = expensesData?.reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0) || 0
+        const totalExpenses = expensesData?.reduce((sum: number, expense: { amount?: number }) => sum + (expense.amount || 0), 0) || 0
       const expensesCount = expensesData?.length || 0
-        const pendingAmount = expensesData?.filter((e: any) => e.status === 'pending').reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0) || 0
-        const pendingCount = expensesData?.filter((e: any) => e.status === 'pending').length || 0
+        const pendingAmount = expensesData?.filter((e: { status: string }) => e.status === 'pending').reduce((sum: number, expense: { amount?: number }) => sum + (expense.amount || 0), 0) || 0
+        const pendingCount = expensesData?.filter((e: { status: string }) => e.status === 'pending').length || 0
 
         // Fetch bills data via API
         const billsData = await billsApi.getBills()
-        const totalBills = billsData?.reduce((sum: number, bill: any) => sum + (bill.amount || 0), 0) || 0
+        const totalBills = billsData?.reduce((sum: number, bill: { amount?: number }) => sum + (bill.amount || 0), 0) || 0
       const billsCount = billsData?.length || 0
 
         // Fetch vendors data via API
         const vendorsData = await vendorsApi.getVendors()
       const vendorsCount = vendorsData?.length || 0
-        const activeVendors = vendorsData?.filter((v: any) => v.is_active).length || 0
+        const activeVendors = vendorsData?.filter((v: { is_active: boolean }) => v.is_active).length || 0
 
       setExpensesStats({
         total_expenses: totalExpenses,
