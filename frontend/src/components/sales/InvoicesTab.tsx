@@ -15,7 +15,7 @@ import {
   CheckCircle
 } from 'lucide-react'
 import CreateInvoiceSidebar from './CreateInvoiceSidebar'
-import { apiGet, apiPost } from '@/lib/api'
+import { apiGet, apiPost, apiPut } from '@/lib/api'
 
 interface Invoice {
   id: string
@@ -89,14 +89,9 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
 
   const sendInvoice = async (invoiceId: string) => {
     try {
-      const response = await fetch(`/api/sales/invoices/${invoiceId}/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      const response = await apiPost(`/api/sales/invoices/${invoiceId}/send`, {})
 
-      if (response.ok) {
+      if (response) {
         fetchInvoices() // Refresh list
         // Show success message
       }
@@ -107,18 +102,16 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
 
   const recordPayment = async (invoiceId: string, amount: number) => {
     try {
-      const response = await fetch(`/api/sales/invoices/${invoiceId}/payment`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          payment_amount: amount,
-          payment_date: new Date().toISOString().split('T')[0]
-        }),
+      // Build URL with query parameters
+      const params = new URLSearchParams({
+        payment_amount: amount.toString(),
+        payment_method: 'bank_transfer',
+        payment_date: new Date().toISOString().split('T')[0]
       })
+      
+      const response = await apiPut(`/api/sales/invoices/${invoiceId}/payment?${params.toString()}`, {})
 
-      if (response.ok) {
+      if (response) {
         fetchInvoices() // Refresh list
         // Show success message
       }

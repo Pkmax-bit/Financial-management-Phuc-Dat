@@ -672,3 +672,4 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
     </>
   )
 }
+

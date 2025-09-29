@@ -16,7 +16,9 @@ import {
   Receipt,
   TrendingUp,
   Users,
-  CreditCard
+  CreditCard,
+  BookOpen,
+  HelpCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Navigation from '@/components/Navigation'
@@ -27,6 +29,9 @@ import InvoicesTab from '@/components/sales/InvoicesTab'
 import PaymentsTab from '@/components/sales/PaymentsTab'
 import CustomersTab from '@/components/sales/CustomersTab'
 import ProductsServicesTab from '@/components/sales/ProductsServicesTab'
+import SalesReceiptsTab from '@/components/sales/SalesReceiptsTab'
+import CreateSalesReceiptModal from '@/components/sales/CreateSalesReceiptModal'
+import QuickGuideModal from '@/components/sales/QuickGuideModal'
 import { apiGet } from '@/lib/api'
 
 interface User {
@@ -42,6 +47,8 @@ export default function SalesPage() {
   const [user, setUser] = useState<User | null>(null)
   const [salesStats, setSalesStats] = useState<unknown>({})
   const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
+  const [showCreateReceiptModal, setShowCreateReceiptModal] = useState(false)
+  const [showQuickGuide, setShowQuickGuide] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -232,6 +239,34 @@ export default function SalesPage() {
               </div>
               <div className="flex space-x-3">
                 <button
+                  onClick={() => setShowQuickGuide(true)}
+                  className="inline-flex items-center px-3 py-2 border border-green-300 shadow-sm text-sm leading-4 font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  <HelpCircle className="w-4 h-4 mr-1" />
+                  Hướng dẫn nhanh
+                </button>
+                <button
+                  onClick={() => router.push('/sales/guide')}
+                  className="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <BookOpen className="w-4 h-4 mr-1" />
+                  Hướng dẫn đầy đủ
+                </button>
+                <button
+                  onClick={() => router.push('/sales/help')}
+                  className="inline-flex items-center px-3 py-2 border border-purple-300 shadow-sm text-sm leading-4 font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                >
+                  <HelpCircle className="w-4 h-4 mr-1" />
+                  Trung tâm hỗ trợ
+                </button>
+                <button
+                  onClick={() => router.push('/sales/learning')}
+                  className="inline-flex items-center px-3 py-2 border border-orange-300 shadow-sm text-sm leading-4 font-medium rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                >
+                  <BookOpen className="w-4 h-4 mr-1" />
+                  Trung tâm học tập
+                </button>
+                <button
                   onClick={fetchSalesStats}
                   disabled={loading}
                   className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
@@ -297,6 +332,15 @@ export default function SalesPage() {
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Tạo hóa đơn
+                    </button>
+                  )}
+                  {activeTab === 'receipts' && (
+                    <button 
+                      onClick={() => setShowCreateReceiptModal(true)}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Tạo phiếu thu
                     </button>
                   )}
                   {activeTab === 'customers' && (
@@ -471,6 +515,16 @@ export default function SalesPage() {
                   Báo giá ({String(Object.values((quotesStats as Record<string, unknown>).by_status || {}).reduce((a: unknown, b: unknown) => (a as number) + (b as number), 0))})
                 </button>
                 <button
+                  onClick={() => setActiveTab('receipts')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'receipts'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Phiếu Thu
+                </button>
+                <button
                   onClick={() => setActiveTab('customers')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'customers'
@@ -546,6 +600,13 @@ export default function SalesPage() {
                   shouldOpenCreateModal={shouldOpenCreateModal}
                 />
               )}
+              {activeTab === 'receipts' && (
+                <SalesReceiptsTab 
+                  onShowCreateModal={() => setShowCreateReceiptModal(true)}
+                  onShowEditModal={(receipt) => console.log('Edit receipt:', receipt)}
+                  onShowDetailModal={(receipt) => console.log('Detail receipt:', receipt)}
+                />
+              )}
               {activeTab === 'customers' && (
                 <CustomersTab 
                   searchTerm={searchTerm}
@@ -560,6 +621,22 @@ export default function SalesPage() {
           </div>
         </div>
       </div>
+
+      {/* Create Sales Receipt Modal */}
+      <CreateSalesReceiptModal
+        isOpen={showCreateReceiptModal}
+        onClose={() => setShowCreateReceiptModal(false)}
+        onSuccess={() => {
+          setShowCreateReceiptModal(false)
+          // Refresh data if needed
+        }}
+      />
+
+      {/* Quick Guide Modal */}
+      <QuickGuideModal
+        isOpen={showQuickGuide}
+        onClose={() => setShowQuickGuide(false)}
+      />
     </div>
   )
 }

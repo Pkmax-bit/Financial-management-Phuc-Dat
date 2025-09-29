@@ -1,81 +1,59 @@
-"""
-Sales Receipt model definitions for Sales Center
-"""
-
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, date
-from enum import Enum
-
-class SalesReceiptStatus(str, Enum):
-    DRAFT = "draft"
-    COMPLETED = "completed"
-    VOIDED = "voided"
-
-class PaymentMethod(str, Enum):
-    CASH = "cash"
-    CARD = "card"
-    BANK_TRANSFER = "bank_transfer"
-    CHECK = "check"
-    OTHER = "other"
+from decimal import Decimal
 
 class SalesReceiptItem(BaseModel):
-    """Sales receipt item model"""
-    description: str
+    """Sales receipt line item"""
+    product_id: Optional[str] = None
+    product_name: str
+    description: Optional[str] = None
     quantity: float
     unit_price: float
-    total: float
-    tax_rate: float = 0.0
-    tax_amount: float = 0.0
-    notes: Optional[str] = None
+    discount_rate: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    line_total: float
 
 class SalesReceipt(BaseModel):
-    """Sales receipt model"""
-    id: str
+    """Sales Receipt model"""
+    id: Optional[str] = None
     receipt_number: str
-    customer_id: str
-    project_id: Optional[str] = None
-    sale_date: date
-    payment_date: date
+    customer_id: Optional[str] = None
+    issue_date: date
+    line_items: List[SalesReceiptItem]
     subtotal: float
-    tax_rate: float = 0.0
-    tax_amount: float = 0.0
+    tax_rate: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
     total_amount: float
-    currency: str = "VND"
-    status: SalesReceiptStatus = SalesReceiptStatus.DRAFT
-    payment_method: PaymentMethod
-    payment_reference: Optional[str] = None
-    items: List[SalesReceiptItem] = []
+    payment_method: str  # 'Cash', 'Credit Card', 'Bank Transfer', etc.
     notes: Optional[str] = None
-    created_by: str
-    created_at: datetime
-    updated_at: datetime
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class SalesReceiptCreate(BaseModel):
-    """Sales receipt creation model"""
-    receipt_number: str
-    customer_id: str
-    project_id: Optional[str] = None
-    sale_date: date
-    payment_date: date
+    """Create sales receipt request"""
+    customer_id: Optional[str] = None
+    issue_date: date
+    line_items: List[SalesReceiptItem]
     subtotal: float
-    tax_rate: float = 0.0
-    payment_method: PaymentMethod
-    payment_reference: Optional[str] = None
-    items: List[SalesReceiptItem] = []
+    tax_rate: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    total_amount: float
+    payment_method: str
     notes: Optional[str] = None
 
 class SalesReceiptUpdate(BaseModel):
-    """Sales receipt update model"""
-    receipt_number: Optional[str] = None
+    """Update sales receipt request"""
     customer_id: Optional[str] = None
-    project_id: Optional[str] = None
-    sale_date: Optional[date] = None
-    payment_date: Optional[date] = None
+    issue_date: Optional[date] = None
+    line_items: Optional[List[SalesReceiptItem]] = None
     subtotal: Optional[float] = None
     tax_rate: Optional[float] = None
-    payment_method: Optional[PaymentMethod] = None
-    payment_reference: Optional[str] = None
-    status: Optional[SalesReceiptStatus] = None
-    items: Optional[List[SalesReceiptItem]] = None
+    tax_amount: Optional[float] = None
+    discount_amount: Optional[float] = None
+    total_amount: Optional[float] = None
+    payment_method: Optional[str] = None
     notes: Optional[str] = None

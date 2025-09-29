@@ -142,3 +142,11 @@ media/
 test-results/
 playwright-report/
 test-results.xml
+
+
+# Ignore kluster.ai Verify Code rules
+.github/instructions/kluster-code-verify.instructions.md
+
+
+# Ignore kluster.ai Verify Code rules
+.cursor/rules/kluster-code-verify.mdc
