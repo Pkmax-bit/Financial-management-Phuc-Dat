@@ -78,7 +78,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const fetchInvoices = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('/api/sales/invoices')
+      const data = await apiGet('http://localhost:8000/api/sales/invoices')
       setInvoices(data)
     } catch (error) {
       console.error('Error fetching invoices:', error)

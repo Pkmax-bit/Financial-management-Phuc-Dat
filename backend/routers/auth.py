@@ -460,12 +460,12 @@ async def debug_token(credentials: HTTPAuthorizationCredentials = Depends(securi
     """Debug endpoint to test JWT token verification"""
     try:
         token = credentials.credentials
-        print(f"🔍 DEBUG: Received token: {token[:50]}...")
+        print(f"DEBUG: Received token: {token[:50]}...")
         
         # Try to verify with Supabase JWT secret
         try:
             payload = jwt.decode(token, settings.SUPABASE_JWT_SECRET, algorithms=["HS256"])
-            print(f"🔍 DEBUG: JWT payload: {payload}")
+            print(f"DEBUG: JWT payload: {payload}")
             return {
                 "status": "success",
                 "message": "Token verified successfully",

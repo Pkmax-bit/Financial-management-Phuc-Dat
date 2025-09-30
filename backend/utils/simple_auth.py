@@ -16,20 +16,20 @@ async def get_current_user_simple(credentials: HTTPAuthorizationCredentials = De
         token = credentials.credentials
         supabase = get_supabase_client()
         
-        print(f"🔍 SIMPLE AUTH: Checking token: {token[:30]}...")
+        print(f"SIMPLE AUTH: Checking token: {token[:30]}...")
         
         # Get user from Supabase
         user_response = supabase.auth.get_user(token)
         
         if not user_response or not user_response.user:
-            print("🔍 SIMPLE AUTH: Invalid token")
+            print("SIMPLE AUTH: Invalid token")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated"
             )
         
         supabase_user = user_response.user
-        print(f"🔍 SIMPLE AUTH: Valid user: {supabase_user.email}")
+        print(f"SIMPLE AUTH: Valid user: {supabase_user.email}")
         
         # Return a minimal user object
         return User(
@@ -43,7 +43,7 @@ async def get_current_user_simple(credentials: HTTPAuthorizationCredentials = De
     except HTTPException:
         raise
     except Exception as e:
-        print(f"🔍 SIMPLE AUTH: Error: {str(e)}")
+        print(f"SIMPLE AUTH: Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication failed: {str(e)}"

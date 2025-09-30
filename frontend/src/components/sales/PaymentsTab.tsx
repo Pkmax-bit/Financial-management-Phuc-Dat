@@ -55,7 +55,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
   const fetchPayments = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('/api/sales/payments')
+      const data = await apiGet('http://localhost:8000/api/sales/payments')
       setPayments(data)
     } catch (error) {
       console.error('Error fetching payments:', error)

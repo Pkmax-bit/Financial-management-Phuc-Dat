@@ -305,38 +305,60 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Báo cáo Lưu chuyển Tiền tệ</h2>
-            <p className="text-gray-600">
-              Kỳ báo cáo: {formatDate(startDate)} - {formatDate(endDate)}
-            </p>
-            <p className="text-sm text-gray-500">
-              {statement ? `Cập nhật lúc: ${formatDate(statement.generated_at)}` : 'Đang tải...'}
-            </p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => {/* TODO: Implement export */}}
-              className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Xuất Excel
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
+        {/* Top Navigation */}
+        <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
+          <div className="flex h-16 items-center justify-between px-6">
+            <div className="flex items-center">
+              <h2 className="text-2xl font-semibold text-gray-900">Báo cáo Lưu chuyển Tiền tệ</h2>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {/* TODO: Implement export */}}
+                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Xuất báo cáo
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Sidebar */}
+          <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin báo cáo</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Kỳ báo cáo</label>
+                  <p className="text-sm text-gray-600">{formatDate(startDate)} - {formatDate(endDate)}</p>
+                </div>
+                {statement && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Cập nhật lúc</label>
+                    <p className="text-sm text-gray-600">{formatDate(statement.generated_at)}</p>
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Mô tả</label>
+                  <p className="text-sm text-gray-600">Báo cáo chi tiết về các dòng tiền vào và ra của công ty theo 3 hoạt động chính</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 overflow-y-auto bg-white">
+            <div className="p-6">
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -419,6 +441,8 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
             endDate={endDate}
           />
         )}
+          </div>
+        </div>
       </div>
     </div>
   )

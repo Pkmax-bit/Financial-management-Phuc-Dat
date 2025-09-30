@@ -58,7 +58,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """Get current authenticated user using Supabase token"""
     try:
         token = credentials.credentials
-        print(f"🔍 DEBUG: Received token: {token[:50]}...")
+        print(f"DEBUG: Received token: {token[:50]}...")
         
         # Use anon client to verify JWT tokens from frontend
         from services.supabase_client import get_supabase_anon_client
@@ -67,12 +67,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         try:
             # Get the user from Supabase using the JWT token
             user_response = supabase.auth.get_user(token)
-            
-            # print(f"🔍 DEBUG: Supabase user response type: {type(user_response)}")
-            # print(f"🔍 DEBUG: Supabase user response: {user_response}")
-            
+            print(f"DEBUG: Supabase user response type: {type(user_response)}")
+            print(f"DEBUG: Supabase user response: {user_response}")
+
             if not user_response or not hasattr(user_response, 'user') or not user_response.user:
-                # print("🔍 DEBUG: No user found in Supabase response")
+                print("DEBUG: No user found in Supabase response")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid token"
@@ -81,7 +80,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             user_id = user_response.user.id
             email = user_response.user.email
             
-            print(f"🔍 DEBUG: Extracted user_id: {user_id}, email: {email}")
+            print(f"DEBUG: Extracted user_id: {user_id}, email: {email}")
             
             if not user_id or not email:
                 raise HTTPException(
@@ -92,8 +91,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         except HTTPException:
             raise
         except Exception as auth_error:
-            # print(f"🔍 DEBUG: Supabase auth error: {str(auth_error)}")
-            # print(f"🔍 DEBUG: Auth error type: {type(auth_error)}")
+            print(f"DEBUG: Supabase auth error: {str(auth_error)}")
+            print(f"DEBUG: Auth error type: {type(auth_error)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Token verification failed: {str(auth_error)}"

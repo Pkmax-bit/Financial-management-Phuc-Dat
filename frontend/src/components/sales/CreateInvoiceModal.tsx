@@ -73,7 +73,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
   const fetchCustomers = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('/api/customers')
+      const data = await apiGet('http://localhost:8000/api/customers')
       setCustomers(data)
     } catch (error) {
       console.error('Error fetching customers:', error)
@@ -140,11 +140,11 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
         status: sendImmediately ? 'sent' : 'draft'
       }
 
-      const result = await apiPost('/api/sales/invoices', invoiceData)
+      const result = await apiPost('http://localhost:8000/api/sales/invoices', invoiceData)
         
       // If sending immediately, also send the invoice
       if (sendImmediately) {
-        await apiPost(`/api/sales/invoices/${result.id}/send`, {})
+        await apiPost(`http://localhost:8000/api/sales/invoices/${result.id}/send`, {})
       }
 
       onSuccess()

@@ -11,7 +11,7 @@ import json
 async def test_supabase_connection():
     """Test Supabase connection and basic operations"""
     
-    print("🔍 Testing Supabase Connection...")
+    print("Testing Supabase Connection...")
     print(f"URL: {settings.SUPABASE_URL}")
     print(f"Anon Key: {settings.SUPABASE_ANON_KEY[:20]}...")
     print(f"Service Key: {settings.SUPABASE_SERVICE_KEY[:20]}...")
@@ -94,7 +94,7 @@ async def test_supabase_connection():
 def test_environment_variables():
     """Test if all required environment variables are set"""
     
-    print("🔍 Testing Environment Variables...")
+    print("Testing Environment Variables...")
     print("-" * 50)
     
     required_vars = [

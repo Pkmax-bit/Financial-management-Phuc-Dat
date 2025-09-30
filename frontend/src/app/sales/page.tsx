@@ -110,7 +110,7 @@ export default function SalesPage() {
       
       // Try authenticated endpoint first
       try {
-        const stats = await apiGet('/api/sales/dashboard/stats')
+        const stats = await apiGet('http://localhost:8000/api/sales/dashboard/stats')
         setSalesStats(stats)
         console.log('Successfully fetched sales stats via authenticated API')
         return

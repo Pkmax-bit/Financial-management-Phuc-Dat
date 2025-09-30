@@ -31,11 +31,11 @@ async def get_dashboard_stats(
         start_of_month = now.replace(day=1)
         
         # Financial Overview - Last 30 Days
-        # Revenue (Paid invoices)
+        # Revenue (Paid invoices) - Use issue_date since paid_date is often null
         paid_invoices = supabase.table("invoices")\
             .select("total_amount")\
             .eq("payment_status", "paid")\
-            .gte("paid_date", thirty_days_ago.isoformat())\
+            .gte("issue_date", thirty_days_ago.isoformat())\
             .execute()
         total_revenue = sum(invoice["total_amount"] for invoice in paid_invoices.data)
         
@@ -107,6 +107,65 @@ async def get_dashboard_stats(
                 "color": colors[i % len(colors)]
             })
         
+        # Monthly Revenue Data (last 12 months)
+        monthly_revenue_data = []
+        for i in range(12):
+            month_start = (now - timedelta(days=30 * i)).replace(day=1)
+            month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            
+            # Revenue for this month
+            month_revenue = supabase.table("invoices")\
+                .select("total_amount")\
+                .eq("payment_status", "paid")\
+                .gte("paid_date", month_start.isoformat())\
+                .lte("paid_date", month_end.isoformat())\
+                .execute()
+            
+            # Expenses for this month
+            month_expenses = supabase.table("expenses")\
+                .select("amount")\
+                .eq("status", "approved")\
+                .gte("expense_date", month_start.isoformat())\
+                .lte("expense_date", month_end.isoformat())\
+                .execute()
+            
+            revenue = sum(inv["total_amount"] for inv in month_revenue.data)
+            expenses = sum(exp["amount"] for exp in month_expenses.data)
+            
+            monthly_revenue_data.append({
+                "month": month_start.strftime("%b"),
+                "revenue": revenue,
+                "expenses": expenses
+            })
+        
+        # Reverse to get chronological order
+        monthly_revenue_data.reverse()
+        
+        # Top Customers (last 30 days)
+        top_customers = supabase.table("invoices")\
+            .select("customer_id, total_amount, customers(name)")\
+            .eq("payment_status", "paid")\
+            .gte("paid_date", thirty_days_ago.isoformat())\
+            .execute()
+        
+        # Group by customer and sum revenue
+        customer_totals = {}
+        for invoice in top_customers.data:
+            customer_id = invoice["customer_id"]
+            customer_name = invoice.get("customers", {}).get("name", f"Customer {customer_id}")
+            amount = invoice["total_amount"]
+            
+            if customer_id not in customer_totals:
+                customer_totals[customer_id] = {"name": customer_name, "revenue": 0}
+            customer_totals[customer_id]["revenue"] += amount
+        
+        # Sort and get top 5
+        top_customers_list = sorted(
+            customer_totals.values(), 
+            key=lambda x: x["revenue"], 
+            reverse=True
+        )[:5]
+        
         # Recent Transactions (placeholder)
         recent_transactions = []
         
@@ -145,6 +204,8 @@ async def get_dashboard_stats(
             "paidLast30Days": paid_last_30,
             "pendingBills": pending_bills_count,
             "expensesByCategory": expenses_by_category,
+            "monthlyRevenueData": monthly_revenue_data,
+            "topCustomers": top_customers_list,
             "recentTransactions": recent_transactions,
             "bankAccounts": bank_accounts
         }
@@ -176,36 +237,34 @@ async def get_cashflow_projection(
         now = datetime.now()
         twelve_months_ago = now - timedelta(days=365)
         
-        # Get monthly revenue and expense trends
-        monthly_data = []
+        # Calculate 3-month average once outside the loop
+        last_three_months = now - timedelta(days=90)
         
+        avg_revenue = supabase.table("invoices")\
+            .select("total_amount")\
+            .eq("payment_status", "paid")\
+            .gte("payment_date", last_three_months.isoformat())\
+            .execute()
+        
+        avg_expenses = supabase.table("expenses")\
+            .select("amount")\
+            .eq("status", "approved")\
+            .gte("expense_date", last_three_months.isoformat())\
+            .execute()
+        
+        monthly_revenue_avg = sum(inv["total_amount"] for inv in avg_revenue.data) / 3
+        monthly_expense_avg = sum(exp["amount"] for exp in avg_expenses.data) / 3
+        
+        # Generate projections using pre-calculated averages
+        monthly_data = []
         for i in range(months):
             future_month = now + timedelta(days=30 * i)
             
-            # For now, use average of last 3 months as projection
-            # In a real system, this would use more sophisticated algorithms
-            last_three_months = now - timedelta(days=90)
-            
-            avg_revenue = supabase.table("invoices")\
-                .select("total_amount")\
-                .eq("payment_status", "paid")\
-                .gte("payment_date", last_three_months.isoformat())\
-                .execute()
-            
-            avg_expenses = supabase.table("expenses")\
-                .select("amount")\
-                .eq("status", "approved")\
-                .gte("expense_date", last_three_months.isoformat())\
-                .execute()
-            
-            monthly_revenue = sum(inv["total_amount"] for inv in avg_revenue.data) / 3
-            monthly_expense = sum(exp["amount"] for exp in avg_expenses.data) / 3
-            
             monthly_data.append({
                 "month": future_month.strftime("%Y-%m"),
-                "projectedRevenue": monthly_revenue,
-                "projectedExpenses": monthly_expense,
-                "projectedCashFlow": monthly_revenue - monthly_expense
+                "projectedRevenue": monthly_revenue_avg,
+                "projectedExpenses": monthly_expense_avg,
+                "projectedCashFlow": monthly_revenue_avg - monthly_expense_avg
             })
         
         return {
@@ -306,26 +365,26 @@ async def calculate_what_if_scenario(
         new_expense = scenario_data.get("new_expense", 0)  # New monthly expense
         months = scenario_data.get("months", 6)  # Analysis period
         
-        # Get current baseline
+        # Get current baseline (reuse data from dashboard stats if available)
         supabase = get_supabase_client()
         now = datetime.now()
         last_month = now - timedelta(days=30)
         
-        # Current monthly averages
-        current_revenue = supabase.table("invoices")\
+        # Use single query to get both revenue and expenses
+        baseline_data = supabase.table("invoices")\
             .select("total_amount")\
             .eq("payment_status", "paid")\
             .gte("payment_date", last_month.isoformat())\
             .execute()
         
-        current_expenses = supabase.table("expenses")\
+        baseline_expenses_data = supabase.table("expenses")\
             .select("amount")\
             .eq("status", "approved")\
             .gte("expense_date", last_month.isoformat())\
             .execute()
         
-        baseline_revenue = sum(inv["total_amount"] for inv in current_revenue.data)
-        baseline_expenses = sum(exp["amount"] for exp in current_expenses.data)
+        baseline_revenue = sum(inv["total_amount"] for inv in baseline_data.data)
+        baseline_expenses = sum(exp["amount"] for exp in baseline_expenses_data.data)
         
         # Calculate scenario projections
         projected_revenue = baseline_revenue * (1 + revenue_change / 100)

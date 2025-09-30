@@ -200,7 +200,7 @@ async def get_employees(
 ):
     """Get all employees with optional filtering"""
     try:
-        print(f"🔍 DEBUG: get_employees called by user: {current_user.email}")
+        print(f"DEBUG: get_employees called by user: {current_user.email}")
         supabase = get_supabase_client()
         
         query = supabase.table("employees").select("*")
@@ -218,7 +218,7 @@ async def get_employees(
         # Apply pagination
         result = query.range(skip, skip + limit - 1).execute()
         
-        print(f"🔍 DEBUG: Found {len(result.data) if result.data else 0} employees")
+        print(f"DEBUG: Found {len(result.data) if result.data else 0} employees")
         
         if not result.data:
             return []
@@ -226,8 +226,8 @@ async def get_employees(
         return [Employee(**emp) for emp in result.data]
         
     except Exception as e:
-        print(f"🔍 DEBUG: Error in get_employees: {str(e)}")
-        print(f"🔍 DEBUG: Error type: {type(e)}")
+        print(f"DEBUG: Error in get_employees: {str(e)}")
+        print(f"DEBUG: Error type: {type(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch employees: {str(e)}"
@@ -237,7 +237,7 @@ async def get_employees(
 async def get_employees_simple(current_user: User = Depends(get_current_user_simple)):
     """Get employees with simple auth - returns raw dict instead of Employee model"""
     try:
-        print(f"🔍 DEBUG: get_employees_simple called by user: {current_user.email}")
+        print(f"DEBUG: get_employees_simple called by user: {current_user.email}")
         supabase = get_supabase_client()
         
         result = supabase.table("employees").select("""
@@ -255,12 +255,12 @@ async def get_employees_simple(current_user: User = Depends(get_current_user_sim
             created_at
         """).execute()
         
-        print(f"🔍 DEBUG: Found {len(result.data) if result.data else 0} employees")
+        print(f"DEBUG: Found {len(result.data) if result.data else 0} employees")
         
         return result.data or []
         
     except Exception as e:
-        print(f"🔍 DEBUG: Error in get_employees_simple: {str(e)}")
+        print(f"DEBUG: Error in get_employees_simple: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch employees: {str(e)}"

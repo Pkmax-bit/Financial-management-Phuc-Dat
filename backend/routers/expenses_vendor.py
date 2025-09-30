@@ -218,10 +218,9 @@ async def get_vendor_expense_data(supabase, start_date: str, end_date: str) -> D
     
     # Get bill data
     bills = supabase.table("bills")\
-        .select("vendor_id, total_amount, issue_date, status")\
+        .select("vendor_id, total_amount, issue_date")\
         .gte("issue_date", start_date)\
         .lte("issue_date", end_date)\
-        .eq("status", "paid")\
         .execute()
     
     for bill in bills.data:
@@ -244,10 +243,9 @@ async def get_vendor_expense_data(supabase, start_date: str, end_date: str) -> D
     
     # Get expense data
     expenses = supabase.table("expenses")\
-        .select("vendor_id, amount, expense_date, status")\
+        .select("vendor_id, amount, expense_date")\
         .gte("expense_date", start_date)\
         .lte("expense_date", end_date)\
-        .eq("status", "approved")\
         .execute()
     
     for expense in expenses.data:

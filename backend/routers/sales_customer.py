@@ -217,10 +217,9 @@ async def get_customer_sales_data(supabase, start_date: str, end_date: str) -> D
     
     # Get invoice data
     invoices = supabase.table("invoices")\
-        .select("customer_id, total_amount, issue_date, status")\
+        .select("customer_id, total_amount, issue_date")\
         .gte("issue_date", start_date)\
         .lte("issue_date", end_date)\
-        .eq("status", "paid")\
         .execute()
     
     for invoice in invoices.data:
@@ -243,10 +242,9 @@ async def get_customer_sales_data(supabase, start_date: str, end_date: str) -> D
     
     # Get sales receipt data
     sales_receipts = supabase.table("sales_receipts")\
-        .select("customer_id, total_amount, issue_date, status")\
+        .select("customer_id, total_amount, issue_date")\
         .gte("issue_date", start_date)\
         .lte("issue_date", end_date)\
-        .eq("status", "completed")\
         .execute()
     
     for receipt in sales_receipts.data:
