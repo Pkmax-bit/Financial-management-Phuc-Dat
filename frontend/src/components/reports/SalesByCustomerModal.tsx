@@ -392,7 +392,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
 
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
+      <div className="bg-gray-50 rounded-lg shadow-xl w-full h-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
         {/* Top Navigation */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
@@ -418,134 +418,128 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin báo cáo</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Kỳ báo cáo</label>
-                  <p className="text-sm text-gray-600">{formatDate(startDate)} - {formatDate(endDate)}</p>
-                </div>
-                {report && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Cập nhật lúc</label>
-                    <p className="text-sm text-gray-600">{formatDate(report.generated_at)}</p>
-                  </div>
-                )}
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Mô tả</label>
-                  <p className="text-sm text-gray-600">Báo cáo chi tiết về doanh thu và hiệu suất bán hàng theo từng khách hàng</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Content Area */}
-          <div className="flex-1 overflow-y-auto bg-white">
-            <div className="p-6">
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Đang tải báo cáo Doanh thu theo Khách hàng...</span>
-            </div>
-          )}
-
-          {error && (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                <p className="text-red-600 font-medium">{error}</p>
-                <button
-                  onClick={fetchSalesByCustomerReport}
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  Thử lại
-                </button>
-              </div>
-            </div>
-          )}
-
-          {report && !loading && (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="space-y-8">
-              {/* Key Metrics */}
-              {renderKeyMetrics()}
-
-              {/* Top Customers */}
-              {renderTopCustomers()}
-
-              {/* Search and Filter */}
-              <div className="flex items-center space-x-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Tìm kiếm khách hàng..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+              {/* Header */}
+              <div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Báo cáo Doanh thu theo Khách hàng</h1>
+                    <p className="mt-2 text-gray-600">
+                      Báo cáo chi tiết về doanh thu và hiệu suất bán hàng theo từng khách hàng
+                    </p>
+                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                      <span>Kỳ báo cáo: {formatDate(startDate)} - {formatDate(endDate)}</span>
+                      {report && (
+                        <span>• Cập nhật lúc: {formatDate(report.generated_at)}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="text-sm text-gray-500">
-                  Hiển thị {paginatedCustomers.length} / {filteredCustomers.length} khách hàng
                 </div>
               </div>
 
-              {/* Customer Table */}
-              {renderCustomerTable()}
+              {loading && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">Đang tải báo cáo Doanh thu theo Khách hàng...</span>
+                </div>
+              )}
 
-              {/* Pagination */}
-              {filteredCustomers.length > pageSize && (
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
-                    Hiển thị {(currentPage - 1) * pageSize + 1} đến {Math.min(currentPage * pageSize, filteredCustomers.length)} 
-                    trong tổng số {filteredCustomers.length} khách hàng
-                  </div>
-                  <div className="flex items-center space-x-2">
+              {error && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                    <p className="text-red-600 font-medium">{error}</p>
                     <button
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                      className="p-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      onClick={fetchSalesByCustomerReport}
+                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                     >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <span className="px-3 py-1 text-sm text-gray-700">
-                      Trang {currentPage}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(prev => prev + 1)}
-                      disabled={currentPage * pageSize >= filteredCustomers.length}
-                      className="p-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      <ChevronRight className="h-4 w-4" />
+                      Thử lại
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Report Information */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">Thông tin báo cáo</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                  <div>
-                    <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
+              {report && !loading && (
+                <div className="space-y-8">
+                  {/* Key Metrics */}
+                  {renderKeyMetrics()}
+
+                  {/* Top Customers */}
+                  {renderTopCustomers()}
+
+                  {/* Search and Filter */}
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-1">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Tìm kiếm khách hàng..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Hiển thị {paginatedCustomers.length} / {filteredCustomers.length} khách hàng
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-medium">Tổng hóa đơn:</span> {report.total_invoices}
-                  </div>
-                  <div>
-                    <span className="font-medium">Tổng phiếu thu:</span> {report.total_sales_receipts}
-                  </div>
-                  <div>
-                    <span className="font-medium">Đơn vị tiền tệ:</span> {report.currency}
+
+                  {/* Customer Table */}
+                  {renderCustomerTable()}
+
+                  {/* Pagination */}
+                  {filteredCustomers.length > pageSize && (
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-500">
+                        Hiển thị {(currentPage - 1) * pageSize + 1} đến {Math.min(currentPage * pageSize, filteredCustomers.length)} 
+                        trong tổng số {filteredCustomers.length} khách hàng
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                          className="p-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="px-3 py-1 text-sm text-gray-700">
+                          Trang {currentPage}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(prev => prev + 1)}
+                          disabled={currentPage * pageSize >= filteredCustomers.length}
+                          className="p-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Report Information */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">Thông tin báo cáo</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                      <div>
+                        <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
+                      </div>
+                      <div>
+                        <span className="font-medium">Tổng hóa đơn:</span> {report.total_invoices}
+                      </div>
+                      <div>
+                        <span className="font-medium">Tổng phiếu thu:</span> {report.total_sales_receipts}
+                      </div>
+                      <div>
+                        <span className="font-medium">Đơn vị tiền tệ:</span> {report.currency}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
             </div>
           </div>
         </div>

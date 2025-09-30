@@ -15,8 +15,59 @@ from models.vendor import Vendor, VendorCreate, VendorUpdate
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
 from services.supabase_client import get_supabase_client
+from services.project_validation_service import ProjectValidationService
 
 router = APIRouter()
+
+# ============================================================================
+# PROJECT INTEGRATION - Tích hợp dự án
+# ============================================================================
+
+@router.get("/projects/by-customer/{customer_id}")
+async def get_projects_for_expenses(
+    customer_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get projects for a specific customer - used for dropdown selection in expense forms"""
+    try:
+        service = ProjectValidationService()
+        return await service.get_projects_for_customer(customer_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch projects for customer: {str(e)}"
+        )
+
+@router.get("/projects/dropdown-options/{customer_id}")
+async def get_project_dropdown_options(
+    customer_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get formatted project options for dropdown selection"""
+    try:
+        service = ProjectValidationService()
+        return await service.get_project_dropdown_options(customer_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get project dropdown options: {str(e)}"
+        )
+
+@router.get("/validate-project-customer")
+async def validate_project_for_expenses(
+    project_id: str,
+    customer_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Validate that a project belongs to a specific customer for expense transactions"""
+    try:
+        service = ProjectValidationService()
+        return await service.validate_project_customer(project_id, customer_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to validate project-customer relationship: {str(e)}"
+        )
 
 # ============================================================================
 # EXPENSES MANAGEMENT - Quản lý chi phí

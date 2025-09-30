@@ -19,6 +19,7 @@ class SalesReceipt(BaseModel):
     id: Optional[str] = None
     receipt_number: str
     customer_id: Optional[str] = None
+    project_id: Optional[str] = None
     issue_date: date
     line_items: List[SalesReceiptItem]
     subtotal: float
@@ -35,6 +36,7 @@ class SalesReceipt(BaseModel):
 class SalesReceiptCreate(BaseModel):
     """Create sales receipt request"""
     customer_id: Optional[str] = None
+    project_id: Optional[str] = None
     issue_date: date
     line_items: List[SalesReceiptItem]
     subtotal: float
@@ -48,6 +50,7 @@ class SalesReceiptCreate(BaseModel):
 class SalesReceiptUpdate(BaseModel):
     """Update sales receipt request"""
     customer_id: Optional[str] = None
+    project_id: Optional[str] = None
     issue_date: Optional[date] = None
     line_items: Optional[List[SalesReceiptItem]] = None
     subtotal: Optional[float] = None

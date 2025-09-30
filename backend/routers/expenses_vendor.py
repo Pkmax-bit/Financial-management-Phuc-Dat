@@ -218,13 +218,15 @@ async def get_vendor_expense_data(supabase, start_date: str, end_date: str) -> D
     
     # Get bill data
     bills = supabase.table("bills")\
-        .select("vendor_id, total_amount, issue_date")\
+        .select("vendor_id, amount, issue_date")\
         .gte("issue_date", start_date)\
         .lte("issue_date", end_date)\
         .execute()
     
     for bill in bills.data:
         vendor_id = bill["vendor_id"]
+        if vendor_id is None:
+            continue
         if vendor_id not in vendor_expenses:
             vendor_expenses[vendor_id] = {
                 "total_expenses": 0,
@@ -233,7 +235,7 @@ async def get_vendor_expense_data(supabase, start_date: str, end_date: str) -> D
                 "transaction_amounts": []
             }
         
-        amount = float(bill["total_amount"] or 0)
+        amount = float(bill["amount"] or 0)
         vendor_expenses[vendor_id]["total_expenses"] += amount
         vendor_expenses[vendor_id]["bills"].append({
             "amount": amount,
@@ -250,6 +252,8 @@ async def get_vendor_expense_data(supabase, start_date: str, end_date: str) -> D
     
     for expense in expenses.data:
         vendor_id = expense["vendor_id"]
+        if vendor_id is None:
+            continue
         if vendor_id not in vendor_expenses:
             vendor_expenses[vendor_id] = {
                 "total_expenses": 0,

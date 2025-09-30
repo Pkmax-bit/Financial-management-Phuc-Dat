@@ -214,7 +214,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
 
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
+      <div className="bg-gray-50 rounded-lg shadow-xl w-full h-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
         {/* Top Navigation */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
@@ -240,27 +240,23 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin báo cáo</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Tính đến ngày</label>
-                  <p className="text-sm text-gray-600">{report?.report_date || asOfDate}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Mô tả</label>
-                  <p className="text-sm text-gray-600">Báo cáo chi tiết về tài sản, nợ phải trả và vốn chủ sở hữu của công ty</p>
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="space-y-8">
+              {/* Header */}
+              <div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Bảng Cân đối Kế toán</h1>
+                    <p className="mt-2 text-gray-600">
+                      Báo cáo chi tiết về tài sản, nợ phải trả và vốn chủ sở hữu của công ty
+                    </p>
+                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                      <span>Tính đến ngày: {report?.report_date || asOfDate}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Content Area */}
-          <div className="flex-1 overflow-y-auto bg-white">
-            <div className="p-6">
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
