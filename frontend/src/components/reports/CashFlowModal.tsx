@@ -23,6 +23,7 @@ import {
   Zap
 } from 'lucide-react'
 import { cashFlowApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import DrillDownModal from './DrillDownModal'
 
 interface CashFlowModalProps {

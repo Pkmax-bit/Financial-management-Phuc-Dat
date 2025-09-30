@@ -14,6 +14,7 @@ import {
   CheckCircle
 } from 'lucide-react'
 import { plReportsApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import DrillDownModal from './DrillDownModal'
 
 interface PLReportModalProps {

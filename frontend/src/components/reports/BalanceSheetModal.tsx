@@ -18,6 +18,7 @@ import {
   Scale
 } from 'lucide-react'
 import { balanceSheetApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import DrillDownModal from './DrillDownModal'
 
 interface BalanceSheetModalProps {
@@ -48,22 +49,41 @@ interface BalanceSheetReport {
   as_of_date: string
   currency: string
   generated_at: string
-  total_assets: number
-  current_assets: BalanceSheetSection
-  fixed_assets: BalanceSheetSection
-  other_assets?: BalanceSheetSection
-  total_liabilities: number
-  current_liabilities: BalanceSheetSection
-  long_term_liabilities: BalanceSheetSection
-  other_liabilities?: BalanceSheetSection
-  total_equity: number
-  owner_equity: BalanceSheetSection
-  retained_earnings?: BalanceSheetSection
-  total_liabilities_and_equity: number
-  is_balanced: boolean
-  total_accounts: number
-  total_journal_entries: number
-  total_transactions: number
+  assets: {
+    total_assets: number
+    current_assets: number
+    fixed_assets: number
+    asset_breakdown: Array<{
+      category: string
+      amount: number
+      percentage: number
+    }>
+  }
+  liabilities: {
+    total_liabilities: number
+    current_liabilities: number
+    long_term_liabilities: number
+    liability_breakdown: Array<{
+      category: string
+      amount: number
+      percentage: number
+    }>
+  }
+  equity: {
+    total_equity: number
+    retained_earnings: number
+    equity_breakdown: Array<{
+      category: string
+      amount: number
+      percentage: number
+    }>
+  }
+  summary: {
+    total_assets: number
+    total_liabilities: number
+    total_equity: number
+    balance_check: boolean
+  }
 }
 
 export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: BalanceSheetModalProps) {
@@ -167,27 +187,27 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
     const metrics = [
       {
         label: 'Tổng Tài sản',
-        value: report.total_assets,
+        value: report.assets.total_assets,
         color: 'text-blue-600',
         icon: Building2
       },
       {
         label: 'Tổng Nợ phải trả',
-        value: report.total_liabilities,
+        value: report.liabilities.total_liabilities,
         color: 'text-red-600',
         icon: CreditCard
       },
       {
         label: 'Tổng Vốn chủ sở hữu',
-        value: report.total_equity,
+        value: report.equity.total_equity,
         color: 'text-green-600',
         icon: PiggyBank
       },
       {
         label: 'Cân đối',
-        value: report.is_balanced ? 'Cân bằng' : 'Không cân bằng',
-        color: report.is_balanced ? 'text-green-600' : 'text-red-600',
-        icon: report.is_balanced ? CheckCircle : AlertCircle
+        value: report.summary.balance_check ? 'Cân bằng' : 'Không cân bằng',
+        color: report.summary.balance_check ? 'text-green-600' : 'text-red-600',
+        icon: report.summary.balance_check ? CheckCircle : AlertCircle
       }
     ]
 
@@ -297,29 +317,53 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                     {/* Current Assets */}
                     <div className="mb-6">
                       <h4 className="text-md font-semibold text-blue-800 mb-3">Tài sản ngắn hạn</h4>
-                      {renderSection(report.current_assets, 'blue')}
+                      <div className="space-y-2">
+                        {report.assets.asset_breakdown.filter(item => 
+                          item.category === 'Cash' || item.category === 'Accounts Receivable'
+                        ).map((item, index) => (
+                          <div key={index} className="flex justify-between items-center py-2 px-4 bg-white rounded-md">
+                            <span className="text-sm font-medium text-gray-700">{item.category}</span>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(item.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.percentage.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     
                     {/* Fixed Assets */}
                     <div className="mb-6">
                       <h4 className="text-md font-semibold text-blue-800 mb-3">Tài sản dài hạn</h4>
-                      {renderSection(report.fixed_assets, 'blue')}
-                    </div>
-                    
-                    {/* Other Assets */}
-                    {report.other_assets && (
-                      <div className="mb-6">
-                        <h4 className="text-md font-semibold text-blue-800 mb-3">Tài sản khác</h4>
-                        {renderSection(report.other_assets, 'blue')}
+                      <div className="space-y-2">
+                        {report.assets.asset_breakdown.filter(item => 
+                          item.category === 'Fixed Assets'
+                        ).map((item, index) => (
+                          <div key={index} className="flex justify-between items-center py-2 px-4 bg-white rounded-md">
+                            <span className="text-sm font-medium text-gray-700">{item.category}</span>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(item.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.percentage.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    )}
+                    </div>
                     
                     {/* Total Assets */}
                     <div className="bg-blue-100 rounded-lg p-4">
                       <div className="flex justify-between items-center">
                         <h4 className="text-lg font-bold text-blue-900">TỔNG TÀI SẢN</h4>
                         <div className="text-2xl font-bold text-blue-900">
-                          {formatCurrency(report.total_assets)}
+                          {formatCurrency(report.assets.total_assets)}
                         </div>
                       </div>
                     </div>
@@ -338,29 +382,53 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                     {/* Current Liabilities */}
                     <div className="mb-6">
                       <h4 className="text-md font-semibold text-red-800 mb-3">Nợ ngắn hạn</h4>
-                      {renderSection(report.current_liabilities, 'red')}
+                      <div className="space-y-2">
+                        {report.liabilities.liability_breakdown.filter(item => 
+                          item.category === 'Accounts Payable'
+                        ).map((item, index) => (
+                          <div key={index} className="flex justify-between items-center py-2 px-4 bg-white rounded-md">
+                            <span className="text-sm font-medium text-gray-700">{item.category}</span>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(item.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.percentage.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     
                     {/* Long-term Liabilities */}
                     <div className="mb-6">
                       <h4 className="text-md font-semibold text-red-800 mb-3">Nợ dài hạn</h4>
-                      {renderSection(report.long_term_liabilities, 'red')}
-                    </div>
-                    
-                    {/* Other Liabilities */}
-                    {report.other_liabilities && (
-                      <div className="mb-6">
-                        <h4 className="text-md font-semibold text-red-800 mb-3">Nợ khác</h4>
-                        {renderSection(report.other_liabilities, 'red')}
+                      <div className="space-y-2">
+                        {report.liabilities.liability_breakdown.filter(item => 
+                          item.category === 'Long-term Liabilities'
+                        ).map((item, index) => (
+                          <div key={index} className="flex justify-between items-center py-2 px-4 bg-white rounded-md">
+                            <span className="text-sm font-medium text-gray-700">{item.category}</span>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(item.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.percentage.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    )}
+                    </div>
                     
                     {/* Total Liabilities */}
                     <div className="bg-red-100 rounded-lg p-4 mb-4">
                       <div className="flex justify-between items-center">
                         <h4 className="text-lg font-bold text-red-900">TỔNG NỢ PHẢI TRẢ</h4>
                         <div className="text-2xl font-bold text-red-900">
-                          {formatCurrency(report.total_liabilities)}
+                          {formatCurrency(report.liabilities.total_liabilities)}
                         </div>
                       </div>
                     </div>
@@ -373,26 +441,32 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                       VỐN CHỦ SỞ HỮU
                     </h3>
                     
-                    {/* Owner Equity */}
-                    <div className="mb-6">
-                      <h4 className="text-md font-semibold text-green-800 mb-3">Vốn chủ sở hữu</h4>
-                      {renderSection(report.owner_equity, 'green')}
-                    </div>
-                    
                     {/* Retained Earnings */}
-                    {report.retained_earnings && (
-                      <div className="mb-6">
-                        <h4 className="text-md font-semibold text-green-800 mb-3">Lợi nhuận giữ lại</h4>
-                        {renderSection(report.retained_earnings, 'green')}
+                    <div className="mb-6">
+                      <h4 className="text-md font-semibold text-green-800 mb-3">Lợi nhuận giữ lại</h4>
+                      <div className="space-y-2">
+                        {report.equity.equity_breakdown.map((item, index) => (
+                          <div key={index} className="flex justify-between items-center py-2 px-4 bg-white rounded-md">
+                            <span className="text-sm font-medium text-gray-700">{item.category}</span>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(item.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.percentage.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    )}
+                    </div>
                     
                     {/* Total Equity */}
                     <div className="bg-green-100 rounded-lg p-4 mb-4">
                       <div className="flex justify-between items-center">
                         <h4 className="text-lg font-bold text-green-900">TỔNG VỐN CHỦ SỞ HỮU</h4>
                         <div className="text-2xl font-bold text-green-900">
-                          {formatCurrency(report.total_equity)}
+                          {formatCurrency(report.equity.total_equity)}
                         </div>
                       </div>
                     </div>
@@ -403,7 +477,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                     <div className="flex justify-between items-center">
                       <h4 className="text-lg font-bold text-gray-900">TỔNG NỢ PHẢI TRẢ VÀ VỐN CHỦ SỞ HỮU</h4>
                       <div className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(report.total_liabilities_and_equity)}
+                        {formatCurrency(report.liabilities.total_liabilities + report.equity.total_equity)}
                       </div>
                     </div>
                   </div>
@@ -411,15 +485,15 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
               </div>
 
               {/* Balance Validation */}
-              <div className={`rounded-lg p-6 ${report.is_balanced ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className={`rounded-lg p-6 ${report.summary.balance_check ? 'bg-green-50' : 'bg-red-50'}`}>
                 <div className="flex items-center justify-center">
-                  <Scale className={`h-8 w-8 mr-3 ${report.is_balanced ? 'text-green-600' : 'text-red-600'}`} />
+                  <Scale className={`h-8 w-8 mr-3 ${report.summary.balance_check ? 'text-green-600' : 'text-red-600'}`} />
                   <div className="text-center">
-                    <h4 className={`text-lg font-bold ${report.is_balanced ? 'text-green-900' : 'text-red-900'}`}>
-                      {report.is_balanced ? 'Bảng cân đối hợp lệ' : 'Bảng cân đối không hợp lệ'}
+                    <h4 className={`text-lg font-bold ${report.summary.balance_check ? 'text-green-900' : 'text-red-900'}`}>
+                      {report.summary.balance_check ? 'Bảng cân đối hợp lệ' : 'Bảng cân đối không hợp lệ'}
                     </h4>
-                    <p className={`text-sm ${report.is_balanced ? 'text-green-700' : 'text-red-700'}`}>
-                      Tài sản: {formatCurrency(report.total_assets)} = Nợ phải trả + Vốn chủ sở hữu: {formatCurrency(report.total_liabilities_and_equity)}
+                    <p className={`text-sm ${report.summary.balance_check ? 'text-green-700' : 'text-red-700'}`}>
+                      Tài sản: {formatCurrency(report.summary.total_assets)} = Nợ phải trả + Vốn chủ sở hữu: {formatCurrency(report.summary.total_liabilities + report.summary.total_equity)}
                     </p>
                   </div>
                 </div>
@@ -427,15 +501,12 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
 
               {/* Report Info */}
               <div className="bg-gray-100 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                   <div>
-                    <span className="font-medium">Tổng tài khoản:</span> {report.total_accounts}
+                    <span className="font-medium">Ngày báo cáo:</span> {new Date(report.report_date).toLocaleDateString('vi-VN')}
                   </div>
                   <div>
-                    <span className="font-medium">Tổng bút toán:</span> {report.total_journal_entries}
-                  </div>
-                  <div>
-                    <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
+                    <span className="font-medium">Tính đến ngày:</span> {new Date(report.as_of_date).toLocaleDateString('vi-VN')}
                   </div>
                   <div>
                     <span className="font-medium">Đơn vị tiền tệ:</span> {report.currency}

@@ -36,6 +36,7 @@ import {
   FileCheck
 } from 'lucide-react'
 import { generalLedgerApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import DrillDownModal from './DrillDownModal'
 
 interface GeneralLedgerModalProps {

@@ -14,6 +14,85 @@ from services.supabase_client import get_supabase_client
 
 router = APIRouter()
 
+@router.get("/balance-sheet-demo")
+async def get_balance_sheet_demo(
+    as_of_date: date = Query(..., description="As of date for balance sheet")
+):
+    """
+    Generate Balance Sheet report (Demo version - no auth required)
+    """
+    try:
+        # Sample data for demo
+        sample_data = {
+            "as_of_date": as_of_date.isoformat(),
+            "currency": "VND",
+            "generated_at": datetime.now().isoformat(),
+            "assets": {
+                "total_assets": 184000000,
+                "current_assets": 134000000,
+                "fixed_assets": 50000000,
+                "asset_breakdown": [
+                    {
+                        "category": "Cash",
+                        "amount": 10000000,
+                        "percentage": 5.434782608695652
+                    },
+                    {
+                        "category": "Accounts Receivable",
+                        "amount": 124000000,
+                        "percentage": 67.3913043478261
+                    },
+                    {
+                        "category": "Fixed Assets",
+                        "amount": 50000000,
+                        "percentage": 27.173913043478258
+                    }
+                ]
+            },
+            "liabilities": {
+                "total_liabilities": 38000000,
+                "current_liabilities": 38000000,
+                "long_term_liabilities": 0,
+                "liability_breakdown": [
+                    {
+                        "category": "Accounts Payable",
+                        "amount": 38000000,
+                        "percentage": 100
+                    },
+                    {
+                        "category": "Long-term Liabilities",
+                        "amount": 0,
+                        "percentage": 0
+                    }
+                ]
+            },
+            "equity": {
+                "total_equity": 146000000,
+                "retained_earnings": 146000000,
+                "equity_breakdown": [
+                    {
+                        "category": "Retained Earnings",
+                        "amount": 146000000,
+                        "percentage": 100
+                    }
+                ]
+            },
+            "summary": {
+                "total_assets": 184000000,
+                "total_liabilities": 38000000,
+                "total_equity": 146000000,
+                "balance_check": True
+            }
+        }
+        
+        return sample_data
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate balance sheet: {str(e)}"
+        )
+
 @router.get("/balance-sheet")
 async def get_balance_sheet(
     as_of_date: date = Query(..., description="As of date for balance sheet"),

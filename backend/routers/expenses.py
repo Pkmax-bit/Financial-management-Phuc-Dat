@@ -913,19 +913,14 @@ async def get_expense_dashboard_stats(
     try:
         supabase = get_supabase_client()
         
-        # Build date filter
-        date_filter = ""
-        if start_date and end_date:
-            date_filter = f"expense_date.gte.{start_date},expense_date.lte.{end_date}"
-        elif start_date:
-            date_filter = f"expense_date.gte.{start_date}"
-        elif end_date:
-            date_filter = f"expense_date.lte.{end_date}"
-        
         # Get expense statistics
         expense_query = supabase.table("expenses").select("*")
-        if date_filter:
-            expense_query = expense_query.filter(date_filter)
+        if start_date and end_date:
+            expense_query = expense_query.gte("expense_date", start_date.isoformat()).lte("expense_date", end_date.isoformat())
+        elif start_date:
+            expense_query = expense_query.gte("expense_date", start_date.isoformat())
+        elif end_date:
+            expense_query = expense_query.lte("expense_date", end_date.isoformat())
         
         expenses = expense_query.execute()
         

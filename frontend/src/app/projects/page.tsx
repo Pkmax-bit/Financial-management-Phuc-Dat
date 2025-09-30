@@ -1,752 +1,308 @@
-"use client";
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Search, Edit, Trash2, Eye, DollarSign, Clock, Users } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { 
+  FolderOpen, 
+  Plus, 
+  Search, 
+  BarChart3,
+  TrendingUp,
+  Target,
+  Clock,
+  DollarSign,
+  Users,
+  Calendar,
+  AlertCircle
+} from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import Navigation from '@/components/Navigation'
+import ProjectsTab from '@/components/projects/ProjectsTab'
+import CreateProjectModal from '@/components/projects/CreateProjectModal'
+import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
+import ProjectDetailSidebar from '@/components/projects/ProjectDetailSidebar'
 
 interface Project {
-  id: string;
-  project_code: string;
-  name: string;
-  description?: string;
-  customer_id: string;
-  customer_name?: string;
-  manager_id: string;
-  manager_name?: string;
-  start_date: string;
-  end_date?: string;
-  budget?: number;
-  actual_cost?: number;
-  status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  progress: number;
-  billing_type: 'fixed' | 'hourly' | 'milestone';
-  hourly_rate?: number;
-  created_at: string;
-  updated_at: string;
+  id: string
+  project_code: string
+  name: string
+  description?: string
+  customer_id: string
+  customer_name?: string
+  manager_id: string
+  manager_name?: string
+  start_date: string
+  end_date?: string
+  budget?: number
+  actual_cost?: number
+  status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  progress: number
+  billing_type: 'fixed' | 'hourly' | 'milestone'
+  hourly_rate?: number
+  created_at: string
+  updated_at: string
 }
 
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
+interface User {
+  full_name?: string
+  role?: string
+  email?: string
 }
-
-interface Employee {
-  id: string;
-  name: string;
-  email: string;
-}
-
-const statusColors = {
-  planning: 'bg-blue-100 text-blue-800',
-  active: 'bg-green-100 text-green-800',
-  on_hold: 'bg-yellow-100 text-yellow-800',
-  completed: 'bg-gray-100 text-gray-800',
-  cancelled: 'bg-red-100 text-red-800'
-};
-
-const priorityColors = {
-  low: 'bg-gray-100 text-gray-800',
-  medium: 'bg-blue-100 text-blue-800',
-  high: 'bg-orange-100 text-orange-800',
-  urgent: 'bg-red-100 text-red-800'
-};
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [activeTab, setActiveTab] = useState('projects')
+  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    completed: 0,
+    onHold: 0
+  })
+  const router = useRouter()
 
-  // Form states
-  const [formData, setFormData] = useState({
-    project_code: '',
-    name: '',
-    description: '',
-    customer_id: '',
-    manager_id: '',
-    start_date: '',
-    end_date: '',
-    budget: '',
-    status: 'planning' as const,
-    priority: 'medium' as const,
-    progress: 0,
-    billing_type: 'fixed' as const,
-    hourly_rate: ''
-  });
-
-  const [datePickerOpen, setDatePickerOpen] = useState<'start' | 'end' | null>(null);
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditSidebar, setShowEditSidebar] = useState(false)
+  const [showDetailSidebar, setShowDetailSidebar] = useState(false)
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   useEffect(() => {
-    fetchProjects();
-    fetchCustomers();
-    fetchEmployees();
-  }, []);
+    checkUser()
+    fetchStats()
+  }, [])
 
-  const fetchProjects = async () => {
+  const checkUser = async () => {
     try {
-      const response = await fetch('/api/projects');
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(data);
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (authUser) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authUser.id)
+          .single()
+        
+        if (userData) {
+          setUser(userData)
+        } else {
+          router.push('/login')
+        }
+      } else {
+        router.push('/login')
       }
     } catch (error) {
-      console.error('Error fetching projects:', error);
+      console.error('Error checking user:', error)
+      router.push('/login')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  const fetchCustomers = async () => {
+  const fetchStats = async () => {
     try {
-      const response = await fetch('/api/customers');
-      if (response.ok) {
-        const data = await response.json();
-        setCustomers(data);
-      }
+      const { data: projects, error } = await supabase
+        .from('projects')
+        .select('status')
+
+      if (error) throw error
+
+      const total = projects?.length || 0
+      const active = projects?.filter(p => p.status === 'active').length || 0
+      const completed = projects?.filter(p => p.status === 'completed').length || 0
+      const onHold = projects?.filter(p => p.status === 'on_hold').length || 0
+
+      setStats({
+        total,
+        active,
+        completed,
+        onHold
+      })
     } catch (error) {
-      console.error('Error fetching customers:', error);
+      console.error('Error fetching stats:', error)
     }
-  };
+  }
 
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch('/api/employees');
-      if (response.ok) {
-        const data = await response.json();
-        setEmployees(data);
-      }
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-    }
-  };
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
-  const handleCreateProject = async () => {
-    try {
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          budget: formData.budget ? parseFloat(formData.budget) : null,
-          hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
-        }),
-      });
-
-      if (response.ok) {
-        const newProject = await response.json();
-        setProjects([...projects, newProject]);
-        setIsCreateDialogOpen(false);
-        resetForm();
-      } else {
-        console.error('Error creating project');
-      }
-    } catch (error) {
-      console.error('Error creating project:', error);
-    }
-  };
-
-  const handleUpdateProject = async () => {
-    if (!editingProject) return;
-
-    try {
-      const response = await fetch(`/api/projects/${editingProject.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          budget: formData.budget ? parseFloat(formData.budget) : null,
-          hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
-        }),
-      });
-
-      if (response.ok) {
-        const updatedProject = await response.json();
-        setProjects(projects.map(p => p.id === editingProject.id ? updatedProject : p));
-        setIsEditDialogOpen(false);
-        setEditingProject(null);
-        resetForm();
-      } else {
-        console.error('Error updating project');
-      }
-    } catch (error) {
-      console.error('Error updating project:', error);
-    }
-  };
-
-  const handleDeleteProject = async (projectId: string) => {
-    if (!confirm('Are you sure you want to delete this project?')) return;
-
-    try {
-      const response = await fetch(`/api/projects/${projectId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setProjects(projects.filter(p => p.id !== projectId));
-      } else {
-        console.error('Error deleting project');
-      }
-    } catch (error) {
-      console.error('Error deleting project:', error);
-    }
-  };
+  // Event handlers
+  const handleCreateProject = () => {
+    setShowCreateModal(true)
+  }
 
   const handleEditProject = (project: Project) => {
-    setEditingProject(project);
-    setFormData({
-      project_code: project.project_code,
-      name: project.name,
-      description: project.description || '',
-      customer_id: project.customer_id,
-      manager_id: project.manager_id,
-      start_date: project.start_date,
-      end_date: project.end_date || '',
-      budget: project.budget?.toString() || '',
-      status: project.status,
-      priority: project.priority,
-      progress: project.progress,
-      billing_type: project.billing_type,
-      hourly_rate: project.hourly_rate?.toString() || ''
-    });
-    setIsEditDialogOpen(true);
-  };
+    setSelectedProject(project)
+    setShowEditSidebar(true)
+  }
 
-  const resetForm = () => {
-    setFormData({
-      project_code: '',
-      name: '',
-      description: '',
-      customer_id: '',
-      manager_id: '',
-      start_date: '',
-      end_date: '',
-      budget: '',
-      status: 'planning',
-      priority: 'medium',
-      progress: 0,
-      billing_type: 'fixed',
-      hourly_rate: ''
-    });
-  };
+  const handleViewProject = (project: Project) => {
+    setSelectedProject(project)
+    setShowDetailSidebar(true)
+  }
 
-  const filteredProjects = projects.filter(project => {
-    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.project_code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const handleDeleteProject = (project: Project) => {
+    // This will be handled in the ProjectsTab component
+    console.log('Delete project:', project)
+  }
+
+  const handleProjectSuccess = () => {
+    // Refresh stats when project is created/updated
+    fetchStats()
+    console.log('Project operation successful')
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading projects...</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Projects</h1>
-          <p className="text-gray-600">Manage and track your projects</p>
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl shadow-sm">
+                <FolderOpen className="h-8 w-8 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Dự án</h1>
+                <p className="text-gray-600 mt-1">Quản lý và theo dõi dự án một cách hiệu quả</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setActiveTab('reports')}
+                className="flex items-center gap-2 px-4 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                <BarChart3 className="h-4 w-4" />
+                Báo cáo
+              </button>
+              <button
+                onClick={handleCreateProject}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl font-medium"
+              >
+                <Plus className="h-5 w-5" />
+                Dự án mới
+              </button>
+            </div>
+          </div>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Project
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Project</DialogTitle>
-              <DialogDescription>
-                Fill in the details to create a new project.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="project_code">Project Code</Label>
-                <Input
-                  id="project_code"
-                  value={formData.project_code}
-                  onChange={(e) => setFormData({ ...formData, project_code: e.target.value })}
-                  placeholder="PROJ-001"
-                />
-              </div>
-              <div>
-                <Label htmlFor="name">Project Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Website Development"
-                />
-              </div>
-              <div className="col-span-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Project description..."
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer_id">Customer</Label>
-                <Select
-                  value={formData.customer_id}
-                  onValueChange={(value) => setFormData({ ...formData, customer_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="manager_id">Project Manager</Label>
-                <Select
-                  value={formData.manager_id}
-                  onValueChange={(value) => setFormData({ ...formData, manager_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select manager" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="start_date">Start Date</Label>
-                <Popover open={datePickerOpen === 'start'} onOpenChange={(open) => setDatePickerOpen(open ? 'start' : null)}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !formData.start_date && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formData.start_date ? format(new Date(formData.start_date), "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={formData.start_date ? new Date(formData.start_date) : undefined}
-                      onSelect={(date) => {
-                        setFormData({ ...formData, start_date: date ? format(date, 'yyyy-MM-dd') : '' });
-                        setDatePickerOpen(null);
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label htmlFor="end_date">End Date</Label>
-                <Popover open={datePickerOpen === 'end'} onOpenChange={(open) => setDatePickerOpen(open ? 'end' : null)}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !formData.end_date && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formData.end_date ? format(new Date(formData.end_date), "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={formData.end_date ? new Date(formData.end_date) : undefined}
-                      onSelect={(date) => {
-                        setFormData({ ...formData, end_date: date ? format(date, 'yyyy-MM-dd') : '' });
-                        setDatePickerOpen(null);
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label htmlFor="budget">Budget</Label>
-                <Input
-                  id="budget"
-                  type="number"
-                  value={formData.budget}
-                  onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                  placeholder="100000"
-                />
-              </div>
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value: any) => setFormData({ ...formData, status: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="planning">Planning</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="on_hold">On Hold</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="priority">Priority</Label>
-                <Select
-                  value={formData.priority}
-                  onValueChange={(value: any) => setFormData({ ...formData, priority: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="billing_type">Billing Type</Label>
-                <Select
-                  value={formData.billing_type}
-                  onValueChange={(value: any) => setFormData({ ...formData, billing_type: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fixed">Fixed Price</SelectItem>
-                    <SelectItem value="hourly">Hourly Rate</SelectItem>
-                    <SelectItem value="milestone">Milestone</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {formData.billing_type === 'hourly' && (
-                <div>
-                  <Label htmlFor="hourly_rate">Hourly Rate</Label>
-                  <Input
-                    id="hourly_rate"
-                    type="number"
-                    value={formData.hourly_rate}
-                    onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })}
-                    placeholder="50"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="flex justify-end space-x-2 mt-4">
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateProject}>
-                Create Project
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
 
-        {/* Edit Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Edit Project</DialogTitle>
-              <DialogDescription>
-                Update the project details.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-4">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="edit_project_code">Project Code</Label>
-                <Input
-                  id="edit_project_code"
-                  value={formData.project_code}
-                  onChange={(e) => setFormData({ ...formData, project_code: e.target.value })}
-                />
+                <p className="text-sm font-medium text-gray-600">Tổng dự án</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
-              <div>
-                <Label htmlFor="edit_name">Project Name</Label>
-                <Input
-                  id="edit_name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              <div className="col-span-2">
-                <Label htmlFor="edit_description">Description</Label>
-                <Textarea
-                  id="edit_description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit_customer_id">Customer</Label>
-                <Select
-                  value={formData.customer_id}
-                  onValueChange={(value) => setFormData({ ...formData, customer_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit_manager_id">Project Manager</Label>
-                <Select
-                  value={formData.manager_id}
-                  onValueChange={(value) => setFormData({ ...formData, manager_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit_budget">Budget</Label>
-                <Input
-                  id="edit_budget"
-                  type="number"
-                  value={formData.budget}
-                  onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit_status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value: any) => setFormData({ ...formData, status: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="planning">Planning</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="on_hold">On Hold</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit_priority">Priority</Label>
-                <Select
-                  value={formData.priority}
-                  onValueChange={(value: any) => setFormData({ ...formData, priority: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit_progress">Progress (%)</Label>
-                <Input
-                  id="edit_progress"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={formData.progress}
-                  onChange={(e) => setFormData({ ...formData, progress: parseInt(e.target.value) || 0 })}
-                />
+              <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg">
+                <FolderOpen className="h-6 w-6 text-blue-600" />
               </div>
             </div>
-            <div className="flex justify-end space-x-2 mt-4">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateProject}>
-                Update Project
-              </Button>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Dự án đang hoạt động</p>
+                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+              </div>
+              <div className="p-3 bg-gradient-to-br from-green-100 to-green-200 rounded-lg">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Đã hoàn thành</p>
+                <p className="text-2xl font-bold text-gray-600">{stats.completed}</p>
+              </div>
+              <div className="p-3 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg">
+                <Target className="h-6 w-6 text-gray-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Tạm dừng</p>
+                <p className="text-2xl font-bold text-yellow-600">{stats.onHold}</p>
+              </div>
+              <div className="p-3 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg">
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="bg-white rounded-lg shadow-sm border">
+          {activeTab === 'projects' && (
+            <ProjectsTab
+              onCreateProject={handleCreateProject}
+              onEditProject={handleEditProject}
+              onViewProject={handleViewProject}
+              onDeleteProject={handleDeleteProject}
+            />
+          )}
+          
+          {activeTab === 'reports' && (
+            <div className="p-6">
+              <div className="text-center py-12">
+                <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Project Reports</h3>
+                <p className="text-gray-600 mb-4">
+                  View detailed reports and analytics for your projects
+                </p>
+                <button
+                  onClick={() => router.push('/projects/reports')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  View Reports
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <Input
-            placeholder="Search projects..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="planning">Planning</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="on_hold">On Hold</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Modals */}
+      <CreateProjectModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleProjectSuccess}
+      />
 
-      {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProjects.map((project) => (
-          <Card key={project.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{project.name}</CardTitle>
-                  <CardDescription>{project.project_code}</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditProject(project)}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteProject(project.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Status</span>
-                  <Badge className={statusColors[project.status]}>
-                    {project.status.replace('_', ' ').toUpperCase()}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Priority</span>
-                  <Badge className={priorityColors[project.priority]}>
-                    {project.priority.toUpperCase()}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Progress</span>
-                  <span className="text-sm font-medium">{project.progress}%</span>
-                </div>
-                {project.budget && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Budget</span>
-                    <span className="text-sm font-medium">
-                      ${project.budget.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Start Date</span>
-                  <span className="text-sm">
-                    {format(new Date(project.start_date), 'MMM dd, yyyy')}
-                  </span>
-                </div>
-                {project.end_date && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">End Date</span>
-                    <span className="text-sm">
-                      {format(new Date(project.end_date), 'MMM dd, yyyy')}
-                    </span>
-                  </div>
-                )}
-                <div className="pt-2 border-t">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Customer</span>
-                    <span className="text-sm font-medium">{project.customer_name || 'Unknown'}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <EditProjectSidebar
+        isOpen={showEditSidebar}
+        onClose={() => setShowEditSidebar(false)}
+        project={selectedProject}
+        onSuccess={handleProjectSuccess}
+      />
 
-      {filteredProjects.length === 0 && (
-        <div className="text-center py-12">
-          <div className="text-gray-500 text-lg">No projects found</div>
-          <p className="text-gray-400 mt-2">
-            {searchTerm || statusFilter !== 'all' 
-              ? 'Try adjusting your search or filter criteria'
-              : 'Create your first project to get started'
-            }
-          </p>
-        </div>
-      )}
+      <ProjectDetailSidebar
+        isOpen={showDetailSidebar}
+        onClose={() => setShowDetailSidebar(false)}
+        project={selectedProject}
+        onEdit={handleEditProject}
+        onDelete={handleDeleteProject}
+      />
     </div>
-  );
+  )
 }

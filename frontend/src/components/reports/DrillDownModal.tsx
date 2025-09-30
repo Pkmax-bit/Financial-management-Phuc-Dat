@@ -24,6 +24,7 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { drillDownApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 interface DrillDownModalProps {
   isOpen: boolean

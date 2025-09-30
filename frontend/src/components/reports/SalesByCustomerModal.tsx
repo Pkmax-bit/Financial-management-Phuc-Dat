@@ -30,6 +30,7 @@ import {
   Activity
 } from 'lucide-react'
 import { salesCustomerApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import DrillDownModal from './DrillDownModal'
 
 interface SalesByCustomerModalProps {

@@ -1226,19 +1226,14 @@ async def get_sales_dashboard_stats(
     try:
         supabase = get_supabase_client()
         
-        # Build date filter
-        date_filter = ""
-        if start_date and end_date:
-            date_filter = f"issue_date.gte.{start_date},issue_date.lte.{end_date}"
-        elif start_date:
-            date_filter = f"issue_date.gte.{start_date}"
-        elif end_date:
-            date_filter = f"issue_date.lte.{end_date}"
-        
         # Get invoice statistics
         invoice_query = supabase.table("invoices").select("*")
-        if date_filter:
-            invoice_query = invoice_query.filter(date_filter)
+        if start_date and end_date:
+            invoice_query = invoice_query.gte("issue_date", start_date.isoformat()).lte("issue_date", end_date.isoformat())
+        elif start_date:
+            invoice_query = invoice_query.gte("issue_date", start_date.isoformat())
+        elif end_date:
+            invoice_query = invoice_query.lte("issue_date", end_date.isoformat())
         
         invoices = invoice_query.execute()
         

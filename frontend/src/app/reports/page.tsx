@@ -32,6 +32,7 @@ import { dashboardApi } from '@/lib/api'
 import Navigation from '@/components/Navigation'
 import PLReportModal from '@/components/reports/PLReportModal'
 import BalanceSheetModal from '@/components/reports/BalanceSheetModal'
+import BalanceSheetView from '@/components/reports/BalanceSheetView'
 import CashFlowModal from '@/components/reports/CashFlowModal'
 import SalesByCustomerModal from '@/components/reports/SalesByCustomerModal'
 import ExpensesByVendorModal from '@/components/reports/ExpensesByVendorModal'
@@ -46,37 +47,83 @@ export default function ReportsPage() {
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [dashboardLoading, setDashboardLoading] = useState(false)
   const [showPLModal, setShowPLModal] = useState(false)
-  const [plDateRange, setPLDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+  const [plDateRange, setPLDateRange] = useState(() => {
+    const now = new Date()
+    return {
+      startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+      endDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
+    }
   })
   const [showBalanceSheetModal, setShowBalanceSheetModal] = useState(false)
-  const [balanceSheetDate, setBalanceSheetDate] = useState(new Date().toISOString().split('T')[0])
+  const [balanceSheetDate, setBalanceSheetDate] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
   const [showCashFlowModal, setShowCashFlowModal] = useState(false)
-  const [cashFlowDateRange, setCashFlowDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+  const [cashFlowDateRange, setCashFlowDateRange] = useState(() => {
+    const now = new Date()
+    return {
+      startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+      endDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
+    }
   })
   const [showSalesByCustomerModal, setShowSalesByCustomerModal] = useState(false)
-  const [salesByCustomerDateRange, setSalesByCustomerDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+  const [salesByCustomerDateRange, setSalesByCustomerDateRange] = useState(() => {
+    const now = new Date()
+    return {
+      startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+      endDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
+    }
   })
   const [showExpensesByVendorModal, setShowExpensesByVendorModal] = useState(false)
-  const [expensesByVendorDateRange, setExpensesByVendorDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+  const [expensesByVendorDateRange, setExpensesByVendorDateRange] = useState(() => {
+    const now = new Date()
+    return {
+      startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+      endDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
+    }
   })
   const [showGeneralLedgerModal, setShowGeneralLedgerModal] = useState(false)
-  const [generalLedgerDateRange, setGeneralLedgerDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+  const [generalLedgerDateRange, setGeneralLedgerDateRange] = useState(() => {
+    const now = new Date()
+    return {
+      startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+      endDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
+    }
   })
   
   // Month filter for reports
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM format
   
+  // Report data states
+  const [balanceSheetData, setBalanceSheetData] = useState<any>(null)
+  const [balanceSheetLoading, setBalanceSheetLoading] = useState(false)
+  const [plReportData, setPLReportData] = useState<any>(null)
+  const [plReportLoading, setPLReportLoading] = useState(false)
+  const [cashFlowData, setCashFlowData] = useState<any>(null)
+  const [cashFlowLoading, setCashFlowLoading] = useState(false)
+  
   const router = useRouter()
+
+  // Fetch balance sheet data
+  const fetchBalanceSheetData = async (date: string) => {
+    setBalanceSheetLoading(true)
+    try {
+      const response = await fetch(`http://localhost:8000/api/reports/financial/balance-sheet-demo?as_of_date=${date}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Balance sheet data received:', data)
+        setBalanceSheetData(data)
+      } else {
+        console.error('Failed to fetch balance sheet data:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('Error fetching balance sheet data:', error)
+    } finally {
+      setBalanceSheetLoading(false)
+    }
+  }
 
   useEffect(() => {
     checkUser()
@@ -1185,7 +1232,15 @@ export default function ReportsPage() {
     }
 
     const handleReportClick = (reportId: string) => {
-      setActiveTab(reportId)
+      console.log('Report clicked:', reportId)
+      if (reportId === 'balance-sheet') {
+        const date = selectedMonth + '-01' // Convert month to date
+        console.log('Fetching balance sheet for date:', date)
+        setBalanceSheetDate(date)
+        fetchBalanceSheetData(date)
+      } else {
+        setActiveTab(reportId)
+      }
     }
 
     const handleMonthClick = (monthValue: string) => {
@@ -1372,6 +1427,28 @@ export default function ReportsPage() {
               <span className="font-medium">Xem Bảng Cân đối</span>
             </button>
           </div>
+        </div>
+
+        {/* Balance Sheet Report Display */}
+        {balanceSheetLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-gray-600">Đang tải báo cáo...</span>
+          </div>
+        )}
+
+        {balanceSheetData && !balanceSheetLoading && (
+          <div className="mt-8">
+            <BalanceSheetView data={balanceSheetData} />
+          </div>
+        )}
+
+        {/* Debug info */}
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg">
+          <h4 className="font-semibold">Debug Info:</h4>
+          <p>Loading: {balanceSheetLoading ? 'true' : 'false'}</p>
+          <p>Data: {balanceSheetData ? 'Available' : 'None'}</p>
+          <p>Selected Month: {selectedMonth}</p>
         </div>
       </div>
     )

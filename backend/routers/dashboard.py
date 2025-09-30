@@ -430,3 +430,171 @@ async def calculate_what_if_scenario(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to calculate scenario: {str(e)}"
         )
+
+@router.get("/cashflow/projection")
+async def get_cashflow_projection(
+    months: int = 6,
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Get cash flow projection for the next N months
+    
+    Args:
+        months: Number of months to project (default: 6)
+        
+    Returns:
+        Dict containing cash flow projections
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Get current cash position
+        now = datetime.now()
+        current_month = now.replace(day=1)
+        
+        # Get revenue projections (based on historical averages)
+        revenue_data = supabase.table("invoices")\
+            .select("total_amount, issue_date")\
+            .eq("payment_status", "paid")\
+            .gte("issue_date", (current_month - timedelta(days=365)).isoformat())\
+            .execute()
+        
+        # Calculate average monthly revenue
+        monthly_revenue = sum(invoice["total_amount"] for invoice in revenue_data.data) / 12
+        
+        # Get expense projections
+        expense_data = supabase.table("expenses")\
+            .select("amount, expense_date")\
+            .eq("status", "approved")\
+            .gte("expense_date", (current_month - timedelta(days=365)).isoformat())\
+            .execute()
+        
+        # Calculate average monthly expenses
+        monthly_expenses = sum(expense["amount"] for expense in expense_data.data) / 12
+        
+        # Generate projections
+        projections = []
+        cumulative_cash = 0
+        
+        for month in range(months):
+            month_date = current_month + timedelta(days=30 * month)
+            projected_revenue = monthly_revenue * (1 + (month * 0.05))  # 5% growth per month
+            projected_expenses = monthly_expenses * (1 + (month * 0.03))  # 3% growth per month
+            net_cash_flow = projected_revenue - projected_expenses
+            cumulative_cash += net_cash_flow
+            
+            projections.append({
+                "month": month + 1,
+                "month_name": month_date.strftime("%B %Y"),
+                "revenue": projected_revenue,
+                "expenses": projected_expenses,
+                "net_cash_flow": net_cash_flow,
+                "cumulative_cash": cumulative_cash
+            })
+        
+        return {
+            "projections": projections,
+            "summary": {
+                "total_months": months,
+                "average_monthly_revenue": monthly_revenue,
+                "average_monthly_expenses": monthly_expenses,
+                "projected_net_cash_flow": cumulative_cash
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate cash flow projection: {str(e)}"
+        )
+
+@router.get("/planner/events")
+async def get_planner_events(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Get financial planning events and milestones
+    
+    Returns:
+        Dict containing upcoming events and milestones
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Get upcoming invoice due dates
+        now = datetime.now()
+        upcoming_invoices = supabase.table("invoices")\
+            .select("invoice_number, total_amount, due_date, customer_id")\
+            .gte("due_date", now.isoformat())\
+            .lte("due_date", (now + timedelta(days=30)).isoformat())\
+            .eq("payment_status", "pending")\
+            .execute()
+        
+        # Get upcoming expense due dates
+        upcoming_expenses = supabase.table("expenses")\
+            .select("description, amount, expense_date, category")\
+            .gte("expense_date", now.isoformat())\
+            .lte("expense_date", (now + timedelta(days=30)).isoformat())\
+            .eq("status", "pending")\
+            .execute()
+        
+        # Get project milestones
+        project_milestones = supabase.table("projects")\
+            .select("name, end_date, status, budget")\
+            .gte("end_date", now.isoformat())\
+            .lte("end_date", (now + timedelta(days=90)).isoformat())\
+            .in_("status", ["active", "planning"])\
+            .execute()
+        
+        # Format events
+        events = []
+        
+        # Add invoice events
+        for invoice in upcoming_invoices.data:
+            events.append({
+                "type": "invoice_due",
+                "title": f"Invoice {invoice['invoice_number']} due",
+                "date": invoice["due_date"],
+                "amount": invoice["total_amount"],
+                "priority": "high" if invoice["total_amount"] > 10000 else "medium"
+            })
+        
+        # Add expense events
+        for expense in upcoming_expenses.data:
+            events.append({
+                "type": "expense_due",
+                "title": expense["description"],
+                "date": expense["expense_date"],
+                "amount": expense["amount"],
+                "category": expense["category"],
+                "priority": "medium"
+            })
+        
+        # Add project milestones
+        for project in project_milestones.data:
+            events.append({
+                "type": "project_milestone",
+                "title": f"Project {project['name']} deadline",
+                "date": project["end_date"],
+                "amount": project["budget"],
+                "status": project["status"],
+                "priority": "high" if project["status"] == "active" else "low"
+            })
+        
+        # Sort events by date
+        events.sort(key=lambda x: x["date"])
+        
+        return {
+            "events": events,
+            "summary": {
+                "total_events": len(events),
+                "high_priority": len([e for e in events if e["priority"] == "high"]),
+                "upcoming_days": 30
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get planner events: {str(e)}"
+        )

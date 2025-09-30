@@ -36,6 +36,7 @@ import {
   Mail
 } from 'lucide-react'
 import { expensesVendorApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import DrillDownModal from './DrillDownModal'
 
 interface ExpensesByVendorModalProps {

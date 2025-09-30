@@ -27,7 +27,7 @@ class Expense(BaseModel):
     """Expense model"""
     id: str
     expense_code: str
-    employee_id: str
+    employee_id: Optional[str] = None
     project_id: Optional[str] = None
     vendor_id: Optional[str] = None
     category: ExpenseCategory
