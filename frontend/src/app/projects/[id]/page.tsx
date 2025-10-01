@@ -163,8 +163,8 @@ export default function ProjectDetailPage() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold">{project.name}</h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-3xl font-bold break-words">{project.name}</h1>
           <p className="text-black">{project.project_code}</p>
         </div>
         <div className="ml-auto flex gap-2">

@@ -163,6 +163,10 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
       }
 
       await projectApi.updateProject(project.id, updateData)
+      
+      // Show success message
+      alert('Dự án đã được cập nhật thành công!')
+      
       onSuccess()
       onClose()
     } catch (error: any) {
@@ -225,7 +229,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
                   onChange={handleChange}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                  placeholder="VD: #PRJ001"
+                    placeholder="VD: PRJ001"
                 />
               </div>
 
@@ -456,7 +460,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm hover:shadow-md"
               >
                 {loading ? (
                   <>
@@ -466,7 +470,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
                 ) : (
                   <>
                     <Save className="h-4 w-4" />
-                    <span>Cập nhật</span>
+                    <span>Lưu thay đổi</span>
                   </>
                 )}
               </button>

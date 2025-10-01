@@ -44,6 +44,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -67,9 +68,13 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       const existingNumbers = new Set<number>()
       if (data && data.length > 0) {
         data.forEach(project => {
-          const match = project.project_code.match(/#PRJ(\d+)/)
-          if (match) {
-            existingNumbers.add(parseInt(match[1]))
+          // Check for both #PRJ and PRJ formats
+          const match1 = project.project_code.match(/#PRJ(\d+)/)
+          const match2 = project.project_code.match(/PRJ(\d+)/)
+          if (match1) {
+            existingNumbers.add(parseInt(match1[1]))
+          } else if (match2) {
+            existingNumbers.add(parseInt(match2[1]))
           }
         })
       }
@@ -80,8 +85,8 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         nextNumber++
       }
 
-      // Format as #PRJXXX (3 digits)
-      const newCode = `#PRJ${nextNumber.toString().padStart(3, '0')}`
+      // Format as PRJXXX (3 digits)
+      const newCode = `PRJ${nextNumber.toString().padStart(3, '0')}`
       
       setFormData(prev => ({
         ...prev,
@@ -93,7 +98,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       const timestamp = Date.now().toString().slice(-6)
       setFormData(prev => ({
         ...prev,
-        project_code: `#PRJ${timestamp}`
+        project_code: `PRJ${timestamp}`
       }))
     }
   }
@@ -170,24 +175,41 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         ...formData,
         budget: formData.budget ? parseFloat(formData.budget) : null,
         hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
-        end_date: formData.end_date || null
+        end_date: formData.end_date || null,
+        progress: parseFloat(formData.progress.toString()) || 0,
+        actual_cost: 0.0  // Add default actual_cost
       }
+      
+      console.log('Submitting project data:', submitData)
 
       // Try API first, fallback to Supabase
       try {
+        console.log('Trying API first...')
         await projectApi.createProject(submitData)
+        console.log('API success')
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
         
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('projects')
           .insert(submitData)
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error('Supabase error:', error)
+          throw new Error(`Database error: ${error.message}`)
+        }
+        
+        console.log('Supabase success:', data)
       }
 
+      // Show success notification
+      setSuccess(true)
+      
+      // Call onSuccess to reload data
       onSuccess()
-      onClose()
+      
+      // Reset form
       setFormData({
         project_code: '',
         name: '',
@@ -203,9 +225,16 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         billing_type: 'fixed',
         hourly_rate: ''
       })
+      
+      // Close modal after a short delay to show success message
+      setTimeout(() => {
+        onClose()
+        setSuccess(false)
+      }, 1500)
     } catch (error) {
       console.error('Error creating project:', error)
-      setError('Failed to create project')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create project. Please try again.'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -243,6 +272,23 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               <p className="text-sm text-red-800 font-semibold">{error}</p>
             </div>
           )}
+          
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-3">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-800 font-semibold">
+                    Dự án đã được tạo thành công!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -258,7 +304,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                     onChange={handleChange}
                     required
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                    placeholder="VD: #PRJ001"
+                    placeholder="VD: PRJ001"
                   />
                 </div>
                 <button
@@ -495,10 +541,10 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || success}
               className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md"
             >
-              {loading ? 'Đang tạo...' : 'Tạo dự án'}
+              {loading ? 'Đang tạo...' : success ? 'Đã tạo thành công!' : 'Tạo dự án'}
             </button>
           </div>
         </form>

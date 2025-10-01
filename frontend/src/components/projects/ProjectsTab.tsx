@@ -17,7 +17,9 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Pause
+  Pause,
+  X,
+  Save
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi } from '@/lib/api'
@@ -66,6 +68,27 @@ const priorityColors = {
   urgent: 'bg-red-100 text-red-800'
 }
 
+const getStatusText = (status: string) => {
+  const statusMap: { [key: string]: string } = {
+    'planning': 'Lập kế hoạch',
+    'active': 'Đang hoạt động',
+    'on_hold': 'Tạm dừng',
+    'completed': 'Hoàn thành',
+    'cancelled': 'Đã hủy'
+  }
+  return statusMap[status] || status
+}
+
+const getPriorityText = (priority: string) => {
+  const priorityMap: { [key: string]: string } = {
+    'low': 'Thấp',
+    'medium': 'Trung bình',
+    'high': 'Cao',
+    'urgent': 'Khẩn cấp'
+  }
+  return priorityMap[priority] || priority
+}
+
 const statusIcons = {
   planning: Target,
   active: CheckCircle,
@@ -88,10 +111,63 @@ export default function ProjectsTab({
   const [sortBy, setSortBy] = useState('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [error, setError] = useState<string | null>(null)
+  const [generatedCode, setGeneratedCode] = useState<string>('')
 
   useEffect(() => {
     fetchProjects()
   }, [])
+
+  const generateProjectCode = async () => {
+    try {
+      // Get all existing project codes from database
+      const { data, error } = await supabase
+        .from('projects')
+        .select('project_code')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Extract all existing numbers
+      const existingNumbers = new Set<number>()
+      if (data && data.length > 0) {
+        data.forEach(project => {
+          // Check for both #PRJ and PRJ formats
+          const match1 = project.project_code.match(/#PRJ(\d+)/)
+          const match2 = project.project_code.match(/PRJ(\d+)/)
+          if (match1) {
+            existingNumbers.add(parseInt(match1[1]))
+          } else if (match2) {
+            existingNumbers.add(parseInt(match2[1]))
+          }
+        })
+      }
+
+      // Find the next available number
+      let nextNumber = 1
+      while (existingNumbers.has(nextNumber)) {
+        nextNumber++
+      }
+
+      // Format as PRJXXX (3 digits)
+      const newCode = `PRJ${nextNumber.toString().padStart(3, '0')}`
+      setGeneratedCode(newCode)
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(newCode)
+      
+      // Show success message
+      alert(`Mã dự án mới: ${newCode}\nĐã sao chép vào clipboard!`)
+      
+    } catch (error) {
+      console.error('Error generating project code:', error)
+      // Fallback to timestamp-based code
+      const timestamp = Date.now().toString().slice(-6)
+      const fallbackCode = `PRJ${timestamp}`
+      setGeneratedCode(fallbackCode)
+      await navigator.clipboard.writeText(fallbackCode)
+      alert(`Mã dự án mới: ${fallbackCode}\nĐã sao chép vào clipboard!`)
+    }
+  }
 
   const fetchProjects = async () => {
     try {
@@ -157,6 +233,33 @@ export default function ProjectsTab({
     }
   }
 
+  const handleQuickSave = async (project: Project) => {
+    try {
+      // Quick save - just update the project with current data
+      const updateData = {
+        name: project.name,
+        description: project.description,
+        customer_id: project.customer_id,
+        manager_id: project.manager_id,
+        start_date: project.start_date,
+        end_date: project.end_date,
+        budget: project.budget,
+        status: project.status,
+        priority: project.priority,
+        progress: project.progress,
+        billing_type: project.billing_type,
+        hourly_rate: project.hourly_rate
+      }
+
+      await projectApi.updateProject(project.id, updateData)
+      alert('Dự án đã được lưu thành công!')
+      fetchProjects()
+    } catch (error) {
+      console.error('Error saving project:', error)
+      alert('Có lỗi xảy ra khi lưu dự án')
+    }
+  }
+
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          project.project_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -219,6 +322,14 @@ export default function ProjectsTab({
               {sortedProjects.length} dự án
             </div>
             <button
+              onClick={generateProjectCode}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm hover:shadow-md"
+              title="Tạo mã dự án mới"
+            >
+              <Target className="h-4 w-4" />
+              Tạo mã
+            </button>
+            <button
               onClick={onCreateProject}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
             >
@@ -228,6 +339,30 @@ export default function ProjectsTab({
           </div>
         </div>
       </div>
+
+      {/* Generated Code Display */}
+      {generatedCode && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Target className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-800">Mã dự án đã tạo</p>
+                <p className="text-lg font-bold text-green-900">{generatedCode}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setGeneratedCode('')}
+              className="text-green-600 hover:text-green-800 transition-colors"
+              title="Đóng"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -307,83 +442,116 @@ export default function ProjectsTab({
 
       {/* Projects Grid */}
       <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {sortedProjects.map((project) => {
           const StatusIcon = statusIcons[project.status]
           return (
             <div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group">
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl group-hover:from-blue-200 group-hover:to-blue-300 transition-colors">
-                      <FolderOpen className="h-6 w-6 text-blue-600" />
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-5 gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="p-2 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg group-hover:from-blue-200 group-hover:to-blue-300 transition-colors flex-shrink-0">
+                      <FolderOpen className="h-5 w-5 text-blue-600" />
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg group-hover:text-blue-700 transition-colors">{project.name}</h3>
-                      <p className="text-sm text-black font-medium">#{project.project_code}</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 
+                        className="font-semibold text-gray-900 text-base group-hover:text-blue-700 transition-colors break-words leading-tight"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          wordWrap: 'break-word',
+                          hyphens: 'auto',
+                          lineHeight: '1.3',
+                          maxHeight: '2.6em'
+                        }}
+                        title={project.name}
+                      >
+                        {project.name}
+                      </h3>
+                      <p className="text-xs text-black font-medium mt-1">#{project.project_code}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-start gap-1 flex-shrink-0">
                     <button
                       onClick={() => onViewProject(project)}
-                      className="p-2 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-1.5 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xem chi tiết"
                     >
-                      <Eye className="h-4 w-4" />
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleQuickSave(project)}
+                      className="p-1.5 text-black hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      title="Lưu nhanh"
+                    >
+                      <Save className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => onEditProject(project)}
-                      className="p-2 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-1.5 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Chỉnh sửa dự án"
                     >
-                      <Edit className="h-4 w-4" />
+                      <Edit className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(project)}
-                      className="p-2 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-1.5 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xóa dự án"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <StatusIcon className="h-4 w-4 text-black" />
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${statusColors[project.status]} shadow-sm`}>
-                      {project.status.replace('_', ' ').toUpperCase()}
+                    <StatusIcon className="h-3 w-3 text-black" />
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[project.status]} shadow-sm`}>
+                      {getStatusText(project.status)}
                     </span>
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${priorityColors[project.priority]} shadow-sm`}>
-                      {project.priority.toUpperCase()}
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${priorityColors[project.priority]} shadow-sm`}>
+                      {getPriorityText(project.priority)}
                     </span>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-sm text-black bg-gray-50 rounded-lg p-3">
-                      <Users className="h-4 w-4 text-blue-500" />
-                      <span className="font-medium">{project.customer_name || 'Không có khách hàng'}</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-black bg-blue-50 rounded-lg p-2">
+                      <Users className="h-3 w-3 text-blue-600" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold truncate block">{project.customer_name || 'Không có khách hàng'}</span>
+                        {project.customer_name && (
+                          <span className="text-blue-600 text-xs">Khách hàng</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-black bg-gray-50 rounded-lg p-3">
-                      <Calendar className="h-4 w-4 text-green-500" />
+                    <div className="flex items-center gap-2 text-xs text-black bg-gray-50 rounded-lg p-2">
+                      <Calendar className="h-3 w-3 text-green-500" />
                       <span className="font-medium">{new Date(project.start_date).toLocaleDateString()}</span>
                     </div>
                     {project.budget && (
-                      <div className="flex items-center gap-3 text-sm text-black bg-gray-50 rounded-lg p-3">
-                        <DollarSign className="h-4 w-4 text-emerald-500" />
-                        <span className="font-medium">${project.budget.toLocaleString()}</span>
+                      <div className="flex items-center gap-2 text-xs text-black bg-gray-50 rounded-lg p-2">
+                        <DollarSign className="h-3 w-3 text-emerald-500" />
+                        <span className="font-medium">VND {project.budget.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {project.manager_name && (
+                      <div className="flex items-center gap-2 text-xs text-black bg-gray-50 rounded-lg p-2">
+                        <Users className="h-3 w-3 text-purple-500" />
+                        <span className="font-medium truncate">Quản lý: {project.manager_name}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-4 border-t border-gray-100">
-                    <div className="flex items-center justify-between text-sm mb-3">
+                  <div className="pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between text-xs mb-2">
                       <span className="text-black font-medium">Tiến độ</span>
                       <span className="font-semibold text-gray-900">{project.progress}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner">
+                    <div className="w-full bg-gray-200 rounded-full h-2 shadow-inner">
                       <div 
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-700 shadow-sm"
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-700 shadow-sm"
                         style={{ width: `${project.progress}%` }}
                       ></div>
                     </div>
