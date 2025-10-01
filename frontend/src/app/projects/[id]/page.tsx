@@ -165,7 +165,7 @@ export default function ProjectDetailPage() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold">{project.name}</h1>
-          <p className="text-gray-600">{project.project_code}</p>
+          <p className="text-black">{project.project_code}</p>
         </div>
         <div className="ml-auto flex gap-2">
           <Button>
@@ -240,24 +240,24 @@ export default function ProjectDetailPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Description</label>
+                  <label className="text-sm font-medium text-black">Description</label>
                   <p className="text-sm mt-1">{project.description || 'No description provided'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Customer</label>
+                  <label className="text-sm font-medium text-black">Customer</label>
                   <p className="text-sm mt-1">{project.customer_name || 'Unknown'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Project Manager</label>
+                  <label className="text-sm font-medium text-black">Project Manager</label>
                   <p className="text-sm mt-1">{project.manager_name || 'Unknown'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Billing Type</label>
+                  <label className="text-sm font-medium text-black">Billing Type</label>
                   <p className="text-sm mt-1 capitalize">{project.billing_type.replace('_', ' ')}</p>
                 </div>
                 {project.hourly_rate && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Hourly Rate</label>
+                    <label className="text-sm font-medium text-black">Hourly Rate</label>
                     <p className="text-sm mt-1">${project.hourly_rate}/hour</p>
                   </div>
                 )}
@@ -270,25 +270,25 @@ export default function ProjectDetailPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <Calendar className="h-4 w-4 text-black" />
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Start Date</label>
+                    <label className="text-sm font-medium text-black">Start Date</label>
                     <p className="text-sm">{format(new Date(project.start_date), 'MMM dd, yyyy')}</p>
                   </div>
                 </div>
                 {project.end_date && (
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <Calendar className="h-4 w-4 text-black" />
                     <div>
-                      <label className="text-sm font-medium text-gray-600">End Date</label>
+                      <label className="text-sm font-medium text-black">End Date</label>
                       <p className="text-sm">{format(new Date(project.end_date), 'MMM dd, yyyy')}</p>
                     </div>
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-gray-500" />
+                  <Clock className="h-4 w-4 text-black" />
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Created</label>
+                    <label className="text-sm font-medium text-black">Created</label>
                     <p className="text-sm">{format(new Date(project.created_at), 'MMM dd, yyyy')}</p>
                   </div>
                 </div>
@@ -366,7 +366,7 @@ export default function ProjectDetailPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Invoices</label>
+                      <label className="text-sm font-medium text-black">Invoices</label>
                       <div className="flex justify-between mt-1">
                         <span className="text-sm">Total: ${financialSummary.income_breakdown.invoices.total_amount.toLocaleString()}</span>
                         <span className="text-sm">Count: {financialSummary.income_breakdown.invoices.count}</span>
@@ -377,7 +377,7 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Sales Receipts</label>
+                      <label className="text-sm font-medium text-black">Sales Receipts</label>
                       <div className="flex justify-between mt-1">
                         <span className="text-sm">Total: ${financialSummary.income_breakdown.sales_receipts.total_amount.toLocaleString()}</span>
                         <span className="text-sm">Count: {financialSummary.income_breakdown.sales_receipts.count}</span>
@@ -392,24 +392,24 @@ export default function ProjectDetailPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Labor</label>
+                      <label className="text-sm font-medium text-black">Labor</label>
                       <div className="flex justify-between mt-1">
                         <span className="text-sm">Hours: {financialSummary.costs_breakdown.labor.total_hours}</span>
                         <span className="text-sm">Cost: ${financialSummary.costs_breakdown.labor.total_cost.toLocaleString()}</span>
                       </div>
-                      <div className="text-sm text-gray-500 mt-1">
+                      <div className="text-sm text-black mt-1">
                         Avg Rate: ${financialSummary.costs_breakdown.labor.average_hourly_rate.toFixed(2)}/hour
                       </div>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Expenses</label>
+                      <label className="text-sm font-medium text-black">Expenses</label>
                       <div className="flex justify-between mt-1">
                         <span className="text-sm">Cost: ${financialSummary.costs_breakdown.expenses.total_cost.toLocaleString()}</span>
                         <span className="text-sm">Count: {financialSummary.costs_breakdown.expenses.count}</span>
                       </div>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Bills</label>
+                      <label className="text-sm font-medium text-black">Bills</label>
                       <div className="flex justify-between mt-1">
                         <span className="text-sm">Total: ${financialSummary.costs_breakdown.bills.total_amount.toLocaleString()}</span>
                         <span className="text-sm">Count: {financialSummary.costs_breakdown.bills.count}</span>
@@ -430,24 +430,24 @@ export default function ProjectDetailPage() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Allocated Budget</label>
+                      <label className="text-sm font-medium text-black">Allocated Budget</label>
                       <p className="text-lg font-semibold">${financialSummary.budget_analysis.allocated.toLocaleString()}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Actual Costs</label>
+                      <label className="text-sm font-medium text-black">Actual Costs</label>
                       <p className="text-lg font-semibold">${financialSummary.budget_analysis.actual_costs.toLocaleString()}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Variance</label>
+                      <label className="text-sm font-medium text-black">Variance</label>
                       <p className={`text-lg font-semibold ${financialSummary.budget_analysis.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         ${financialSummary.budget_analysis.variance.toLocaleString()}
                       </p>
                     </div>
                   </div>
                   <div className="mt-4">
-                    <label className="text-sm font-medium text-gray-600">Budget Utilization</label>
+                    <label className="text-sm font-medium text-black">Budget Utilization</label>
                     <Progress value={financialSummary.budget_analysis.utilization_percentage} className="mt-2" />
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-black mt-1">
                       {financialSummary.budget_analysis.utilization_percentage.toFixed(1)}% of budget used
                     </p>
                   </div>
@@ -457,7 +457,7 @@ export default function ProjectDetailPage() {
           ) : (
             <Card>
               <CardContent className="text-center py-8">
-                <p className="text-gray-500">Financial data not available</p>
+                <p className="text-black">Financial data not available</p>
               </CardContent>
             </Card>
           )}
@@ -469,7 +469,7 @@ export default function ProjectDetailPage() {
               <CardTitle>Project Team</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">Team information will be displayed here</p>
+              <p className="text-black">Team information will be displayed here</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -480,7 +480,7 @@ export default function ProjectDetailPage() {
               <CardTitle>Project Timeline</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">Timeline information will be displayed here</p>
+              <p className="text-black">Timeline information will be displayed here</p>
             </CardContent>
           </Card>
         </TabsContent>

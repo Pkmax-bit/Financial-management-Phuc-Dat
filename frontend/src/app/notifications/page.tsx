@@ -251,7 +251,7 @@ export default function NotificationsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Thông báo</h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   Quản lý thông báo và cảnh báo hệ thống
                 </p>
               </div>
@@ -290,7 +290,7 @@ export default function NotificationsPage() {
                   <Bell className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tổng thông báo</p>
+                  <p className="text-sm font-medium text-black">Tổng thông báo</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                 </div>
               </div>
@@ -302,7 +302,7 @@ export default function NotificationsPage() {
                   <Eye className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Chưa đọc</p>
+                  <p className="text-sm font-medium text-black">Chưa đọc</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.unread}</p>
                 </div>
               </div>
@@ -314,7 +314,7 @@ export default function NotificationsPage() {
                   <CheckCircle className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Đã đọc</p>
+                  <p className="text-sm font-medium text-black">Đã đọc</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.read}</p>
                 </div>
               </div>
@@ -327,7 +327,7 @@ export default function NotificationsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
+                    <Search className="h-5 w-5 text-black" />
                   </div>
                   <input
                     type="text"
@@ -374,16 +374,16 @@ export default function NotificationsPage() {
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 Thông báo ({filteredNotifications.length})
               </h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              <p className="mt-1 max-w-2xl text-sm text-black">
                 Trung tâm thông báo của bạn
               </p>
             </div>
             
             {filteredNotifications.length === 0 ? (
               <div className="text-center py-12">
-                <Bell className="mx-auto h-12 w-12 text-gray-400" />
+                <Bell className="mx-auto h-12 w-12 text-black" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">Không tìm thấy thông báo</h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   {searchTerm || filter !== 'all' || typeFilter !== 'all'
                     ? 'Hãy thử điều chỉnh tiêu chí tìm kiếm hoặc bộ lọc.'
                     : 'Bạn đã cập nhật tất cả! Không có thông báo mới.'}
@@ -401,7 +401,7 @@ export default function NotificationsPage() {
                           </div>
                           <div className="ml-3 flex-1">
                             <div className="flex items-center">
-                              <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900' : 'text-gray-600'}`}>
+                              <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900' : 'text-black'}`}>
                                 {notification.title}
                               </p>
                               {!notification.read && (
@@ -410,10 +410,10 @@ export default function NotificationsPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="mt-1 text-sm text-gray-600">
+                            <p className="mt-1 text-sm text-black">
                               {notification.message}
                             </p>
-                            <p className="mt-1 text-xs text-gray-500">
+                            <p className="mt-1 text-xs text-black">
                               {formatDate(notification.created_at)}
                             </p>
                           </div>
@@ -422,7 +422,7 @@ export default function NotificationsPage() {
                           {!notification.read && (
                             <button
                               onClick={() => markAsRead(notification.id)}
-                              className="text-gray-400 hover:text-green-600"
+                              className="text-black hover:text-green-600"
                               title="Đánh dấu đã đọc"
                             >
                               <Check className="h-4 w-4" />
@@ -430,7 +430,7 @@ export default function NotificationsPage() {
                           )}
                           <button
                             onClick={() => deleteNotification(notification.id)}
-                            className="text-gray-400 hover:text-red-600"
+                            className="text-black hover:text-red-600"
                             title="Xóa"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -455,7 +455,7 @@ export default function NotificationsPage() {
                 <h3 className="text-lg font-medium text-gray-900">Gửi thông báo email</h3>
                 <button
                   onClick={() => setShowEmailModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -515,7 +515,7 @@ export default function NotificationsPage() {
                 <h3 className="text-lg font-medium text-gray-900">Tạo cảnh báo hệ thống</h3>
                 <button
                   onClick={() => setShowSystemAlertModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

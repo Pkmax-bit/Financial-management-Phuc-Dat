@@ -196,7 +196,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium text-gray-900">Đơn Đặt Hàng</h3>
-          <p className="text-sm text-gray-500">Quản lý đơn đặt hàng và luồng phê duyệt</p>
+          <p className="text-sm text-black">Quản lý đơn đặt hàng và luồng phê duyệt</p>
         </div>
         <button
           onClick={onCreatePurchaseOrder}
@@ -212,7 +212,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
         <button
           onClick={() => setFilter('all')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Tất cả
@@ -220,7 +220,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
         <button
           onClick={() => setFilter('draft')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Nháp
@@ -228,7 +228,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
         <button
           onClick={() => setFilter('pending_approval')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'pending_approval' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'pending_approval' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Chờ duyệt
@@ -236,7 +236,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
         <button
           onClick={() => setFilter('approved')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Đã duyệt
@@ -244,7 +244,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
         <button
           onClick={() => setFilter('rejected')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Từ chối
@@ -260,7 +260,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <ShoppingCart className="h-8 w-8 text-gray-400" />
+                      <ShoppingCart className="h-8 w-8 text-black" />
                     </div>
                     <div className="ml-4">
                       <div className="flex items-center">
@@ -271,14 +271,14 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                         </span>
                       </div>
                       <div className="mt-1">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-black">
                           Nhà cung cấp: {po.vendor_name}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-black">
                           Ngày tạo: {formatDate(po.created_at)}
                         </p>
                         {po.delivery_date && (
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-black">
                             Ngày giao: {formatDate(po.delivery_date)}
                           </p>
                         )}
@@ -290,13 +290,13 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                       <p className="text-sm font-medium text-gray-900">
                         {formatCurrency(po.total_amount)}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-black">
                         {po.item_count} sản phẩm
                       </p>
                     </div>
                     <div className="flex space-x-2">
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
@@ -305,21 +305,21 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                       {po.status === 'draft' && (
                         <>
                           <button 
-                            className="text-gray-400 hover:text-blue-600" 
+                            className="text-black hover:text-blue-600" 
                             title="Chỉnh sửa"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
                           <button 
                             onClick={() => handleSubmitForApproval(po.id)}
-                            className="text-gray-400 hover:text-green-600" 
+                            className="text-black hover:text-green-600" 
                             title="Gửi duyệt"
                           >
                             <Send className="h-4 w-4" />
                           </button>
                           <button 
                             onClick={() => handleDelete(po.id)}
-                            className="text-gray-400 hover:text-red-600" 
+                            className="text-black hover:text-red-600" 
                             title="Xóa"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -334,7 +334,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                               setSelectedPO(po)
                               setShowApprovalModal(true)
                             }}
-                            className="text-gray-400 hover:text-green-600" 
+                            className="text-black hover:text-green-600" 
                             title="Duyệt"
                           >
                             <CheckCircle className="h-4 w-4" />
@@ -344,7 +344,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                               setSelectedPO(po)
                               setShowApprovalModal(true)
                             }}
-                            className="text-gray-400 hover:text-red-600" 
+                            className="text-black hover:text-red-600" 
                             title="Từ chối"
                           >
                             <XCircle className="h-4 w-4" />
@@ -355,7 +355,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                       {po.status === 'approved' && (
                         <button 
                           onClick={() => handleConvertToBill(po.id)}
-                          className="text-gray-400 hover:text-blue-600" 
+                          className="text-black hover:text-blue-600" 
                           title="Chuyển thành hóa đơn"
                         >
                           <ArrowRight className="h-4 w-4" />
@@ -378,13 +378,13 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 Phê duyệt đơn đặt hàng
               </h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Đơn đặt hàng: <strong>{selectedPO.po_number}</strong>
               </p>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Nhà cung cấp: <strong>{selectedPO.vendor_name}</strong>
               </p>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Tổng tiền: <strong>{formatCurrency(selectedPO.total_amount)}</strong>
               </p>
               

@@ -136,11 +136,11 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Quản lý phòng ban</h2>
-            <p className="text-sm text-gray-500 mt-1">Tạo và quản lý các phòng ban trong công ty</p>
+            <p className="text-sm text-black mt-1">Tạo và quản lý các phòng ban trong công ty</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -189,7 +189,7 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
             </button>
             
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
               <input
                 type="text"
                 placeholder="Tìm kiếm phòng ban..."
@@ -216,7 +216,7 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Đang tải...</p>
+              <p className="mt-2 text-black">Đang tải...</p>
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -224,22 +224,22 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Phòng ban
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Mã PB
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Nhân viên
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Ngân sách
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Trạng thái
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Thao tác
                       </th>
                     </tr>
@@ -247,7 +247,7 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredDepartments.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={6} className="px-6 py-8 text-center text-black">
                           Không có phòng ban nào
                         </td>
                       </tr>
@@ -256,13 +256,13 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                         <tr key={department.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <Building2 className="h-5 w-5 text-gray-400 mr-3" />
+                              <Building2 className="h-5 w-5 text-black mr-3" />
                               <div>
                                 <div className="text-sm font-medium text-gray-900">
                                   {department.name}
                                 </div>
                                 {department.description && (
-                                  <div className="text-sm text-gray-500 truncate max-w-xs">
+                                  <div className="text-sm text-black truncate max-w-xs">
                                     {department.description}
                                   </div>
                                 )}
@@ -274,7 +274,7 @@ export default function DepartmentManager({ isOpen, onClose }: DepartmentManager
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center text-sm text-gray-900">
-                              <Users className="h-4 w-4 text-gray-400 mr-1" />
+                              <Users className="h-4 w-4 text-black mr-1" />
                               {department.employee_count || 0}
                             </div>
                           </td>

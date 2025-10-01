@@ -179,3 +179,4 @@ async def get_expense_data(supabase, start_date: str, end_date: str) -> Dict[str
         "direct_expenses": direct_expenses,
         "expense_breakdown": expense_breakdown
     }
+

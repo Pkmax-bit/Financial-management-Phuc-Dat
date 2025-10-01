@@ -131,12 +131,12 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
             <BookOpen className="h-6 w-6 text-blue-600 mr-3" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Hướng dẫn nhanh Sales</h2>
-              <p className="text-sm text-gray-600">Quy trình bán hàng từ A đến Z</p>
+              <p className="text-sm text-black">Quy trình bán hàng từ A đến Z</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -150,7 +150,7 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
               <span className="text-sm font-medium text-gray-700">
                 Bước {activeStep + 1} / {steps.length}
               </span>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-black">
                 {Math.round(((activeStep + 1) / steps.length) * 100)}%
               </span>
             </div>
@@ -245,7 +245,7 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
 
         {/* Footer */}
         <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-black">
             Cần hỗ trợ thêm? <a href="/sales/guide" className="text-blue-600 hover:text-blue-700">Xem hướng dẫn chi tiết</a>
           </div>
           <div className="flex space-x-3">

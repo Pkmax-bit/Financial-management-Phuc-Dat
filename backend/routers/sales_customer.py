@@ -22,6 +22,135 @@ from services.supabase_client import get_supabase_client
 
 router = APIRouter()
 
+@router.get("/customer-demo")
+async def get_sales_by_customer_demo(
+    start_date: date = Query(..., description="Start date for sales report"),
+    end_date: date = Query(..., description="End date for sales report")
+):
+    """
+    Generate Sales by Customer report (Demo version - no auth required)
+    """
+    try:
+        # Sample data for demo
+        sample_data = {
+            "report_period": f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}",
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "currency": "VND",
+            "generated_at": datetime.now().isoformat(),
+            "total_customers": 15,
+            "total_sales": 187000000,
+            "total_invoices": 25,
+            "total_sales_receipts": 12,
+            "average_order_value": 5054054,
+            "top_customers": [
+                {
+                    "customer_id": "11111111-1111-1111-1111-111111111111",
+                    "customer_name": "Công ty ABC",
+                    "customer_code": "KH001",
+                    "customer_email": "contact@abc.com",
+                    "customer_phone": "0123456789",
+                    "total_sales": 55000000,
+                    "total_invoices": 8,
+                    "total_sales_receipts": 3,
+                    "average_order_value": 5000000,
+                    "last_transaction_date": "2024-03-15",
+                    "growth_rate": 15.5,
+                    "rank": 1
+                },
+                {
+                    "customer_id": "22222222-2222-2222-2222-222222222222",
+                    "customer_name": "Doanh nghiệp XYZ",
+                    "customer_code": "KH002",
+                    "customer_email": "info@xyz.com",
+                    "customer_phone": "0987654321",
+                    "total_sales": 45000000,
+                    "total_invoices": 6,
+                    "total_sales_receipts": 4,
+                    "average_order_value": 4500000,
+                    "last_transaction_date": "2024-03-10",
+                    "growth_rate": 8.2,
+                    "rank": 2
+                },
+                {
+                    "customer_id": "33333333-3333-3333-3333-333333333333",
+                    "customer_name": "Cá nhân Nguyễn C",
+                    "customer_code": "KH003",
+                    "customer_email": "nguyenc@email.com",
+                    "customer_phone": "0369852147",
+                    "total_sales": 35000000,
+                    "total_invoices": 5,
+                    "total_sales_receipts": 2,
+                    "average_order_value": 5000000,
+                    "last_transaction_date": "2024-03-08",
+                    "growth_rate": -2.1,
+                    "rank": 3
+                },
+                {
+                    "customer_id": "44444444-4444-4444-4444-444444444444",
+                    "customer_name": "Công ty DEF",
+                    "customer_code": "KH004",
+                    "customer_email": "sales@def.com",
+                    "customer_phone": "0147258369",
+                    "total_sales": 25000000,
+                    "total_invoices": 4,
+                    "total_sales_receipts": 2,
+                    "average_order_value": 4166667,
+                    "last_transaction_date": "2024-03-05",
+                    "growth_rate": 22.8,
+                    "rank": 4
+                },
+                {
+                    "customer_id": "55555555-5555-5555-5555-555555555555",
+                    "customer_name": "Doanh nghiệp GHI",
+                    "customer_code": "KH005",
+                    "customer_email": "contact@ghi.com",
+                    "customer_phone": "0258147369",
+                    "total_sales": 15000000,
+                    "total_invoices": 2,
+                    "total_sales_receipts": 1,
+                    "average_order_value": 5000000,
+                    "last_transaction_date": "2024-03-01",
+                    "growth_rate": 5.5,
+                    "rank": 5
+                }
+            ],
+            "customer_segments": [
+                {
+                    "segment_name": "Khách hàng VIP",
+                    "customer_count": 3,
+                    "total_sales": 135000000,
+                    "percentage": 72.2
+                },
+                {
+                    "segment_name": "Khách hàng thường",
+                    "customer_count": 8,
+                    "total_sales": 40000000,
+                    "percentage": 21.4
+                },
+                {
+                    "segment_name": "Khách hàng mới",
+                    "customer_count": 4,
+                    "total_sales": 12000000,
+                    "percentage": 6.4
+                }
+            ],
+            "summary_stats": {
+                "highest_sales": 55000000,
+                "lowest_sales": 2000000,
+                "median_sales": 15000000,
+                "growth_rate": 12.3
+            }
+        }
+        
+        return sample_data
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate Sales by Customer report demo: {str(e)}"
+        )
+
 @router.get("/by-customer", response_model=SalesByCustomerReport)
 async def get_sales_by_customer(
     start_date: date = Query(..., description="Start date for sales report"),

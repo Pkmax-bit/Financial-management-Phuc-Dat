@@ -132,7 +132,7 @@ export default function SupportFAQTab({ searchTerm, onCreateGuide }: SupportFAQT
     <div className="space-y-6">
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Câu hỏi Thường gặp</h3>
-        <p className="text-gray-600 mb-6">
+        <p className="text-black mb-6">
           Tìm câu trả lời cho các vấn đề phổ biến
         </p>
       </div>
@@ -146,20 +146,20 @@ export default function SupportFAQTab({ searchTerm, onCreateGuide }: SupportFAQT
               className="w-full px-4 py-3 text-left flex items-center justify-between hover:bg-gray-50"
             >
               <div className="flex items-center space-x-3">
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                <span className="text-xs bg-gray-100 text-black px-2 py-1 rounded">
                   {faq.category}
                 </span>
                 <span className="font-medium text-gray-900">{faq.question}</span>
               </div>
               {expandedFaq === faq.id ? (
-                <ChevronDown className="h-4 w-4 text-gray-500" />
+                <ChevronDown className="h-4 w-4 text-black" />
               ) : (
-                <ChevronRight className="h-4 w-4 text-gray-500" />
+                <ChevronRight className="h-4 w-4 text-black" />
               )}
             </button>
             {expandedFaq === faq.id && (
               <div className="px-4 pb-3 border-t bg-gray-50">
-                <p className="text-gray-600 text-sm pt-3">{faq.answer}</p>
+                <p className="text-black text-sm pt-3">{faq.answer}</p>
               </div>
             )}
           </div>
@@ -168,9 +168,9 @@ export default function SupportFAQTab({ searchTerm, onCreateGuide }: SupportFAQT
       
       {filteredFaqs.length === 0 && (
         <div className="text-center py-8">
-          <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <Search className="h-12 w-12 text-black mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy câu hỏi</h3>
-          <p className="text-gray-600">Thử tìm kiếm với từ khóa khác hoặc liên hệ hỗ trợ</p>
+          <p className="text-black">Thử tìm kiếm với từ khóa khác hoặc liên hệ hỗ trợ</p>
         </div>
       )}
 
@@ -180,19 +180,19 @@ export default function SupportFAQTab({ searchTerm, onCreateGuide }: SupportFAQT
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="text-center p-4 border border-gray-200 rounded-lg">
             <div className="text-2xl font-bold text-blue-600">2</div>
-            <div className="text-sm text-gray-500">Bán hàng</div>
+            <div className="text-sm text-black">Bán hàng</div>
           </div>
           <div className="text-center p-4 border border-gray-200 rounded-lg">
             <div className="text-2xl font-bold text-orange-600">2</div>
-            <div className="text-sm text-gray-500">Chi phí</div>
+            <div className="text-sm text-black">Chi phí</div>
           </div>
           <div className="text-center p-4 border border-gray-200 rounded-lg">
             <div className="text-2xl font-bold text-green-600">1</div>
-            <div className="text-sm text-gray-500">Nhân sự</div>
+            <div className="text-sm text-black">Nhân sự</div>
           </div>
           <div className="text-center p-4 border border-gray-200 rounded-lg">
             <div className="text-2xl font-bold text-purple-600">1</div>
-            <div className="text-sm text-gray-500">Báo cáo</div>
+            <div className="text-sm text-black">Báo cáo</div>
           </div>
         </div>
       </div>

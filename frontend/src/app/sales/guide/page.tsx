@@ -405,12 +405,12 @@ export default function SalesGuidePage() {
               <BookOpen className="h-8 w-8 text-blue-600 mr-3" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Hướng dẫn sử dụng Sales</h1>
-                <p className="text-sm text-gray-600">Hướng dẫn chi tiết cho người mới bắt đầu</p>
+                <p className="text-sm text-black">Hướng dẫn chi tiết cho người mới bắt đầu</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <HelpCircle className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-600">Cần hỗ trợ? Liên hệ: support@company.com</span>
+              <HelpCircle className="h-5 w-5 text-black" />
+              <span className="text-sm text-black">Cần hỗ trợ? Liên hệ: support@company.com</span>
             </div>
           </div>
         </div>
@@ -466,13 +466,13 @@ export default function SalesGuidePage() {
                         <Icon className="h-6 w-6 text-blue-600 mr-4" />
                         <div>
                           <h2 className="text-xl font-semibold text-gray-900">{section.title}</h2>
-                          <p className="text-sm text-gray-600 mt-1">{section.content.description}</p>
+                          <p className="text-sm text-black mt-1">{section.content.description}</p>
                         </div>
                       </div>
                       {activeSection === section.id ? (
-                        <ChevronDown className="h-5 w-5 text-gray-400" />
+                        <ChevronDown className="h-5 w-5 text-black" />
                       ) : (
-                        <ChevronRight className="h-5 w-5 text-gray-400" />
+                        <ChevronRight className="h-5 w-5 text-black" />
                       )}
                     </button>
 
@@ -492,13 +492,13 @@ export default function SalesGuidePage() {
                                     </div>
                                     <div>
                                       <h3 className="text-lg font-medium text-gray-900">{step.title}</h3>
-                                      <p className="text-sm text-gray-600 mt-1">{step.description}</p>
+                                      <p className="text-sm text-black mt-1">{step.description}</p>
                                     </div>
                                   </div>
                                   {activeStep === stepIndex ? (
-                                    <ChevronDown className="h-5 w-5 text-gray-400" />
+                                    <ChevronDown className="h-5 w-5 text-black" />
                                   ) : (
-                                    <ChevronRight className="h-5 w-5 text-gray-400" />
+                                    <ChevronRight className="h-5 w-5 text-black" />
                                   )}
                                 </button>
 
@@ -559,9 +559,9 @@ export default function SalesGuidePage() {
             {/* Contact Support */}
             <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
               <div className="text-center">
-                <HelpCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <HelpCircle className="h-12 w-12 text-black mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Cần hỗ trợ thêm?</h3>
-                <p className="text-gray-600 mb-4">
+                <p className="text-black mb-4">
                   Nếu bạn gặp khó khăn hoặc có câu hỏi, đừng ngần ngại liên hệ với chúng tôi.
                 </p>
                 <div className="flex justify-center space-x-4">

@@ -181,7 +181,7 @@ export default function CreateBudgetModal({ isOpen, onClose, onSuccess }: Create
           </h2>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>

@@ -317,7 +317,9 @@ class DashboardService {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to fetch planner events')
+        const errorText = await response.text()
+        console.error('Planner events API error:', response.status, errorText)
+        throw new Error(`Failed to fetch planner events: ${response.status} ${errorText}`)
       }
 
       return await response.json()
@@ -343,7 +345,7 @@ class DashboardService {
         throw new Error('No access token available')
       }
 
-      const response = await fetch(`${this.baseUrl}/dashboard/planner/scenario`, {
+      const response = await fetch(`${this.baseUrl}/api/dashboard/planner/scenario`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

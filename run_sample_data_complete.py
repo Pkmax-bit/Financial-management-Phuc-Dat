@@ -28,3 +28,4 @@ print("- Sau do moi chay clean_and_insert_sample_data_final_hex.sql")
 print("- Neu co loi, kiem tra lai thu tu chay script")
 print("=" * 60)
 
+

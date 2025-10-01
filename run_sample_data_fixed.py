@@ -34,3 +34,4 @@ print("- PHAI chay create_employees_simple.sql TRUOC")
 print("- Sau do moi chay clean_and_insert_sample_data_final_hex.sql")
 print("=" * 60)
 
+

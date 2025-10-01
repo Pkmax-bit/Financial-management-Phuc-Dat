@@ -127,7 +127,7 @@ export default function SalesReceiptsTab({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Phiếu Thu Bán Hàng</h3>
-          <p className="text-sm text-gray-500">Quản lý các giao dịch bán hàng thu tiền ngay</p>
+          <p className="text-sm text-black">Quản lý các giao dịch bán hàng thu tiền ngay</p>
         </div>
         <button
           onClick={onShowCreateModal}
@@ -142,7 +142,7 @@ export default function SalesReceiptsTab({
       <div className="flex items-center space-x-4">
         <div className="flex-1 max-w-md">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black w-4 h-4" />
             <input
               type="text"
               placeholder="Tìm kiếm theo số phiếu, ghi chú..."
@@ -154,7 +154,7 @@ export default function SalesReceiptsTab({
         </div>
         
         <div className="flex items-center space-x-2">
-          <Filter className="w-4 h-4 text-gray-400" />
+          <Filter className="w-4 h-4 text-black" />
           <select
             value={filterMethod}
             onChange={(e) => setFilterMethod(e.target.value)}
@@ -175,25 +175,25 @@ export default function SalesReceiptsTab({
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số Phiếu
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngày
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số Lượng SP
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Tổng Tiền
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Phương Thức
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ghi Chú
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Thao Tác
                 </th>
               </tr>
@@ -201,7 +201,7 @@ export default function SalesReceiptsTab({
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredReceipts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-black">
                     {searchTerm || filterMethod !== 'all' 
                       ? 'Không tìm thấy phiếu thu nào phù hợp' 
                       : 'Chưa có phiếu thu nào. Hãy tạo phiếu thu đầu tiên!'
@@ -237,7 +237,7 @@ export default function SalesReceiptsTab({
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500 max-w-xs truncate">
+                      <div className="text-sm text-black max-w-xs truncate">
                         {receipt.notes || '-'}
                       </div>
                     </td>
@@ -278,7 +278,7 @@ export default function SalesReceiptsTab({
       {filteredReceipts.length > 0 && (
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-black">
               Hiển thị {filteredReceipts.length} phiếu thu
             </div>
             <div className="text-sm font-semibold text-gray-900">

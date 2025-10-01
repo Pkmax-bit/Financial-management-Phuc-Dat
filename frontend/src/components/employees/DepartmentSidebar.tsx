@@ -134,7 +134,7 @@ export default function DepartmentSidebar({ isOpen, onClose, onSuccess }: Depart
             </div>
             <button
               onClick={handleClose}
-              className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              className="text-black hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
               disabled={submitting}
             >
               <X className="h-6 w-6" />

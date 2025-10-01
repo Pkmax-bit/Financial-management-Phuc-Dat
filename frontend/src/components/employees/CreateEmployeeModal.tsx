@@ -201,7 +201,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+            className="text-black hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
             disabled={submitting}
           >
             <X className="h-6 w-6" />
@@ -415,9 +415,9 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                     disabled={submitting}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-400" />
+                      <EyeOff className="h-4 w-4 text-black" />
                     ) : (
-                      <Eye className="h-4 w-4 text-gray-400" />
+                      <Eye className="h-4 w-4 text-black" />
                     )}
                   </button>
                 </div>

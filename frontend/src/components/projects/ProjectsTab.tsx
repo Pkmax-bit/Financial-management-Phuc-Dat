@@ -212,10 +212,10 @@ export default function ProjectsTab({
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Tất cả dự án</h2>
-            <p className="text-gray-600 mt-1">Quản lý và theo dõi dự án một cách hiệu quả</p>
+            <p className="text-black mt-1">Quản lý và theo dõi dự án một cách hiệu quả</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-black">
               {sortedProjects.length} dự án
             </div>
             <button
@@ -233,26 +233,26 @@ export default function ProjectsTab({
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tìm kiếm dự án</label>
+            <label className="block text-sm font-medium text-black mb-2">Tìm kiếm dự án</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
               <input
                 type="text"
                 placeholder="Tìm theo tên, mã hoặc khách hàng..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
               />
             </div>
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Trạng thái</label>
+            <label className="block text-sm font-medium text-black mb-2">Trạng thái</label>
             <div className="relative">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white text-black"
               >
                 <option value="all">Tất cả trạng thái</option>
                 <option value="planning">Lập kế hoạch</option>
@@ -265,12 +265,12 @@ export default function ProjectsTab({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Độ ưu tiên</label>
+            <label className="block text-sm font-medium text-black mb-2">Độ ưu tiên</label>
             <div className="relative">
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white text-black"
               >
                 <option value="all">Tất cả độ ưu tiên</option>
                 <option value="low">Thấp</option>
@@ -282,7 +282,7 @@ export default function ProjectsTab({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sắp xếp theo</label>
+            <label className="block text-sm font-medium text-black mb-2">Sắp xếp theo</label>
             <div className="relative">
               <select
                 value={`${sortBy}-${sortOrder}`}
@@ -291,7 +291,7 @@ export default function ProjectsTab({
                   setSortBy(field)
                   setSortOrder(order as 'asc' | 'desc')
                 }}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white text-black"
               >
                 <option value="name-asc">Tên (A-Z)</option>
                 <option value="name-desc">Tên (Z-A)</option>
@@ -320,27 +320,27 @@ export default function ProjectsTab({
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 text-lg group-hover:text-blue-700 transition-colors">{project.name}</h3>
-                      <p className="text-sm text-gray-500 font-medium">#{project.project_code}</p>
+                      <p className="text-sm text-black font-medium">#{project.project_code}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => onViewProject(project)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-2 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xem chi tiết"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => onEditProject(project)}
-                      className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-2 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Chỉnh sửa dự án"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(project)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-2 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xóa dự án"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -350,7 +350,7 @@ export default function ProjectsTab({
 
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <StatusIcon className="h-4 w-4 text-gray-500" />
+                    <StatusIcon className="h-4 w-4 text-black" />
                     <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${statusColors[project.status]} shadow-sm`}>
                       {project.status.replace('_', ' ').toUpperCase()}
                     </span>
@@ -360,16 +360,16 @@ export default function ProjectsTab({
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center gap-3 text-sm text-black bg-gray-50 rounded-lg p-3">
                       <Users className="h-4 w-4 text-blue-500" />
                       <span className="font-medium">{project.customer_name || 'Không có khách hàng'}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center gap-3 text-sm text-black bg-gray-50 rounded-lg p-3">
                       <Calendar className="h-4 w-4 text-green-500" />
                       <span className="font-medium">{new Date(project.start_date).toLocaleDateString()}</span>
                     </div>
                     {project.budget && (
-                      <div className="flex items-center gap-3 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center gap-3 text-sm text-black bg-gray-50 rounded-lg p-3">
                         <DollarSign className="h-4 w-4 text-emerald-500" />
                         <span className="font-medium">${project.budget.toLocaleString()}</span>
                       </div>
@@ -378,7 +378,7 @@ export default function ProjectsTab({
 
                   <div className="pt-4 border-t border-gray-100">
                     <div className="flex items-center justify-between text-sm mb-3">
-                      <span className="text-gray-600 font-medium">Tiến độ</span>
+                      <span className="text-black font-medium">Tiến độ</span>
                       <span className="font-semibold text-gray-900">{project.progress}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner">
@@ -400,10 +400,10 @@ export default function ProjectsTab({
         <div className="p-6">
           <div className="text-center py-12">
             <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4">
-              <FolderOpen className="h-8 w-8 text-gray-400" />
+              <FolderOpen className="h-8 w-8 text-black" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy dự án</h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-black mb-6">
               {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' 
                 ? 'Thử điều chỉnh bộ lọc của bạn' 
                 : 'Bắt đầu bằng cách tạo dự án đầu tiên'

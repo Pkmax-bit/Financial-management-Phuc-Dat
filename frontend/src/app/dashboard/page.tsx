@@ -136,7 +136,7 @@ export default function DashboardPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Đang tải...</p>
+          <p className="mt-4 text-black">Đang tải...</p>
         </div>
       </div>
     )
@@ -155,7 +155,7 @@ export default function DashboardPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <h1 className="text-3xl font-bold text-gray-900">Tổng quan kinh doanh</h1>
-                  <p className="mt-2 text-gray-600">
+                  <p className="mt-2 text-black">
                     Nắm bắt tình hình tài chính và thực hiện các công việc hàng ngày
                   </p>
                 </div>
@@ -176,7 +176,7 @@ export default function DashboardPage() {
                   )}
                   
                   {stats.lastUpdated && (
-                    <div className="text-sm text-gray-500 flex items-center gap-1">
+                    <div className="text-sm text-black flex items-center gap-1">
                       <Clock className="h-4 w-4" />
                       Cập nhật: {stats.lastUpdated.toLocaleTimeString('vi-VN')}
                     </div>
@@ -236,7 +236,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-900">{action.title}</h3>
-                    <p className="text-sm text-gray-500">Tạo nhanh</p>
+                    <p className="text-sm text-black">Tạo nhanh</p>
                   </div>
                 </button>
               ))}
@@ -249,11 +249,11 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Lãi/Lỗ (30 ngày)</p>
+                  <p className="text-sm font-medium text-black">Lãi/Lỗ (30 ngày)</p>
                   <p className={`text-2xl font-bold ${(stats.stats?.profitLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(stats.stats?.profitLoss || 0)}
                   </p>
-                  <div className="flex items-center text-sm text-gray-500 mt-1">
+                  <div className="flex items-center text-sm text-black mt-1">
                     {(stats.stats?.profitLoss || 0) >= 0 ? (
                       <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
                     ) : (
@@ -261,11 +261,11 @@ export default function DashboardPage() {
                     )}
                     Doanh thu: {formatCurrency(stats.stats?.totalRevenue || 0)}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     Chi phí: {formatCurrency(stats.stats?.totalExpenses || 0)}
                   </div>
                 </div>
-                <BarChart3 className="h-8 w-8 text-gray-400" />
+                <BarChart3 className="h-8 w-8 text-black" />
               </div>
             </div>
 
@@ -273,15 +273,15 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Số dư tiền mặt</p>
+                  <p className="text-sm font-medium text-black">Số dư tiền mặt</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(stats.stats?.cashBalance || 0)}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-black mt-1">
                     {stats.stats?.bankAccounts?.length || 0} tài khoản
                   </p>
                 </div>
-                <DollarSign className="h-8 w-8 text-gray-400" />
+                <DollarSign className="h-8 w-8 text-black" />
               </div>
             </div>
 
@@ -289,15 +289,15 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Hóa đơn chưa thu</p>
+                  <p className="text-sm font-medium text-black">Hóa đơn chưa thu</p>
                   <p className="text-2xl font-bold text-blue-600">
                     {stats.stats?.openInvoices || 0}
                   </p>
-                  <div className="text-sm text-gray-500 mt-1">
+                  <div className="text-sm text-black mt-1">
                     <span className="text-red-600">{stats.stats?.overdueInvoices || 0}</span> quá hạn
                   </div>
                 </div>
-                <FileText className="h-8 w-8 text-gray-400" />
+                <FileText className="h-8 w-8 text-black" />
               </div>
             </div>
 
@@ -305,13 +305,13 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Hóa đơn phải trả</p>
+                  <p className="text-sm font-medium text-black">Hóa đơn phải trả</p>
                   <p className="text-2xl font-bold text-orange-600">
                     {stats.stats?.pendingBills || 0}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">Chờ thanh toán</p>
+                  <p className="text-sm text-black mt-1">Chờ thanh toán</p>
                 </div>
-                <Receipt className="h-8 w-8 text-gray-400" />
+                <Receipt className="h-8 w-8 text-black" />
               </div>
             </div>
           </div>
@@ -322,27 +322,27 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Doanh thu theo trạng thái</h3>
-                <PieChart className="h-5 w-5 text-gray-400" />
+                <PieChart className="h-5 w-5 text-black" />
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                    <span className="text-sm text-gray-600">Đã thanh toán (30 ngày)</span>
+                    <span className="text-sm text-black">Đã thanh toán (30 ngày)</span>
                   </div>
                   <span className="font-medium">{formatCurrency(stats.stats?.paidLast30Days || 0)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                    <span className="text-sm text-gray-600">Hóa đơn chưa thanh toán</span>
+                    <span className="text-sm text-black">Hóa đơn chưa thanh toán</span>
                   </div>
                   <span className="font-medium">{stats.stats?.openInvoices || 0} hóa đơn</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                    <span className="text-sm text-gray-600">Hóa đơn quá hạn</span>
+                    <span className="text-sm text-black">Hóa đơn quá hạn</span>
                   </div>
                   <span className="font-medium text-red-600">{stats.stats?.overdueInvoices || 0} hóa đơn</span>
                 </div>
@@ -359,19 +359,19 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Chi phí theo danh mục</h3>
-                <PieChart className="h-5 w-5 text-gray-400" />
+                <PieChart className="h-5 w-5 text-black" />
               </div>
               <div className="space-y-3">
                 {stats.stats?.expensesByCategory?.slice(0, 4).map((expense: any, index: number) => (
                   <div key={index} className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className={`w-3 h-3 rounded-full mr-2`} style={{ backgroundColor: expense.color }}></div>
-                      <span className="text-sm text-gray-600">{expense.category}</span>
+                      <span className="text-sm text-black">{expense.category}</span>
                     </div>
                     <span className="font-medium">{formatCurrency(expense.amount)}</span>
                   </div>
                 )) || (
-                  <div className="text-sm text-gray-500 text-center py-4">
+                  <div className="text-sm text-black text-center py-4">
                     Chưa có dữ liệu chi phí
                   </div>
                 )}
@@ -399,7 +399,7 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-900">{account.name}</p>
-                      <p className="text-sm text-gray-500">{account.type}</p>
+                      <p className="text-sm text-black">{account.type}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-gray-900">{formatCurrency(account.balance)}</p>
@@ -410,7 +410,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )) || (
-                <div className="col-span-3 text-center py-8 text-gray-500">
+                <div className="col-span-3 text-center py-8 text-black">
                   <Building2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                   <p>Chưa có tài khoản ngân hàng nào được kết nối</p>
                   <button className="mt-2 text-blue-600 hover:text-blue-800 font-medium">
@@ -484,7 +484,7 @@ export default function DashboardPage() {
 
               {(!stats.stats?.overdueInvoices || stats.stats.overdueInvoices === 0) && 
                (!stats.stats?.pendingBills || stats.stats.pendingBills === 0) && (
-                <div className="text-center py-4 text-gray-500">
+                <div className="text-center py-4 text-black">
                   <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
                   Tuyệt vời! Không có vấn đề nào cần xử lý ngay.
                 </div>

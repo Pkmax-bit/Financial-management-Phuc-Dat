@@ -135,12 +135,12 @@ export default function CreateExpenseClaimModal({ isOpen, onClose, onSuccess }: 
             <Receipt className="h-6 w-6 text-green-600 mr-3" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Tạo đề nghị hoàn ứng mới</h2>
-              <p className="text-sm text-gray-600">Tạo đề nghị hoàn ứng cho chi phí cá nhân</p>
+              <p className="text-sm text-black">Tạo đề nghị hoàn ứng cho chi phí cá nhân</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -325,7 +325,7 @@ export default function CreateExpenseClaimModal({ isOpen, onClose, onSuccess }: 
                           Tải lên
                         </label>
                         {item.receipt_filename && (
-                          <span className="text-sm text-gray-600 flex items-center">
+                          <span className="text-sm text-black flex items-center">
                             <FileText className="h-4 w-4 mr-1" />
                             {item.receipt_filename}
                           </span>
@@ -334,7 +334,7 @@ export default function CreateExpenseClaimModal({ isOpen, onClose, onSuccess }: 
                     </div>
 
                     <div className="mt-4 flex justify-end">
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-black">
                         <span className="font-medium">Số tiền: </span>
                         {new Intl.NumberFormat('vi-VN', {
                           style: 'currency',

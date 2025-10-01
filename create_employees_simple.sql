@@ -13,3 +13,4 @@ INSERT INTO employees (id, employee_code, first_name, last_name, email, phone, c
 SELECT 'Sample employees created successfully!' as status;
 SELECT COUNT(*) as employee_count FROM employees;
 
+

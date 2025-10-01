@@ -83,7 +83,7 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
       case 'payment':
         return <CheckCircle className="h-4 w-4 text-green-600" />
       default:
-        return <FileText className="h-4 w-4 text-gray-600" />
+        return <FileText className="h-4 w-4 text-black" />
     }
   }
 
@@ -301,25 +301,25 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Loại
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số chứng từ
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Khách hàng
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngày
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số tiền
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Trạng thái
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Hành động
                 </th>
               </tr>
@@ -347,7 +347,7 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {transaction.customer_name}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     {formatDate(transaction.date)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
@@ -358,12 +358,12 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
                       {getStatusLabel(transaction.status)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex space-x-2">
                       <button className="text-blue-600 hover:text-blue-900">
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button className="text-gray-600 hover:text-gray-900">
+                      <button className="text-black hover:text-gray-900">
                         <Edit className="h-4 w-4" />
                       </button>
                       <button className="text-red-600 hover:text-red-900">
@@ -380,13 +380,13 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
         {filteredTransactions.length === 0 && (
           <div className="text-center py-8">
             <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">Không tìm thấy giao dịch nào</p>
+            <p className="text-black">Không tìm thấy giao dịch nào</p>
           </div>
         )}
       </div>
       
       {/* Summary */}
-      <div className="flex justify-between items-center text-sm text-gray-600">
+      <div className="flex justify-between items-center text-sm text-black">
         <span>Hiển thị {filteredTransactions.length} giao dịch</span>
         <span>
           Tổng giá trị: {formatCurrency(filteredTransactions.reduce((sum, t) => sum + t.amount, 0))}

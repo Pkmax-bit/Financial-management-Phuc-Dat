@@ -492,7 +492,7 @@ export default function CustomersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Trung tâm Khách hàng</h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   Quản lý toàn diện khách hàng, công nợ và giao dịch
                 </p>
                 <div className="flex items-center mt-2 space-x-4">
@@ -500,14 +500,14 @@ export default function CustomersPage() {
                     <div className={`w-2 h-2 rounded-full mr-2 ${
                       customers.length > 0 ? 'bg-green-500' : 'bg-red-500'
                     }`}></div>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-black">
                       {customers.length > 0 ? `${customers.length} khách hàng` : 'Chưa có dữ liệu'}
                     </span>
                   </div>
                   {user && (
                     <div className="flex items-center">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                      <span className="text-xs text-gray-500">Đã đăng nhập: {user?.email || 'Unknown'}</span>
+                      <span className="text-xs text-black">Đã đăng nhập: {user?.email || 'Unknown'}</span>
                     </div>
                   )}
                 </div>
@@ -616,7 +616,7 @@ export default function CustomersPage() {
                   <Users className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tổng khách hàng</p>
+                  <p className="text-sm font-medium text-black">Tổng khách hàng</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                 </div>
               </div>
@@ -628,7 +628,7 @@ export default function CustomersPage() {
                   <TrendingUp className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Hoạt động</p>
+                  <p className="text-sm font-medium text-black">Hoạt động</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
                 </div>
               </div>
@@ -640,7 +640,7 @@ export default function CustomersPage() {
                   <Star className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tiềm năng</p>
+                  <p className="text-sm font-medium text-black">Tiềm năng</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.prospects}</p>
                 </div>
               </div>
@@ -652,7 +652,7 @@ export default function CustomersPage() {
                   <Building2 className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Công ty</p>
+                  <p className="text-sm font-medium text-black">Công ty</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.companies}</p>
                 </div>
               </div>
@@ -664,7 +664,7 @@ export default function CustomersPage() {
                   <DollarSign className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tổng doanh thu</p>
+                  <p className="text-sm font-medium text-black">Tổng doanh thu</p>
                   <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalRevenue)}</p>
                 </div>
               </div>
@@ -676,7 +676,7 @@ export default function CustomersPage() {
                   <AlertTriangle className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Quá hạn</p>
+                  <p className="text-sm font-medium text-black">Quá hạn</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.overdueCount}</p>
                 </div>
               </div>
@@ -689,7 +689,7 @@ export default function CustomersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
+                    <Search className="h-5 w-5 text-black" />
                   </div>
                   <input
                     type="text"
@@ -719,14 +719,14 @@ export default function CustomersPage() {
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 Danh sách Khách hàng ({filteredCustomers.length})
               </h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">Thông tin cơ bản khách hàng</p>
+              <p className="mt-1 max-w-2xl text-sm text-black">Thông tin cơ bản khách hàng</p>
             </div>
           
             {filteredCustomers.length === 0 ? (
               <div className="text-center py-12">
-                <Building2 className="mx-auto h-12 w-12 text-gray-400" />
+                <Building2 className="mx-auto h-12 w-12 text-black" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">Không tìm thấy khách hàng</h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   {searchTerm || filterType !== 'all' || filterStatus !== 'all' || filterLevel !== 'all'
                     ? 'Hãy thử điều chỉnh tiêu chí tìm kiếm hoặc bộ lọc.'
                     : 'Bắt đầu bằng cách thêm khách hàng mới.'}
@@ -748,19 +748,19 @@ export default function CustomersPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         KHÁCH HÀNG
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         LOẠI
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         LIÊN HỆ
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         TÀI CHÍNH
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         TRẠNG THÁI
                       </th>
                       <th scope="col" className="relative px-6 py-3">
@@ -783,7 +783,7 @@ export default function CustomersPage() {
                                 <div className="text-sm font-medium text-gray-900">
                                   {customer.name}
                                 </div>
-                                <div className="text-sm text-gray-500">Mã: {customer.customer_code || customer.id.slice(0, 8)}</div>
+                                <div className="text-sm text-black">Mã: {customer.customer_code || customer.id.slice(0, 8)}</div>
                               </div>
                             </div>
                           </td>
@@ -797,23 +797,23 @@ export default function CustomersPage() {
                           <div className="text-sm text-gray-900">
                             {customer.email && (
                               <div className="flex items-center">
-                                <Mail className="h-3 w-3 mr-1 text-gray-400" />
+                                <Mail className="h-3 w-3 mr-1 text-black" />
                                 {customer.email}
                               </div>
                             )}
                             {customer.phone && (
                               <div className="flex items-center mt-1">
-                                <Phone className="h-3 w-3 mr-1 text-gray-400" />
+                                <Phone className="h-3 w-3 mr-1 text-black" />
                                 {customer.phone}
                               </div>
                             )}
-                            {!customer.email && !customer.phone && <span className="text-gray-400">—</span>}
+                            {!customer.email && !customer.phone && <span className="text-black">—</span>}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
                             <div>Hạn mức: {formatCurrency(customer.credit_limit || 0)}</div>
-                            <div className="text-xs text-gray-500">Thanh toán: {customer.payment_terms || 30} ngày</div>
+                            <div className="text-xs text-black">Thanh toán: {customer.payment_terms || 30} ngày</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -829,7 +829,7 @@ export default function CustomersPage() {
                                   setSelectedCustomer(customer)
                                   setShowDetailModal(true)
                                 }}
-                                className="text-gray-400 hover:text-gray-600"
+                                className="text-black hover:text-black"
                                 title="Xem chi tiết"
                               >
                                 <Eye className="h-5 w-5" />
@@ -839,22 +839,22 @@ export default function CustomersPage() {
                                   setSelectedCustomer(customer)
                                   setShowTransactionModal(true)
                                 }}
-                                className="text-gray-400 hover:text-blue-600"
+                                className="text-black hover:text-blue-600"
                                 title="Lịch sử giao dịch"
                               >
                                 <FileText className="h-5 w-5" />
                               </button>
-                              <button onClick={() => openEditModal(customer)} className="text-gray-400 hover:text-gray-600" title="Sửa">
+                              <button onClick={() => openEditModal(customer)} className="text-black hover:text-black" title="Sửa">
                                 <Edit className="h-5 w-5" />
                               </button>
                               <button
                                 onClick={() => deleteCustomer(customer)}
-                                className="text-gray-400 hover:text-red-600"
+                                className="text-black hover:text-red-600"
                                 title="Xóa"
                               >
                                 <Trash2 className="h-5 w-5" />
                               </button>
-                              <button className="text-gray-400 hover:text-gray-600" title="Thêm">
+                              <button className="text-black hover:text-black" title="Thêm">
                                 <MoreVertical className="h-5 w-5" />
                               </button>
                             </div>
@@ -917,7 +917,7 @@ export default function CustomersPage() {
                 <h3 className="text-lg font-medium text-gray-900">Thêm khách hàng mới</h3>
                 <button
                   onClick={() => setShowAddModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1039,7 +1039,7 @@ export default function CustomersPage() {
                 <h3 className="text-lg font-medium text-gray-900">Hồ sơ Khách hàng Chi tiết</h3>
                 <button
                   onClick={() => setShowDetailModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1156,7 +1156,7 @@ export default function CustomersPage() {
                 <h3 className="text-lg font-medium text-gray-900">Lịch sử Giao dịch - {selectedCustomer.name}</h3>
                 <button
                   onClick={() => setShowTransactionModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1166,7 +1166,7 @@ export default function CustomersPage() {
               </div>
               
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-black">
                   Lịch sử kiểm toán đầy đủ về mọi tương tác tài chính
                 </p>
                 
@@ -1174,22 +1174,22 @@ export default function CustomersPage() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           LOẠI
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           SỐ
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           NGÀY
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           SỐ TIỀN
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           TRẠNG THÁI
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           MÔ TẢ
                         </th>
                         <th scope="col" className="relative px-6 py-3">
@@ -1212,7 +1212,7 @@ export default function CustomersPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {transaction.number}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                             {formatDate(transaction.date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1227,7 +1227,7 @@ export default function CustomersPage() {
                                transaction.status === 'draft' ? 'Nháp' : 'Đã hủy'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">
+                          <td className="px-6 py-4 text-sm text-black">
                             {transaction.description}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -1268,7 +1268,7 @@ export default function CustomersPage() {
                 </h3>
                 <button
                   onClick={() => setShowQuickActionModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1278,10 +1278,10 @@ export default function CustomersPage() {
               </div>
               
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-black">
                   Khách hàng: <span className="font-medium">{selectedCustomer.name}</span>
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-black">
                   Form {quickActionType === 'invoice' ? 'tạo hóa đơn' :
                         quickActionType === 'payment' ? 'ghi nhận thanh toán' :
                         quickActionType === 'estimate' ? 'tạo báo giá' : 'gửi email nhắc nợ'} sẽ được phát triển.
@@ -1315,7 +1315,7 @@ export default function CustomersPage() {
                 <h3 className="text-lg font-medium text-gray-900">Sửa khách hàng</h3>
                 <button
                   onClick={() => setShowEditModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -374,7 +374,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 max-h-[calc(100vh-200px)] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 relative">
           {/* Scroll indicator */}
-          <div className="absolute top-2 right-2 text-xs text-gray-400 bg-white px-2 py-1 rounded-full shadow-sm border">
+          <div className="absolute top-2 right-2 text-xs text-black bg-white px-2 py-1 rounded-full shadow-sm border">
             Cuộn để xem thêm
           </div>
           
@@ -389,9 +389,9 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                 Thông tin cơ bản
               </h3>
               {expandedSections.basic ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             
@@ -413,7 +413,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                     <label className="block text-xs font-semibold text-black mb-1">Khách hàng</label>
                     {loading ? (
                       <div className="w-full border border-gray-300 rounded-md px-2 py-1.5 bg-gray-50">
-                        <span className="text-xs text-gray-500">Đang tải...</span>
+                        <span className="text-xs text-black">Đang tải...</span>
                       </div>
                     ) : customers.length === 0 ? (
                       <div className="w-full border border-red-300 rounded-md px-2 py-1.5 bg-red-50">
@@ -517,9 +517,9 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                 Chi tiết hóa đơn
               </h3>
               {expandedSections.items ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             
@@ -551,7 +551,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                           type="button"
                           onClick={() => removeItem(index)}
                           disabled={items.length === 1}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:text-gray-400 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:text-black disabled:cursor-not-allowed disabled:hover:bg-transparent"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -576,7 +576,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                               <button
                                 type="button"
                                 onClick={() => decrementQuantity(index)}
-                                className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-colors"
+                                className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-black hover:text-gray-800 transition-colors"
                                 disabled={item.quantity <= 0.01}
                               >
                                 <Minus className="w-3 h-3" />
@@ -593,7 +593,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                               <button
                                 type="button"
                                 onClick={() => incrementQuantity(index)}
-                                className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-colors"
+                                className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-black hover:text-gray-800 transition-colors"
                               >
                                 <PlusIcon className="w-3 h-3" />
                               </button>
@@ -630,7 +630,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                               {formatCurrency(item.total_price)}
                             </span>
                           </div>
-                          <div className="text-xs text-gray-600 mt-0.5">
+                          <div className="text-xs text-black mt-0.5">
                             {item.quantity} × {formatCurrency(item.unit_price)} = {formatCurrency(item.quantity * item.unit_price)}
                           </div>
                         </div>
@@ -653,9 +653,9 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                 Tổng cộng
               </h3>
               {expandedSections.totals ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             
@@ -749,9 +749,9 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                 Thông tin bổ sung
               </h3>
               {expandedSections.additional ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             

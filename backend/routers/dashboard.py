@@ -311,25 +311,44 @@ async def get_planner_events(
                 "title": f"Invoice #{invoice['invoice_number']} Due",
                 "date": invoice["due_date"],
                 "type": "invoice",
-                "amount": invoice["total_amount"],
+                "amount": float(invoice["total_amount"]) if invoice["total_amount"] else 0.0,
                 "status": "pending"
             })
         
         # Upcoming bill payments
         upcoming_bills = supabase.table("bills")\
-            .select("*")\
+            .select("*, vendors(name)")\
             .eq("status", "pending")\
             .lte("due_date", next_month.isoformat())\
             .gte("due_date", now.isoformat())\
             .execute()
         
         for bill in upcoming_bills.data:
+            vendor_name = bill.get("vendors", {}).get("name", "Unknown Vendor") if bill.get("vendors") else "Unknown Vendor"
             events.append({
                 "id": f"bill_{bill['id']}",
-                "title": f"Bill Payment - {bill['vendor_name']}",
+                "title": f"Bill Payment - {vendor_name}",
                 "date": bill["due_date"],
                 "type": "bill",
-                "amount": bill["amount"],
+                "amount": float(bill["amount"]) if bill["amount"] else 0.0,
+                "status": "pending"
+            })
+        
+        # Upcoming expense due dates
+        upcoming_expenses = supabase.table("expenses")\
+            .select("*")\
+            .eq("status", "pending")\
+            .lte("expense_date", next_month.isoformat())\
+            .gte("expense_date", now.isoformat())\
+            .execute()
+        
+        for expense in upcoming_expenses.data:
+            events.append({
+                "id": f"expense_{expense['id']}",
+                "title": f"Expense - {expense.get('description', 'Unknown')}",
+                "date": expense["expense_date"],
+                "type": "expense",
+                "amount": float(expense["amount"]) if expense["amount"] else 0.0,
                 "status": "pending"
             })
         
@@ -506,95 +525,4 @@ async def get_cashflow_projection(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate cash flow projection: {str(e)}"
-        )
-
-@router.get("/planner/events")
-async def get_planner_events(
-    current_user: User = Depends(get_current_user)
-) -> Dict[str, Any]:
-    """
-    Get financial planning events and milestones
-    
-    Returns:
-        Dict containing upcoming events and milestones
-    """
-    try:
-        supabase = get_supabase_client()
-        
-        # Get upcoming invoice due dates
-        now = datetime.now()
-        upcoming_invoices = supabase.table("invoices")\
-            .select("invoice_number, total_amount, due_date, customer_id")\
-            .gte("due_date", now.isoformat())\
-            .lte("due_date", (now + timedelta(days=30)).isoformat())\
-            .eq("payment_status", "pending")\
-            .execute()
-        
-        # Get upcoming expense due dates
-        upcoming_expenses = supabase.table("expenses")\
-            .select("description, amount, expense_date, category")\
-            .gte("expense_date", now.isoformat())\
-            .lte("expense_date", (now + timedelta(days=30)).isoformat())\
-            .eq("status", "pending")\
-            .execute()
-        
-        # Get project milestones
-        project_milestones = supabase.table("projects")\
-            .select("name, end_date, status, budget")\
-            .gte("end_date", now.isoformat())\
-            .lte("end_date", (now + timedelta(days=90)).isoformat())\
-            .in_("status", ["active", "planning"])\
-            .execute()
-        
-        # Format events
-        events = []
-        
-        # Add invoice events
-        for invoice in upcoming_invoices.data:
-            events.append({
-                "type": "invoice_due",
-                "title": f"Invoice {invoice['invoice_number']} due",
-                "date": invoice["due_date"],
-                "amount": invoice["total_amount"],
-                "priority": "high" if invoice["total_amount"] > 10000 else "medium"
-            })
-        
-        # Add expense events
-        for expense in upcoming_expenses.data:
-            events.append({
-                "type": "expense_due",
-                "title": expense["description"],
-                "date": expense["expense_date"],
-                "amount": expense["amount"],
-                "category": expense["category"],
-                "priority": "medium"
-            })
-        
-        # Add project milestones
-        for project in project_milestones.data:
-            events.append({
-                "type": "project_milestone",
-                "title": f"Project {project['name']} deadline",
-                "date": project["end_date"],
-                "amount": project["budget"],
-                "status": project["status"],
-                "priority": "high" if project["status"] == "active" else "low"
-            })
-        
-        # Sort events by date
-        events.sort(key=lambda x: x["date"])
-        
-        return {
-            "events": events,
-            "summary": {
-                "total_events": len(events),
-                "high_priority": len([e for e in events if e["priority"] == "high"]),
-                "upcoming_days": 30
-            }
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get planner events: {str(e)}"
         )

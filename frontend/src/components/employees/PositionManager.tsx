@@ -172,11 +172,11 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Quản lý chức vụ</h2>
-            <p className="text-sm text-gray-500 mt-1">Tạo và quản lý các chức vụ trong công ty</p>
+            <p className="text-sm text-black mt-1">Tạo và quản lý các chức vụ trong công ty</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -218,7 +218,7 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-4">
               <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-black" />
                 <input
                   type="text"
                   placeholder="Tìm kiếm chức vụ..."
@@ -258,11 +258,11 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
               </div>
             ) : filteredPositions.length === 0 ? (
               <div className="text-center py-12">
-                <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
+                <Briefcase className="mx-auto h-12 w-12 text-black" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">
                   {searchTerm ? 'Không tìm thấy chức vụ' : 'Chưa có chức vụ'}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   {searchTerm ? 'Thử thay đổi từ khóa tìm kiếm.' : 'Bắt đầu bằng cách tạo chức vụ đầu tiên.'}
                 </p>
                 {!searchTerm && (
@@ -290,7 +290,7 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
                           <Briefcase className="h-5 w-5 text-blue-600 mr-2" />
                           <div>
                             <h3 className="text-lg font-medium text-gray-900">{pos.name}</h3>
-                            <p className="text-sm text-gray-500">Mã: {pos.code}</p>
+                            <p className="text-sm text-black">Mã: {pos.code}</p>
                           </div>
                           {!pos.is_active && (
                             <span className="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
@@ -299,25 +299,25 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
                           )}
                         </div>
                         {pos.description && (
-                          <p className="mt-1 text-sm text-gray-600">{pos.description}</p>
+                          <p className="mt-1 text-sm text-black">{pos.description}</p>
                         )}
                         <div className="mt-3 grid grid-cols-2 gap-4">
-                          <div className="flex items-center text-sm text-gray-500">
+                          <div className="flex items-center text-sm text-black">
                             <Building2 className="h-4 w-4 mr-1" />
                             {pos.department_name}
                           </div>
-                          <div className="flex items-center text-sm text-gray-500">
+                          <div className="flex items-center text-sm text-black">
                             <Users className="h-4 w-4 mr-1" />
                             {pos.employee_count || 0} nhân viên
                           </div>
                         </div>
                         {pos.salary_range_min && pos.salary_range_max && (
-                          <div className="mt-2 flex items-center text-sm text-gray-500">
+                          <div className="mt-2 flex items-center text-sm text-black">
                             <DollarSign className="h-4 w-4 mr-1" />
                             {formatCurrency(pos.salary_range_min)} - {formatCurrency(pos.salary_range_max)}
                           </div>
                         )}
-                        <div className="mt-2 flex items-center text-xs text-gray-500">
+                        <div className="mt-2 flex items-center text-xs text-black">
                           <Calendar className="h-3 w-3 mr-1" />
                           Tạo ngày {formatDate(pos.created_at)}
                         </div>
@@ -325,14 +325,14 @@ export default function PositionManager({ isOpen, onClose }: PositionManagerProp
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleEditPosition(pos)}
-                          className="p-1 text-gray-400 hover:text-blue-600"
+                          className="p-1 text-black hover:text-blue-600"
                           title="Sửa chức vụ"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDeletePosition(pos.id, pos.name)}
-                          className="p-1 text-gray-400 hover:text-red-600"
+                          className="p-1 text-black hover:text-red-600"
                           title="Xóa chức vụ"
                         >
                           <Trash2 className="h-4 w-4" />

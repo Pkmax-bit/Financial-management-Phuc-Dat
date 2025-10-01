@@ -263,7 +263,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
       green: 'bg-green-100 text-green-600',
       purple: 'bg-purple-100 text-purple-600'
     }
-    return colors[color as keyof typeof colors] || 'bg-gray-100 text-gray-600'
+    return colors[color as keyof typeof colors] || 'bg-gray-100 text-black'
   }
 
   if (!isOpen) return null
@@ -278,13 +278,13 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
               <HelpCircle className="h-6 w-6 text-blue-600" />
               Trung tâm Hỗ trợ
             </h2>
-            <p className="text-gray-600 mt-1">
+            <p className="text-black mt-1">
               Hướng dẫn toàn diện cho tất cả các chức năng hệ thống
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -300,7 +300,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'overview' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Tổng quan
@@ -310,7 +310,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'modules' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Theo Module
@@ -320,7 +320,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'quick-guides' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Hướng dẫn nhanh
@@ -330,7 +330,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'videos' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Video hướng dẫn
@@ -340,7 +340,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'faq' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Câu hỏi thường gặp
@@ -350,7 +350,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'contact' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Liên hệ hỗ trợ
@@ -367,7 +367,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">Chào mừng đến với Trung tâm Hỗ trợ</h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-black mb-6">
                     Tại đây bạn có thể tìm thấy tất cả các hướng dẫn, video và tài liệu để sử dụng hệ thống hiệu quả.
                   </p>
                 </div>
@@ -445,7 +445,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">Hướng dẫn theo Module</h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-black mb-6">
                     Chọn module bạn muốn tìm hiểu để xem hướng dẫn chi tiết
                   </p>
                 </div>
@@ -459,7 +459,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                         </div>
                         <div className="flex-1">
                           <h4 className="font-semibold text-gray-900 mb-2">{module.name}</h4>
-                          <p className="text-gray-600 text-sm mb-4">{module.description}</p>
+                          <p className="text-black text-sm mb-4">{module.description}</p>
                           
                           <div className="space-y-2">
                             <h5 className="text-sm font-medium text-gray-700">Hướng dẫn:</h5>
@@ -501,7 +501,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">Hướng dẫn Nhanh</h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-black mb-6">
                     Các bước cơ bản để bắt đầu sử dụng hệ thống
                   </p>
                 </div>
@@ -512,13 +512,13 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h4 className="font-semibold text-gray-900 mb-2">{guide.title}</h4>
-                          <p className="text-gray-600 text-sm mb-4">{guide.description}</p>
+                          <p className="text-black text-sm mb-4">{guide.description}</p>
                           
                           <div className="space-y-2">
                             <h5 className="text-sm font-medium text-gray-700">Các bước thực hiện:</h5>
                             <ol className="space-y-1">
                               {guide.steps.map((step, index) => (
-                                <li key={index} className="flex items-start space-x-2 text-sm text-gray-600">
+                                <li key={index} className="flex items-start space-x-2 text-sm text-black">
                                   <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
                                     {index + 1}
                                   </span>
@@ -529,7 +529,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                           </div>
                         </div>
                         <div className="ml-4 text-right">
-                          <div className="text-sm text-gray-500 mb-2">Thời gian ước tính:</div>
+                          <div className="text-sm text-black mb-2">Thời gian ước tính:</div>
                           <div className="text-sm font-medium text-blue-600">{guide.estimatedTime}</div>
                         </div>
                       </div>
@@ -544,7 +544,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">Video Hướng dẫn</h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-black mb-6">
                     Xem video minh họa để hiểu rõ cách sử dụng hệ thống
                   </p>
                 </div>
@@ -572,7 +572,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       </div>
                       <div className="p-4">
                         <h4 className="font-semibold text-gray-900 mb-2">{video.title}</h4>
-                        <p className="text-gray-600 text-sm">{video.description}</p>
+                        <p className="text-black text-sm">{video.description}</p>
                       </div>
                     </div>
                   ))}
@@ -589,7 +589,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   {/* Search */}
                   <div className="mb-6">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
                       <input
                         type="text"
                         placeholder="Tìm kiếm câu hỏi..."
@@ -610,20 +610,20 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                         className="w-full px-4 py-3 text-left flex items-center justify-between hover:bg-gray-50"
                       >
                         <div className="flex items-center space-x-3">
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                          <span className="text-xs bg-gray-100 text-black px-2 py-1 rounded">
                             {faq.category}
                           </span>
                           <span className="font-medium text-gray-900">{faq.question}</span>
                         </div>
                         {expandedFaq === faq.id ? (
-                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                          <ChevronDown className="h-4 w-4 text-black" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-gray-500" />
+                          <ChevronRight className="h-4 w-4 text-black" />
                         )}
                       </button>
                       {expandedFaq === faq.id && (
                         <div className="px-4 pb-3 border-t bg-gray-50">
-                          <p className="text-gray-600 text-sm pt-3">{faq.answer}</p>
+                          <p className="text-black text-sm pt-3">{faq.answer}</p>
                         </div>
                       )}
                     </div>
@@ -632,9 +632,9 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                 
                 {filteredFaqs.length === 0 && (
                   <div className="text-center py-8">
-                    <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <Search className="h-12 w-12 text-black mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy câu hỏi</h3>
-                    <p className="text-gray-600">Thử tìm kiếm với từ khóa khác hoặc liên hệ hỗ trợ</p>
+                    <p className="text-black">Thử tìm kiếm với từ khóa khác hoặc liên hệ hỗ trợ</p>
                   </div>
                 )}
               </div>
@@ -645,7 +645,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">Liên hệ Hỗ trợ</h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-black mb-6">
                     Chúng tôi luôn sẵn sàng hỗ trợ bạn 24/7
                   </p>
                 </div>
@@ -656,7 +656,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       <MessageCircle className="h-5 w-5 text-blue-600" />
                       Hỗ trợ Trực tuyến
                     </h4>
-                    <p className="text-gray-600 text-sm mb-4">
+                    <p className="text-black text-sm mb-4">
                       Nhận hỗ trợ nhanh chóng qua chat trực tuyến
                     </p>
                     <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
@@ -669,7 +669,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       <Mail className="h-5 w-5 text-green-600" />
                       Email Hỗ trợ
                     </h4>
-                    <p className="text-gray-600 text-sm mb-4">
+                    <p className="text-black text-sm mb-4">
                       Gửi email để nhận hỗ trợ chi tiết
                     </p>
                     <a 
@@ -685,7 +685,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       <Phone className="h-5 w-5 text-purple-600" />
                       Điện thoại
                     </h4>
-                    <p className="text-gray-600 text-sm mb-4">
+                    <p className="text-black text-sm mb-4">
                       Gọi điện để được hỗ trợ trực tiếp
                     </p>
                     <a 
@@ -701,10 +701,10 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       <Clock className="h-5 w-5 text-orange-600" />
                       Giờ làm việc
                     </h4>
-                    <p className="text-gray-600 text-sm mb-2">
+                    <p className="text-black text-sm mb-2">
                       <strong>Thứ 2 - Thứ 6:</strong> 8:00 - 17:00
                     </p>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-black text-sm">
                       <strong>Thứ 7:</strong> 8:00 - 12:00
                     </p>
                   </div>

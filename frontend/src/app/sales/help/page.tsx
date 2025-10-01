@@ -266,7 +266,7 @@ export default function SalesHelpPage() {
               <HelpCircle className="h-8 w-8 text-blue-600 mr-3" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Trung tâm hỗ trợ Sales</h1>
-                <p className="text-sm text-gray-600">Tìm kiếm trợ giúp và hướng dẫn sử dụng</p>
+                <p className="text-sm text-black">Tìm kiếm trợ giúp và hướng dẫn sử dụng</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -319,7 +319,7 @@ export default function SalesHelpPage() {
                         <Icon className="h-6 w-6 text-blue-600 mr-3" />
                         <div>
                           <h2 className="text-xl font-semibold text-gray-900">{section.title}</h2>
-                          <p className="text-gray-600 mt-1">{section.content.description}</p>
+                          <p className="text-black mt-1">{section.content.description}</p>
                         </div>
                       </div>
                     </div>
@@ -329,7 +329,7 @@ export default function SalesHelpPage() {
                         {section.content.items?.map((item, index) => (
                           <div key={index} className="border border-gray-200 rounded-lg p-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-3">{item.title}</h3>
-                            <p className="text-gray-600 mb-4">{item.description}</p>
+                            <p className="text-black mb-4">{item.description}</p>
                             
                             {item.features && (
                               <ul className="space-y-2">
@@ -398,7 +398,7 @@ export default function SalesHelpPage() {
                                     const ContactIcon = contact.icon
                                     return (
                                       <div key={contactIndex} className="flex items-center">
-                                        <ContactIcon className="h-5 w-5 text-gray-400 mr-3" />
+                                        <ContactIcon className="h-5 w-5 text-black mr-3" />
                                         <span className="text-sm text-gray-700">
                                           <strong>{contact.type}:</strong> {contact.value}
                                         </span>
@@ -446,7 +446,7 @@ export default function SalesHelpPage() {
                                 <ul className="space-y-2">
                                   {item.feedback.map((feedback, feedbackIndex) => (
                                     <li key={feedbackIndex} className="flex items-start">
-                                      <MessageCircle className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
+                                      <MessageCircle className="h-4 w-4 text-black mr-2 mt-0.5 flex-shrink-0" />
                                       <span className="text-sm text-gray-700">{feedback}</span>
                                     </li>
                                   ))}
@@ -469,7 +469,7 @@ export default function SalesHelpPage() {
                   <FileText className="h-6 w-6 text-blue-600 mr-3" />
                   <h3 className="text-lg font-semibold text-gray-900">Hướng dẫn chi tiết</h3>
                 </div>
-                <p className="text-gray-600 mb-4">Xem hướng dẫn từng bước chi tiết cho tất cả chức năng</p>
+                <p className="text-black mb-4">Xem hướng dẫn từng bước chi tiết cho tất cả chức năng</p>
                 <a
                   href="/sales/guide"
                   className="inline-flex items-center text-blue-600 hover:text-blue-700"
@@ -484,7 +484,7 @@ export default function SalesHelpPage() {
                   <Video className="h-6 w-6 text-green-600 mr-3" />
                   <h3 className="text-lg font-semibold text-gray-900">Video hướng dẫn</h3>
                 </div>
-                <p className="text-gray-600 mb-4">Xem video hướng dẫn trực quan và dễ hiểu</p>
+                <p className="text-black mb-4">Xem video hướng dẫn trực quan và dễ hiểu</p>
                 <a
                   href="/sales/help#videos"
                   className="inline-flex items-center text-green-600 hover:text-green-700"
@@ -499,7 +499,7 @@ export default function SalesHelpPage() {
                   <MessageCircle className="h-6 w-6 text-purple-600 mr-3" />
                   <h3 className="text-lg font-semibold text-gray-900">Liên hệ hỗ trợ</h3>
                 </div>
-                <p className="text-gray-600 mb-4">Cần hỗ trợ thêm? Liên hệ với chúng tôi</p>
+                <p className="text-black mb-4">Cần hỗ trợ thêm? Liên hệ với chúng tôi</p>
                 <a
                   href="mailto:support@company.com"
                   className="inline-flex items-center text-purple-600 hover:text-purple-700"

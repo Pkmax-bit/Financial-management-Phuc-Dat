@@ -175,11 +175,11 @@ export default function DrillDownModal({
       'expense': 'text-red-600 bg-red-100',
       'bill': 'text-red-600 bg-red-100',
       'bill_payment': 'text-green-600 bg-green-100',
-      'journal_entry': 'text-gray-600 bg-gray-100',
+      'journal_entry': 'text-black bg-gray-100',
       'purchase_order': 'text-purple-600 bg-purple-100',
       'expense_claim': 'text-yellow-600 bg-yellow-100'
     }
-    return typeColors[type] || 'text-gray-600 bg-gray-100'
+    return typeColors[type] || 'text-black bg-gray-100'
   }
 
   const filteredTransactions = report?.transactions.filter(transaction =>
@@ -209,7 +209,7 @@ export default function DrillDownModal({
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-black hover:text-black"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -226,17 +226,17 @@ export default function DrillDownModal({
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Tài khoản</label>
-                  <p className="text-sm text-gray-600">{report?.report_title || `${accountName} (${accountId})`}</p>
+                  <p className="text-sm text-black">{report?.report_title || `${accountName} (${accountId})`}</p>
                 </div>
                 {report?.summary.date_range && (
                   <div>
                     <label className="text-sm font-medium text-gray-700">Kỳ báo cáo</label>
-                    <p className="text-sm text-gray-600">{report.summary.date_range}</p>
+                    <p className="text-sm text-black">{report.summary.date_range}</p>
                   </div>
                 )}
                 <div>
                   <label className="text-sm font-medium text-gray-700">Mô tả</label>
-                  <p className="text-sm text-gray-600">Báo cáo chi tiết về các giao dịch và bút toán kế toán</p>
+                  <p className="text-sm text-black">Báo cáo chi tiết về các giao dịch và bút toán kế toán</p>
                 </div>
               </div>
             </div>
@@ -248,7 +248,7 @@ export default function DrillDownModal({
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Đang tải chi tiết giao dịch...</span>
+              <span className="ml-2 text-black">Đang tải chi tiết giao dịch...</span>
             </div>
           )}
 
@@ -316,7 +316,7 @@ export default function DrillDownModal({
               <div className="flex items-center space-x-4">
                 <div className="flex-1">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
                     <input
                       type="text"
                       placeholder="Tìm kiếm giao dịch..."
@@ -326,7 +326,7 @@ export default function DrillDownModal({
                     />
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-black">
                   Hiển thị {filteredTransactions.length} / {report.transactions.length} giao dịch
                 </div>
               </div>
@@ -337,31 +337,31 @@ export default function DrillDownModal({
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Ngày
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Số chứng từ
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Loại
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Mô tả
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Tham chiếu
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                           Nợ
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                           Có
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                           Số tiền
                         </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-center text-xs font-medium text-black uppercase tracking-wider">
                           Trạng thái
                         </th>
                       </tr>
@@ -383,7 +383,7 @@ export default function DrillDownModal({
                           <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                             {transaction.description}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                             {transaction.reference || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-red-600">
@@ -412,8 +412,8 @@ export default function DrillDownModal({
 
                 {filteredTransactions.length === 0 && (
                   <div className="text-center py-12">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">Không tìm thấy giao dịch nào</p>
+                    <FileText className="h-12 w-12 text-black mx-auto mb-4" />
+                    <p className="text-black">Không tìm thấy giao dịch nào</p>
                   </div>
                 )}
               </div>
@@ -421,7 +421,7 @@ export default function DrillDownModal({
               {/* Pagination */}
               {report.transactions.length > pageSize && (
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     Hiển thị {(currentPage - 1) * pageSize + 1} đến {Math.min(currentPage * pageSize, report.transactions.length)} 
                     trong tổng số {report.transactions.length} giao dịch
                   </div>

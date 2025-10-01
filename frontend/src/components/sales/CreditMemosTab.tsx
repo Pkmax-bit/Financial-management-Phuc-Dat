@@ -136,7 +136,7 @@ export default function CreditMemosTab({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Credit Memo</h3>
-          <p className="text-sm text-gray-500">Quản lý việc khách hàng trả lại hàng hoặc hủy dịch vụ</p>
+          <p className="text-sm text-black">Quản lý việc khách hàng trả lại hàng hoặc hủy dịch vụ</p>
         </div>
         <button
           onClick={onShowCreateModal}
@@ -151,7 +151,7 @@ export default function CreditMemosTab({
       <div className="flex items-center space-x-4">
         <div className="flex-1 max-w-md">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black w-4 h-4" />
             <input
               type="text"
               placeholder="Tìm kiếm theo số credit memo, lý do..."
@@ -163,7 +163,7 @@ export default function CreditMemosTab({
         </div>
         
         <div className="flex items-center space-x-2">
-          <Filter className="w-4 h-4 text-gray-400" />
+          <Filter className="w-4 h-4 text-black" />
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -183,28 +183,28 @@ export default function CreditMemosTab({
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số Credit Memo
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngày
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Tổng Tiền
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Đã Áp Dụng
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Còn Lại
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Trạng Thái
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Lý Do
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Thao Tác
                 </th>
               </tr>
@@ -212,7 +212,7 @@ export default function CreditMemosTab({
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredMemos.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-black">
                     {searchTerm || filterStatus !== 'all' 
                       ? 'Không tìm thấy credit memo nào phù hợp' 
                       : 'Chưa có credit memo nào. Hãy tạo credit memo đầu tiên!'
@@ -253,7 +253,7 @@ export default function CreditMemosTab({
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500 max-w-xs truncate">
+                      <div className="text-sm text-black max-w-xs truncate">
                         {memo.reason || '-'}
                       </div>
                     </td>
@@ -316,7 +316,7 @@ export default function CreditMemosTab({
       {filteredMemos.length > 0 && (
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-black">
               Hiển thị {filteredMemos.length} credit memo
             </div>
             <div className="text-sm font-semibold text-gray-900">

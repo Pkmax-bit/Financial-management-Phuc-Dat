@@ -150,7 +150,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
             {formatCurrency(section.total_amount)}
           </div>
           {section.percentage && (
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-black">
               {formatPercentage(section.percentage)}
             </div>
           )}
@@ -167,7 +167,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
             <div className="text-sm font-medium text-gray-700 hover:text-blue-600">
               {account.account_name}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-black">
               {account.account_code}
             </div>
           </div>
@@ -217,7 +217,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
           <div key={index} className="bg-white rounded-lg border p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">{metric.label}</p>
+                <p className="text-sm font-medium text-black">{metric.label}</p>
                 <p className={`text-2xl font-bold ${metric.color}`}>
                   {typeof metric.value === 'string' ? metric.value : formatCurrency(metric.value)}
                 </p>
@@ -251,7 +251,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-black hover:text-black"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -268,10 +268,10 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                 <div className="flex justify-between items-center">
                   <div>
                     <h1 className="text-3xl font-bold text-gray-900">Bảng Cân đối Kế toán</h1>
-                    <p className="mt-2 text-gray-600">
+                    <p className="mt-2 text-black">
                       Báo cáo chi tiết về tài sản, nợ phải trả và vốn chủ sở hữu của công ty
                     </p>
-                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                    <div className="mt-2 flex items-center space-x-4 text-sm text-black">
                       <span>Tính đến ngày: {report?.report_date || asOfDate}</span>
                     </div>
                   </div>
@@ -280,7 +280,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Đang tải báo cáo...</span>
+              <span className="ml-2 text-black">Đang tải báo cáo...</span>
             </div>
           )}
 
@@ -327,7 +327,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                               <div className="text-sm font-semibold text-gray-900">
                                 {formatCurrency(item.amount)}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-black">
                                 {item.percentage.toFixed(1)}%
                               </div>
                             </div>
@@ -349,7 +349,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                               <div className="text-sm font-semibold text-gray-900">
                                 {formatCurrency(item.amount)}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-black">
                                 {item.percentage.toFixed(1)}%
                               </div>
                             </div>
@@ -392,7 +392,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                               <div className="text-sm font-semibold text-gray-900">
                                 {formatCurrency(item.amount)}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-black">
                                 {item.percentage.toFixed(1)}%
                               </div>
                             </div>
@@ -414,7 +414,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                               <div className="text-sm font-semibold text-gray-900">
                                 {formatCurrency(item.amount)}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-black">
                                 {item.percentage.toFixed(1)}%
                               </div>
                             </div>
@@ -452,7 +452,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
                               <div className="text-sm font-semibold text-gray-900">
                                 {formatCurrency(item.amount)}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-black">
                                 {item.percentage.toFixed(1)}%
                               </div>
                             </div>
@@ -501,7 +501,7 @@ export default function BalanceSheetModal({ isOpen, onClose, asOfDate }: Balance
 
               {/* Report Info */}
               <div className="bg-gray-100 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-black">
                   <div>
                     <span className="font-medium">Ngày báo cáo:</span> {new Date(report.report_date).toLocaleDateString('vi-VN')}
                   </div>

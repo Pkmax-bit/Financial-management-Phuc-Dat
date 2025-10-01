@@ -86,7 +86,7 @@ export default function HomePage() {
               </h1>
             </div>
             <nav className="flex space-x-8">
-              <Link href="/login" className="text-gray-500 hover:text-gray-900">
+              <Link href="/login" className="text-black hover:text-gray-900">
                 Login
               </Link>
               <Link href="/register" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
@@ -139,7 +139,7 @@ export default function HomePage() {
                 <div className="text-3xl font-bold text-gray-900 mb-2">
                   {stat.value}
                 </div>
-                <div className="text-gray-600">
+                <div className="text-black">
                   {stat.label}
                 </div>
               </div>
@@ -155,7 +155,7 @@ export default function HomePage() {
             <h3 className="text-3xl font-bold text-gray-900 mb-4">
               Key Features
             </h3>
-            <p className="text-lg text-gray-600">
+            <p className="text-lg text-black">
               Everything you need to manage your business finances
             </p>
           </div>
@@ -175,7 +175,7 @@ export default function HomePage() {
                     {feature.title}
                   </h4>
                 </div>
-                <p className="text-gray-600">
+                <p className="text-black">
                   {feature.description}
                 </p>
               </Link>
@@ -192,10 +192,10 @@ export default function HomePage() {
               <TrendingUp className="h-6 w-6 text-blue-400" />
               <span className="ml-2 text-lg font-semibold">Financial Management</span>
             </div>
-            <p className="text-gray-400 mb-4">
+            <p className="text-black mb-4">
               © 2025 Financial Management System - Phuc Dat. All rights reserved.
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-black">
               Built with Next.js, FastAPI, and Supabase
             </p>
           </div>

@@ -257,7 +257,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         
         {/* Visual Status Bar */}
         <div className="mb-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+          <div className="flex items-center justify-between text-sm text-black mb-2">
             <span>Tổng giá trị hóa đơn</span>
             <span>Tổng: {formatCurrency(overdueAmount + notDueYetAmount + paidAmount)}</span>
           </div>
@@ -287,18 +287,18 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="text-center p-3 bg-red-50 rounded-lg">
             <div className="text-2xl font-bold text-red-600">{formatCurrency(overdueAmount)}</div>
-            <div className="text-sm text-gray-600">Overdue</div>
-            <div className="text-xs text-gray-500">Quá hạn thanh toán</div>
+            <div className="text-sm text-black">Overdue</div>
+            <div className="text-xs text-black">Quá hạn thanh toán</div>
           </div>
           <div className="text-center p-3 bg-orange-50 rounded-lg">
             <div className="text-2xl font-bold text-orange-600">{formatCurrency(notDueYetAmount)}</div>
-            <div className="text-sm text-gray-600">Not due yet</div>
-            <div className="text-xs text-gray-500">Chưa tới hạn</div>
+            <div className="text-sm text-black">Not due yet</div>
+            <div className="text-xs text-black">Chưa tới hạn</div>
           </div>
           <div className="text-center p-3 bg-green-50 rounded-lg">
             <div className="text-2xl font-bold text-green-600">{formatCurrency(paidAmount)}</div>
-            <div className="text-sm text-gray-600">Paid</div>
-            <div className="text-xs text-gray-500">Đã thanh toán</div>
+            <div className="text-sm text-black">Paid</div>
+            <div className="text-xs text-black">Đã thanh toán</div>
           </div>
         </div>
       </div>
@@ -382,25 +382,25 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Số hóa đơn
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Khách hàng
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Số tiền
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Trạng thái
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Thanh toán
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Hạn thanh toán
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Thao tác
               </th>
             </tr>
@@ -410,7 +410,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
               <tr key={invoice.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <Receipt className="h-4 w-4 text-gray-400 mr-2" />
+                    <Receipt className="h-4 w-4 text-black mr-2" />
                     <div>
                       <span className="text-sm font-medium text-gray-900">
                         {invoice.invoice_number}
@@ -421,7 +421,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                   {invoice.customer_name || 'N/A'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -444,9 +444,9 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     {getPaymentStatusText(invoice.payment_status)}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                   <div className="flex items-center">
-                    <Calendar className="h-4 w-4 text-gray-400 mr-1" />
+                    <Calendar className="h-4 w-4 text-black mr-1" />
                     <span className={isOverdue(invoice.due_date, invoice.payment_status) ? 'text-red-600 font-medium' : ''}>
                       {formatDate(invoice.due_date)}
                     </span>
@@ -458,7 +458,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
                     <button 
-                      className="text-gray-400 hover:text-gray-600" 
+                      className="text-black hover:text-black" 
                       title="Xem chi tiết"
                     >
                       <Eye className="h-4 w-4" />
@@ -467,14 +467,14 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     {invoice.status === 'draft' && (
                       <>
                         <button 
-                          className="text-gray-400 hover:text-blue-600" 
+                          className="text-black hover:text-blue-600" 
                           title="Chỉnh sửa"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button 
                           onClick={() => sendInvoice(invoice.id)}
-                          className="text-gray-400 hover:text-green-600" 
+                          className="text-black hover:text-green-600" 
                           title="Gửi hóa đơn"
                         >
                           <Send className="h-4 w-4" />
@@ -485,7 +485,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     {(invoice.payment_status === 'pending' || invoice.payment_status === 'partial') && (
                       <button 
                         onClick={() => recordPayment(invoice.id, invoice.total_amount - invoice.paid_amount)}
-                        className="text-gray-400 hover:text-green-600" 
+                        className="text-black hover:text-green-600" 
                         title="Ghi nhận thanh toán"
                       >
                         <DollarSign className="h-4 w-4" />
@@ -499,7 +499,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     )}
                     
                     <button 
-                      className="text-gray-400 hover:text-red-600" 
+                      className="text-black hover:text-red-600" 
                       title="Xóa"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -513,9 +513,9 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         
         {filteredInvoices.length === 0 && (
           <div className="text-center py-8">
-            <Receipt className="mx-auto h-12 w-12 text-gray-400" />
+            <Receipt className="mx-auto h-12 w-12 text-black" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có hóa đơn</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-black">
               Bắt đầu bằng cách tạo hóa đơn mới.
             </p>
             <div className="mt-6">

@@ -266,7 +266,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
           <div className="flex items-center">
             <Users className="h-8 w-8 text-blue-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tổng khách hàng</p>
+              <p className="text-sm font-medium text-black">Tổng khách hàng</p>
               <p className="text-2xl font-bold text-gray-900">{filteredCustomers.length}</p>
             </div>
           </div>
@@ -276,7 +276,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
           <div className="flex items-center">
             <CreditCard className="h-8 w-8 text-green-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Khách hàng hoạt động</p>
+              <p className="text-sm font-medium text-black">Khách hàng hoạt động</p>
               <p className="text-2xl font-bold text-gray-900">
                 {filteredCustomers.filter(c => c.status === 'active').length}
               </p>
@@ -288,7 +288,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
           <div className="flex items-center">
             <FileText className="h-8 w-8 text-orange-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tổng hạn mức</p>
+              <p className="text-sm font-medium text-black">Tổng hạn mức</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(filteredCustomers.reduce((sum, c) => sum + c.credit_limit, 0))}
               </p>
@@ -300,7 +300,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
           <div className="flex items-center">
             <Users className="h-8 w-8 text-purple-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Khách hàng công ty</p>
+              <p className="text-sm font-medium text-black">Khách hàng công ty</p>
               <p className="text-2xl font-bold text-gray-900">
                 {filteredCustomers.filter(c => c.type === 'company').length}
               </p>
@@ -315,25 +315,25 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Khách hàng
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Liên hệ
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Tài chính
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Thông tin
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngày tạo
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Trạng thái
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Hành động
                 </th>
               </tr>
@@ -345,14 +345,14 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
                         <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-sm font-medium text-gray-600">
+                          <span className="text-sm font-medium text-black">
                             {customer.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">{customer.name}</div>
-                        <div className="text-sm text-gray-500">Mã: {customer.customer_code}</div>
+                        <div className="text-sm text-black">Mã: {customer.customer_code}</div>
                       </div>
                     </div>
                   </td>
@@ -360,18 +360,18 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                     <div className="text-sm text-gray-900">
                       {customer.email && (
                         <div className="flex items-center">
-                          <Mail className="h-3 w-3 mr-1 text-gray-400" />
+                          <Mail className="h-3 w-3 mr-1 text-black" />
                           {customer.email}
                         </div>
                       )}
                       {customer.phone && (
                         <div className="flex items-center mt-1">
-                          <Phone className="h-3 w-3 mr-1 text-gray-400" />
+                          <Phone className="h-3 w-3 mr-1 text-black" />
                           {customer.phone}
                         </div>
                       )}
                       {!customer.email && !customer.phone && (
-                        <div className="text-sm text-gray-400">—</div>
+                        <div className="text-sm text-black">—</div>
                       )}
                     </div>
                   </td>
@@ -380,7 +380,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                       <div className={`${getCreditLimitColor(customer.credit_limit)}`}>
                         Hạn mức: {formatCurrency(customer.credit_limit)}
                       </div>
-                      <div className="text-xs text-gray-500">Thanh toán: {customer.payment_terms} ngày</div>
+                      <div className="text-xs text-black">Thanh toán: {customer.payment_terms} ngày</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -395,10 +395,10 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                            customer.type === 'company' ? 'Công ty' : 'Cơ quan nhà nước'}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">{customer.city || 'N/A'}</div>
+                      <div className="text-xs text-black mt-1">{customer.city || 'N/A'}</div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     {formatDate(customer.created_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -406,7 +406,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                       {getStatusLabel(customer.status)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex space-x-2">
                       <button 
                         onClick={() => handleViewCustomer(customer.id)}
@@ -424,7 +424,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                       </button>
                       <button 
                         onClick={() => handleEditCustomer(customer.id)}
-                        className="text-gray-600 hover:text-gray-900 p-1"
+                        className="text-black hover:text-gray-900 p-1"
                         title="Chỉnh sửa"
                       >
                         <Edit className="h-4 w-4" />
@@ -447,7 +447,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
         {filteredCustomers.length === 0 && (
           <div className="text-center py-8">
             <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">Không tìm thấy khách hàng nào</p>
+            <p className="text-black">Không tìm thấy khách hàng nào</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="mt-2 text-blue-600 hover:text-blue-800 font-medium"
@@ -459,7 +459,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
       </div>
       
       {/* Summary */}
-      <div className="flex justify-between items-center text-sm text-gray-600">
+      <div className="flex justify-between items-center text-sm text-black">
         <span>Hiển thị {filteredCustomers.length} khách hàng</span>
         <span>
           Tổng hạn mức: {formatCurrency(filteredCustomers.reduce((sum, c) => sum + c.credit_limit, 0))}

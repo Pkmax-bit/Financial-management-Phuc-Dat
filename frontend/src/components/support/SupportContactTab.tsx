@@ -19,7 +19,7 @@ export default function SupportContactTab({ searchTerm, onCreateGuide }: Support
     <div className="space-y-6">
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Liên hệ Hỗ trợ</h3>
-        <p className="text-gray-600 mb-6">
+        <p className="text-black mb-6">
           Chúng tôi luôn sẵn sàng hỗ trợ bạn 24/7
         </p>
       </div>
@@ -30,7 +30,7 @@ export default function SupportContactTab({ searchTerm, onCreateGuide }: Support
             <MessageCircle className="h-5 w-5 text-blue-600" />
             Hỗ trợ Trực tuyến
           </h4>
-          <p className="text-gray-600 text-sm mb-4">
+          <p className="text-black text-sm mb-4">
             Nhận hỗ trợ nhanh chóng qua chat trực tuyến
           </p>
           <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
@@ -43,7 +43,7 @@ export default function SupportContactTab({ searchTerm, onCreateGuide }: Support
             <Mail className="h-5 w-5 text-green-600" />
             Email Hỗ trợ
           </h4>
-          <p className="text-gray-600 text-sm mb-4">
+          <p className="text-black text-sm mb-4">
             Gửi email để nhận hỗ trợ chi tiết
           </p>
           <a 
@@ -59,7 +59,7 @@ export default function SupportContactTab({ searchTerm, onCreateGuide }: Support
             <Phone className="h-5 w-5 text-purple-600" />
             Điện thoại
           </h4>
-          <p className="text-gray-600 text-sm mb-4">
+          <p className="text-black text-sm mb-4">
             Gọi điện để được hỗ trợ trực tiếp
           </p>
           <a 
@@ -75,10 +75,10 @@ export default function SupportContactTab({ searchTerm, onCreateGuide }: Support
             <Clock className="h-5 w-5 text-orange-600" />
             Giờ làm việc
           </h4>
-          <p className="text-gray-600 text-sm mb-2">
+          <p className="text-black text-sm mb-2">
             <strong>Thứ 2 - Thứ 6:</strong> 8:00 - 17:00
           </p>
-          <p className="text-gray-600 text-sm">
+          <p className="text-black text-sm">
             <strong>Thứ 7:</strong> 8:00 - 12:00
           </p>
         </div>
@@ -101,19 +101,19 @@ export default function SupportContactTab({ searchTerm, onCreateGuide }: Support
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">98%</div>
-            <div className="text-sm text-gray-500">Hài lòng</div>
+            <div className="text-sm text-black">Hài lòng</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">2h</div>
-            <div className="text-sm text-gray-500">Phản hồi TB</div>
+            <div className="text-sm text-black">Phản hồi TB</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">24/7</div>
-            <div className="text-sm text-gray-500">Hỗ trợ</div>
+            <div className="text-sm text-black">Hỗ trợ</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-purple-600">1000+</div>
-            <div className="text-sm text-gray-500">Khách hàng</div>
+            <div className="text-sm text-black">Khách hàng</div>
           </div>
         </div>
       </div>

@@ -199,7 +199,7 @@ export default function EmployeeDetailSidebar({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+            className="text-black hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -218,7 +218,7 @@ export default function EmployeeDetailSidebar({
                 <h3 className="text-2xl font-bold text-gray-900">
                   {employee.first_name} {employee.last_name}
                 </h3>
-                <p className="text-lg text-gray-600">Mã: {employee.employee_code}</p>
+                <p className="text-lg text-black">Mã: {employee.employee_code}</p>
                 <div className="flex items-center mt-2">
                   <StatusIcon className="h-4 w-4 mr-2" />
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>
@@ -255,17 +255,17 @@ export default function EmployeeDetailSidebar({
               </h4>
               <div className="space-y-3">
                 <div className="flex items-center">
-                  <Mail className="h-4 w-4 text-gray-400 mr-3" />
+                  <Mail className="h-4 w-4 text-black mr-3" />
                   <div>
-                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="text-sm text-black">Email</p>
                     <p className="font-medium text-gray-900">{employee.email}</p>
                   </div>
                 </div>
                 {employee.phone && (
                   <div className="flex items-center">
-                    <Phone className="h-4 w-4 text-gray-400 mr-3" />
+                    <Phone className="h-4 w-4 text-black mr-3" />
                     <div>
-                      <p className="text-sm text-gray-500">Số điện thoại</p>
+                      <p className="text-sm text-black">Số điện thoại</p>
                       <p className="font-medium text-gray-900">{employee.phone}</p>
                     </div>
                   </div>
@@ -280,24 +280,24 @@ export default function EmployeeDetailSidebar({
               </h4>
               <div className="space-y-3">
                 <div className="flex items-center">
-                  <Building2 className="h-4 w-4 text-gray-400 mr-3" />
+                  <Building2 className="h-4 w-4 text-black mr-3" />
                   <div>
-                    <p className="text-sm text-gray-500">Phòng ban</p>
+                    <p className="text-sm text-black">Phòng ban</p>
                     <p className="font-medium text-gray-900">{getDepartmentName(employee.department_id)}</p>
                   </div>
                 </div>
                 <div className="flex items-center">
-                  <Briefcase className="h-4 w-4 text-gray-400 mr-3" />
+                  <Briefcase className="h-4 w-4 text-black mr-3" />
                   <div>
-                    <p className="text-sm text-gray-500">Chức vụ</p>
+                    <p className="text-sm text-black">Chức vụ</p>
                     <p className="font-medium text-gray-900">{getPositionName(employee.position_id)}</p>
                   </div>
                 </div>
                 {employee.salary && (
                   <div className="flex items-center">
-                    <DollarSign className="h-4 w-4 text-gray-400 mr-3" />
+                    <DollarSign className="h-4 w-4 text-black mr-3" />
                     <div>
-                      <p className="text-sm text-gray-500">Lương</p>
+                      <p className="text-sm text-black">Lương</p>
                       <p className="font-medium text-gray-900">{formatCurrency(employee.salary)}</p>
                     </div>
                   </div>
@@ -312,16 +312,16 @@ export default function EmployeeDetailSidebar({
               </h4>
               <div className="space-y-3">
                 <div className="flex items-center">
-                  <Calendar className="h-4 w-4 text-gray-400 mr-3" />
+                  <Calendar className="h-4 w-4 text-black mr-3" />
                   <div>
-                    <p className="text-sm text-gray-500">Ngày vào làm</p>
+                    <p className="text-sm text-black">Ngày vào làm</p>
                     <p className="font-medium text-gray-900">{formatDate(employee.hire_date)}</p>
                   </div>
                 </div>
                 <div className="flex items-center">
-                  <Clock className="h-4 w-4 text-gray-400 mr-3" />
+                  <Clock className="h-4 w-4 text-black mr-3" />
                   <div>
-                    <p className="text-sm text-gray-500">Trạng thái</p>
+                    <p className="text-sm text-black">Trạng thái</p>
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>
                       {statusInfo.label}
                     </span>
@@ -337,16 +337,16 @@ export default function EmployeeDetailSidebar({
               </h4>
               <div className="space-y-3">
                 <div className="flex items-center">
-                  <Clock className="h-4 w-4 text-gray-400 mr-3" />
+                  <Clock className="h-4 w-4 text-black mr-3" />
                   <div>
-                    <p className="text-sm text-gray-500">Ngày tạo</p>
+                    <p className="text-sm text-black">Ngày tạo</p>
                     <p className="font-medium text-gray-900">{formatDateTime(employee.created_at)}</p>
                   </div>
                 </div>
                 <div className="flex items-center">
-                  <Clock className="h-4 w-4 text-gray-400 mr-3" />
+                  <Clock className="h-4 w-4 text-black mr-3" />
                   <div>
-                    <p className="text-sm text-gray-500">Cập nhật lần cuối</p>
+                    <p className="text-sm text-black">Cập nhật lần cuối</p>
                     <p className="font-medium text-gray-900">{formatDateTime(employee.updated_at)}</p>
                   </div>
                 </div>
@@ -362,19 +362,19 @@ export default function EmployeeDetailSidebar({
                 <div className="text-2xl font-bold text-blue-600">
                   {employee.employee_code}
                 </div>
-                <div className="text-sm text-gray-600">Mã nhân viên</div>
+                <div className="text-sm text-black">Mã nhân viên</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">
                   {employee.salary ? formatCurrency(employee.salary) : 'N/A'}
                 </div>
-                <div className="text-sm text-gray-600">Mức lương</div>
+                <div className="text-sm text-black">Mức lương</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-purple-600">
                   {statusInfo.label}
                 </div>
-                <div className="text-sm text-gray-600">Trạng thái</div>
+                <div className="text-sm text-black">Trạng thái</div>
               </div>
             </div>
           </div>

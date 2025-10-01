@@ -44,6 +44,135 @@ FINANCING_ACCOUNTS = {
     "dividends": ["421"],  # Retained earnings (for dividends)
 }
 
+@router.get("/cash-flow-demo")
+async def get_cash_flow_statement_demo(
+    start_date: date = Query(..., description="Start date for Cash Flow statement"),
+    end_date: date = Query(..., description="End date for Cash Flow statement")
+):
+    """
+    Generate Cash Flow report (Demo version - no auth required)
+    """
+    try:
+        # Sample data for demo
+        sample_data = {
+            "report_period": f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}",
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "currency": "VND",
+            "generated_at": datetime.now().isoformat(),
+            "beginning_cash": 10000000,
+            "ending_cash": 15000000,
+            "net_change_in_cash": 5000000,
+            "net_income": 25000000,
+            "operating_activities": {
+                "section_name": "Dòng tiền từ hoạt động kinh doanh",
+                "section_type": "operating",
+                "items": [
+                    {
+                        "item_name": "Lợi nhuận ròng",
+                        "amount": 25000000,
+                        "is_inflow": True,
+                        "description": "Từ báo cáo Kết quả Kinh doanh"
+                    },
+                    {
+                        "item_name": "Khấu hao và phân bổ",
+                        "amount": 5000000,
+                        "is_inflow": True,
+                        "description": "Chi phí không dùng tiền mặt"
+                    },
+                    {
+                        "item_name": "Thay đổi Phải thu khách hàng",
+                        "item_code": "131",
+                        "amount": 10000000,
+                        "is_inflow": False,
+                        "description": "Thay đổi trong Phải thu khách hàng"
+                    },
+                    {
+                        "item_name": "Thay đổi Hàng tồn kho",
+                        "item_code": "152",
+                        "amount": 3000000,
+                        "is_inflow": False,
+                        "description": "Thay đổi trong Hàng tồn kho"
+                    },
+                    {
+                        "item_name": "Thay đổi Phải trả nhà cung cấp",
+                        "item_code": "331",
+                        "amount": 8000000,
+                        "is_inflow": True,
+                        "description": "Thay đổi trong Phải trả nhà cung cấp"
+                    }
+                ],
+                "subtotal": 51000000,
+                "net_cash_flow": 20000000
+            },
+            "investing_activities": {
+                "section_name": "Dòng tiền từ hoạt động đầu tư",
+                "section_type": "investing",
+                "items": [
+                    {
+                        "item_name": "Mua sắm Tài sản cố định",
+                        "item_code": "211",
+                        "amount": 15000000,
+                        "is_inflow": False,
+                        "description": "Giao dịch Tài sản cố định hữu hình"
+                    },
+                    {
+                        "item_name": "Bán Tài sản cố định",
+                        "item_code": "211",
+                        "amount": 5000000,
+                        "is_inflow": True,
+                        "description": "Giao dịch Tài sản cố định hữu hình"
+                    }
+                ],
+                "subtotal": 20000000,
+                "net_cash_flow": -10000000
+            },
+            "financing_activities": {
+                "section_name": "Dòng tiền từ hoạt động tài chính",
+                "section_type": "financing",
+                "items": [
+                    {
+                        "item_name": "Vay dài hạn",
+                        "item_code": "341",
+                        "amount": 20000000,
+                        "is_inflow": True,
+                        "description": "Giao dịch Vay dài hạn"
+                    },
+                    {
+                        "item_name": "Trả nợ vay",
+                        "item_code": "341",
+                        "amount": 10000000,
+                        "is_inflow": False,
+                        "description": "Giao dịch Vay dài hạn"
+                    },
+                    {
+                        "item_name": "Góp vốn",
+                        "item_code": "411",
+                        "amount": 5000000,
+                        "is_inflow": True,
+                        "description": "Giao dịch Vốn đầu tư của chủ sở hữu"
+                    }
+                ],
+                "subtotal": 35000000,
+                "net_cash_flow": 15000000
+            },
+            "total_operating_cash_flow": 20000000,
+            "total_investing_cash_flow": -10000000,
+            "total_financing_cash_flow": 15000000,
+            "net_cash_flow": 25000000,
+            "cash_flow_validation": True,
+            "total_transactions": 45,
+            "total_journal_entries": 45
+        }
+        
+        return sample_data
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate Cash Flow Statement demo: {str(e)}"
+        )
+
 @router.get("/cash-flow", response_model=CashFlowStatement)
 async def get_cash_flow_statement(
     start_date: date = Query(..., description="Start date for Cash Flow statement"),

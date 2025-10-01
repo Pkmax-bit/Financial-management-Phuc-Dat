@@ -162,7 +162,7 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
               Báo cáo Chi phí theo NCC
             </button>
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-black">
             {filteredVendors.length} nhà cung cấp • {filteredVendors.filter(v => v.status === 'active').length} hoạt động
           </div>
         </div>
@@ -204,25 +204,25 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Nhà cung cấp
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Thông tin liên hệ
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Tổng hóa đơn
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Tổng số tiền
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Trạng thái
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Ngày tạo
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Hành động
               </th>
             </tr>
@@ -230,13 +230,13 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-black">
                   Đang tải...
                 </td>
               </tr>
             ) : filteredVendors.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-black">
                   Không tìm thấy nhà cung cấp nào
                 </td>
               </tr>
@@ -245,14 +245,14 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
                 <tr key={vendor.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-900">
                     <div className="flex items-center">
-                      <Building2 className="h-8 w-8 text-gray-400 mr-3" />
+                      <Building2 className="h-8 w-8 text-black mr-3" />
                       <div>
                         <div className="font-medium">{vendor.name}</div>
                         {vendor.company_name && (
-                          <div className="text-xs text-gray-500">{vendor.company_name}</div>
+                          <div className="text-xs text-black">{vendor.company_name}</div>
                         )}
                         {vendor.tax_id && (
-                          <div className="text-xs text-gray-500">MST: {vendor.tax_id}</div>
+                          <div className="text-xs text-black">MST: {vendor.tax_id}</div>
                         )}
                         {vendor.payment_terms && (
                           <div className="text-xs text-blue-600">Điều kiện: {vendor.payment_terms}</div>
@@ -260,7 +260,7 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-black">
                     <div className="space-y-1">
                       {vendor.email && (
                         <div className="flex items-center">
@@ -288,7 +288,7 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="font-medium">{vendor.total_bills || 0} bill</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-black">
                       {(vendor.total_bills || 0) > 0 ? 'Có lịch sử giao dịch' : 'Chưa có giao dịch'}
                     </div>
                   </td>
@@ -296,7 +296,7 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
                     <div className="font-semibold">
                       {vendor.total_amount ? formatCurrency(vendor.total_amount) : '0 ₫'}
                     </div>
-                    <div className="text-xs text-gray-500">Tổng chi tiêu</div>
+                    <div className="text-xs text-black">Tổng chi tiêu</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
@@ -306,32 +306,32 @@ export default function VendorsTab({ searchTerm, onCreateVendor }: VendorsTabPro
                       {getStatusText(vendor.status)}
                     </button>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div>{formatDate(vendor.created_at)}</div>
-                    <div className="text-xs text-gray-400">Ngày tạo</div>
+                    <div className="text-xs text-black">Ngày tạo</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
-                        className="text-gray-400 hover:text-blue-600" 
+                        className="text-black hover:text-blue-600" 
                         title="Xem lịch sử giao dịch"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-gray-400 hover:text-green-600" 
+                        className="text-black hover:text-green-600" 
                         title="Tạo Bill mới"
                       >
                         <FileText className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Sửa thông tin"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-gray-400 hover:text-red-600" 
+                        className="text-black hover:text-red-600" 
                         title="Xóa"
                       >
                         <Trash2 className="h-4 w-4" />

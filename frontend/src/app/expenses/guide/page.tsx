@@ -55,7 +55,7 @@ export default function ExpensesGuidePage() {
                   <BookOpen className="h-6 w-6 text-blue-600" />
                   Hướng dẫn Quản lý Chi phí
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p className="text-black mt-1">
                   Hướng dẫn chi tiết về cách sử dụng hệ thống quản lý chi phí
                 </p>
               </div>
@@ -225,7 +225,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Nhận hóa đơn</h4>
-                      <p className="text-gray-600 text-sm">Nhận hóa đơn từ nhà cung cấp và kiểm tra tính hợp lệ</p>
+                      <p className="text-black text-sm">Nhận hóa đơn từ nhà cung cấp và kiểm tra tính hợp lệ</p>
                     </div>
                   </div>
                   
@@ -235,7 +235,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Nhập vào hệ thống</h4>
-                      <p className="text-gray-600 text-sm">Tạo hóa đơn mới với đầy đủ thông tin</p>
+                      <p className="text-black text-sm">Tạo hóa đơn mới với đầy đủ thông tin</p>
                     </div>
                   </div>
                   
@@ -245,7 +245,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Phê duyệt</h4>
-                      <p className="text-gray-600 text-sm">Người có thẩm quyền phê duyệt hóa đơn</p>
+                      <p className="text-black text-sm">Người có thẩm quyền phê duyệt hóa đơn</p>
                     </div>
                   </div>
                   
@@ -255,7 +255,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Thanh toán</h4>
-                      <p className="text-gray-600 text-sm">Thực hiện thanh toán theo đúng hạn</p>
+                      <p className="text-black text-sm">Thực hiện thanh toán theo đúng hạn</p>
                     </div>
                   </div>
                 </div>
@@ -293,7 +293,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <span className="font-medium text-gray-900">Draft</span>
-                      <span className="text-sm text-gray-600 ml-2">- Tạo đơn đặt hàng</span>
+                      <span className="text-sm text-black ml-2">- Tạo đơn đặt hàng</span>
                     </div>
                   </div>
                   
@@ -303,7 +303,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <span className="font-medium text-gray-900">Pending Approval</span>
-                      <span className="text-sm text-gray-600 ml-2">- Chờ phê duyệt</span>
+                      <span className="text-sm text-black ml-2">- Chờ phê duyệt</span>
                     </div>
                   </div>
                   
@@ -313,7 +313,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <span className="font-medium text-gray-900">Approved</span>
-                      <span className="text-sm text-gray-600 ml-2">- Đã phê duyệt</span>
+                      <span className="text-sm text-black ml-2">- Đã phê duyệt</span>
                     </div>
                   </div>
                   
@@ -323,7 +323,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <span className="font-medium text-gray-900">Closed</span>
-                      <span className="text-sm text-gray-600 ml-2">- Chuyển thành hóa đơn</span>
+                      <span className="text-sm text-black ml-2">- Chuyển thành hóa đơn</span>
                     </div>
                   </div>
                 </div>
@@ -357,8 +357,8 @@ export default function ExpensesGuidePage() {
                 <div className="space-y-4">
                   <div className="border-l-4 border-purple-200 pl-4">
                     <h4 className="font-semibold text-gray-900">1. Tạo đề nghị</h4>
-                    <p className="text-gray-600 text-sm">Nhân viên tạo đề nghị với các chi phí đã chi</p>
-                    <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                    <p className="text-black text-sm">Nhân viên tạo đề nghị với các chi phí đã chi</p>
+                    <ul className="text-sm text-black mt-1 space-y-1">
                       <li>• Đính kèm hóa đơn/chứng từ</li>
                       <li>• Mô tả chi tiết từng khoản chi</li>
                       <li>• Chọn danh mục chi phí</li>
@@ -367,13 +367,13 @@ export default function ExpensesGuidePage() {
                   
                   <div className="border-l-4 border-yellow-200 pl-4">
                     <h4 className="font-semibold text-gray-900">2. Gửi phê duyệt</h4>
-                    <p className="text-gray-600 text-sm">Đề nghị được gửi cho người quản lý phê duyệt</p>
+                    <p className="text-black text-sm">Đề nghị được gửi cho người quản lý phê duyệt</p>
                   </div>
                   
                   <div className="border-l-4 border-green-200 pl-4">
                     <h4 className="font-semibold text-gray-900">3. Phê duyệt</h4>
-                    <p className="text-gray-600 text-sm">Người quản lý xem xét và phê duyệt/ từ chối</p>
-                    <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                    <p className="text-black text-sm">Người quản lý xem xét và phê duyệt/ từ chối</p>
+                    <ul className="text-sm text-black mt-1 space-y-1">
                       <li>• Tạo bút toán kế toán khi phê duyệt</li>
                       <li>• Ghi nhận nợ phải trả nhân viên</li>
                     </ul>
@@ -381,8 +381,8 @@ export default function ExpensesGuidePage() {
                   
                   <div className="border-l-4 border-blue-200 pl-4">
                     <h4 className="font-semibold text-gray-900">4. Thanh toán</h4>
-                    <p className="text-gray-600 text-sm">Thực hiện thanh toán cho nhân viên</p>
-                    <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                    <p className="text-black text-sm">Thực hiện thanh toán cho nhân viên</p>
+                    <ul className="text-sm text-black mt-1 space-y-1">
                       <li>• Ghi nhận thanh toán</li>
                       <li>• Cấn trừ nợ phải trả</li>
                     </ul>
@@ -422,8 +422,8 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Tạo ngân sách</h4>
-                      <p className="text-gray-600 text-sm">Thiết lập ngân sách cho từng danh mục chi phí</p>
-                      <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                      <p className="text-black text-sm">Thiết lập ngân sách cho từng danh mục chi phí</p>
+                      <ul className="text-sm text-black mt-1 space-y-1">
                         <li>• Chọn chu kỳ (tháng/quý/năm)</li>
                         <li>• Phân bổ ngân sách theo danh mục</li>
                         <li>• Thiết lập mục tiêu chi tiêu</li>
@@ -437,7 +437,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Phê duyệt ngân sách</h4>
-                      <p className="text-gray-600 text-sm">Người quản lý phê duyệt ngân sách</p>
+                      <p className="text-black text-sm">Người quản lý phê duyệt ngân sách</p>
                     </div>
                   </div>
                   
@@ -447,8 +447,8 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Theo dõi thực tế</h4>
-                      <p className="text-gray-600 text-sm">Hệ thống tự động cập nhật chi tiêu thực tế</p>
-                      <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                      <p className="text-black text-sm">Hệ thống tự động cập nhật chi tiêu thực tế</p>
+                      <ul className="text-sm text-black mt-1 space-y-1">
                         <li>• Từ chi phí đã ghi nhận</li>
                         <li>• Từ hóa đơn đã thanh toán</li>
                         <li>• Tính toán chênh lệch</li>
@@ -462,8 +462,8 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Báo cáo & Phân tích</h4>
-                      <p className="text-gray-600 text-sm">Xem báo cáo so sánh ngân sách vs thực tế</p>
-                      <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                      <p className="text-black text-sm">Xem báo cáo so sánh ngân sách vs thực tế</p>
+                      <ul className="text-sm text-black mt-1 space-y-1">
                         <li>• Biểu đồ trực quan</li>
                         <li>• Phân tích chênh lệch</li>
                         <li>• Đề xuất điều chỉnh</li>
@@ -551,8 +551,8 @@ export default function ExpensesGuidePage() {
                 <div className="space-y-4">
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h4 className="font-semibold text-gray-900 mb-2">📈 Báo cáo chi phí theo thời gian</h4>
-                    <p className="text-gray-600 text-sm mb-2">Theo dõi xu hướng chi phí qua các tháng/quý</p>
-                    <ul className="text-sm text-gray-600 space-y-1">
+                    <p className="text-black text-sm mb-2">Theo dõi xu hướng chi phí qua các tháng/quý</p>
+                    <ul className="text-sm text-black space-y-1">
                       <li>• Biểu đồ đường xu hướng</li>
                       <li>• So sánh theo kỳ</li>
                       <li>• Dự báo chi phí</li>
@@ -561,8 +561,8 @@ export default function ExpensesGuidePage() {
                   
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h4 className="font-semibold text-gray-900 mb-2">🥧 Báo cáo chi phí theo danh mục</h4>
-                    <p className="text-gray-600 text-sm mb-2">Phân tích chi phí theo từng danh mục</p>
-                    <ul className="text-sm text-gray-600 space-y-1">
+                    <p className="text-black text-sm mb-2">Phân tích chi phí theo từng danh mục</p>
+                    <ul className="text-sm text-black space-y-1">
                       <li>• Biểu đồ tròn phân bổ</li>
                       <li>• Top danh mục chi phí cao</li>
                       <li>• Tỷ trọng từng danh mục</li>
@@ -571,8 +571,8 @@ export default function ExpensesGuidePage() {
                   
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h4 className="font-semibold text-gray-900 mb-2">📋 Báo cáo ngân sách vs thực tế</h4>
-                    <p className="text-gray-600 text-sm mb-2">So sánh ngân sách với chi tiêu thực tế</p>
-                    <ul className="text-sm text-gray-600 space-y-1">
+                    <p className="text-black text-sm mb-2">So sánh ngân sách với chi tiêu thực tế</p>
+                    <ul className="text-sm text-black space-y-1">
                       <li>• Chênh lệch ngân sách</li>
                       <li>• Tỷ lệ sử dụng ngân sách</li>
                       <li>• Cảnh báo vượt ngân sách</li>
@@ -581,8 +581,8 @@ export default function ExpensesGuidePage() {
                   
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h4 className="font-semibold text-gray-900 mb-2">🏢 Báo cáo theo nhà cung cấp</h4>
-                    <p className="text-gray-600 text-sm mb-2">Phân tích chi phí theo từng nhà cung cấp</p>
-                    <ul className="text-sm text-gray-600 space-y-1">
+                    <p className="text-black text-sm mb-2">Phân tích chi phí theo từng nhà cung cấp</p>
+                    <ul className="text-sm text-black space-y-1">
                       <li>• Top nhà cung cấp</li>
                       <li>• Lịch sử giao dịch</li>
                       <li>• Đánh giá hiệu quả</li>

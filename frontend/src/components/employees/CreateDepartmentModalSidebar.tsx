@@ -143,13 +143,13 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
             <Building2 className="h-6 w-6 text-blue-600 mr-3" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Tạo phòng ban mới</h2>
-              <p className="text-sm text-gray-500 mt-1">Thêm phòng ban mới vào hệ thống</p>
+              <p className="text-sm text-black mt-1">Thêm phòng ban mới vào hệ thống</p>
             </div>
           </div>
           <button
             onClick={handleClose}
             disabled={submitting}
-            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="text-black hover:text-black p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -205,7 +205,7 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
                 required
                 disabled={submitting}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-black mt-1">
                 Mã phòng ban sẽ được tự động viết hoa
               </p>
             </div>
@@ -242,7 +242,7 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
                 step="1000"
                 disabled={submitting}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-black mt-1">
                 Để trống nếu chưa có ngân sách
               </p>
             </div>

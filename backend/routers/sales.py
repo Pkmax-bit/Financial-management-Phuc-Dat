@@ -1259,8 +1259,12 @@ async def get_sales_dashboard_stats(
         
         # Get quote statistics
         quote_query = supabase.table("quotes").select("*")
-        if date_filter:
-            quote_query = quote_query.filter(date_filter)
+        if start_date and end_date:
+            quote_query = quote_query.gte("created_at", start_date.isoformat()).lte("created_at", end_date.isoformat())
+        elif start_date:
+            quote_query = quote_query.gte("created_at", start_date.isoformat())
+        elif end_date:
+            quote_query = quote_query.lte("created_at", end_date.isoformat())
         
         quotes = quote_query.execute()
         

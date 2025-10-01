@@ -49,8 +49,54 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     if (isOpen) {
       fetchCustomers()
       fetchEmployees()
+      generateProjectCode()
     }
   }, [isOpen])
+
+  const generateProjectCode = async () => {
+    try {
+      // Get all existing project codes from database
+      const { data, error } = await supabase
+        .from('projects')
+        .select('project_code')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Extract all existing numbers
+      const existingNumbers = new Set<number>()
+      if (data && data.length > 0) {
+        data.forEach(project => {
+          const match = project.project_code.match(/#PRJ(\d+)/)
+          if (match) {
+            existingNumbers.add(parseInt(match[1]))
+          }
+        })
+      }
+
+      // Find the next available number
+      let nextNumber = 1
+      while (existingNumbers.has(nextNumber)) {
+        nextNumber++
+      }
+
+      // Format as #PRJXXX (3 digits)
+      const newCode = `#PRJ${nextNumber.toString().padStart(3, '0')}`
+      
+      setFormData(prev => ({
+        ...prev,
+        project_code: newCode
+      }))
+    } catch (error) {
+      console.error('Error generating project code:', error)
+      // Fallback to timestamp-based code
+      const timestamp = Date.now().toString().slice(-6)
+      setFormData(prev => ({
+        ...prev,
+        project_code: `#PRJ${timestamp}`
+      }))
+    }
+  }
 
   const fetchCustomers = async () => {
     try {
@@ -79,7 +125,17 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       // Try API first, fallback to Supabase
       try {
         const data = await employeeApi.getEmployees()
-        setEmployees(data || [])
+        console.log('API employees data:', data)
+        
+        // Transform API data to expected format
+        const employees = data?.map((emp: any) => ({
+          id: emp.id,
+          name: emp.full_name || `${emp.first_name} ${emp.last_name}`,
+          email: emp.email
+        })) || []
+        
+        setEmployees(employees)
+        console.log('Employees set:', employees)
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
         
@@ -97,6 +153,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         })) || []
         
         setEmployees(employees)
+        console.log('Supabase employees set:', employees)
       }
     } catch (error) {
       console.error('Error fetching employees:', error)
@@ -170,11 +227,11 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Tạo dự án mới</h2>
-            <p className="text-sm font-semibold text-gray-700">Thêm dự án vào hệ thống</p>
+            <p className="text-sm font-semibold text-black">Thêm dự án vào hệ thống</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+            className="text-black hover:text-black p-1 rounded-full hover:bg-gray-100 transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -189,24 +246,35 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Mã dự án *
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  name="project_code"
-                  value={formData.project_code}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                  placeholder="VD: PROJ-001"
-                />
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    name="project_code"
+                    value={formData.project_code}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
+                    placeholder="VD: #PRJ001"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={generateProjectCode}
+                  className="px-3 py-2.5 bg-blue-100 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
+                  title="Tạo mã mới"
+                >
+                  <Plus className="h-4 w-4" />
+                  Tạo mới
+                </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Tên dự án *
               </label>
               <div className="relative">
@@ -216,7 +284,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                   placeholder="Nhập tên dự án"
                 />
               </div>
@@ -224,7 +292,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-black mb-2">
               Mô tả
             </label>
             <div className="relative">
@@ -233,7 +301,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                 value={formData.description}
                 onChange={handleChange}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                 placeholder="Nhập mô tả dự án"
               />
             </div>
@@ -241,7 +309,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Khách hàng *
               </label>
               <div className="relative">
@@ -250,7 +318,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   value={formData.customer_id}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 >
                   <option value="">Chọn khách hàng</option>
                   {customers.map(customer => (
@@ -263,8 +331,8 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quản lý dự án *
+              <label className="block text-sm font-medium text-black mb-2">
+                Nhân viên *
               </label>
               <div className="relative">
                 <select
@@ -272,9 +340,9 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   value={formData.manager_id}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 >
-                  <option value="">Chọn quản lý</option>
+                  <option value="">Chọn nhân viên</option>
                   {employees.map(employee => (
                     <option key={employee.id} value={employee.id}>
                       {employee.name}
@@ -287,7 +355,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Ngày bắt đầu *
               </label>
               <div className="relative">
@@ -297,13 +365,13 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   value={formData.start_date}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Ngày kết thúc
               </label>
               <div className="relative">
@@ -312,7 +380,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   name="end_date"
                   value={formData.end_date}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 />
               </div>
             </div>
@@ -320,7 +388,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Ngân sách
               </label>
               <div className="relative">
@@ -331,14 +399,14 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   onChange={handleChange}
                   min="0"
                   step="0.01"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                   placeholder="0.00"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Trạng thái
               </label>
               <div className="relative">
@@ -346,7 +414,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 >
                   <option value="planning">Lập kế hoạch</option>
                   <option value="active">Đang hoạt động</option>
@@ -360,7 +428,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Độ ưu tiên
               </label>
               <div className="relative">
@@ -368,7 +436,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   name="priority"
                   value={formData.priority}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 >
                   <option value="low">Thấp</option>
                   <option value="medium">Trung bình</option>
@@ -379,7 +447,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Loại thanh toán
               </label>
               <div className="relative">
@@ -387,7 +455,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   name="billing_type"
                   value={formData.billing_type}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 >
                   <option value="fixed">Giá cố định</option>
                   <option value="hourly">Theo giờ</option>
@@ -399,7 +467,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
           {formData.billing_type === 'hourly' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-black mb-2">
                 Tỷ lệ theo giờ
               </label>
               <div className="relative">
@@ -410,7 +478,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   onChange={handleChange}
                   min="0"
                   step="0.01"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                   placeholder="0.00"
                 />
               </div>
@@ -421,7 +489,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              className="px-6 py-2.5 text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
             >
               Hủy
             </button>

@@ -150,7 +150,7 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
           </h2>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
             disabled={submitting}
           >
             <X className="h-6 w-6" />
@@ -234,7 +234,7 @@ export default function DepartmentModal({ isOpen, onClose, onSuccess, department
               maxLength={1000}
               disabled={submitting}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-black mt-1">
               {formData.description.length}/1000 ký tự
             </p>
           </div>

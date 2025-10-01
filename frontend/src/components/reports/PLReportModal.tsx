@@ -127,7 +127,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
             {formatCurrency(section.total_amount)}
           </div>
           {section.percentage && (
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-black">
               {formatPercentage(section.percentage)}
             </div>
           )}
@@ -144,7 +144,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
             <div className="text-sm font-medium text-gray-700 hover:text-blue-600">
               {account.account_name}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-black">
               {account.account_code}
             </div>
           </div>
@@ -153,7 +153,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
               {formatCurrency(account.amount)}
             </div>
             {account.percentage && (
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-black">
                 {formatPercentage(account.percentage)}
               </div>
             )}
@@ -199,7 +199,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
           <div key={index} className="bg-white rounded-lg border p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">{metric.label}</p>
+                <p className="text-sm font-medium text-black">{metric.label}</p>
                 <p className={`text-2xl font-bold ${metric.color}`}>
                   {formatCurrency(metric.value)}
                 </p>
@@ -233,7 +233,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-black hover:text-black"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -250,10 +250,10 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
                 <div className="flex justify-between items-center">
                   <div>
                     <h1 className="text-3xl font-bold text-gray-900">Báo cáo Kết quả Kinh doanh</h1>
-                    <p className="mt-2 text-gray-600">
+                    <p className="mt-2 text-black">
                       Báo cáo chi tiết về doanh thu, chi phí và lợi nhuận của công ty
                     </p>
-                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                    <div className="mt-2 flex items-center space-x-4 text-sm text-black">
                       <span>Kỳ báo cáo: {report?.report_period || `${startDate} - ${endDate}`}</span>
                     </div>
                   </div>
@@ -262,7 +262,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Đang tải báo cáo...</span>
+              <span className="ml-2 text-black">Đang tải báo cáo...</span>
             </div>
           )}
 
@@ -356,7 +356,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {report.other_income > 0 && (
                       <div className="text-center">
-                        <p className="text-sm text-gray-600">Thu nhập khác</p>
+                        <p className="text-sm text-black">Thu nhập khác</p>
                         <p className="text-lg font-semibold text-green-600">
                           {formatCurrency(report.other_income)}
                         </p>
@@ -364,7 +364,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
                     )}
                     {report.other_expenses > 0 && (
                       <div className="text-center">
-                        <p className="text-sm text-gray-600">Chi phí khác</p>
+                        <p className="text-sm text-black">Chi phí khác</p>
                         <p className="text-lg font-semibold text-red-600">
                           {formatCurrency(report.other_expenses)}
                         </p>
@@ -393,7 +393,7 @@ export default function PLReportModal({ isOpen, onClose, startDate, endDate }: P
 
               {/* Report Info */}
               <div className="bg-gray-100 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-black">
                   <div>
                     <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
                   </div>

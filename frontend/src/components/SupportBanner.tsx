@@ -93,7 +93,7 @@ export default function SupportBanner({
           <div className="flex-shrink-0 ml-4">
             <button
               onClick={handleClose}
-              className="inline-flex text-gray-400 hover:text-gray-600"
+              className="inline-flex text-black hover:text-black"
             >
               <X className="h-4 w-4" />
             </button>

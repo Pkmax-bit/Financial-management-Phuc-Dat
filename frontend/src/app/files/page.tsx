@@ -137,7 +137,7 @@ export default function FilesPage() {
       case 'archive':
         return <FileArchive className="h-8 w-8 text-purple-500" />
       default:
-        return <FileType className="h-8 w-8 text-gray-500" />
+        return <FileType className="h-8 w-8 text-black" />
     }
   }
 
@@ -265,7 +265,7 @@ export default function FilesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Quản lý file</h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   Tải lên, tổ chức và quản lý file của bạn
                 </p>
               </div>
@@ -289,7 +289,7 @@ export default function FilesPage() {
                   <File className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tổng file</p>
+                  <p className="text-sm font-medium text-black">Tổng file</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                 </div>
               </div>
@@ -301,7 +301,7 @@ export default function FilesPage() {
                   <Image className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Hình ảnh</p>
+                  <p className="text-sm font-medium text-black">Hình ảnh</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.images}</p>
                 </div>
               </div>
@@ -313,7 +313,7 @@ export default function FilesPage() {
                   <FileText className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tài liệu</p>
+                  <p className="text-sm font-medium text-black">Tài liệu</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.documents}</p>
                 </div>
               </div>
@@ -325,7 +325,7 @@ export default function FilesPage() {
                   <Archive className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Nén</p>
+                  <p className="text-sm font-medium text-black">Nén</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.archives}</p>
                 </div>
               </div>
@@ -337,7 +337,7 @@ export default function FilesPage() {
                   <FolderOpen className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tổng dung lượng</p>
+                  <p className="text-sm font-medium text-black">Tổng dung lượng</p>
                   <p className="text-2xl font-bold text-gray-900">{formatFileSize(stats.totalSize)}</p>
                 </div>
               </div>
@@ -350,7 +350,7 @@ export default function FilesPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
+                    <Search className="h-5 w-5 text-black" />
                   </div>
                   <input
                     type="text"
@@ -384,9 +384,9 @@ export default function FilesPage() {
           {/* Files Grid */}
           {filteredFiles.length === 0 ? (
             <div className="text-center py-12">
-              <File className="mx-auto h-12 w-12 text-gray-400" />
+              <File className="mx-auto h-12 w-12 text-black" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Không tìm thấy file</h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-black">
                 {searchTerm || filterType !== 'all'
                   ? 'Hãy thử điều chỉnh tiêu chí tìm kiếm hoặc bộ lọc.'
                   : 'Bắt đầu bằng cách tải lên file đầu tiên.'}
@@ -416,21 +416,21 @@ export default function FilesPage() {
                             setSelectedFile(file)
                             setShowDetailModal(true)
                           }}
-                          className="text-gray-400 hover:text-gray-600"
+                          className="text-black hover:text-black"
                           title="Xem chi tiết"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDownload(file)}
-                          className="text-gray-400 hover:text-blue-600"
+                          className="text-black hover:text-blue-600"
                           title="Tải xuống"
                         >
                           <Download className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(file.id)}
-                          className="text-gray-400 hover:text-red-600"
+                          className="text-black hover:text-red-600"
                           title="Xóa"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -443,13 +443,13 @@ export default function FilesPage() {
                         {file.original_filename}
                       </h3>
                       {file.description && (
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                        <p className="text-xs text-black mt-1 line-clamp-2">
                           {file.description}
                         </p>
                       )}
                     </div>
                     
-                    <div className="flex items-center justify-between text-xs text-gray-500">
+                    <div className="flex items-center justify-between text-xs text-black">
                       <span>{formatFileSize(file.file_size)}</span>
                       <span>{formatDate(file.uploaded_at)}</span>
                     </div>
@@ -465,7 +465,7 @@ export default function FilesPage() {
                           </span>
                         ))}
                         {file.tags.length > 2 && (
-                          <span className="text-xs text-gray-500">+{file.tags.length - 2}</span>
+                          <span className="text-xs text-black">+{file.tags.length - 2}</span>
                         )}
                       </div>
                     )}
@@ -486,7 +486,7 @@ export default function FilesPage() {
                 <h3 className="text-lg font-medium text-gray-900">Tải lên file</h3>
                 <button
                   onClick={() => setShowUploadModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -504,11 +504,11 @@ export default function FilesPage() {
                     className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-600">
+                    <Upload className="mx-auto h-12 w-12 text-black" />
+                    <p className="mt-2 text-sm text-black">
                       Nhấp để tải lên hoặc kéo thả
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-black">
                       PNG, JPG, PDF, DOC, XLS tối đa 50MB
                     </p>
                   </div>
@@ -525,7 +525,7 @@ export default function FilesPage() {
                 {uploading && (
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-600">Đang tải lên file...</p>
+                    <p className="mt-2 text-sm text-black">Đang tải lên file...</p>
                   </div>
                 )}
               </div>
@@ -552,7 +552,7 @@ export default function FilesPage() {
                 <h3 className="text-lg font-medium text-gray-900">Chi tiết file</h3>
                 <button
                   onClick={() => setShowDetailModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-black hover:text-black"
                 >
                   <span className="sr-only">Đóng</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -566,25 +566,25 @@ export default function FilesPage() {
                   {getFileIcon(selectedFile.original_filename)}
                   <div>
                     <h4 className="font-medium text-gray-900">{selectedFile.original_filename}</h4>
-                    <p className="text-sm text-gray-500">{formatFileSize(selectedFile.file_size)}</p>
+                    <p className="text-sm text-black">{formatFileSize(selectedFile.file_size)}</p>
                   </div>
                 </div>
                 
                 {selectedFile.description && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Mô tả</label>
-                    <p className="mt-1 text-sm text-gray-600">{selectedFile.description}</p>
+                    <p className="mt-1 text-sm text-black">{selectedFile.description}</p>
                   </div>
                 )}
                 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="font-medium text-gray-700">Loại:</span>
-                    <p className="text-gray-600">{selectedFile.mime_type}</p>
+                    <p className="text-black">{selectedFile.mime_type}</p>
                   </div>
                   <div>
                     <span className="font-medium text-gray-700">Tải lên:</span>
-                    <p className="text-gray-600">{formatDate(selectedFile.uploaded_at)}</p>
+                    <p className="text-black">{formatDate(selectedFile.uploaded_at)}</p>
                   </div>
                 </div>
                 

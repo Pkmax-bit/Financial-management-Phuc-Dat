@@ -108,7 +108,7 @@ export default function ExpensesHelpPage() {
                   <HelpCircle className="h-6 w-6 text-blue-600" />
                   Trung tâm Hỗ trợ - Chi phí
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p className="text-black mt-1">
                   Tìm kiếm câu trả lời và hỗ trợ cho các vấn đề về quản lý chi phí
                 </p>
               </div>
@@ -129,7 +129,7 @@ export default function ExpensesHelpPage() {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'overview' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Tổng quan
@@ -139,7 +139,7 @@ export default function ExpensesHelpPage() {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'getting-started' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Bắt đầu
@@ -149,7 +149,7 @@ export default function ExpensesHelpPage() {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'guides' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Hướng dẫn
@@ -159,7 +159,7 @@ export default function ExpensesHelpPage() {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'faq' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Câu hỏi thường gặp
@@ -169,7 +169,7 @@ export default function ExpensesHelpPage() {
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
                     activeTab === 'support' 
                       ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-black hover:bg-gray-100'
                   }`}
                 >
                   Liên hệ hỗ trợ
@@ -256,8 +256,8 @@ export default function ExpensesHelpPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 mb-2">Thiết lập Nhà cung cấp</h3>
-                        <p className="text-gray-600 text-sm mb-2">Thêm thông tin các nhà cung cấp mà doanh nghiệp thường xuyên làm việc</p>
-                        <ul className="text-sm text-gray-600 space-y-1">
+                        <p className="text-black text-sm mb-2">Thêm thông tin các nhà cung cấp mà doanh nghiệp thường xuyên làm việc</p>
+                        <ul className="text-sm text-black space-y-1">
                           <li>• Vào tab &quot;Nhà cung cấp&quot;</li>
                           <li>• Nhấn &quot;Tạo nhà cung cấp&quot;</li>
                           <li>• Điền đầy đủ thông tin liên hệ và tài chính</li>
@@ -271,8 +271,8 @@ export default function ExpensesHelpPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 mb-2">Tạo Ngân sách</h3>
-                        <p className="text-gray-600 text-sm mb-2">Thiết lập ngân sách cho các danh mục chi phí chính</p>
-                        <ul className="text-sm text-gray-600 space-y-1">
+                        <p className="text-black text-sm mb-2">Thiết lập ngân sách cho các danh mục chi phí chính</p>
+                        <ul className="text-sm text-black space-y-1">
                           <li>• Vào tab &quot;Quản lý ngân sách&quot;</li>
                           <li>• Nhấn &quot;Tạo ngân sách&quot;</li>
                           <li>• Chọn chu kỳ và thiết lập các dòng ngân sách</li>
@@ -286,8 +286,8 @@ export default function ExpensesHelpPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 mb-2">Ghi nhận Chi phí</h3>
-                        <p className="text-gray-600 text-sm mb-2">Bắt đầu ghi nhận các khoản chi phí phát sinh</p>
-                        <ul className="text-sm text-gray-600 space-y-1">
+                        <p className="text-black text-sm mb-2">Bắt đầu ghi nhận các khoản chi phí phát sinh</p>
+                        <ul className="text-sm text-black space-y-1">
                           <li>• Vào tab &quot;Chi phí&quot;</li>
                           <li>• Nhấn &quot;Tạo chi phí&quot;</li>
                           <li>• Điền thông tin và đính kèm chứng từ</li>
@@ -301,8 +301,8 @@ export default function ExpensesHelpPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 mb-2">Theo dõi & Báo cáo</h3>
-                        <p className="text-gray-600 text-sm mb-2">Sử dụng các báo cáo để theo dõi hiệu quả</p>
-                        <ul className="text-sm text-gray-600 space-y-1">
+                        <p className="text-black text-sm mb-2">Sử dụng các báo cáo để theo dõi hiệu quả</p>
+                        <ul className="text-sm text-black space-y-1">
                           <li>• Xem báo cáo ngân sách vs thực tế</li>
                           <li>• Phân tích chi phí theo danh mục</li>
                           <li>• Điều chỉnh ngân sách khi cần thiết</li>
@@ -326,7 +326,7 @@ export default function ExpensesHelpPage() {
                         <Receipt className="h-5 w-5 text-orange-600" />
                         Quản lý Chi phí
                       </h3>
-                      <p className="text-gray-600 text-sm mb-3">Hướng dẫn tạo và quản lý chi phí</p>
+                      <p className="text-black text-sm mb-3">Hướng dẫn tạo và quản lý chi phí</p>
                       <Link 
                         href="/expenses/guide#expenses"
                         className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
@@ -340,7 +340,7 @@ export default function ExpensesHelpPage() {
                         <BarChart3 className="h-5 w-5 text-green-600" />
                         Quản lý Ngân sách
                       </h3>
-                      <p className="text-gray-600 text-sm mb-3">Hướng dẫn thiết lập và theo dõi ngân sách</p>
+                      <p className="text-black text-sm mb-3">Hướng dẫn thiết lập và theo dõi ngân sách</p>
                       <Link 
                         href="/expenses/guide#budgeting"
                         className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
@@ -354,7 +354,7 @@ export default function ExpensesHelpPage() {
                         <FileTextIcon className="h-5 w-5 text-red-600" />
                         Hóa đơn NCC
                       </h3>
-                      <p className="text-gray-600 text-sm mb-3">Hướng dẫn quản lý hóa đơn nhà cung cấp</p>
+                      <p className="text-black text-sm mb-3">Hướng dẫn quản lý hóa đơn nhà cung cấp</p>
                       <Link 
                         href="/expenses/guide#bills"
                         className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
@@ -368,7 +368,7 @@ export default function ExpensesHelpPage() {
                         <User className="h-5 w-5 text-purple-600" />
                         Đề nghị Hoàn ứng
                       </h3>
-                      <p className="text-gray-600 text-sm mb-3">Hướng dẫn quản lý đề nghị hoàn ứng</p>
+                      <p className="text-black text-sm mb-3">Hướng dẫn quản lý đề nghị hoàn ứng</p>
                       <Link 
                         href="/expenses/guide#expense-claims"
                         className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
@@ -390,7 +390,7 @@ export default function ExpensesHelpPage() {
                   {/* Search */}
                   <div className="mb-6">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
                       <input
                         type="text"
                         placeholder="Tìm kiếm câu hỏi..."
@@ -411,14 +411,14 @@ export default function ExpensesHelpPage() {
                         >
                           <span className="font-medium text-gray-900">{faq.question}</span>
                           {expandedFaq === faq.id ? (
-                            <ChevronDown className="h-4 w-4 text-gray-500" />
+                            <ChevronDown className="h-4 w-4 text-black" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 text-gray-500" />
+                            <ChevronRight className="h-4 w-4 text-black" />
                           )}
                         </button>
                         {expandedFaq === faq.id && (
                           <div className="px-4 pb-3">
-                            <p className="text-gray-600 text-sm">{faq.answer}</p>
+                            <p className="text-black text-sm">{faq.answer}</p>
                           </div>
                         )}
                       </div>
@@ -427,9 +427,9 @@ export default function ExpensesHelpPage() {
                   
                   {filteredFaqs.length === 0 && (
                     <div className="text-center py-8">
-                      <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <Search className="h-12 w-12 text-black mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy câu hỏi</h3>
-                      <p className="text-gray-600">Thử tìm kiếm với từ khóa khác hoặc liên hệ hỗ trợ</p>
+                      <p className="text-black">Thử tìm kiếm với từ khóa khác hoặc liên hệ hỗ trợ</p>
                     </div>
                   )}
                 </div>
@@ -448,7 +448,7 @@ export default function ExpensesHelpPage() {
                         <MessageCircle className="h-5 w-5 text-blue-600" />
                         Hỗ trợ Trực tuyến
                       </h3>
-                      <p className="text-gray-600 text-sm mb-4">
+                      <p className="text-black text-sm mb-4">
                         Nhận hỗ trợ nhanh chóng qua chat trực tuyến
                       </p>
                       <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
@@ -461,7 +461,7 @@ export default function ExpensesHelpPage() {
                         <Mail className="h-5 w-5 text-green-600" />
                         Email Hỗ trợ
                       </h3>
-                      <p className="text-gray-600 text-sm mb-4">
+                      <p className="text-black text-sm mb-4">
                         Gửi email để nhận hỗ trợ chi tiết
                       </p>
                       <a 
@@ -477,7 +477,7 @@ export default function ExpensesHelpPage() {
                         <Phone className="h-5 w-5 text-purple-600" />
                         Điện thoại
                       </h3>
-                      <p className="text-gray-600 text-sm mb-4">
+                      <p className="text-black text-sm mb-4">
                         Gọi điện để được hỗ trợ trực tiếp
                       </p>
                       <a 
@@ -493,10 +493,10 @@ export default function ExpensesHelpPage() {
                         <Clock className="h-5 w-5 text-orange-600" />
                         Giờ làm việc
                       </h3>
-                      <p className="text-gray-600 text-sm mb-2">
+                      <p className="text-black text-sm mb-2">
                         <strong>Thứ 2 - Thứ 6:</strong> 8:00 - 17:00
                       </p>
-                      <p className="text-gray-600 text-sm">
+                      <p className="text-black text-sm">
                         <strong>Thứ 7:</strong> 8:00 - 12:00
                       </p>
                     </div>

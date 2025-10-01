@@ -157,7 +157,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
           <h2 className="text-xl font-semibold text-gray-900">Tạo thanh toán mới</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
             disabled={submitting}
           >
             <X className="h-6 w-6" />
@@ -257,7 +257,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
                           <div className="text-sm font-medium text-gray-900">
                             {invoice.invoice_number}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-black">
                             {new Intl.NumberFormat('vi-VN', {
                               style: 'currency',
                               currency: 'VND'
@@ -268,7 +268,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
                     ))}
                   </div>
                 ) : (
-                  <div className="p-3 text-center text-gray-500">
+                  <div className="p-3 text-center text-black">
                     Không có hóa đơn nào cần thanh toán
                   </div>
                 )}

@@ -199,7 +199,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
       green: 'bg-green-100 text-green-600',
       purple: 'bg-purple-100 text-purple-600'
     }
-    return colors[color as keyof typeof colors] || 'bg-gray-100 text-gray-600'
+    return colors[color as keyof typeof colors] || 'bg-gray-100 text-black'
   }
 
   return (
@@ -212,7 +212,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Trung tâm Hỗ trợ</h2>
-            <p className="text-sm text-gray-500">Hướng dẫn toàn diện</p>
+            <p className="text-sm text-black">Hướng dẫn toàn diện</p>
           </div>
         </div>
       </div>
@@ -220,7 +220,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
       {/* Search */}
       <div className="p-4 border-b border-gray-200">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
           <input
             type="text"
             placeholder="Tìm kiếm hỗ trợ..."
@@ -239,7 +239,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
             className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === 'overview' 
                 ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                : 'text-black hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             <Home className="h-4 w-4 mr-3" />
@@ -251,7 +251,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
             className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === 'modules' 
                 ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                : 'text-black hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             <BookOpen className="h-4 w-4 mr-3" />
@@ -263,7 +263,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
             className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === 'quick-guides' 
                 ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                : 'text-black hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             <Lightbulb className="h-4 w-4 mr-3" />
@@ -275,7 +275,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
             className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === 'videos' 
                 ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                : 'text-black hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             <Video className="h-4 w-4 mr-3" />
@@ -287,7 +287,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
             className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === 'faq' 
                 ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                : 'text-black hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             <MessageCircle className="h-4 w-4 mr-3" />
@@ -299,7 +299,7 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
             className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === 'contact' 
                 ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                : 'text-black hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             <Phone className="h-4 w-4 mr-3" />
@@ -314,28 +314,28 @@ export default function SupportSidebar({ activeTab, onTabChange, searchTerm, onS
         <div className="space-y-2">
           <Link
             href="/dashboard"
-            className="flex items-center text-sm text-gray-600 hover:text-blue-600"
+            className="flex items-center text-sm text-black hover:text-blue-600"
           >
             <Home className="h-4 w-4 mr-2" />
             Về trang chủ
           </Link>
           <Link
             href="/sales"
-            className="flex items-center text-sm text-gray-600 hover:text-blue-600"
+            className="flex items-center text-sm text-black hover:text-blue-600"
           >
             <DollarSign className="h-4 w-4 mr-2" />
             Bán hàng
           </Link>
           <Link
             href="/expenses"
-            className="flex items-center text-sm text-gray-600 hover:text-blue-600"
+            className="flex items-center text-sm text-black hover:text-blue-600"
           >
             <Receipt className="h-4 w-4 mr-2" />
             Chi phí
           </Link>
           <Link
             href="/employees"
-            className="flex items-center text-sm text-gray-600 hover:text-blue-600"
+            className="flex items-center text-sm text-black hover:text-blue-600"
           >
             <Users className="h-4 w-4 mr-2" />
             Nhân sự

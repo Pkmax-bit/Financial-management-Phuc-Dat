@@ -138,7 +138,7 @@ export default function CreatePositionModal({ isOpen, onClose, onSuccess }: Crea
           <h2 className="text-xl font-semibold text-gray-900">Tạo chức vụ mới</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
             disabled={submitting}
           >
             <X className="h-6 w-6" />

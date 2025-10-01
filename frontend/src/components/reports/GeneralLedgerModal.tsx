@@ -173,7 +173,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
       case 'expense':
         return 'text-orange-600 bg-orange-100'
       default:
-        return 'text-gray-600 bg-gray-100'
+        return 'text-black bg-gray-100'
     }
   }
 
@@ -232,11 +232,11 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
             <div key={index} className="bg-white rounded-lg border p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">{metric.title}</p>
+                  <p className="text-sm font-medium text-black">{metric.title}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {metric.title.includes('Nợ') || metric.title.includes('Có') ? formatCurrency(metric.value) : metric.value}
                   </p>
-                  <p className="text-xs text-gray-500">{metric.description}</p>
+                  <p className="text-xs text-black">{metric.description}</p>
                 </div>
                 <div className={`p-3 rounded-lg ${metric.color}`}>
                   <Icon className="h-6 w-6" />
@@ -258,7 +258,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Top 5 Tài khoản hoạt động</h3>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-black">
             {report.account_summary.length} tài khoản có giao dịch
           </div>
         </div>
@@ -272,14 +272,14 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
                 </div>
                 <div>
                   <div className="font-medium text-gray-900">{account.account_name}</div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     {account.account_code} • {account.transaction_count} giao dịch
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="font-semibold text-gray-900">{formatCurrency(account.ending_balance)}</div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-black">
                   Nợ: {formatCurrency(account.total_debits)} • Có: {formatCurrency(account.total_credits)}
                 </div>
               </div>
@@ -298,7 +298,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Sổ cái chi tiết</h3>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-black">
               Hiển thị {paginatedEntries.length} / {filteredEntries.length} bút toán
             </div>
           </div>
@@ -308,29 +308,29 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngày
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số chứng từ
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Loại giao dịch
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Tài khoản
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Mô tả
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Ghi Nợ
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Ghi Có
                 </th>
                 {includeRunningBalance && (
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                     Số dư
                   </th>
                 )}
@@ -348,11 +348,11 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex items-center">
-                      <Hash className="h-3 w-3 mr-1 text-gray-400" />
+                      <Hash className="h-3 w-3 mr-1 text-black" />
                       {entry.journal_entry.transaction_id}
                     </div>
                     {entry.journal_entry.reference_number && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-black">
                         Ref: {entry.journal_entry.reference_number}
                       </div>
                     )}
@@ -372,7 +372,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
                         <div className="text-sm font-medium text-gray-900 hover:text-blue-600">
                           {entry.journal_entry.account_name}
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-black">
                           {entry.journal_entry.account_code}
                         </div>
                       </div>
@@ -392,7 +392,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
                       <div className={`font-medium ${entry.balance_type === 'Debit' ? 'text-red-600' : 'text-green-600'}`}>
                         {formatCurrency(entry.running_balance)}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-black">
                         {entry.balance_type}
                       </div>
                     </td>
@@ -405,8 +405,8 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
 
         {paginatedEntries.length === 0 && (
           <div className="text-center py-12">
-            <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Không tìm thấy bút toán nào</p>
+            <BookOpen className="h-12 w-12 text-black mx-auto mb-4" />
+            <p className="text-black">Không tìm thấy bút toán nào</p>
           </div>
         )}
       </div>
@@ -434,7 +434,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-black hover:text-black"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -451,17 +451,17 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Kỳ báo cáo</label>
-                  <p className="text-sm text-gray-600">{formatDate(startDate)} - {formatDate(endDate)}</p>
+                  <p className="text-sm text-black">{formatDate(startDate)} - {formatDate(endDate)}</p>
                 </div>
                 {report && (
                   <div>
                     <label className="text-sm font-medium text-gray-700">Cập nhật lúc</label>
-                    <p className="text-sm text-gray-600">{formatDate(report.generated_at)}</p>
+                    <p className="text-sm text-black">{formatDate(report.generated_at)}</p>
                   </div>
                 )}
                 <div>
                   <label className="text-sm font-medium text-gray-700">Mô tả</label>
-                  <p className="text-sm text-gray-600">Báo cáo chi tiết về tất cả giao dịch kế toán và số dư tài khoản</p>
+                  <p className="text-sm text-black">Báo cáo chi tiết về tất cả giao dịch kế toán và số dư tài khoản</p>
                 </div>
               </div>
             </div>
@@ -473,7 +473,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Đang tải báo cáo Sổ cái...</span>
+              <span className="ml-2 text-black">Đang tải báo cáo Sổ cái...</span>
             </div>
           )}
 
@@ -508,7 +508,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
                       Tìm kiếm
                     </label>
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
                       <input
                         type="text"
                         placeholder="Tìm kiếm tài khoản, mô tả..."
@@ -575,7 +575,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
               {/* Pagination */}
               {filteredEntries.length > pageSize && (
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     Hiển thị {(currentPage - 1) * pageSize + 1} đến {Math.min(currentPage * pageSize, filteredEntries.length)} 
                     trong tổng số {filteredEntries.length} bút toán
                   </div>
@@ -604,7 +604,7 @@ export default function GeneralLedgerModal({ isOpen, onClose, startDate, endDate
               {/* Report Information */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-900 mb-2">Thông tin báo cáo</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-black">
                   <div>
                     <span className="font-medium">Tổng bút toán:</span> {report.total_entries}
                   </div>

@@ -31,7 +31,7 @@ function DepartmentManager() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium text-gray-900">Quản lý phòng ban</h3>
-          <p className="text-sm text-gray-500">Tạo và quản lý các phòng ban trong công ty</p>
+          <p className="text-sm text-black">Tạo và quản lý các phòng ban trong công ty</p>
         </div>
         <button 
           onClick={() => setShowDepartmentModal(true)}
@@ -47,7 +47,7 @@ function DepartmentManager() {
           <h4 className="text-sm font-medium text-gray-900">Danh sách phòng ban</h4>
         </div>
         <div className="p-6">
-          <p className="text-sm text-gray-500">Chức năng quản lý phòng ban sẽ được phát triển trong tương lai.</p>
+          <p className="text-sm text-black">Chức năng quản lý phòng ban sẽ được phát triển trong tương lai.</p>
         </div>
       </div>
 
@@ -262,7 +262,7 @@ export default function EmployeesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Quản lý nhân viên</h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   Quản lý thông tin nhân viên, phòng ban và chức vụ
                 </p>
               </div>
@@ -291,7 +291,7 @@ export default function EmployeesPage() {
               <div className="flex items-center">
                 <Users className="h-8 w-8 text-blue-500" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Tổng nhân viên</p>
+                  <p className="text-sm font-medium text-black">Tổng nhân viên</p>
                   <p className="text-2xl font-bold text-gray-900">{filteredEmployees.length}</p>
                 </div>
               </div>
@@ -301,7 +301,7 @@ export default function EmployeesPage() {
               <div className="flex items-center">
                 <Users className="h-8 w-8 text-green-500" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Nhân viên hoạt động</p>
+                  <p className="text-sm font-medium text-black">Nhân viên hoạt động</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {filteredEmployees.filter(e => e.status === 'active').length}
                   </p>
@@ -313,7 +313,7 @@ export default function EmployeesPage() {
               <div className="flex items-center">
                 <DollarSign className="h-8 w-8 text-orange-500" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Tổng lương</p>
+                  <p className="text-sm font-medium text-black">Tổng lương</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(filteredEmployees.reduce((sum, e) => sum + (e.salary || 0), 0))}
                   </p>
@@ -325,7 +325,7 @@ export default function EmployeesPage() {
               <div className="flex items-center">
                 <Building2 className="h-8 w-8 text-purple-500" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Phòng ban</p>
+                  <p className="text-sm font-medium text-black">Phòng ban</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {new Set(filteredEmployees.map(e => e.department_id).filter(Boolean)).size}
                   </p>
@@ -371,7 +371,7 @@ export default function EmployeesPage() {
 
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+                  <Search className="h-5 w-5 text-black" />
                 </div>
                 <input
                   type="text"
@@ -390,25 +390,25 @@ export default function EmployeesPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Nhân viên
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Liên hệ
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Chức vụ
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Lương
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Ngày vào làm
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Trạng thái
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Hành động
                     </th>
                   </tr>
@@ -420,7 +420,7 @@ export default function EmployeesPage() {
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
                             <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-sm font-medium text-gray-600">
+                              <span className="text-sm font-medium text-black">
                                 {employee.first_name.charAt(0).toUpperCase()}
                               </span>
                             </div>
@@ -429,7 +429,7 @@ export default function EmployeesPage() {
                             <div className="text-sm font-medium text-gray-900">
                               {employee.first_name} {employee.last_name}
                             </div>
-                            <div className="text-sm text-gray-500">Mã: {employee.employee_code}</div>
+                            <div className="text-sm text-black">Mã: {employee.employee_code}</div>
                           </div>
                         </div>
                       </td>
@@ -437,25 +437,25 @@ export default function EmployeesPage() {
                         <div className="text-sm text-gray-900">
                           {employee.email && (
                             <div className="flex items-center">
-                              <Mail className="h-3 w-3 mr-1 text-gray-400" />
+                              <Mail className="h-3 w-3 mr-1 text-black" />
                               {employee.email}
                             </div>
                           )}
                           {employee.phone && (
                             <div className="flex items-center mt-1">
-                              <span className="h-3 w-3 mr-1 text-gray-400">📞</span>
+                              <span className="h-3 w-3 mr-1 text-black">📞</span>
                               {employee.phone}
                             </div>
                           )}
                           {!employee.email && !employee.phone && (
-                            <div className="text-sm text-gray-400">—</div>
+                            <div className="text-sm text-black">—</div>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
                           <div className="font-medium">{employee.position_id || 'N/A'}</div>
-                          <div className="text-xs text-gray-500">{employee.department_id || 'N/A'}</div>
+                          <div className="text-xs text-black">{employee.department_id || 'N/A'}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -463,7 +463,7 @@ export default function EmployeesPage() {
                           {employee.salary ? formatCurrency(employee.salary) : 'N/A'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                         {formatDate(employee.hire_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -471,7 +471,7 @@ export default function EmployeesPage() {
                           {getStatusLabel(employee.status)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                         <div className="flex space-x-2">
                           <button 
                             onClick={() => handleViewEmployee(employee.id)}
@@ -503,7 +503,7 @@ export default function EmployeesPage() {
             </div>
             
             {/* Summary */}
-            <div className="flex justify-between items-center text-sm text-gray-600 px-6 py-4 border-t border-gray-200">
+            <div className="flex justify-between items-center text-sm text-black px-6 py-4 border-t border-gray-200">
               <span>Hiển thị {filteredEmployees.length} nhân viên</span>
               <span>
                 Tổng lương: {formatCurrency(filteredEmployees.reduce((sum, e) => sum + (e.salary || 0), 0))}

@@ -161,11 +161,11 @@ export default function DepartmentManagerSidebar({ isOpen, onClose }: Department
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Quản lý phòng ban</h2>
-            <p className="text-sm text-gray-500 mt-1">Quản lý tất cả phòng ban trong công ty</p>
+            <p className="text-sm text-black mt-1">Quản lý tất cả phòng ban trong công ty</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg"
+            className="text-black hover:text-black p-2 hover:bg-gray-100 rounded-lg"
           >
             <X className="h-5 w-5" />
           </button>
@@ -214,7 +214,7 @@ export default function DepartmentManagerSidebar({ isOpen, onClose }: Department
             </button>
             
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
               <input
                 type="text"
                 placeholder="Tìm kiếm phòng ban..."
@@ -241,12 +241,12 @@ export default function DepartmentManagerSidebar({ isOpen, onClose }: Department
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Đang tải...</p>
+              <p className="mt-2 text-black">Đang tải...</p>
             </div>
           ) : (
             <div className="space-y-4">
               {filteredDepartments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-black">
                   <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <p>Không có phòng ban nào</p>
                 </div>
@@ -264,31 +264,31 @@ export default function DepartmentManagerSidebar({ isOpen, onClose }: Department
                             <h3 className="text-lg font-medium text-gray-900 truncate">
                               {department.name}
                             </h3>
-                            <span className="text-sm text-gray-500 font-mono">
+                            <span className="text-sm text-black font-mono">
                               {department.code}
                             </span>
                           </div>
                           
                           {department.description && (
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                            <p className="text-sm text-black mt-1 line-clamp-2">
                               {department.description}
                             </p>
                           )}
                           
                           <div className="flex items-center space-x-4 mt-2">
-                            <div className="flex items-center text-sm text-gray-500">
+                            <div className="flex items-center text-sm text-black">
                               <Users className="h-4 w-4 mr-1" />
                               {department.employee_count || 0} nhân viên
                             </div>
                             
                             {department.budget && (
-                              <div className="flex items-center text-sm text-gray-500">
+                              <div className="flex items-center text-sm text-black">
                                 <DollarSign className="h-4 w-4 mr-1" />
                                 {formatCurrency(department.budget)}
                               </div>
                             )}
                             
-                            <div className="flex items-center text-sm text-gray-500">
+                            <div className="flex items-center text-sm text-black">
                               <Calendar className="h-4 w-4 mr-1" />
                               {formatDate(department.created_at)}
                             </div>
@@ -332,7 +332,7 @@ export default function DepartmentManagerSidebar({ isOpen, onClose }: Department
 
         {/* Footer */}
         <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
-          <div className="flex justify-between items-center text-sm text-gray-600">
+          <div className="flex justify-between items-center text-sm text-black">
             <span>Tổng cộng {filteredDepartments.length} phòng ban</span>
             <button
               onClick={onClose}

@@ -124,7 +124,7 @@ export default function CreateDepartmentModal({ isOpen, onClose, onSuccess }: Cr
           <h2 className="text-xl font-semibold text-gray-900">Tạo phòng ban mới</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
             disabled={submitting}
           >
             <X className="h-6 w-6" />

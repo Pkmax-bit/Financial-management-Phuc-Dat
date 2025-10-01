@@ -160,7 +160,7 @@ export default function BalanceSheetDemoPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Demo Báo cáo Cân đối Kế toán</h1>
-              <p className="text-gray-600 mt-2">
+              <p className="text-black mt-2">
                 Trình bày dữ liệu báo cáo cân đối kế toán với giao diện đẹp mắt
               </p>
             </div>
@@ -226,7 +226,7 @@ export default function BalanceSheetDemoPage() {
         {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-gray-600">Đang tải báo cáo...</span>
+            <span className="ml-2 text-black">Đang tải báo cáo...</span>
           </div>
         )}
 

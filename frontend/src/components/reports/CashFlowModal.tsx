@@ -138,7 +138,7 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{section.section_name}</h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-black">
               {section.items.length} mục • Tổng: {formatCurrency(section.subtotal)}
             </p>
           </div>
@@ -147,7 +147,7 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
           <div className={`text-2xl font-bold ${section.net_cash_flow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatCurrency(section.net_cash_flow)}
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-black">
             {section.net_cash_flow >= 0 ? 'Dòng tiền vào' : 'Dòng tiền ra'}
           </div>
         </div>
@@ -169,13 +169,13 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
                   {item.item_name}
                 </div>
                 {item.item_code && (
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-black">
                     ({item.item_code})
                   </div>
                 )}
               </div>
               {item.description && (
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-black mt-1">
                   {item.description}
                 </div>
               )}
@@ -233,11 +233,11 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
             <div key={index} className="bg-white rounded-lg border p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">{metric.title}</p>
+                  <p className="text-sm font-medium text-black">{metric.title}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(metric.value)}
                   </p>
-                  <p className="text-xs text-gray-500">{metric.description}</p>
+                  <p className="text-xs text-black">{metric.description}</p>
                 </div>
                 <div className={`p-3 rounded-lg ${metric.color}`}>
                   <Icon className="h-6 w-6" />
@@ -258,7 +258,7 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Tổng kết Dòng tiền</h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-black">
               Kỳ báo cáo: {statement.report_period}
             </p>
           </div>
@@ -266,7 +266,7 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
             <div className={`text-3xl font-bold ${statement.net_cash_flow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(statement.net_cash_flow)}
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-black">
               Dòng tiền thuần
             </div>
           </div>
@@ -274,19 +274,19 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
         
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="text-center">
-            <div className="text-sm text-gray-600">Tiền đầu kỳ</div>
+            <div className="text-sm text-black">Tiền đầu kỳ</div>
             <div className="text-lg font-semibold text-gray-900">
               {formatCurrency(statement.beginning_cash)}
             </div>
           </div>
           <div className="text-center">
-            <div className="text-sm text-gray-600">Thay đổi tiền</div>
+            <div className="text-sm text-black">Thay đổi tiền</div>
             <div className={`text-lg font-semibold ${statement.net_change_in_cash >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {statement.net_change_in_cash >= 0 ? '+' : ''}{formatCurrency(statement.net_change_in_cash)}
             </div>
           </div>
           <div className="text-center">
-            <div className="text-sm text-gray-600">Tiền cuối kỳ</div>
+            <div className="text-sm text-black">Tiền cuối kỳ</div>
             <div className="text-lg font-semibold text-gray-900">
               {formatCurrency(statement.ending_cash)}
             </div>
@@ -324,7 +324,7 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-black hover:text-black"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -341,10 +341,10 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
                 <div className="flex justify-between items-center">
                   <div>
                     <h1 className="text-3xl font-bold text-gray-900">Báo cáo Lưu chuyển Tiền tệ</h1>
-                    <p className="mt-2 text-gray-600">
+                    <p className="mt-2 text-black">
                       Báo cáo chi tiết về các dòng tiền vào và ra của công ty theo 3 hoạt động chính
                     </p>
-                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                    <div className="mt-2 flex items-center space-x-4 text-sm text-black">
                       <span>Kỳ báo cáo: {formatDate(startDate)} - {formatDate(endDate)}</span>
                       {statement && (
                         <span>• Cập nhật lúc: {formatDate(statement.generated_at)}</span>
@@ -356,7 +356,7 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Đang tải báo cáo Lưu chuyển Tiền tệ...</span>
+              <span className="ml-2 text-black">Đang tải báo cáo Lưu chuyển Tiền tệ...</span>
             </div>
           )}
 
@@ -407,7 +407,7 @@ export default function CashFlowModal({ isOpen, onClose, startDate, endDate }: C
               {/* Report Information */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-900 mb-2">Thông tin báo cáo</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-black">
                   <div>
                     <span className="font-medium">Tổng giao dịch:</span> {statement.total_transactions}
                   </div>

@@ -180,7 +180,7 @@ export default function BudgetingTab() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Quản lý Ngân sách</h2>
-          <p className="text-gray-600">Thiết lập và theo dõi ngân sách chi tiêu</p>
+          <p className="text-black">Thiết lập và theo dõi ngân sách chi tiêu</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -200,7 +200,7 @@ export default function BudgetingTab() {
                 <BarChart3 className="h-6 w-6 text-blue-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Tổng ngân sách</p>
+                <p className="text-sm font-medium text-black">Tổng ngân sách</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.total_budgets}</p>
               </div>
             </div>
@@ -212,7 +212,7 @@ export default function BudgetingTab() {
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Tổng ngân sách</p>
+                <p className="text-sm font-medium text-black">Tổng ngân sách</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatCurrency(stats.total_budgeted_amount)}
                 </p>
@@ -226,7 +226,7 @@ export default function BudgetingTab() {
                 <TrendingUp className="h-6 w-6 text-yellow-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Thực tế</p>
+                <p className="text-sm font-medium text-black">Thực tế</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatCurrency(stats.total_actual_amount)}
                 </p>
@@ -244,7 +244,7 @@ export default function BudgetingTab() {
                 )}
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Chênh lệch</p>
+                <p className="text-sm font-medium text-black">Chênh lệch</p>
                 <p className={`text-2xl font-bold ${stats.total_variance_amount >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {formatCurrency(stats.total_variance_amount)}
                 </p>
@@ -259,7 +259,7 @@ export default function BudgetingTab() {
         <div className="flex flex-wrap gap-4">
           <div className="flex-1 min-w-64">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
               <input
                 type="text"
                 placeholder="Tìm kiếm ngân sách..."
@@ -308,28 +308,28 @@ export default function BudgetingTab() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Tên ngân sách
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Chu kỳ
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Thời gian
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngân sách
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Thực tế
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Chênh lệch
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Trạng thái
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Thao tác
                 </th>
               </tr>
@@ -341,7 +341,7 @@ export default function BudgetingTab() {
                     <div>
                       <div className="text-sm font-medium text-gray-900">{budget.budget_name}</div>
                       {budget.description && (
-                        <div className="text-sm text-gray-500">{budget.description}</div>
+                        <div className="text-sm text-black">{budget.description}</div>
                       )}
                     </div>
                   </td>
@@ -423,9 +423,9 @@ export default function BudgetingTab() {
       {/* Empty State */}
       {budgets.length === 0 && (
         <div className="text-center py-12">
-          <BarChart3 className="mx-auto h-12 w-12 text-gray-400" />
+          <BarChart3 className="mx-auto h-12 w-12 text-black" />
           <h3 className="mt-2 text-sm font-medium text-gray-900">Không có ngân sách</h3>
-          <p className="mt-1 text-sm text-gray-500">Bắt đầu bằng cách tạo ngân sách đầu tiên.</p>
+          <p className="mt-1 text-sm text-black">Bắt đầu bằng cách tạo ngân sách đầu tiên.</p>
           <div className="mt-6">
             <button
               onClick={() => setShowCreateModal(true)}

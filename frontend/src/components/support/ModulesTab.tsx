@@ -94,7 +94,7 @@ export default function ModulesTab() {
       green: 'bg-green-100 text-green-600',
       purple: 'bg-purple-100 text-purple-600'
     }
-    return colors[color as keyof typeof colors] || 'bg-gray-100 text-gray-600'
+    return colors[color as keyof typeof colors] || 'bg-gray-100 text-black'
   }
 
   const handleQuickAction = (action: string) => {
@@ -106,7 +106,7 @@ export default function ModulesTab() {
     <div className="space-y-6">
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Hướng dẫn theo Module</h3>
-        <p className="text-gray-600 mb-6">
+        <p className="text-black mb-6">
           Chọn module bạn muốn tìm hiểu để xem hướng dẫn chi tiết
         </p>
       </div>
@@ -120,7 +120,7 @@ export default function ModulesTab() {
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 mb-2">{module.name}</h4>
-                <p className="text-gray-600 text-sm mb-4">{module.description}</p>
+                <p className="text-black text-sm mb-4">{module.description}</p>
                 
                 <div className="space-y-2">
                   <h5 className="text-sm font-medium text-gray-700">Hướng dẫn:</h5>
@@ -168,7 +168,7 @@ export default function ModulesTab() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">Bán hàng</p>
-              <p className="text-xs text-gray-500">Hóa đơn & Thanh toán</p>
+              <p className="text-xs text-black">Hóa đơn & Thanh toán</p>
             </div>
           </Link>
           
@@ -181,7 +181,7 @@ export default function ModulesTab() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">Chi phí</p>
-              <p className="text-xs text-gray-500">Ngân sách & NCC</p>
+              <p className="text-xs text-black">Ngân sách & NCC</p>
             </div>
           </Link>
           
@@ -194,7 +194,7 @@ export default function ModulesTab() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">Nhân sự</p>
-              <p className="text-xs text-gray-500">Quản lý nhân viên</p>
+              <p className="text-xs text-black">Quản lý nhân viên</p>
             </div>
           </Link>
           
@@ -207,7 +207,7 @@ export default function ModulesTab() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">Dự án</p>
-              <p className="text-xs text-gray-500">Nhiệm vụ & Tiến độ</p>
+              <p className="text-xs text-black">Nhiệm vụ & Tiến độ</p>
             </div>
           </Link>
         </div>

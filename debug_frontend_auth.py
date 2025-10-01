@@ -44,3 +44,4 @@ print("4. Verify backend is running on port 8000")
 print("5. Check if sample data has been inserted")
 print("=" * 60)
 
+

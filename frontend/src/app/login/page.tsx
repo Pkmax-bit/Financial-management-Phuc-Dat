@@ -57,7 +57,7 @@ export default function LoginPage() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Đăng nhập vào tài khoản
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-black">
             Hoặc{' '}
             <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
               tạo tài khoản mới
@@ -84,7 +84,7 @@ export default function LoginPage() {
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+                  <Mail className="h-5 w-5 text-black" />
                 </div>
                 <input
                   id="email"
@@ -106,7 +106,7 @@ export default function LoginPage() {
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                  <Lock className="h-5 w-5 text-black" />
                 </div>
                 <input
                   id="password"
@@ -123,7 +123,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-gray-400 hover:text-gray-500"
+                    className="text-black hover:text-black"
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -174,7 +174,7 @@ export default function LoginPage() {
           </div>
 
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-black">
               Thông tin demo: <br />
               <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
                 admin@example.com / admin123

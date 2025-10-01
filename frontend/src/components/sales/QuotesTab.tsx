@@ -238,25 +238,25 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Số báo giá
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Khách hàng
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Số tiền
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Trạng thái
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Hạn hiệu lực
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Ngày tạo
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Thao tác
               </th>
             </tr>
@@ -266,13 +266,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               <tr key={quote.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <FileText className="h-4 w-4 text-gray-400 mr-2" />
+                    <FileText className="h-4 w-4 text-black mr-2" />
                     <span className="text-sm font-medium text-gray-900">
                       {quote.quote_number}
                     </span>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                   {quote.customer_name || 'N/A'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -283,19 +283,19 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     {getStatusText(quote.status)}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                   <div className="flex items-center">
-                    <Calendar className="h-4 w-4 text-gray-400 mr-1" />
+                    <Calendar className="h-4 w-4 text-black mr-1" />
                     {formatDate(quote.valid_until)}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                   {formatDate(quote.created_at)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
                     <button 
-                      className="text-gray-400 hover:text-gray-600" 
+                      className="text-black hover:text-black" 
                       title="Xem chi tiết"
                     >
                       <Eye className="h-4 w-4" />
@@ -304,14 +304,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     {quote.status === 'draft' && (
                       <>
                         <button 
-                          className="text-gray-400 hover:text-blue-600" 
+                          className="text-black hover:text-blue-600" 
                           title="Chỉnh sửa"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button 
                           onClick={() => sendQuote(quote.id)}
-                          className="text-gray-400 hover:text-green-600" 
+                          className="text-black hover:text-green-600" 
                           title="Gửi báo giá"
                         >
                           <Send className="h-4 w-4" />
@@ -322,7 +322,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     {quote.status === 'accepted' && (
                       <button 
                         onClick={() => convertToInvoice(quote.id)}
-                        className="text-gray-400 hover:text-purple-600" 
+                        className="text-black hover:text-purple-600" 
                         title="Chuyển thành hóa đơn"
                       >
                         <DollarSign className="h-4 w-4" />
@@ -330,7 +330,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     )}
                     
                     <button 
-                      className="text-gray-400 hover:text-red-600" 
+                      className="text-black hover:text-red-600" 
                       title="Xóa"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -344,9 +344,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         
         {filteredQuotes.length === 0 && (
           <div className="text-center py-8">
-            <FileText className="mx-auto h-12 w-12 text-gray-400" />
+            <FileText className="mx-auto h-12 w-12 text-black" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có báo giá</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-black">
               Bắt đầu bằng cách tạo báo giá mới.
             </p>
             <div className="mt-6">

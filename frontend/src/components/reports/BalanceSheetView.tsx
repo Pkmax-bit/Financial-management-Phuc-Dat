@@ -80,7 +80,7 @@ export default function BalanceSheetView({ data }: BalanceSheetViewProps) {
       case 'retained earnings':
         return <PiggyBank className="h-4 w-4 text-green-600" />
       default:
-        return <DollarSign className="h-4 w-4 text-gray-600" />
+        return <DollarSign className="h-4 w-4 text-black" />
     }
   }
 
@@ -391,7 +391,7 @@ export default function BalanceSheetView({ data }: BalanceSheetViewProps) {
 
       {/* Report Info */}
       <div className="bg-gray-100 rounded-xl p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-black">
           <div>
             <span className="font-medium">Ngày báo cáo:</span> {new Date(data.generated_at).toLocaleDateString('vi-VN')}
           </div>

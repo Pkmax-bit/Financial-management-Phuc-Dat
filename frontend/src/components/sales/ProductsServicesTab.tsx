@@ -95,7 +95,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
       case 'bundle':
         return <Layers className="h-5 w-5 text-orange-600" />
       default:
-        return <Package className="h-5 w-5 text-gray-600" />
+        return <Package className="h-5 w-5 text-black" />
     }
   }
 
@@ -272,13 +272,13 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
           <div className="flex border border-gray-300 rounded-md">
             <button
               onClick={() => setViewMode('table')}
-              className={`px-3 py-2 text-sm ${viewMode === 'table' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`px-3 py-2 text-sm ${viewMode === 'table' ? 'bg-blue-500 text-white' : 'text-black hover:bg-gray-50'}`}
             >
               Bảng
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`px-3 py-2 text-sm border-l border-gray-300 ${viewMode === 'grid' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`px-3 py-2 text-sm border-l border-gray-300 ${viewMode === 'grid' ? 'bg-blue-500 text-white' : 'text-black hover:bg-gray-50'}`}
             >
               Lưới
             </button>
@@ -300,7 +300,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
           <div className="flex items-center">
             <Package className="h-8 w-8 text-blue-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tổng mặt hàng</p>
+              <p className="text-sm font-medium text-black">Tổng mặt hàng</p>
               <p className="text-2xl font-bold text-gray-900">{filteredItems.length}</p>
             </div>
           </div>
@@ -310,7 +310,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
           <div className="flex items-center">
             <Box className="h-8 w-8 text-green-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Hàng tồn kho</p>
+              <p className="text-sm font-medium text-black">Hàng tồn kho</p>
               <p className="text-2xl font-bold text-gray-900">
                 {filteredItems.filter(i => i.type === 'inventory').length}
               </p>
@@ -322,7 +322,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
           <div className="flex items-center">
             <Wrench className="h-8 w-8 text-purple-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Dịch vụ</p>
+              <p className="text-sm font-medium text-black">Dịch vụ</p>
               <p className="text-2xl font-bold text-gray-900">
                 {filteredItems.filter(i => i.type === 'service').length}
               </p>
@@ -334,7 +334,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
           <div className="flex items-center">
             <BarChart3 className="h-8 w-8 text-orange-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tổng doanh thu</p>
+              <p className="text-sm font-medium text-black">Tổng doanh thu</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(filteredItems.reduce((sum, i) => sum + i.revenue_generated, 0))}
               </p>
@@ -350,28 +350,28 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Sản phẩm/Dịch vụ
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Loại
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Giá bán
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Tồn kho
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Đã bán
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Doanh thu
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Trạng thái
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Hành động
                   </th>
                 </tr>
@@ -388,9 +388,9 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                            <div className="text-sm text-gray-500">SKU: {item.sku}</div>
+                            <div className="text-sm text-black">SKU: {item.sku}</div>
                             {item.description && (
-                              <div className="text-xs text-gray-400 truncate max-w-xs">
+                              <div className="text-xs text-black truncate max-w-xs">
                                 {item.description}
                               </div>
                             )}
@@ -407,7 +407,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                           {formatCurrency(item.sales_price)}
                         </div>
                         {item.cost_price > 0 && (
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-black">
                             Giá vốn: {formatCurrency(item.cost_price)}
                           </div>
                         )}
@@ -423,12 +423,12 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                             )}
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-500">N/A</span>
+                          <span className="text-sm text-black">N/A</span>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">{item.total_sold}</div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-black">
                           Lần cuối: {formatDate(item.last_sold_date)}
                         </div>
                       </td>
@@ -442,7 +442,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                           {getStatusLabel(item.status)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                         <div className="flex space-x-2">
                           <button 
                             onClick={() => handleViewItem(item.id)}
@@ -453,7 +453,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                           </button>
                           <button 
                             onClick={() => handleEditItem(item.id)}
-                            className="text-gray-600 hover:text-gray-900 p-1"
+                            className="text-black hover:text-gray-900 p-1"
                             title="Chỉnh sửa"
                           >
                             <Edit className="h-4 w-4" />
@@ -504,7 +504,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                     </button>
                     <button 
                       onClick={() => handleEditItem(item.id)}
-                      className="text-gray-600 hover:text-gray-900 p-1"
+                      className="text-black hover:text-gray-900 p-1"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
@@ -512,17 +512,17 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                 </div>
                 
                 <h3 className="font-medium text-gray-900 mb-1">{item.name}</h3>
-                <p className="text-sm text-gray-500 mb-2">SKU: {item.sku}</p>
+                <p className="text-sm text-black mb-2">SKU: {item.sku}</p>
                 
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Giá bán:</span>
+                    <span className="text-sm text-black">Giá bán:</span>
                     <span className="text-sm font-medium">{formatCurrency(item.sales_price)}</span>
                   </div>
                   
                   {item.type === 'inventory' && (
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Tồn kho:</span>
+                      <span className="text-sm text-black">Tồn kho:</span>
                       <div className="text-right">
                         <span className="text-sm font-medium">{item.quantity_on_hand}</span>
                         {stockStatus && (
@@ -535,12 +535,12 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
                   )}
                   
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Đã bán:</span>
+                    <span className="text-sm text-black">Đã bán:</span>
                     <span className="text-sm font-medium">{item.total_sold}</span>
                   </div>
                   
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Doanh thu:</span>
+                    <span className="text-sm text-black">Doanh thu:</span>
                     <span className="text-sm font-medium">{formatCurrency(item.revenue_generated)}</span>
                   </div>
                 </div>
@@ -559,7 +559,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
       {filteredItems.length === 0 && (
         <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
           <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">Không tìm thấy sản phẩm/dịch vụ nào</p>
+          <p className="text-black">Không tìm thấy sản phẩm/dịch vụ nào</p>
           <button
             onClick={() => setShowCreateModal(true)}
             className="mt-2 text-blue-600 hover:text-blue-800 font-medium"
@@ -570,7 +570,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
       )}
       
       {/* Summary */}
-      <div className="flex justify-between items-center text-sm text-gray-600">
+      <div className="flex justify-between items-center text-sm text-black">
         <span>Hiển thị {filteredItems.length} mặt hàng</span>
         <span>
           Tổng giá trị tồn kho: {formatCurrency(

@@ -204,7 +204,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
     return (
       <div className="flex items-center justify-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Đang tải chi phí...</span>
+        <span className="ml-2 text-black">Đang tải chi phí...</span>
       </div>
     )
   }
@@ -278,7 +278,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
           <div className="flex items-center">
             <Receipt className="h-8 w-8 text-blue-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tổng chi phí</p>
+              <p className="text-sm font-medium text-black">Tổng chi phí</p>
               <p className="text-2xl font-bold text-gray-900">{filteredExpenses.length}</p>
             </div>
           </div>
@@ -288,7 +288,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
           <div className="flex items-center">
             <Clock className="h-8 w-8 text-yellow-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Chờ duyệt</p>
+              <p className="text-sm font-medium text-black">Chờ duyệt</p>
               <p className="text-2xl font-bold text-gray-900">
                 {filteredExpenses.filter(e => e.status === 'pending').length}
               </p>
@@ -300,7 +300,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
           <div className="flex items-center">
             <DollarSign className="h-8 w-8 text-green-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tổng số tiền</p>
+              <p className="text-sm font-medium text-black">Tổng số tiền</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(filteredExpenses.reduce((sum, e) => sum + e.amount, 0))}
               </p>
@@ -312,7 +312,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
           <div className="flex items-center">
             <CheckCircle className="h-8 w-8 text-blue-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Đã duyệt</p>
+              <p className="text-sm font-medium text-black">Đã duyệt</p>
               <p className="text-2xl font-bold text-gray-900">
                 {filteredExpenses.filter(e => e.status === 'approved').length}
               </p>
@@ -327,22 +327,22 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Chi phí
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Danh mục
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số tiền
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngày
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Trạng thái
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Hành động
                 </th>
               </tr>
@@ -354,20 +354,20 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
                         <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <Receipt className="h-5 w-5 text-gray-600" />
+                          <Receipt className="h-5 w-5 text-black" />
                         </div>
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
                           {expense.description}
                         </div>
-                        <div className="text-sm text-gray-500">Mã: {expense.expense_code}</div>
+                        <div className="text-sm text-black">Mã: {expense.expense_code}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <Tag className="h-4 w-4 text-gray-400 mr-2" />
+                      <Tag className="h-4 w-4 text-black mr-2" />
                       <span className="text-sm text-gray-900">
                         {getCategoryLabel(expense.category)}
                       </span>
@@ -378,9 +378,9 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
                       {formatCurrency(expense.amount, expense.currency)}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex items-center">
-                      <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                      <Calendar className="h-4 w-4 text-black mr-2" />
                       {formatDate(expense.expense_date)}
                     </div>
                   </td>
@@ -392,7 +392,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex space-x-2">
                       <button 
                         onClick={() => handleViewExpense(expense.id)}
@@ -426,7 +426,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
         {filteredExpenses.length === 0 && (
           <div className="text-center py-8">
             <Receipt className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">
+            <p className="text-black">
               {expenses.length === 0 
                 ? 'Không có chi phí nào' 
                 : 'Không tìm thấy chi phí nào phù hợp với bộ lọc'
@@ -443,7 +443,7 @@ export default function ExpensesDirectTab({ searchTerm = '' }: ExpensesDirectTab
       </div>
       
       {/* Summary */}
-      <div className="flex justify-between items-center text-sm text-gray-600">
+      <div className="flex justify-between items-center text-sm text-black">
         <span>Hiển thị {filteredExpenses.length} chi phí</span>
         <span>
           Tổng số tiền: {formatCurrency(filteredExpenses.reduce((sum, e) => sum + e.amount, 0))}

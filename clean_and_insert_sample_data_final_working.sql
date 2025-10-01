@@ -170,3 +170,4 @@ SELECT 'budgets', COUNT(*) FROM budgets
 UNION ALL
 SELECT 'budget_lines', COUNT(*) FROM budget_lines;
 
+

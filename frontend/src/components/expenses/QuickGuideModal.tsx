@@ -161,7 +161,7 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
       blue: 'bg-blue-100 text-blue-600',
       indigo: 'bg-indigo-100 text-indigo-600'
     }
-    return colors[color as keyof typeof colors] || 'bg-gray-100 text-gray-600'
+    return colors[color as keyof typeof colors] || 'bg-gray-100 text-black'
   }
 
   if (!isOpen) return null
@@ -175,13 +175,13 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
             <h2 className="text-xl font-semibold text-gray-900">
               Hướng dẫn Nhanh - Quản lý Chi phí
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-black mt-1">
               Bước {currentStep + 1} / {steps.length}
             </p>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -206,7 +206,7 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               {currentStepData.title}
             </h3>
-            <p className="text-gray-600">
+            <p className="text-black">
               {currentStepData.description}
             </p>
           </div>
@@ -264,7 +264,7 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
           <button
             onClick={handlePrevious}
             disabled={currentStep === 0}
-            className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center px-4 py-2 text-black bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Trước

@@ -85,7 +85,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
         {/* Income Flow Visualization */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Dòng chảy thu nhập (Income Pipeline)</span>
+            <span className="text-sm text-black">Dòng chảy thu nhập (Income Pipeline)</span>
             <span className="text-sm font-medium text-gray-900">
               Tổng: {formatCurrency(displayUninvoiced + displayUnpaid + displayPaid)}
             </span>
@@ -145,7 +145,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
               <div>
                 <p className="text-sm font-medium text-gray-900">Uninvoiced Activity</p>
                 <p className="text-lg font-bold text-yellow-600">{formatCurrency(displayUninvoiced)}</p>
-                <p className="text-xs text-gray-500">Chi phí, giờ làm có thể tính phí</p>
+                <p className="text-xs text-black">Chi phí, giờ làm có thể tính phí</p>
               </div>
             </div>
             <div className="flex items-center p-3 bg-orange-50 rounded-lg">
@@ -156,7 +156,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
                 {overdueAmount > 0 && (
                   <p className="text-xs text-red-600">Overdue: {formatCurrency(overdueAmount)}</p>
                 )}
-                <p className="text-xs text-gray-500">Chưa tới hạn</p>
+                <p className="text-xs text-black">Chưa tới hạn</p>
               </div>
             </div>
             <div className="flex items-center p-3 bg-green-50 rounded-lg">
@@ -164,7 +164,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
               <div>
                 <p className="text-sm font-medium text-gray-900">Recently Paid</p>
                 <p className="text-lg font-bold text-green-600">{formatCurrency(displayPaid)}</p>
-                <p className="text-xs text-gray-500">30 ngày qua</p>
+                <p className="text-xs text-black">30 ngày qua</p>
               </div>
             </div>
           </div>
@@ -185,10 +185,10 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
                 <div className={`p-2 rounded-lg ${shortcut.color}`}>
                   <shortcut.icon className="h-5 w-5 text-white" />
                 </div>
-                <Plus className="h-4 w-4 text-gray-400 ml-2" />
+                <Plus className="h-4 w-4 text-black ml-2" />
               </div>
               <h4 className="font-medium text-gray-900 mb-1">{shortcut.title}</h4>
-              <p className="text-sm text-gray-600">{shortcut.description}</p>
+              <p className="text-sm text-black">{shortcut.description}</p>
             </button>
           ))}
         </div>
@@ -203,46 +203,46 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <FileText className="h-5 w-5 text-blue-500 mr-3" />
-                <span className="text-gray-600">Tổng hóa đơn</span>
+                <span className="text-black">Tổng hóa đơn</span>
               </div>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">{(invoicesStats as Record<string, unknown>).total as number || 0}</p>
-                <p className="text-sm text-gray-500">hóa đơn</p>
+                <p className="text-sm text-black">hóa đơn</p>
               </div>
             </div>
             
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Receipt className="h-5 w-5 text-green-500 mr-3" />
-                <span className="text-gray-600">Tổng báo giá</span>
+                <span className="text-black">Tổng báo giá</span>
               </div>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">{(quotesStats as { total: number }).total || 0}</p>
-                <p className="text-sm text-gray-500">báo giá</p>
+                <p className="text-sm text-black">báo giá</p>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Clock className="h-5 w-5 text-orange-500 mr-3" />
-                <span className="text-gray-600">Hóa đơn quá hạn</span>
+                <span className="text-black">Hóa đơn quá hạn</span>
               </div>
               <div className="text-right">
                 <p className="font-semibold text-red-600">{(invoicesStats as { overdue: number }).overdue || 0}</p>
-                <p className="text-sm text-gray-500">hóa đơn</p>
+                <p className="text-sm text-black">hóa đơn</p>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <TrendingUp className="h-5 w-5 text-purple-500 mr-3" />
-                <span className="text-gray-600">Tỷ lệ chuyển đổi</span>
+                <span className="text-black">Tỷ lệ chuyển đổi</span>
               </div>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">
                   {(quotesStats as { total: number }).total > 0 ? (((invoicesStats as { total: number }).total / (quotesStats as { total: number }).total) * 100).toFixed(1) : 0}%
                 </p>
-                <p className="text-sm text-gray-500">báo giá → hóa đơn</p>
+                <p className="text-sm text-black">báo giá → hóa đơn</p>
               </div>
             </div>
           </div>
@@ -266,16 +266,16 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
-                    <Users className="h-4 w-4 text-gray-600" />
+                    <Users className="h-4 w-4 text-black" />
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{customer.name}</p>
-                    <p className="text-sm text-gray-500">{customer.count} hóa đơn</p>
+                    <p className="text-sm text-black">{customer.count} hóa đơn</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-gray-900">{formatCurrency(customer.amount)}</p>
-                  <p className="text-sm text-gray-500">Công nợ</p>
+                  <p className="text-sm text-black">Công nợ</p>
                 </div>
               </div>
             ))}

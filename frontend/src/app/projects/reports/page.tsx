@@ -115,7 +115,7 @@ export default function ProjectReportsPage() {
   const getProfitColor = (profit: number) => {
     if (profit > 0) return 'text-green-600';
     if (profit < 0) return 'text-red-600';
-    return 'text-gray-600';
+    return 'text-black';
   };
 
   const getProfitIcon = (profit: number) => {
@@ -136,7 +136,7 @@ export default function ProjectReportsPage() {
     <div className="container mx-auto p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Project Profitability Reports</h1>
-        <p className="text-gray-600">Analyze and compare project profitability across your portfolio</p>
+        <p className="text-black">Analyze and compare project profitability across your portfolio</p>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
@@ -223,10 +223,10 @@ export default function ProjectReportsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-gray-600">Break Even</CardTitle>
+                <CardTitle className="text-black">Break Even</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-gray-600">{summary?.break_even_projects || 0}</div>
+                <div className="text-3xl font-bold text-black">{summary?.break_even_projects || 0}</div>
                 <p className="text-sm text-muted-foreground">
                   {summary ? Math.round((summary.break_even_projects / summary.total_projects) * 100) : 0}% of total
                 </p>
@@ -238,7 +238,7 @@ export default function ProjectReportsPage() {
         <TabsContent value="detailed" className="space-y-6">
           <div className="flex gap-4 mb-6">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black w-4 h-4" />
               <Input
                 placeholder="Search projects..."
                 value={searchTerm}
@@ -309,7 +309,7 @@ export default function ProjectReportsPage() {
                       <TableCell>
                         <div>
                           <div className="font-medium">{project.project_name}</div>
-                          <div className="text-sm text-gray-500">{project.project_code}</div>
+                          <div className="text-sm text-black">{project.project_code}</div>
                         </div>
                       </TableCell>
                       <TableCell>{project.customer_name}</TableCell>
@@ -371,13 +371,13 @@ export default function ProjectReportsPage() {
                       <div key={project.project_id} className="flex justify-between items-center">
                         <div>
                           <div className="font-medium">{project.project_name}</div>
-                          <div className="text-sm text-gray-500">{project.customer_name}</div>
+                          <div className="text-sm text-black">{project.customer_name}</div>
                         </div>
                         <div className="text-right">
                           <div className="font-medium text-green-600">
                             ${project.profit.toLocaleString()}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-black">
                             {project.profit_margin.toFixed(1)}%
                           </div>
                         </div>
@@ -402,13 +402,13 @@ export default function ProjectReportsPage() {
                       <div key={project.project_id} className="flex justify-between items-center">
                         <div>
                           <div className="font-medium">{project.project_name}</div>
-                          <div className="text-sm text-gray-500">{project.customer_name}</div>
+                          <div className="text-sm text-black">{project.customer_name}</div>
                         </div>
                         <div className="text-right">
                           <div className="font-medium text-red-600">
                             ${project.profit.toLocaleString()}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-black">
                             {project.profit_margin.toFixed(1)}%
                           </div>
                         </div>
@@ -427,29 +427,29 @@ export default function ProjectReportsPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-sm font-medium text-gray-600 mb-2">Labor Costs</div>
+                  <div className="text-sm font-medium text-black mb-2">Labor Costs</div>
                   <div className="text-2xl font-bold">
                     ${filteredProjects.reduce((sum, p) => sum + p.labor_cost, 0).toLocaleString()}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     Avg: ${filteredProjects.length > 0 ? (filteredProjects.reduce((sum, p) => sum + p.labor_cost, 0) / filteredProjects.length).toLocaleString() : 0}
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-gray-600 mb-2">Expenses</div>
+                  <div className="text-sm font-medium text-black mb-2">Expenses</div>
                   <div className="text-2xl font-bold">
                     ${filteredProjects.reduce((sum, p) => sum + p.expenses_cost, 0).toLocaleString()}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     Avg: ${filteredProjects.length > 0 ? (filteredProjects.reduce((sum, p) => sum + p.expenses_cost, 0) / filteredProjects.length).toLocaleString() : 0}
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-gray-600 mb-2">Bills</div>
+                  <div className="text-sm font-medium text-black mb-2">Bills</div>
                   <div className="text-2xl font-bold">
                     ${filteredProjects.reduce((sum, p) => sum + p.bills_cost, 0).toLocaleString()}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     Avg: ${filteredProjects.length > 0 ? (filteredProjects.reduce((sum, p) => sum + p.bills_cost, 0) / filteredProjects.length).toLocaleString() : 0}
                   </div>
                 </div>

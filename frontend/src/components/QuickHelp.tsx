@@ -83,13 +83,13 @@ export default function QuickHelp({
           </div>
           <div>
             <h3 className="font-medium text-gray-900">{title}</h3>
-            <p className="text-sm text-gray-500">Hỗ trợ cho {module}</p>
+            <p className="text-sm text-black">Hỗ trợ cho {module}</p>
           </div>
         </div>
         {isExpanded ? (
-          <ChevronUp className="h-5 w-5 text-gray-400" />
+          <ChevronUp className="h-5 w-5 text-black" />
         ) : (
-          <ChevronDown className="h-5 w-5 text-gray-400" />
+          <ChevronDown className="h-5 w-5 text-black" />
         )}
       </button>
       
@@ -109,9 +109,9 @@ export default function QuickHelp({
                     <h4 className="text-sm font-medium text-gray-900 group-hover:text-blue-600">
                       {item.title}
                     </h4>
-                    <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                    <p className="text-xs text-black mt-1">{item.description}</p>
                   </div>
-                  <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-blue-600" />
+                  <ExternalLink className="h-4 w-4 text-black group-hover:text-blue-600" />
                 </Link>
               )
             })}

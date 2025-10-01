@@ -103,7 +103,7 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
           </div>
           <div>
             <h1 className="text-lg font-bold text-gray-900">QuickBooks</h1>
-            <p className="text-xs text-gray-500">Hệ thống quản lý</p>
+            <p className="text-xs text-black">Hệ thống quản lý</p>
           </div>
         </div>
       </div>
@@ -121,13 +121,13 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
               className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
                 isActive
                   ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  : 'text-black hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
-              <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+              <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-blue-600' : 'text-black'}`} />
               <div className="flex-1 text-left">
                 <div className="font-medium">{item.name}</div>
-                <div className="text-xs text-gray-500 mt-0.5">{item.description}</div>
+                <div className="text-xs text-black mt-0.5">{item.description}</div>
               </div>
             </button>
           )
@@ -153,10 +153,10 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
             <p className="text-sm font-medium text-gray-900 truncate">
               {user?.full_name || 'User'}
             </p>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-xs text-black truncate">
               {user?.email || 'backen@vanphuthanh.net'}
             </p>
-            <p className="text-xs text-gray-400 truncate">
+            <p className="text-xs text-black truncate">
               {user?.role || 'Nhân viên'}
             </p>
           </div>
@@ -166,14 +166,14 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
         <div className="mt-4 flex space-x-2">
           <button
             onClick={() => router.push('/settings')}
-            className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+            className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-black bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
           >
             <Settings className="w-4 h-4 mr-1" />
             Cài đặt
           </button>
           <button
             onClick={() => router.push('/notifications')}
-            className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+            className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-black bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
           >
             <Bell className="w-4 h-4 mr-1" />
             Thông báo

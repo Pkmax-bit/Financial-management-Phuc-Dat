@@ -137,9 +137,9 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
 
   const getRankingIcon = (ranking: number) => {
     if (ranking === 1) return <Crown className="h-5 w-5 text-yellow-500" />
-    if (ranking === 2) return <Award className="h-5 w-5 text-gray-400" />
+    if (ranking === 2) return <Award className="h-5 w-5 text-black" />
     if (ranking === 3) return <Award className="h-5 w-5 text-amber-600" />
-    return <span className="text-sm font-medium text-gray-500">#{ranking}</span>
+    return <span className="text-sm font-medium text-black">#{ranking}</span>
   }
 
   const getRankingColor = (ranking: number) => {
@@ -202,11 +202,11 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
             <div key={index} className="bg-white rounded-lg border p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">{metric.title}</p>
+                  <p className="text-sm font-medium text-black">{metric.title}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {metric.title.includes('Doanh thu') ? formatCurrency(metric.value) : metric.value}
                   </p>
-                  <p className="text-xs text-gray-500">{metric.description}</p>
+                  <p className="text-xs text-black">{metric.description}</p>
                 </div>
                 <div className={`p-3 rounded-lg ${metric.color}`}>
                   <Icon className="h-6 w-6" />
@@ -228,7 +228,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Top 5 Khách hàng</h3>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-black">
             Chiếm {report.top_customer_percentage.toFixed(1)}% tổng doanh thu
           </div>
         </div>
@@ -240,14 +240,14 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                 {getRankingIcon(customer.ranking)}
                 <div>
                   <div className="font-medium text-gray-900">{customer.customer_name}</div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     {customer.total_invoices + customer.total_sales_receipts} giao dịch
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="font-semibold text-gray-900">{formatCurrency(customer.total_sales)}</div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-black">
                   {((customer.total_sales / report.total_sales) * 100).toFixed(1)}%
                 </div>
               </div>
@@ -266,7 +266,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Bảng xếp hạng Khách hàng</h3>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-black">
               Hiển thị {paginatedCustomers.length} / {filteredCustomers.length} khách hàng
             </div>
           </div>
@@ -276,28 +276,28 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Xếp hạng
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Khách hàng
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Liên hệ
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Tổng doanh thu
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-black uppercase tracking-wider">
                   Giao dịch
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Giá trị TB
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Giao dịch lớn nhất
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-black uppercase tracking-wider">
                   Lần cuối
                 </th>
               </tr>
@@ -320,7 +320,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                         {customer.customer_name}
                       </div>
                       {customer.customer_code && (
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-black">
                           {customer.customer_code}
                         </div>
                       )}
@@ -346,7 +346,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                     <div className="text-sm font-medium text-gray-900 hover:text-blue-600">
                       {formatCurrency(customer.total_sales)}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-black">
                       {((customer.total_sales / report.total_sales) * 100).toFixed(1)}%
                     </div>
                   </td>
@@ -354,7 +354,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                     <div className="text-sm text-gray-900">
                       {customer.total_invoices + customer.total_sales_receipts}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-black">
                       {customer.total_invoices} hóa đơn, {customer.total_sales_receipts} phiếu thu
                     </div>
                   </td>
@@ -381,8 +381,8 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
 
         {paginatedCustomers.length === 0 && (
           <div className="text-center py-12">
-            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Không tìm thấy khách hàng nào</p>
+            <Users className="h-12 w-12 text-black mx-auto mb-4" />
+            <p className="text-black">Không tìm thấy khách hàng nào</p>
           </div>
         )}
       </div>
@@ -410,7 +410,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-black hover:text-black"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -427,10 +427,10 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                 <div className="flex justify-between items-center">
                   <div>
                     <h1 className="text-3xl font-bold text-gray-900">Báo cáo Doanh thu theo Khách hàng</h1>
-                    <p className="mt-2 text-gray-600">
+                    <p className="mt-2 text-black">
                       Báo cáo chi tiết về doanh thu và hiệu suất bán hàng theo từng khách hàng
                     </p>
-                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                    <div className="mt-2 flex items-center space-x-4 text-sm text-black">
                       <span>Kỳ báo cáo: {formatDate(startDate)} - {formatDate(endDate)}</span>
                       {report && (
                         <span>• Cập nhật lúc: {formatDate(report.generated_at)}</span>
@@ -443,7 +443,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
               {loading && (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  <span className="ml-2 text-gray-600">Đang tải báo cáo Doanh thu theo Khách hàng...</span>
+                  <span className="ml-2 text-black">Đang tải báo cáo Doanh thu theo Khách hàng...</span>
                 </div>
               )}
 
@@ -474,7 +474,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                   <div className="flex items-center space-x-4">
                     <div className="flex-1">
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
                         <input
                           type="text"
                           placeholder="Tìm kiếm khách hàng..."
@@ -484,7 +484,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                         />
                       </div>
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-black">
                       Hiển thị {paginatedCustomers.length} / {filteredCustomers.length} khách hàng
                     </div>
                   </div>
@@ -495,7 +495,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                   {/* Pagination */}
                   {filteredCustomers.length > pageSize && (
                     <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-black">
                         Hiển thị {(currentPage - 1) * pageSize + 1} đến {Math.min(currentPage * pageSize, filteredCustomers.length)} 
                         trong tổng số {filteredCustomers.length} khách hàng
                       </div>
@@ -524,7 +524,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                   {/* Report Information */}
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">Thông tin báo cáo</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-black">
                       <div>
                         <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
                       </div>

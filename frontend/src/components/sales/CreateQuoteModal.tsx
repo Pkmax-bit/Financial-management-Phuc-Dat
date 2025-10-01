@@ -194,13 +194,13 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
             <FileText className="h-6 w-6 text-blue-600 mr-3" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Tạo Báo giá mới</h2>
-              <p className="text-sm text-gray-500 mt-1">Tạo và gửi báo giá cho khách hàng</p>
+              <p className="text-sm text-black mt-1">Tạo và gửi báo giá cho khách hàng</p>
             </div>
           </div>
           <button
             onClick={onClose}
             disabled={submitting}
-            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="text-black hover:text-black p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -324,7 +324,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                           type="button"
                           onClick={() => removeItem(index)}
                           disabled={items.length === 1}
-                          className="text-red-600 hover:text-red-800 disabled:text-gray-400"
+                          className="text-red-600 hover:text-red-800 disabled:text-black"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

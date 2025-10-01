@@ -155,12 +155,12 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
             <ShoppingCart className="h-6 w-6 text-blue-600 mr-3" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Tạo đơn đặt hàng mới</h2>
-              <p className="text-sm text-gray-600">Tạo đơn đặt hàng cho nhà cung cấp</p>
+              <p className="text-sm text-black">Tạo đơn đặt hàng cho nhà cung cấp</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -331,7 +331,7 @@ export default function CreatePurchaseOrderModal({ isOpen, onClose, onSuccess }:
                     </div>
 
                     <div className="mt-4 flex justify-end">
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-black">
                         <span className="font-medium">Tổng dòng: </span>
                         {new Intl.NumberFormat('vi-VN', {
                           style: 'currency',

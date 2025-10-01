@@ -334,7 +334,7 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 max-h-[calc(100vh-200px)] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 relative">
           {/* Scroll indicator */}
-          <div className="absolute top-2 right-2 text-xs text-gray-400 bg-white px-2 py-1 rounded-full shadow-sm border">
+          <div className="absolute top-2 right-2 text-xs text-black bg-white px-2 py-1 rounded-full shadow-sm border">
             Cuộn để xem thêm
           </div>
           
@@ -349,9 +349,9 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                 Thông tin cơ bản
               </h3>
               {expandedSections.basic ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             
@@ -373,7 +373,7 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                     <label className="block text-xs font-semibold text-black mb-1">Nhân viên</label>
                     {loading ? (
                       <div className="w-full border border-gray-300 rounded-md px-2 py-1.5 bg-gray-50">
-                        <span className="text-xs text-gray-500">Đang tải...</span>
+                        <span className="text-xs text-black">Đang tải...</span>
                       </div>
                     ) : employees.length === 0 ? (
                       <div className="w-full border border-red-300 rounded-md px-2 py-1.5 bg-red-50">
@@ -467,9 +467,9 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                 Chi tiết chi phí
               </h3>
               {expandedSections.details ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             
@@ -531,7 +531,7 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                         min="0"
                         step="1000"
                       />
-                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-500">
+                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-black">
                         {formData.currency}
                       </div>
                     </div>
@@ -561,9 +561,9 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                 Tài liệu đính kèm
               </h3>
               {expandedSections.attachments ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             
@@ -578,14 +578,14 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                     className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
                     placeholder="https://example.com/receipt.pdf"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-black mt-1">
                     Đính kèm link đến hóa đơn, chứng từ hoặc hình ảnh
                   </p>
                 </div>
 
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <Paperclip className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600 mb-2">Kéo thả file hoặc click để chọn</p>
+                  <Paperclip className="h-8 w-8 text-black mx-auto mb-2" />
+                  <p className="text-sm text-black mb-2">Kéo thả file hoặc click để chọn</p>
                   <button className="text-xs text-orange-600 hover:text-orange-700">
                     Chọn file
                   </button>
@@ -605,9 +605,9 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                 Thông tin bổ sung
               </h3>
               {expandedSections.additional ? (
-                <ChevronDown className="h-5 w-5 text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-black" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
+                <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
             

@@ -233,7 +233,7 @@ export default function SalesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Sales Center</h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-black">
                   Trung tâm chỉ huy cho toàn bộ quy trình tạo ra doanh thu - từ báo giá đến thu tiền
                 </p>
               </div>
@@ -410,11 +410,11 @@ export default function SalesPage() {
                     <FileText className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Tổng báo giá</p>
+                    <p className="text-sm font-medium text-black">Tổng báo giá</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {(quotesStats as Record<string, unknown>).total as number || 0}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-black">
                       {String(Object.values((quotesStats as Record<string, unknown>).by_status || {}).reduce((a: unknown, b: unknown) => (a as number) + (b as number), 0))} báo giá
                     </p>
                   </div>
@@ -427,11 +427,11 @@ export default function SalesPage() {
                     <Receipt className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Tổng doanh thu</p>
+                    <p className="text-sm font-medium text-black">Tổng doanh thu</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency((revenue as Record<string, unknown>).total as number || 0)}
                     </p>
-                    <p className="text-sm text-gray-500">{(invoicesStats as Record<string, unknown>).total as number || 0} hóa đơn</p>
+                    <p className="text-sm text-black">{(invoicesStats as Record<string, unknown>).total as number || 0} hóa đơn</p>
                   </div>
                 </div>
               </div>
@@ -442,11 +442,11 @@ export default function SalesPage() {
                     <CheckCircle className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Đã thanh toán</p>
+                    <p className="text-sm font-medium text-black">Đã thanh toán</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency((revenue as Record<string, unknown>).paid as number || 0)}
                     </p>
-                    <p className="text-sm text-gray-500">Đã thu</p>
+                    <p className="text-sm text-black">Đã thu</p>
                   </div>
                 </div>
               </div>
@@ -457,11 +457,11 @@ export default function SalesPage() {
                     <Clock className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Chờ thanh toán</p>
+                    <p className="text-sm font-medium text-black">Chờ thanh toán</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency((revenue as Record<string, unknown>).pending as number || 0)}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-black">
                       {(invoicesStats as Record<string, unknown>).overdue as number || 0} quá hạn
                     </p>
                   </div>
@@ -479,7 +479,7 @@ export default function SalesPage() {
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'overview'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Tổng quan
@@ -489,7 +489,7 @@ export default function SalesPage() {
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'all-sales'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Tất cả giao dịch
@@ -499,7 +499,7 @@ export default function SalesPage() {
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'invoices'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Hóa đơn ({(invoicesStats as Record<string, unknown>).total as number || 0})
@@ -509,7 +509,7 @@ export default function SalesPage() {
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'quotes'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Báo giá ({String(Object.values((quotesStats as Record<string, unknown>).by_status || {}).reduce((a: unknown, b: unknown) => (a as number) + (b as number), 0))})
@@ -519,7 +519,7 @@ export default function SalesPage() {
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'receipts'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Phiếu Thu
@@ -529,7 +529,7 @@ export default function SalesPage() {
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'customers'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Khách hàng
@@ -539,7 +539,7 @@ export default function SalesPage() {
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'products'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Sản phẩm & Dịch vụ
@@ -552,7 +552,7 @@ export default function SalesPage() {
               <div className="px-6 py-4 border-b border-gray-200">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
+                    <Search className="h-5 w-5 text-black" />
                   </div>
                   <input
                     type="text"

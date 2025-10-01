@@ -42,7 +42,7 @@ export function CashflowWidget({ projection, loading, error }: CashflowWidgetPro
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Dự báo dòng tiền</h3>
-        <div className="text-center text-gray-500 py-4">
+        <div className="text-center text-black py-4">
           <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
           <p className="text-sm">{error}</p>
         </div>
@@ -63,7 +63,7 @@ export function CashflowWidget({ projection, loading, error }: CashflowWidgetPro
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-gray-900">Dự báo dòng tiền</h3>
-        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+        <span className="text-xs text-black bg-gray-100 px-2 py-1 rounded">
           {projection?.confidence || 'medium'}
         </span>
       </div>
@@ -73,7 +73,7 @@ export function CashflowWidget({ projection, loading, error }: CashflowWidgetPro
           {projection.projections.slice(0, 3).map((month, index) => (
             <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center">
-                <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                <Calendar className="h-4 w-4 text-black mr-2" />
                 <span className="text-sm font-medium">{month.month}</span>
               </div>
               <div className="text-right">
@@ -87,19 +87,19 @@ export function CashflowWidget({ projection, loading, error }: CashflowWidgetPro
                     {formatCurrency(Math.abs(month.projectedCashFlow))}
                   </span>
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-black">
                   Doanh thu: {formatCurrency(month.projectedRevenue)}
                 </div>
               </div>
             </div>
           ))}
           
-          <div className="mt-4 text-xs text-gray-500 text-center">
+          <div className="mt-4 text-xs text-black text-center">
             Dự báo dựa trên: {projection.basedOn}
           </div>
         </div>
       ) : (
-        <div className="text-center text-gray-500 py-4">
+        <div className="text-center text-black py-4">
           <DollarSign className="h-8 w-8 mx-auto mb-2 text-gray-300" />
           <p className="text-sm">Không đủ dữ liệu để dự báo</p>
         </div>
@@ -132,7 +132,7 @@ export function EventsWidget({ events, loading, error }: EventsWidgetProps) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Sự kiện sắp tới</h3>
-        <div className="text-center text-gray-500 py-4">
+        <div className="text-center text-black py-4">
           <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
           <p className="text-sm">{error}</p>
         </div>
@@ -165,7 +165,7 @@ export function EventsWidget({ events, loading, error }: EventsWidgetProps) {
       case 'payment':
         return <DollarSign className="h-4 w-4 text-blue-500" />
       default:
-        return <Calendar className="h-4 w-4 text-gray-500" />
+        return <Calendar className="h-4 w-4 text-black" />
     }
   }
 
@@ -186,7 +186,7 @@ export function EventsWidget({ events, loading, error }: EventsWidgetProps) {
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-gray-900">Sự kiện sắp tới</h3>
-        <Bell className="h-5 w-5 text-gray-400" />
+        <Bell className="h-5 w-5 text-black" />
       </div>
       
       {events && events.length > 0 ? (
@@ -203,7 +203,7 @@ export function EventsWidget({ events, loading, error }: EventsWidgetProps) {
                     <p className="text-sm font-medium text-gray-900">
                       {event.title}
                     </p>
-                    <div className="flex items-center text-xs text-gray-500 mt-1">
+                    <div className="flex items-center text-xs text-black mt-1">
                       <Clock className="h-3 w-3 mr-1" />
                       {formatDate(event.date)}
                     </div>
@@ -226,7 +226,7 @@ export function EventsWidget({ events, loading, error }: EventsWidgetProps) {
           ))}
         </div>
       ) : (
-        <div className="text-center text-gray-500 py-4">
+        <div className="text-center text-black py-4">
           <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
           <p className="text-sm">Không có sự kiện nào sắp tới</p>
         </div>
@@ -306,17 +306,17 @@ export function MonthlyChartWidget({ monthlyData, loading }: MonthlyChartProps) 
                     title={`Chi phí: ${formatCurrency(month.expenses)}`}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600">{month.month}</span>
+                <span className="text-xs text-black">{month.month}</span>
               </div>
             ))}
           </div>
           
-          <div className="text-xs text-gray-500 text-center">
+          <div className="text-xs text-black text-center">
             Dữ liệu 6 tháng gần nhất
           </div>
         </div>
       ) : (
-        <div className="text-center text-gray-500 py-8">
+        <div className="text-center text-black py-8">
           <TrendingUp className="h-8 w-8 mx-auto mb-2 text-gray-300" />
           <p className="text-sm">Chưa có dữ liệu để hiển thị</p>
         </div>

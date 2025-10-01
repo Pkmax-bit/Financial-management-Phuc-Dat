@@ -96,7 +96,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
   const getVarianceColor = (variance: number) => {
     if (variance > 0) return 'text-red-600'
     if (variance < 0) return 'text-green-600'
-    return 'text-gray-600'
+    return 'text-black'
   }
 
   const getVarianceIcon = (variance: number) => {
@@ -132,7 +132,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
               <BarChart3 className="h-5 w-5" />
               Báo cáo ngân sách: {budget.budget_name}
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-black mt-1">
               {new Date(budget.start_date).toLocaleDateString('vi-VN')} - {new Date(budget.end_date).toLocaleDateString('vi-VN')}
             </p>
           </div>
@@ -148,7 +148,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-black hover:text-black"
             >
               <X className="h-6 w-6" />
             </button>
@@ -166,7 +166,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
                 <X className="h-12 w-12 mx-auto" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Lỗi tải báo cáo</h3>
-              <p className="text-gray-600 mb-4">{error}</p>
+              <p className="text-black mb-4">{error}</p>
               <button
                 onClick={fetchReport}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -184,7 +184,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
                       <DollarSign className="h-6 w-6 text-blue-600" />
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Ngân sách</p>
+                      <p className="text-sm font-medium text-black">Ngân sách</p>
                       <p className="text-2xl font-bold text-gray-900">
                         {formatCurrency(report.total_budgeted, report.currency)}
                       </p>
@@ -198,7 +198,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
                       <TrendingUp className="h-6 w-6 text-green-600" />
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Thực tế</p>
+                      <p className="text-sm font-medium text-black">Thực tế</p>
                       <p className="text-2xl font-bold text-gray-900">
                         {formatCurrency(report.total_actual, report.currency)}
                       </p>
@@ -216,7 +216,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
                       )}
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Chênh lệch</p>
+                      <p className="text-sm font-medium text-black">Chênh lệch</p>
                       <p className={`text-2xl font-bold ${getVarianceColor(report.total_variance)}`}>
                         {formatCurrency(report.total_variance, report.currency)}
                       </p>
@@ -230,7 +230,7 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
                       <PieChart className="h-6 w-6 text-yellow-600" />
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">% Chênh lệch</p>
+                      <p className="text-sm font-medium text-black">% Chênh lệch</p>
                       <p className={`text-2xl font-bold ${getVarianceColor(report.total_variance)}`}>
                         {formatPercentage(report.total_variance_percentage)}
                       </p>
@@ -241,12 +241,12 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
 
               {/* Chart Placeholder */}
               <div className="bg-gray-50 p-8 rounded-lg text-center">
-                <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <BarChart3 className="h-12 w-12 text-black mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Biểu đồ ngân sách</h3>
-                <p className="text-gray-600">
+                <p className="text-black">
                   Biểu đồ so sánh ngân sách và thực tế sẽ được hiển thị ở đây
                 </p>
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-sm text-black mt-2">
                   (Cần tích hợp thư viện biểu đồ như Chart.js hoặc Recharts)
                 </p>
               </div>
@@ -260,19 +260,19 @@ export default function BudgetReportModal({ isOpen, onClose, budget }: BudgetRep
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Danh mục
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Ngân sách
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Thực tế
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           Chênh lệch
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                           % Chênh lệch
                         </th>
                       </tr>

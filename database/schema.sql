@@ -105,6 +105,8 @@ CREATE TABLE projects (
     status project_status DEFAULT 'planning',
     priority project_priority DEFAULT 'medium',
     progress DECIMAL(5,2) DEFAULT 0.0,
+    billing_type VARCHAR(20) DEFAULT 'fixed',
+    hourly_rate DECIMAL(8,2),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

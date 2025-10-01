@@ -193,11 +193,11 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Tạo Hóa đơn mới</h2>
-            <p className="text-sm text-gray-600">Tạo và gửi hóa đơn cho khách hàng</p>
+            <p className="text-sm text-black">Tạo và gửi hóa đơn cho khách hàng</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -321,7 +321,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
                           type="button"
                           onClick={() => removeItem(index)}
                           disabled={items.length === 1}
-                          className="text-red-600 hover:text-red-800 disabled:text-gray-400"
+                          className="text-red-600 hover:text-red-800 disabled:text-black"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -337,12 +337,12 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
           <div className="flex justify-end">
             <div className="w-80 space-y-3">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Tổng phụ:</span>
+                <span className="text-sm text-black">Tổng phụ:</span>
                 <span className="text-sm font-medium">{formatCurrency(formData.subtotal)}</span>
               </div>
               
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Thuế VAT:</span>
+                <span className="text-sm text-black">Thuế VAT:</span>
                 <div className="flex items-center space-x-2">
                   <input
                     type="number"
@@ -361,7 +361,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
               </div>
 
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Giảm giá:</span>
+                <span className="text-sm text-black">Giảm giá:</span>
                 <input
                   type="number"
                   value={formData.discount_amount}

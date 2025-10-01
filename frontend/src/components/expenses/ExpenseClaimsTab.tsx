@@ -217,7 +217,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium text-gray-900">Đề nghị Hoàn ứng</h3>
-          <p className="text-sm text-gray-500">Quản lý đề nghị hoàn ứng của nhân viên</p>
+          <p className="text-sm text-black">Quản lý đề nghị hoàn ứng của nhân viên</p>
         </div>
         <button
           onClick={onCreateExpenseClaim}
@@ -233,7 +233,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
         <button
           onClick={() => setFilter('all')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Tất cả
@@ -241,7 +241,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
         <button
           onClick={() => setFilter('draft')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Nháp
@@ -249,7 +249,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
         <button
           onClick={() => setFilter('submitted')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'submitted' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'submitted' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Đã gửi
@@ -257,7 +257,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
         <button
           onClick={() => setFilter('approved')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'approved' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Đã duyệt
@@ -265,7 +265,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
         <button
           onClick={() => setFilter('rejected')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'rejected' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Từ chối
@@ -273,7 +273,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
         <button
           onClick={() => setFilter('paid')}
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            filter === 'paid' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+            filter === 'paid' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-black'
           }`}
         >
           Đã thanh toán
@@ -289,7 +289,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <Receipt className="h-8 w-8 text-gray-400" />
+                      <Receipt className="h-8 w-8 text-black" />
                     </div>
                     <div className="ml-4">
                       <div className="flex items-center">
@@ -300,13 +300,13 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
                         </span>
                       </div>
                       <div className="mt-1">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-black">
                           {claim.description}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-black">
                           Nhân viên: {claim.employee_name || claim.employee_email || 'Unknown'}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-black">
                           Ngày gửi: {formatDate(claim.submission_date)}
                         </p>
                         {claim.rejection_reason && (
@@ -322,13 +322,13 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
                       <p className="text-sm font-medium text-gray-900">
                         {formatCurrency(claim.total_amount)}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-black">
                         {claim.item_count} khoản chi
                       </p>
                     </div>
                     <div className="flex space-x-2">
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
@@ -337,21 +337,21 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
                       {claim.status === 'draft' && (
                         <>
                           <button 
-                            className="text-gray-400 hover:text-blue-600" 
+                            className="text-black hover:text-blue-600" 
                             title="Chỉnh sửa"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
                           <button 
                             onClick={() => handleSubmitForApproval(claim.id)}
-                            className="text-gray-400 hover:text-green-600" 
+                            className="text-black hover:text-green-600" 
                             title="Gửi duyệt"
                           >
                             <Send className="h-4 w-4" />
                           </button>
                           <button 
                             onClick={() => handleDelete(claim.id)}
-                            className="text-gray-400 hover:text-red-600" 
+                            className="text-black hover:text-red-600" 
                             title="Xóa"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -366,7 +366,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
                               setSelectedClaim(claim)
                               setShowApprovalModal(true)
                             }}
-                            className="text-gray-400 hover:text-green-600" 
+                            className="text-black hover:text-green-600" 
                             title="Duyệt"
                           >
                             <CheckCircle className="h-4 w-4" />
@@ -376,7 +376,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
                               setSelectedClaim(claim)
                               setShowApprovalModal(true)
                             }}
-                            className="text-gray-400 hover:text-red-600" 
+                            className="text-black hover:text-red-600" 
                             title="Từ chối"
                           >
                             <XCircle className="h-4 w-4" />
@@ -390,7 +390,7 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
                             setSelectedClaim(claim)
                             setShowPaymentModal(true)
                           }}
-                          className="text-gray-400 hover:text-blue-600" 
+                          className="text-black hover:text-blue-600" 
                           title="Thanh toán"
                         >
                           <DollarSign className="h-4 w-4" />
@@ -413,13 +413,13 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 Phê duyệt đề nghị hoàn ứng
               </h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Đề nghị: <strong>{selectedClaim.claim_number}</strong>
               </p>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Nhân viên: <strong>{selectedClaim.employee_name || selectedClaim.employee_email}</strong>
               </p>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Số tiền: <strong>{formatCurrency(selectedClaim.total_amount)}</strong>
               </p>
               
@@ -487,13 +487,13 @@ export default function ExpenseClaimsTab({ searchTerm, onCreateExpenseClaim }: E
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 Thanh toán đề nghị hoàn ứng
               </h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Đề nghị: <strong>{selectedClaim.claim_number}</strong>
               </p>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Nhân viên: <strong>{selectedClaim.employee_name || selectedClaim.employee_email}</strong>
               </p>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-black mb-4">
                 Số tiền: <strong>{formatCurrency(selectedClaim.total_amount)}</strong>
               </p>
               

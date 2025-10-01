@@ -226,11 +226,11 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Tạo chức vụ mới</h2>
-            <p className="text-sm text-gray-500">Thêm chức vụ vào hệ thống</p>
+            <p className="text-sm text-black">Thêm chức vụ vào hệ thống</p>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg"
+            className="text-black hover:text-black p-2 hover:bg-gray-100 rounded-lg"
             disabled={submitting}
           >
             <X className="h-6 w-6" />
@@ -282,10 +282,10 @@ export default function PositionSidebar({ isOpen, onClose, onSuccess }: Position
               ) : (
                 <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
                   <div className="flex items-center">
-                    <Hash className="h-4 w-4 text-gray-400 mr-2" />
+                    <Hash className="h-4 w-4 text-black mr-2" />
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Mã chức vụ</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm font-medium text-black">Mã chức vụ</p>
+                      <p className="text-sm text-black">
                         📝 Mã sẽ được tạo tự động khi bạn nhập tên chức vụ và chọn phòng ban
                       </p>
                     </div>

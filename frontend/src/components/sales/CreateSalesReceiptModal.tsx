@@ -228,7 +228,7 @@ export default function CreateSalesReceiptModal({
           <h2 className="text-xl font-semibold text-gray-900">Tạo Phiếu Thu Bán Hàng</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="w-6 h-6" />
           </button>
@@ -366,7 +366,7 @@ export default function CreateSalesReceiptModal({
                   </div>
 
                   <div className="mt-3 flex items-center justify-between">
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-black">
                       Mô tả: {item.description || 'Không có mô tả'}
                     </div>
                     <div className="text-sm font-semibold text-gray-900">
@@ -383,12 +383,12 @@ export default function CreateSalesReceiptModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Tạm tính:</span>
+                  <span className="text-sm text-black">Tạm tính:</span>
                   <span className="text-sm font-medium">{formatCurrency(subtotal)}</span>
                 </div>
                 
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Giảm giá:</span>
+                  <span className="text-sm text-black">Giảm giá:</span>
                   <input
                     type="number"
                     min="0"
@@ -400,7 +400,7 @@ export default function CreateSalesReceiptModal({
                 </div>
                 
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Thuế (%):</span>
+                  <span className="text-sm text-black">Thuế (%):</span>
                   <input
                     type="number"
                     min="0"
@@ -415,12 +415,12 @@ export default function CreateSalesReceiptModal({
 
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Thuế:</span>
+                  <span className="text-sm text-black">Thuế:</span>
                   <span className="text-sm font-medium">{formatCurrency(taxAmount)}</span>
                 </div>
                 
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Giảm giá:</span>
+                  <span className="text-sm text-black">Giảm giá:</span>
                   <span className="text-sm font-medium">{formatCurrency(discountAmount)}</span>
                 </div>
                 

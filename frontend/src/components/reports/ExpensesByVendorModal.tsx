@@ -144,9 +144,9 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
 
   const getRankingIcon = (ranking: number) => {
     if (ranking === 1) return <Truck className="h-5 w-5 text-yellow-500" />
-    if (ranking === 2) return <Package className="h-5 w-5 text-gray-400" />
+    if (ranking === 2) return <Package className="h-5 w-5 text-black" />
     if (ranking === 3) return <Package className="h-5 w-5 text-amber-600" />
-    return <span className="text-sm font-medium text-gray-500">#{ranking}</span>
+    return <span className="text-sm font-medium text-black">#{ranking}</span>
   }
 
   const getRankingColor = (ranking: number) => {
@@ -209,11 +209,11 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
             <div key={index} className="bg-white rounded-lg border p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">{metric.title}</p>
+                  <p className="text-sm font-medium text-black">{metric.title}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {metric.title.includes('Chi phí') ? formatCurrency(metric.value) : metric.value}
                   </p>
-                  <p className="text-xs text-gray-500">{metric.description}</p>
+                  <p className="text-xs text-black">{metric.description}</p>
                 </div>
                 <div className={`p-3 rounded-lg ${metric.color}`}>
                   <Icon className="h-6 w-6" />
@@ -235,7 +235,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
       <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Top 5 Nhà cung cấp</h3>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-black">
             Chiếm {report.top_vendor_percentage.toFixed(1)}% tổng chi phí
           </div>
         </div>
@@ -247,14 +247,14 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
                 {getRankingIcon(vendor.ranking)}
                 <div>
                   <div className="font-medium text-gray-900">{vendor.vendor_name}</div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     {vendor.total_bills + vendor.total_expense_claims} giao dịch
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="font-semibold text-gray-900">{formatCurrency(vendor.total_expenses)}</div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-black">
                   {((vendor.total_expenses / report.total_expenses) * 100).toFixed(1)}%
                 </div>
               </div>
@@ -273,7 +273,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Bảng xếp hạng Nhà cung cấp</h3>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-black">
               Hiển thị {paginatedVendors.length} / {filteredVendors.length} nhà cung cấp
             </div>
           </div>
@@ -283,28 +283,28 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Xếp hạng
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Nhà cung cấp
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Liên hệ
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Tổng chi phí
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-black uppercase tracking-wider">
                   Giao dịch
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Giá trị TB
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">
                   Giao dịch lớn nhất
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-black uppercase tracking-wider">
                   Lần cuối
                 </th>
               </tr>
@@ -327,12 +327,12 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
                         {vendor.vendor_name}
                       </div>
                       {vendor.vendor_code && (
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-black">
                           {vendor.vendor_code}
                         </div>
                       )}
                       {vendor.vendor_address && (
-                        <div className="text-xs text-gray-400 flex items-center">
+                        <div className="text-xs text-black flex items-center">
                           <MapPin className="h-3 w-3 mr-1" />
                           {vendor.vendor_address}
                         </div>
@@ -359,7 +359,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
                     <div className="text-sm font-medium text-gray-900 hover:text-blue-600">
                       {formatCurrency(vendor.total_expenses)}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-black">
                       {((vendor.total_expenses / report.total_expenses) * 100).toFixed(1)}%
                     </div>
                   </td>
@@ -367,7 +367,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
                     <div className="text-sm text-gray-900">
                       {vendor.total_bills + vendor.total_expense_claims}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-black">
                       {vendor.total_bills} hóa đơn, {vendor.total_expense_claims} chi phí
                     </div>
                   </td>
@@ -394,8 +394,8 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
 
         {paginatedVendors.length === 0 && (
           <div className="text-center py-12">
-            <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Không tìm thấy nhà cung cấp nào</p>
+            <Building2 className="h-12 w-12 text-black mx-auto mb-4" />
+            <p className="text-black">Không tìm thấy nhà cung cấp nào</p>
           </div>
         )}
       </div>
@@ -423,7 +423,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-black hover:text-black"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -440,17 +440,17 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Kỳ báo cáo</label>
-                  <p className="text-sm text-gray-600">{formatDate(startDate)} - {formatDate(endDate)}</p>
+                  <p className="text-sm text-black">{formatDate(startDate)} - {formatDate(endDate)}</p>
                 </div>
                 {report && (
                   <div>
                     <label className="text-sm font-medium text-gray-700">Cập nhật lúc</label>
-                    <p className="text-sm text-gray-600">{formatDate(report.generated_at)}</p>
+                    <p className="text-sm text-black">{formatDate(report.generated_at)}</p>
                   </div>
                 )}
                 <div>
                   <label className="text-sm font-medium text-gray-700">Mô tả</label>
-                  <p className="text-sm text-gray-600">Báo cáo chi tiết về chi phí và hiệu suất mua hàng theo từng nhà cung cấp</p>
+                  <p className="text-sm text-black">Báo cáo chi tiết về chi phí và hiệu suất mua hàng theo từng nhà cung cấp</p>
                 </div>
               </div>
             </div>
@@ -462,7 +462,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Đang tải báo cáo Chi phí theo Nhà cung cấp...</span>
+              <span className="ml-2 text-black">Đang tải báo cáo Chi phí theo Nhà cung cấp...</span>
             </div>
           )}
 
@@ -493,7 +493,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
               <div className="flex items-center space-x-4">
                 <div className="flex-1">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
                     <input
                       type="text"
                       placeholder="Tìm kiếm nhà cung cấp..."
@@ -503,7 +503,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
                     />
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-black">
                   Hiển thị {paginatedVendors.length} / {filteredVendors.length} nhà cung cấp
                 </div>
               </div>
@@ -514,7 +514,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
               {/* Pagination */}
               {filteredVendors.length > pageSize && (
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-black">
                     Hiển thị {(currentPage - 1) * pageSize + 1} đến {Math.min(currentPage * pageSize, filteredVendors.length)} 
                     trong tổng số {filteredVendors.length} nhà cung cấp
                   </div>
@@ -543,7 +543,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
               {/* Report Information */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-900 mb-2">Thông tin báo cáo</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-black">
                   <div>
                     <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
                   </div>

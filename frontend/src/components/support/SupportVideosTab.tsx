@@ -47,7 +47,7 @@ export default function SupportVideosTab({ searchTerm, onCreateGuide }: SupportV
     <div className="space-y-6">
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Video Hướng dẫn</h3>
-        <p className="text-gray-600 mb-6">
+        <p className="text-black mb-6">
           Xem video minh họa để hiểu rõ cách sử dụng hệ thống
         </p>
       </div>
@@ -76,7 +76,7 @@ export default function SupportVideosTab({ searchTerm, onCreateGuide }: SupportV
             </div>
             <div className="p-4">
               <h4 className="font-semibold text-gray-900 mb-2">{video.title}</h4>
-              <p className="text-gray-600 text-sm">{video.description}</p>
+              <p className="text-black text-sm">{video.description}</p>
             </div>
           </div>
         ))}
@@ -88,19 +88,19 @@ export default function SupportVideosTab({ searchTerm, onCreateGuide }: SupportV
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
             <div className="text-2xl font-bold text-blue-600">4</div>
-            <div className="text-sm text-gray-500">Tổng quan</div>
+            <div className="text-sm text-black">Tổng quan</div>
           </div>
           <div className="text-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
             <div className="text-2xl font-bold text-green-600">8</div>
-            <div className="text-sm text-gray-500">Bán hàng</div>
+            <div className="text-sm text-black">Bán hàng</div>
           </div>
           <div className="text-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
             <div className="text-2xl font-bold text-orange-600">6</div>
-            <div className="text-sm text-gray-500">Chi phí</div>
+            <div className="text-sm text-black">Chi phí</div>
           </div>
           <div className="text-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
             <div className="text-2xl font-bold text-purple-600">5</div>
-            <div className="text-sm text-gray-500">Báo cáo</div>
+            <div className="text-sm text-black">Báo cáo</div>
           </div>
         </div>
       </div>

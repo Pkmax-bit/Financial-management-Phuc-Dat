@@ -225,7 +225,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
         <div className="flex items-center space-x-4">
           <h3 className="text-lg font-medium text-gray-900">Lịch sử Chi tiêu</h3>
           <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-gray-400" />
+            <Filter className="h-4 w-4 text-black" />
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -267,25 +267,25 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Ngày
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Người nhận / Mô tả
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Danh mục
               </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Tiền tệ
                   </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Số tiền
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Chứng từ
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Hành động
               </th>
             </tr>
@@ -293,13 +293,13 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-black">
                   Đang tải...
                 </td>
               </tr>
             ) : filteredExpenses.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-black">
                   Không tìm thấy chi phí nào
                 </td>
               </tr>
@@ -308,19 +308,19 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                 <tr key={expense.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="font-medium">{formatDate(expense.expense_date)}</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-black">
                       Expense
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     <div>
                       <div className="font-medium">{expense.description}</div>
-                      <div className="text-sm text-gray-600 mt-1">{expense.description}</div>
+                      <div className="text-sm text-black mt-1">{expense.description}</div>
                       {expense.notes && (
-                        <div className="text-xs text-gray-500 mt-1">{expense.notes}</div>
+                        <div className="text-xs text-black mt-1">{expense.notes}</div>
                       )}
                       {expense.notes && (
-                        <div className="text-xs text-gray-500 mt-1">Ghi chú: {expense.notes}</div>
+                        <div className="text-xs text-black mt-1">Ghi chú: {expense.notes}</div>
                       )}
                     </div>
                   </td>
@@ -332,7 +332,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex items-center">
                       <span>{expense.currency}</span>
                     </div>
@@ -343,7 +343,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                       {getStatusText(expense.status)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex items-center">
                       {expense.receipt_url ? (
                         <div className="flex items-center text-green-600">
@@ -351,7 +351,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                           <span className="text-xs">Có</span>
                         </div>
                       ) : (
-                        <div className="flex items-center text-gray-400">
+                        <div className="flex items-center text-black">
                           <Paperclip className="h-4 w-4 mr-1" />
                           <span className="text-xs">Chưa có</span>
                         </div>
@@ -361,20 +361,20 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Sửa"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       {!expense.receipt_url && (
                         <button 
-                          className="text-gray-400 hover:text-blue-600" 
+                          className="text-black hover:text-blue-600" 
                           title="Đính kèm chứng từ"
                         >
                           <Paperclip className="h-4 w-4" />
@@ -384,14 +384,14 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                         <>
                           <button 
                             onClick={() => approveExpense(expense.id)}
-                            className="text-gray-400 hover:text-green-600" 
+                            className="text-black hover:text-green-600" 
                             title="Duyệt"
                           >
                             <CheckCircle className="h-4 w-4" />
                           </button>
                           <button 
                             onClick={() => rejectExpense(expense.id)}
-                            className="text-gray-400 hover:text-red-600" 
+                            className="text-black hover:text-red-600" 
                             title="Từ chối"
                           >
                             <XCircle className="h-4 w-4" />
@@ -399,7 +399,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                         </>
                       )}
                       <button 
-                        className="text-gray-400 hover:text-red-600" 
+                        className="text-black hover:text-red-600" 
                         title="Xóa"
                       >
                         <Trash2 className="h-4 w-4" />

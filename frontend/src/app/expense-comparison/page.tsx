@@ -17,7 +17,7 @@ export default function ExpenseComparisonPage() {
             <h1 className="text-2xl font-bold text-gray-900">
               So sánh phương pháp kết nối Supabase
             </h1>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-black">
               Test cả hai phương pháp: Trực tiếp Supabase và thông qua API Backend
             </p>
           </div>
@@ -29,7 +29,7 @@ export default function ExpenseComparisonPage() {
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'direct'
                   ? 'border-blue-500 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Supabase Trực tiếp
@@ -39,7 +39,7 @@ export default function ExpenseComparisonPage() {
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'api'
                   ? 'border-blue-500 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               API Backend (Hiện tại lỗi 403)
@@ -49,7 +49,7 @@ export default function ExpenseComparisonPage() {
           {/* Search Bar */}
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
               <input
                 type="text"
                 placeholder="Tìm kiếm chi phí..."

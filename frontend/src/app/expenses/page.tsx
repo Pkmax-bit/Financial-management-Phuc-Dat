@@ -207,7 +207,7 @@ export default function ExpensesPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Đang tải...</p>
+          <p className="mt-4 text-black">Đang tải...</p>
         </div>
       </div>
     )
@@ -223,7 +223,7 @@ export default function ExpensesPage() {
           {/* Header */}
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Quản lý Chi phí</h1>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-black">
               Theo dõi và quản lý chi phí, hóa đơn nhà cung cấp và nhà cung cấp
             </p>
             <div className="flex items-center justify-between mt-2">
@@ -232,14 +232,14 @@ export default function ExpensesPage() {
                   <div className={`w-2 h-2 rounded-full mr-2 ${
                     ((expensesStats as Record<string, unknown>).expenses_count as number) > 0 ? 'bg-green-500' : 'bg-red-500'
                   }`}></div>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-black">
                     {((expensesStats as Record<string, unknown>).expenses_count as number) > 0 ? `${(expensesStats as Record<string, unknown>).expenses_count} chi phí` : 'Chưa có dữ liệu'}
                   </span>
                 </div>
                 {user && (
                   <div className="flex items-center">
                     <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                    <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
+                    <span className="text-xs text-black">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
                   </div>
                 )}
               </div>
@@ -350,11 +350,11 @@ export default function ExpensesPage() {
                   <Receipt className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Tổng chi phí</p>
+                  <p className="text-sm font-medium text-black">Tổng chi phí</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(((expensesStats as Record<string, unknown>).total_expenses as number) || 0)}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-black">
                     {((expensesStats as Record<string, unknown>).expenses_count as number) || 0} phiếu chi
                   </p>
                 </div>
@@ -367,11 +367,11 @@ export default function ExpensesPage() {
                   <FileText className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Hóa đơn NCC</p>
+                  <p className="text-sm font-medium text-black">Hóa đơn NCC</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(((expensesStats as Record<string, unknown>).total_bills as number) || 0)}
                   </p>
-                  <p className="text-sm text-gray-500">{((expensesStats as Record<string, unknown>).bills_count as number) || 0} hóa đơn</p>
+                  <p className="text-sm text-black">{((expensesStats as Record<string, unknown>).bills_count as number) || 0} hóa đơn</p>
                 </div>
               </div>
             </div>
@@ -382,11 +382,11 @@ export default function ExpensesPage() {
                   <Clock className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Chờ duyệt</p>
+                  <p className="text-sm font-medium text-black">Chờ duyệt</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(((expensesStats as Record<string, unknown>).pending_amount as number) || 0)}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-black">
                     {((expensesStats as Record<string, unknown>).pending_count as number) || 0} phiếu
                   </p>
                 </div>
@@ -399,11 +399,11 @@ export default function ExpensesPage() {
                   <Building2 className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Nhà cung cấp</p>
+                  <p className="text-sm font-medium text-black">Nhà cung cấp</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {((expensesStats as Record<string, unknown>).vendors_count as number) || 0}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-black">
                     {((expensesStats as Record<string, unknown>).active_vendors as number) || 0} hoạt động
                   </p>
                 </div>
@@ -421,7 +421,7 @@ export default function ExpensesPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'expenses'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <Receipt className="w-4 h-4 inline mr-1" />
@@ -432,7 +432,7 @@ export default function ExpensesPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'bills'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <FileText className="w-4 h-4 inline mr-1" />
@@ -443,7 +443,7 @@ export default function ExpensesPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'purchase-orders'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <ShoppingCart className="w-4 h-4 inline mr-1" />
@@ -454,7 +454,7 @@ export default function ExpensesPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'expense-claims'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <User className="w-4 h-4 inline mr-1" />
@@ -465,7 +465,7 @@ export default function ExpensesPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'budgeting'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <BarChart3 className="w-4 h-4 inline mr-1" />
@@ -476,7 +476,7 @@ export default function ExpensesPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'vendors'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <Building2 className="w-4 h-4 inline mr-1" />
@@ -491,7 +491,7 @@ export default function ExpensesPage() {
               <div className="flex items-center justify-between">
                 <div className="relative flex-1 mr-4">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+                  <Search className="h-5 w-5 text-black" />
                 </div>
                 <input
                   type="text"

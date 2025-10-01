@@ -112,26 +112,33 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
   const StatusIcon = statusIcons[project.status]
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50">
-      <div className="bg-white w-full max-w-2xl h-full overflow-y-auto">
+    <>
+      {/* Invisible backdrop for click outside */}
+      <div 
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+      />
+      
+      {/* Sidebar */}
+      <div className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold text-gray-900">Project Details</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => onEdit(project)}
-              className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+              className="p-2 text-black hover:text-blue-600 transition-colors"
             >
               <Edit className="h-4 w-4" />
             </button>
             <button
               onClick={handleDelete}
-              className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+              className="p-2 text-black hover:text-red-600 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-black hover:text-black transition-colors"
             >
               <X className="h-6 w-6" />
             </button>
@@ -146,9 +153,9 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
             </div>
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
-              <p className="text-sm text-gray-500">#{project.project_code}</p>
+              <p className="text-sm text-black">#{project.project_code}</p>
               {project.description && (
-                <p className="text-sm text-gray-600 mt-2">{project.description}</p>
+                <p className="text-sm text-black mt-2">{project.description}</p>
               )}
             </div>
           </div>
@@ -156,7 +163,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
           {/* Status and Priority */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <StatusIcon className="h-4 w-4 text-gray-500" />
+              <StatusIcon className="h-4 w-4 text-black" />
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[project.status]}`}>
                 {project.status.replace('_', ' ').toUpperCase()}
               </span>
@@ -169,7 +176,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
           {/* Progress */}
           <div>
             <div className="flex items-center justify-between text-sm mb-2">
-              <span className="text-gray-600">Progress</span>
+              <span className="text-black">Progress</span>
               <span className="font-medium">{project.progress}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
@@ -184,26 +191,26 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm">
-                <Users className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-600">Customer:</span>
+                <Users className="h-4 w-4 text-black" />
+                <span className="text-black">Customer:</span>
                 <span className="font-medium">{project.customer_name || 'No Customer'}</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
-                <Users className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-600">Manager:</span>
+                <Users className="h-4 w-4 text-black" />
+                <span className="text-black">Manager:</span>
                 <span className="font-medium">{project.manager_name || 'No Manager'}</span>
               </div>
             </div>
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-600">Start:</span>
+                <Calendar className="h-4 w-4 text-black" />
+                <span className="text-black">Start:</span>
                 <span className="font-medium">{new Date(project.start_date).toLocaleDateString()}</span>
               </div>
               {project.end_date && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-gray-500" />
-                  <span className="text-gray-600">End:</span>
+                  <Calendar className="h-4 w-4 text-black" />
+                  <span className="text-black">End:</span>
                   <span className="font-medium">{new Date(project.end_date).toLocaleDateString()}</span>
                 </div>
               )}
@@ -214,27 +221,27 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {project.budget && (
               <div className="flex items-center gap-2 text-sm">
-                <DollarSign className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-600">Budget:</span>
+                <DollarSign className="h-4 w-4 text-black" />
+                <span className="text-black">Budget:</span>
                 <span className="font-medium">${project.budget.toLocaleString()}</span>
               </div>
             )}
             {project.actual_cost && (
               <div className="flex items-center gap-2 text-sm">
-                <DollarSign className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-600">Actual Cost:</span>
+                <DollarSign className="h-4 w-4 text-black" />
+                <span className="text-black">Actual Cost:</span>
                 <span className="font-medium">${project.actual_cost.toLocaleString()}</span>
               </div>
             )}
             <div className="flex items-center gap-2 text-sm">
-              <Clock className="h-4 w-4 text-gray-500" />
-              <span className="text-gray-600">Billing:</span>
+              <Clock className="h-4 w-4 text-black" />
+              <span className="text-black">Billing:</span>
               <span className="font-medium">{project.billing_type.replace('_', ' ').toUpperCase()}</span>
             </div>
             {project.hourly_rate && (
               <div className="flex items-center gap-2 text-sm">
-                <DollarSign className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-600">Rate:</span>
+                <DollarSign className="h-4 w-4 text-black" />
+                <span className="text-black">Rate:</span>
                 <span className="font-medium">${project.hourly_rate}/hour</span>
               </div>
             )}
@@ -244,24 +251,24 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
           {financialData && (
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="h-5 w-5 text-gray-600" />
+                <BarChart3 className="h-5 w-5 text-black" />
                 <h4 className="font-medium text-gray-900">Financial Summary</h4>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Total Revenue</p>
+                  <p className="text-sm text-black">Total Revenue</p>
                   <p className="text-lg font-semibold text-green-600">
                     ${financialData.total_revenue?.toLocaleString() || '0'}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Total Costs</p>
+                  <p className="text-sm text-black">Total Costs</p>
                   <p className="text-lg font-semibold text-red-600">
                     ${financialData.total_costs?.toLocaleString() || '0'}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Profit</p>
+                  <p className="text-sm text-black">Profit</p>
                   <p className={`text-lg font-semibold ${
                     (financialData.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
@@ -281,7 +288,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
                   <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border">
                     <div>
                       <p className="text-sm font-medium text-gray-900">{transaction.type}</p>
-                      <p className="text-xs text-gray-500">{transaction.description}</p>
+                      <p className="text-xs text-black">{transaction.description}</p>
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-medium ${
@@ -289,7 +296,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
                       }`}>
                         {transaction.amount >= 0 ? '+' : ''}${transaction.amount.toLocaleString()}
                       </p>
-                      <p className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()}</p>
+                      <p className="text-xs text-black">{new Date(transaction.date).toLocaleDateString()}</p>
                     </div>
                   </div>
                 ))}
@@ -298,12 +305,12 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
           )}
 
           {/* Timestamps */}
-          <div className="pt-4 border-t text-xs text-gray-500">
+          <div className="pt-4 border-t text-xs text-black">
             <p>Created: {new Date(project.created_at).toLocaleString()}</p>
             <p>Updated: {new Date(project.updated_at).toLocaleString()}</p>
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

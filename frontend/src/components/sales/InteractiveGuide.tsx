@@ -290,7 +290,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">{currentGuide.title}</h2>
-            <p className="text-sm text-gray-600">{currentGuide.description}</p>
+            <p className="text-sm text-black">{currentGuide.description}</p>
           </div>
           <div className="flex items-center space-x-2">
             <button
@@ -302,7 +302,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-black hover:text-black"
             >
               <X className="h-6 w-6" />
             </button>
@@ -315,7 +315,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
             <span className="text-sm font-medium text-gray-700">
               Bước {currentStep + 1} / {totalSteps}
             </span>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-black">
               {Math.round(((currentStep + 1) / totalSteps) * 100)}%
             </span>
           </div>
@@ -362,7 +362,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
               <div className="bg-white rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-gray-900 mb-3">Hành động cần thực hiện:</h4>
                 <div className="flex items-start mb-3">
-                  <MousePointer className="h-5 w-5 text-gray-400 mr-3 mt-0.5 flex-shrink-0" />
+                  <MousePointer className="h-5 w-5 text-black mr-3 mt-0.5 flex-shrink-0" />
                   <span className="text-gray-700">{currentGuide.steps[currentStep].action}</span>
                 </div>
                 
@@ -439,7 +439,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
 
         {/* Footer */}
         <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-black">
             Đã hoàn thành {completedSteps.length} / {totalSteps} bước
           </div>
           <div className="flex space-x-3">

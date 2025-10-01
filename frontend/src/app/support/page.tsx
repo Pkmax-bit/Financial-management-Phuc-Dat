@@ -123,7 +123,7 @@ export default function SupportPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Đang tải...</p>
+          <p className="mt-4 text-black">Đang tải...</p>
         </div>
       </div>
     )
@@ -139,7 +139,7 @@ export default function SupportPage() {
           {/* Header */}
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Trung tâm Hỗ trợ</h1>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-black">
               Hướng dẫn toàn diện cho tất cả các chức năng hệ thống
             </p>
             <div className="flex items-center justify-between mt-2">
@@ -148,14 +148,14 @@ export default function SupportPage() {
                   <div className={`w-2 h-2 rounded-full mr-2 ${
                     ((supportStats as Record<string, unknown>).total_guides as number) > 0 ? 'bg-green-500' : 'bg-red-500'
                   }`}></div>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-black">
                     {((supportStats as Record<string, unknown>).total_guides as number) > 0 ? `${(supportStats as Record<string, unknown>).total_guides} hướng dẫn` : 'Chưa có dữ liệu'}
                   </span>
                 </div>
                 {user && (
                   <div className="flex items-center">
                     <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                    <span className="text-xs text-gray-500">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
+                    <span className="text-xs text-black">Đã đăng nhập: {(user as { email?: string })?.email || 'Unknown'}</span>
                   </div>
                 )}
               </div>
@@ -233,11 +233,11 @@ export default function SupportPage() {
                   <BookOpen className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Hướng dẫn</p>
+                  <p className="text-sm font-medium text-black">Hướng dẫn</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {(supportStats as Record<string, unknown>).total_guides as number || 0}
                   </p>
-                  <p className="text-sm text-gray-500">Tài liệu hướng dẫn</p>
+                  <p className="text-sm text-black">Tài liệu hướng dẫn</p>
                 </div>
               </div>
             </div>
@@ -248,11 +248,11 @@ export default function SupportPage() {
                   <Video className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Video</p>
+                  <p className="text-sm font-medium text-black">Video</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {(supportStats as Record<string, unknown>).total_videos as number || 0}
                   </p>
-                  <p className="text-sm text-gray-500">Video hướng dẫn</p>
+                  <p className="text-sm text-black">Video hướng dẫn</p>
                 </div>
               </div>
             </div>
@@ -263,11 +263,11 @@ export default function SupportPage() {
                   <MessageCircle className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">FAQ</p>
+                  <p className="text-sm font-medium text-black">FAQ</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {(supportStats as Record<string, unknown>).total_faqs as number || 0}
                   </p>
-                  <p className="text-sm text-gray-500">Câu hỏi thường gặp</p>
+                  <p className="text-sm text-black">Câu hỏi thường gặp</p>
                 </div>
               </div>
             </div>
@@ -278,11 +278,11 @@ export default function SupportPage() {
                   <Target className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Modules</p>
+                  <p className="text-sm font-medium text-black">Modules</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {(supportStats as Record<string, unknown>).total_modules as number || 0}
                   </p>
-                  <p className="text-sm text-gray-500">Chức năng hỗ trợ</p>
+                  <p className="text-sm text-black">Chức năng hỗ trợ</p>
                 </div>
               </div>
             </div>
@@ -298,7 +298,7 @@ export default function SupportPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'overview'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <HelpCircle className="w-4 h-4 inline mr-1" />
@@ -309,7 +309,7 @@ export default function SupportPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'modules'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <BookOpen className="w-4 h-4 inline mr-1" />
@@ -320,7 +320,7 @@ export default function SupportPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'guides'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <Lightbulb className="w-4 h-4 inline mr-1" />
@@ -331,7 +331,7 @@ export default function SupportPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'videos'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <Video className="w-4 h-4 inline mr-1" />
@@ -342,7 +342,7 @@ export default function SupportPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'faq'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <MessageCircle className="w-4 h-4 inline mr-1" />
@@ -353,7 +353,7 @@ export default function SupportPage() {
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'contact'
                         ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <Phone className="w-4 h-4 inline mr-1" />
@@ -368,7 +368,7 @@ export default function SupportPage() {
               <div className="flex items-center justify-between">
                 <div className="relative flex-1 mr-4">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+                  <Search className="h-5 w-5 text-black" />
                 </div>
                 <input
                   type="text"

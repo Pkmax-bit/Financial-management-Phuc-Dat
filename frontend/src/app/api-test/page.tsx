@@ -62,7 +62,7 @@ export default function ApiTestPage() {
           <h2 className="text-xl font-semibold mb-4">Test Results</h2>
           
           {Object.keys(results).length === 0 ? (
-            <p className="text-gray-500">No tests run yet. Click &quot;Run All Tests&quot; to start.</p>
+            <p className="text-black">No tests run yet. Click &quot;Run All Tests&quot; to start.</p>
           ) : (
             <div className="space-y-4">
               {Object.entries(results).map(([testName, result]: [string, { success: boolean; data?: unknown; error?: string }]) => (
@@ -80,7 +80,7 @@ export default function ApiTestPage() {
                   
                   {result.success ? (
                     <div>
-                      <p className="text-sm text-gray-600 mb-2">Response:</p>
+                      <p className="text-sm text-black mb-2">Response:</p>
                       <pre className="bg-gray-50 p-2 rounded text-xs overflow-auto max-h-32">
                         {JSON.stringify(result.data, null, 2)}
                       </pre>

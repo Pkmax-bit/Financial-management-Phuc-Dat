@@ -37,7 +37,7 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
     <div className="space-y-6">
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Chào mừng đến với Trung tâm Hỗ trợ</h3>
-        <p className="text-gray-600 mb-6">
+        <p className="text-black mb-6">
           Tại đây bạn có thể tìm thấy tất cả các hướng dẫn, video và tài liệu để sử dụng hệ thống hiệu quả.
         </p>
       </div>
@@ -54,7 +54,7 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
               <DollarSign className="h-4 w-4 text-blue-500" />
               Bán hàng
             </h5>
-            <p className="text-sm text-gray-600 mb-3">Quản lý bán hàng, hóa đơn, thanh toán</p>
+            <p className="text-sm text-black mb-3">Quản lý bán hàng, hóa đơn, thanh toán</p>
             <Link href="/sales/guide" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
               Hướng dẫn Bán hàng →
             </Link>
@@ -64,7 +64,7 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
               <Receipt className="h-4 w-4 text-orange-500" />
               Chi phí
             </h5>
-            <p className="text-sm text-gray-600 mb-3">Quản lý chi phí, ngân sách, nhà cung cấp</p>
+            <p className="text-sm text-black mb-3">Quản lý chi phí, ngân sách, nhà cung cấp</p>
             <Link href="/expenses/guide" className="text-orange-600 hover:text-orange-800 text-sm font-medium">
               Hướng dẫn Chi phí →
             </Link>
@@ -144,19 +144,19 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">4</div>
-            <div className="text-sm text-gray-500">Modules</div>
+            <div className="text-sm text-black">Modules</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">12</div>
-            <div className="text-sm text-gray-500">Hướng dẫn</div>
+            <div className="text-sm text-black">Hướng dẫn</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">4</div>
-            <div className="text-sm text-gray-500">Video</div>
+            <div className="text-sm text-black">Video</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-purple-600">6</div>
-            <div className="text-sm text-gray-500">FAQ</div>
+            <div className="text-sm text-black">FAQ</div>
           </div>
         </div>
       </div>
@@ -171,7 +171,7 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-900">Hướng dẫn Bán hàng</p>
-              <p className="text-xs text-gray-500">2 giờ trước</p>
+              <p className="text-xs text-black">2 giờ trước</p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -180,7 +180,7 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-900">Video Quản lý Chi phí</p>
-              <p className="text-xs text-gray-500">1 ngày trước</p>
+              <p className="text-xs text-black">1 ngày trước</p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -189,7 +189,7 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-900">FAQ: Tạo tài khoản mới</p>
-              <p className="text-xs text-gray-500">3 ngày trước</p>
+              <p className="text-xs text-black">3 ngày trước</p>
             </div>
           </div>
         </div>

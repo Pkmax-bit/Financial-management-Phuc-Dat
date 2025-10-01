@@ -208,11 +208,11 @@ export default function SalesLearningPage() {
               <BookOpen className="h-8 w-8 text-blue-600 mr-3" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Trung tâm học tập Sales</h1>
-                <p className="text-sm text-gray-600">Học cách sử dụng hệ thống Sales hiệu quả</p>
+                <p className="text-sm text-black">Học cách sử dụng hệ thống Sales hiệu quả</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-black">
                 <span className="font-medium">Tiến độ tổng thể:</span> 45%
               </div>
               <div className="w-32 bg-gray-200 rounded-full h-2">
@@ -259,7 +259,7 @@ export default function SalesLearningPage() {
                 <div className="p-6">
                   <div className="mb-8">
                     <h2 className="text-2xl font-bold text-gray-900 mb-4">Chào mừng đến với Trung tâm học tập Sales</h2>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-black mb-6">
                       Hệ thống Sales giúp bạn quản lý toàn bộ quy trình bán hàng từ báo giá đến thanh toán. 
                       Hãy bắt đầu với lộ trình học phù hợp với trình độ của bạn.
                     </p>
@@ -347,12 +347,12 @@ export default function SalesLearningPage() {
                             </div>
                             <div>
                               <h3 className="text-lg font-semibold text-gray-900">{path.title}</h3>
-                              <p className="text-gray-600">{path.description}</p>
+                              <p className="text-black">{path.description}</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm text-gray-500">Thời gian: {path.duration}</div>
-                            <div className="text-sm text-gray-500">Độ khó: {path.difficulty}</div>
+                            <div className="text-sm text-black">Thời gian: {path.duration}</div>
+                            <div className="text-sm text-black">Độ khó: {path.difficulty}</div>
                           </div>
                         </div>
 
@@ -365,7 +365,7 @@ export default function SalesLearningPage() {
                                 </div>
                                 <div>
                                   <h4 className="text-sm font-medium text-gray-900">{step.title}</h4>
-                                  <div className="flex items-center text-xs text-gray-500">
+                                  <div className="flex items-center text-xs text-black">
                                     <Clock className="h-3 w-3 mr-1" />
                                     {step.duration}
                                     <span className="mx-2">•</span>
@@ -417,11 +417,11 @@ export default function SalesLearningPage() {
                             </div>
                             <div>
                               <h3 className="text-lg font-semibold text-gray-900">{resource.title}</h3>
-                              <p className="text-gray-600">{resource.description}</p>
+                              <p className="text-black">{resource.description}</p>
                             </div>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-500 capitalize">{resource.type}</span>
+                            <span className="text-sm text-black capitalize">{resource.type}</span>
                             <a
                               href={resource.url}
                               className="inline-flex items-center text-blue-600 hover:text-blue-700"
@@ -453,7 +453,7 @@ export default function SalesLearningPage() {
                               achievement.unlocked ? 'bg-green-100' : 'bg-gray-100'
                             }`}>
                               <Icon className={`h-6 w-6 ${
-                                achievement.unlocked ? 'text-green-600' : 'text-gray-400'
+                                achievement.unlocked ? 'text-green-600' : 'text-black'
                               }`} />
                             </div>
                             <div>
@@ -463,7 +463,7 @@ export default function SalesLearningPage() {
                                 {achievement.title}
                               </h3>
                               <p className={`text-sm ${
-                                achievement.unlocked ? 'text-green-700' : 'text-gray-600'
+                                achievement.unlocked ? 'text-green-700' : 'text-black'
                               }`}>
                                 {achievement.description}
                               </p>
@@ -471,7 +471,7 @@ export default function SalesLearningPage() {
                           </div>
                           <div className="mb-4">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm text-gray-600">Tiến độ</span>
+                              <span className="text-sm text-black">Tiến độ</span>
                               <span className="text-sm font-medium text-gray-900">{achievement.progress}%</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2">
@@ -489,7 +489,7 @@ export default function SalesLearningPage() {
                               <span className="text-sm font-medium">Đã mở khóa</span>
                             </div>
                           ) : (
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-black">
                               Còn {100 - achievement.progress}% để mở khóa
                             </div>
                           )}

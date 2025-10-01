@@ -255,25 +255,25 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Số hóa đơn
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Nhà cung cấp
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Số tiền
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Ngày phát hành
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Hạn thanh toán
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Trạng thái
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Hành động
               </th>
             </tr>
@@ -281,13 +281,13 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-black">
                   Đang tải...
                 </td>
               </tr>
             ) : filteredBills.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-black">
                   Không tìm thấy hóa đơn nào
                 </td>
               </tr>
@@ -304,17 +304,17 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex items-center">
-                      <Building2 className="h-4 w-4 text-gray-400 mr-2" />
+                      <Building2 className="h-4 w-4 text-black mr-2" />
                       {bill.vendor_name || 'Chưa có tên'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCurrency(bill.total_amount)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     {formatDate(bill.issue_date)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className={`${isOverdue(bill) ? 'text-red-600 font-medium' : ''}`}>
                       {formatDate(bill.due_date)}
                     </div>
@@ -327,13 +327,13 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Sửa"
                       >
                         <Edit className="h-4 w-4" />
@@ -341,7 +341,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
                       {bill.status === 'received' && (
                         <button 
                           onClick={() => approveBill(bill.id)}
-                          className="text-gray-400 hover:text-green-600" 
+                          className="text-black hover:text-green-600" 
                           title="Duyệt thanh toán"
                         >
                           <CheckCircle className="h-4 w-4" />
@@ -350,14 +350,14 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
                       {(bill.status === 'approved' || bill.status === 'overdue') && (
                         <button 
                           onClick={() => payBill(bill.id)}
-                          className="text-gray-400 hover:text-blue-600" 
+                          className="text-black hover:text-blue-600" 
                           title="Thanh toán"
                         >
                           <DollarSign className="h-4 w-4" />
                         </button>
                       )}
                       <button 
-                        className="text-gray-400 hover:text-red-600" 
+                        className="text-black hover:text-red-600" 
                         title="Xóa"
                       >
                         <Trash2 className="h-4 w-4" />

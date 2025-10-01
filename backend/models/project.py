@@ -50,7 +50,9 @@ class ProjectCreate(BaseModel):
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None
+    status: ProjectStatus = ProjectStatus.PLANNING
     priority: ProjectPriority = ProjectPriority.MEDIUM
+    progress: float = 0.0
     billing_type: str = "fixed"
     hourly_rate: Optional[float] = None
 

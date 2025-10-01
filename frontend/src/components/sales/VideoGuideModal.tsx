@@ -81,11 +81,11 @@ export default function VideoGuideModal({ isOpen, onClose }: VideoGuideModalProp
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Hướng dẫn video Sales</h2>
-            <p className="text-sm text-gray-600">Xem video hướng dẫn từng bước</p>
+            <p className="text-sm text-black">Xem video hướng dẫn từng bước</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="h-6 w-6" />
           </button>
@@ -141,7 +141,7 @@ export default function VideoGuideModal({ isOpen, onClose }: VideoGuideModalProp
             {/* Video Info */}
             <div className="mt-4">
               <h3 className="text-lg font-semibold text-gray-900">{videos[currentVideo].title}</h3>
-              <p className="text-gray-600 mt-1">{videos[currentVideo].description}</p>
+              <p className="text-black mt-1">{videos[currentVideo].description}</p>
             </div>
           </div>
 
@@ -161,10 +161,10 @@ export default function VideoGuideModal({ isOpen, onClose }: VideoGuideModalProp
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-900">{video.title}</span>
-                    <span className="text-xs text-gray-500">{video.duration}</span>
+                    <span className="text-xs text-black">{video.duration}</span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3">{video.description}</p>
-                  <div className="flex items-center text-xs text-gray-500">
+                  <p className="text-sm text-black mb-3">{video.description}</p>
+                  <div className="flex items-center text-xs text-black">
                     <Play className="h-3 w-3 mr-1" />
                     {index === currentVideo ? 'Đang phát' : 'Nhấn để phát'}
                   </div>
@@ -210,7 +210,7 @@ export default function VideoGuideModal({ isOpen, onClose }: VideoGuideModalProp
             </button>
           </div>
           
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-black">
             Video {currentVideo + 1} / {videos.length}
           </div>
         </div>

@@ -47,7 +47,7 @@ export default function QuickGuidesTab() {
     <div className="space-y-6">
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Hướng dẫn Nhanh</h3>
-        <p className="text-gray-600 mb-6">
+        <p className="text-black mb-6">
           Các bước cơ bản để bắt đầu sử dụng hệ thống
         </p>
       </div>
@@ -58,13 +58,13 @@ export default function QuickGuidesTab() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 mb-2">{guide.title}</h4>
-                <p className="text-gray-600 text-sm mb-4">{guide.description}</p>
+                <p className="text-black text-sm mb-4">{guide.description}</p>
                 
                 <div className="space-y-2">
                   <h5 className="text-sm font-medium text-gray-700">Các bước thực hiện:</h5>
                   <ol className="space-y-1">
                     {guide.steps.map((step, index) => (
-                      <li key={index} className="flex items-start space-x-2 text-sm text-gray-600">
+                      <li key={index} className="flex items-start space-x-2 text-sm text-black">
                         <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
                           {index + 1}
                         </span>
@@ -75,7 +75,7 @@ export default function QuickGuidesTab() {
                 </div>
               </div>
               <div className="ml-4 text-right">
-                <div className="text-sm text-gray-500 mb-2">Thời gian ước tính:</div>
+                <div className="text-sm text-black mb-2">Thời gian ước tính:</div>
                 <div className="text-sm font-medium text-blue-600 flex items-center gap-1">
                   <Clock className="h-4 w-4" />
                   {guide.estimatedTime}

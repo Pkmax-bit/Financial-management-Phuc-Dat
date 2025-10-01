@@ -102,7 +102,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
       case 'cancelled':
         return <XCircle className="h-4 w-4 text-red-500" />
       default:
-        return <Clock className="h-4 w-4 text-gray-500" />
+        return <Clock className="h-4 w-4 text-black" />
     }
   }
 
@@ -178,7 +178,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
         <div className="bg-white rounded-lg border p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Tổng thanh toán</p>
+              <p className="text-sm font-medium text-black">Tổng thanh toán</p>
               <p className="text-2xl font-bold text-gray-900">{totalPayments}</p>
             </div>
             <CreditCard className="h-8 w-8 text-blue-500" />
@@ -188,7 +188,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
         <div className="bg-white rounded-lg border p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Đã hoàn thành</p>
+              <p className="text-sm font-medium text-black">Đã hoàn thành</p>
               <p className="text-2xl font-bold text-green-600">{completedPayments}</p>
             </div>
             <CheckCircle className="h-8 w-8 text-green-500" />
@@ -198,7 +198,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
         <div className="bg-white rounded-lg border p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Tổng số tiền</p>
+              <p className="text-sm font-medium text-black">Tổng số tiền</p>
               <p className="text-lg font-bold text-gray-900">{formatCurrency(totalAmount)}</p>
             </div>
             <DollarSign className="h-8 w-8 text-green-500" />
@@ -208,7 +208,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
         <div className="bg-white rounded-lg border p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Đang xử lý</p>
+              <p className="text-sm font-medium text-black">Đang xử lý</p>
               <p className="text-lg font-bold text-yellow-600">{formatCurrency(pendingAmount)}</p>
             </div>
             <Clock className="h-8 w-8 text-yellow-500" />
@@ -276,25 +276,25 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số thanh toán
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Khách hàng
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Số tiền
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Phương thức
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Trạng thái
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Ngày thanh toán
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Thao tác
                 </th>
               </tr>
@@ -304,26 +304,26 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
                 <tr key={payment.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <CreditCard className="h-4 w-4 text-gray-400 mr-2" />
+                      <CreditCard className="h-4 w-4 text-black mr-2" />
                       <div>
                         <span className="text-sm font-medium text-gray-900">
                           {payment.payment_number}
                         </span>
                         {payment.payment_reference && (
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-black">
                             Ref: {payment.payment_reference}
                           </div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     {payment.customer_name || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {formatCurrency(payment.amount)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     {getPaymentMethodText(payment.payment_method)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -334,22 +334,22 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex items-center">
-                      <Calendar className="h-4 w-4 text-gray-400 mr-1" />
+                      <Calendar className="h-4 w-4 text-black mr-1" />
                       {formatDate(payment.payment_date)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
-                        className="text-gray-400 hover:text-gray-600" 
+                        className="text-black hover:text-black" 
                         title="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-gray-400 hover:text-blue-600" 
+                        className="text-black hover:text-blue-600" 
                         title="Tải biên lai"
                       >
                         <Download className="h-4 w-4" />
@@ -363,9 +363,9 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
           
           {filteredPayments.length === 0 && (
             <div className="text-center py-8">
-              <CreditCard className="mx-auto h-12 w-12 text-gray-400" />
+              <CreditCard className="mx-auto h-12 w-12 text-black" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có thanh toán</h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-black">
                 Bắt đầu bằng cách ghi nhận thanh toán đầu tiên.
               </p>
               <div className="mt-6">

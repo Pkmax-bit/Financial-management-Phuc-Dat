@@ -158,7 +158,7 @@ export default function SupabaseTestPage() {
     if (status.includes('✅')) return 'text-green-600'
     if (status.includes('⚠️')) return 'text-yellow-600'
     if (status.includes('❌')) return 'text-red-600'
-    return 'text-gray-600'
+    return 'text-black'
   }
 
   return (
@@ -241,7 +241,7 @@ export default function SupabaseTestPage() {
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="font-semibold">{result.test}</span>
-                    <span className="text-gray-500 text-sm ml-2">{result.timestamp}</span>
+                    <span className="text-black text-sm ml-2">{result.timestamp}</span>
                   </div>
                   <span className={`text-sm px-2 py-1 rounded ${
                     result.status === 'success' ? 'bg-green-200 text-green-800' :
@@ -254,7 +254,7 @@ export default function SupabaseTestPage() {
                 <p className="text-sm mt-1">{result.message}</p>
                 {Boolean(result.data) && (
                   <details className="mt-2">
-                    <summary className="text-xs text-gray-600 cursor-pointer">Show Details</summary>
+                    <summary className="text-xs text-black cursor-pointer">Show Details</summary>
                     <pre className="text-xs bg-gray-100 p-2 mt-1 rounded overflow-auto">
                       {typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)}
                     </pre>

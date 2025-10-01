@@ -184,7 +184,7 @@ export default function CreateCreditMemoModal({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-black hover:text-black"
           >
             <X className="w-6 h-6" />
           </button>
@@ -274,7 +274,7 @@ export default function CreateCreditMemoModal({
             </div>
 
             {formData.returned_items.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-black">
                 Chưa có sản phẩm nào. Hãy thêm sản phẩm trả lại.
               </div>
             ) : (

@@ -178,13 +178,13 @@ export default function ProjectsPage() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">Dự án</h1>
-                <p className="text-gray-600 mt-1">Quản lý và theo dõi dự án một cách hiệu quả</p>
+                <p className="text-black mt-1">Quản lý và theo dõi dự án một cách hiệu quả</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setActiveTab('reports')}
-                className="flex items-center gap-2 px-4 py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                className="flex items-center gap-2 px-4 py-2.5 text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
               >
                 <BarChart3 className="h-4 w-4" />
                 Báo cáo
@@ -205,7 +205,7 @@ export default function ProjectsPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Tổng dự án</p>
+                <p className="text-sm font-medium text-black">Tổng dự án</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
               <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg">
@@ -217,7 +217,7 @@ export default function ProjectsPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Dự án đang hoạt động</p>
+                <p className="text-sm font-medium text-black">Dự án đang hoạt động</p>
                 <p className="text-2xl font-bold text-green-600">{stats.active}</p>
               </div>
               <div className="p-3 bg-gradient-to-br from-green-100 to-green-200 rounded-lg">
@@ -229,11 +229,11 @@ export default function ProjectsPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Đã hoàn thành</p>
-                <p className="text-2xl font-bold text-gray-600">{stats.completed}</p>
+                <p className="text-sm font-medium text-black">Đã hoàn thành</p>
+                <p className="text-2xl font-bold text-black">{stats.completed}</p>
               </div>
               <div className="p-3 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg">
-                <Target className="h-6 w-6 text-gray-600" />
+                <Target className="h-6 w-6 text-black" />
               </div>
             </div>
           </div>
@@ -241,7 +241,7 @@ export default function ProjectsPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Tạm dừng</p>
+                <p className="text-sm font-medium text-black">Tạm dừng</p>
                 <p className="text-2xl font-bold text-yellow-600">{stats.onHold}</p>
               </div>
               <div className="p-3 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg">
@@ -265,9 +265,9 @@ export default function ProjectsPage() {
           {activeTab === 'reports' && (
             <div className="p-6">
               <div className="text-center py-12">
-                <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <BarChart3 className="mx-auto h-12 w-12 text-black mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Project Reports</h3>
-                <p className="text-gray-600 mb-4">
+                <p className="text-black mb-4">
                   View detailed reports and analytics for your projects
                 </p>
                 <button

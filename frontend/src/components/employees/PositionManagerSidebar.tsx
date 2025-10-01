@@ -172,11 +172,11 @@ export default function PositionManagerSidebar({ isOpen, onClose }: PositionMana
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Quản lý chức vụ</h2>
-            <p className="text-sm text-gray-500 mt-1">Tạo và quản lý các chức vụ trong công ty</p>
+            <p className="text-sm text-black mt-1">Tạo và quản lý các chức vụ trong công ty</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="text-black hover:text-black p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -231,7 +231,7 @@ export default function PositionManagerSidebar({ isOpen, onClose }: PositionMana
             </button>
             
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black h-4 w-4" />
               <input
                 type="text"
                 placeholder="Tìm kiếm chức vụ..."
@@ -258,7 +258,7 @@ export default function PositionManagerSidebar({ isOpen, onClose }: PositionMana
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Đang tải...</p>
+              <p className="mt-2 text-black">Đang tải...</p>
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -266,25 +266,25 @@ export default function PositionManagerSidebar({ isOpen, onClose }: PositionMana
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Chức vụ
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Mã CV
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Phòng ban
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Nhân viên
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Mức lương
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Trạng thái
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         Thao tác
                       </th>
                     </tr>
@@ -292,7 +292,7 @@ export default function PositionManagerSidebar({ isOpen, onClose }: PositionMana
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredPositions.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={7} className="px-6 py-8 text-center text-black">
                           Không có chức vụ nào
                         </td>
                       </tr>
@@ -301,13 +301,13 @@ export default function PositionManagerSidebar({ isOpen, onClose }: PositionMana
                         <tr key={position.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <Briefcase className="h-5 w-5 text-gray-400 mr-3" />
+                              <Briefcase className="h-5 w-5 text-black mr-3" />
                               <div>
                                 <div className="text-sm font-medium text-gray-900">
                                   {position.name}
                                 </div>
                                 {position.description && (
-                                  <div className="text-sm text-gray-500 truncate max-w-xs">
+                                  <div className="text-sm text-black truncate max-w-xs">
                                     {position.description}
                                   </div>
                                 )}
@@ -319,13 +319,13 @@ export default function PositionManagerSidebar({ isOpen, onClose }: PositionMana
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center text-sm text-gray-900">
-                              <Building2 className="h-4 w-4 text-gray-400 mr-1" />
+                              <Building2 className="h-4 w-4 text-black mr-1" />
                               {position.department_name}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center text-sm text-gray-900">
-                              <Users className="h-4 w-4 text-gray-400 mr-1" />
+                              <Users className="h-4 w-4 text-black mr-1" />
                               {position.employee_count || 0}
                             </div>
                           </td>
