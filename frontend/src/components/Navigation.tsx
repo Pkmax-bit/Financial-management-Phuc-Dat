@@ -17,7 +17,8 @@ import {
   DollarSign,
   HelpCircle,
   Brain,
-  TestTube
+  TestTube,
+  Camera
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 
@@ -53,18 +54,12 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       icon: Receipt,
       description: 'Quản lý chi phí với AI'
     },
-    {
-      name: 'AI Image Reader',
-      href: '/ai-image-reader',
-      icon: FileText,
-      description: 'Upload hình ảnh và xem kết quả AI'
-    },
-    {
-      name: 'AI Analysis',
-      href: '/ai-analysis',
-      icon: FileText,
-      description: 'AI phân tích hình với camera và auto-matching'
-    },
+          {
+            name: 'AI Analysis',
+            href: '/ai-analysis',
+            icon: FileText,
+            description: 'AI phân tích hình với camera và auto-matching'
+          },
     {
       name: 'Bán hàng',
       href: '/sales',
@@ -112,6 +107,12 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       href: '/test-api',
       icon: TestTube,
       description: 'Test AI API'
+    },
+    {
+      name: 'Camera Guide',
+      href: '/camera-guide',
+      icon: Camera,
+      description: 'Hướng dẫn setup camera cho AI'
     }
   ]
 
@@ -135,7 +136,13 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 max-h-[calc(100vh-8rem)] relative">
+        {/* Scroll indicator */}
+        <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-white to-transparent pointer-events-none z-10"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
+        
+        {/* Navigation items with padding for scroll indicators */}
+        <div className="pt-2 pb-2">
         {navigation.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href
@@ -162,6 +169,7 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
         {/* Support Center Button */}
         <div className="pt-4 border-t border-gray-200">
           <SupportCenterButton />
+        </div>
         </div>
       </nav>
 

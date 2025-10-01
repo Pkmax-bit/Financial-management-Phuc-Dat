@@ -1,7 +1,11 @@
 'use client'
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { Upload, Camera, FileText, Search, Save, Loader2, AlertCircle, X } from 'lucide-react'
+import { Upload, Camera, FileText, Search, Save, Loader2, AlertCircle, X, HelpCircle } from 'lucide-react'
+import CameraSetupGuide from './CameraSetupGuide'
+import CameraStatus from './CameraStatus'
+import CameraGuidePopup from './CameraGuidePopup'
+import MobileCamera from './MobileCamera'
 
 interface ExpenseItem {
   id: string
@@ -43,6 +47,15 @@ export default function AIImageAnalysis() {
   const [showCamera, setShowCamera] = useState(false)
   const [cameraMode, setCameraMode] = useState<'front' | 'rear'>('rear')
   const [cameraLoading, setCameraLoading] = useState(false)
+  const [aspectRatio, setAspectRatio] = useState<'default' | 'a4'>('default')
+  const [flipImage, setFlipImage] = useState(false)
+  const [flipCapturedImage, setFlipCapturedImage] = useState(false)
+  const [mirrorImage, setMirrorImage] = useState(false)
+  const [mirrorCapturedImage, setMirrorCapturedImage] = useState(false)
+  const [showCameraGuide, setShowCameraGuide] = useState(false)
+  const [showCameraGuidePopup, setShowCameraGuidePopup] = useState(false)
+  const [showMobileCamera, setShowMobileCamera] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   
@@ -68,6 +81,20 @@ export default function AIImageAnalysis() {
   // Load projects on mount
   useEffect(() => {
     loadAllProjects()
+    
+    // Detect mobile device
+    const checkMobile = () => {
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                            window.innerWidth <= 768
+      setIsMobile(isMobileDevice)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile)
+    }
   }, [])
 
   // Ensure video element is ready when showCamera changes
@@ -335,8 +362,9 @@ export default function AIImageAnalysis() {
       const constraints = {
         video: { 
           facingMode: cameraMode === 'front' ? 'user' : 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: aspectRatio === 'a4' ? 1080 : 1280 },
+          height: { ideal: aspectRatio === 'a4' ? 1440 : 720 },
+          aspectRatio: aspectRatio === 'a4' ? { ideal: 3/4 } : undefined
         }
       }
       
@@ -391,16 +419,72 @@ export default function AIImageAnalysis() {
       const context = canvas.getContext('2d')
       
       if (context) {
-        // Set canvas size to match video
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        
-        // Apply mirror effect for front camera
-        if (cameraMode === 'front') {
-          context.scale(-1, 1)
-          context.drawImage(video, -canvas.width, 0)
+        if (aspectRatio === 'a4') {
+          // Set canvas size to A4 ratio (3:4)
+          const targetWidth = 1080
+          const targetHeight = 1440
+          canvas.width = targetWidth
+          canvas.height = targetHeight
+          
+          // Calculate scaling to fit video into A4 ratio
+          const videoAspect = video.videoWidth / video.videoHeight
+          const targetAspect = targetWidth / targetHeight
+          
+          let sourceX = 0, sourceY = 0, sourceWidth = video.videoWidth, sourceHeight = video.videoHeight
+          
+          if (videoAspect > targetAspect) {
+            // Video is wider than target, crop sides
+            sourceWidth = video.videoHeight * targetAspect
+            sourceX = (video.videoWidth - sourceWidth) / 2
+          } else {
+            // Video is taller than target, crop top/bottom
+            sourceHeight = video.videoWidth / targetAspect
+            sourceY = (video.videoHeight - sourceHeight) / 2
+          }
+          
+          // Apply transforms for front camera and flip/mirror if enabled
+          if (cameraMode === 'front') {
+            context.scale(-1, 1) // Front camera mirror
+            if (flipImage) {
+              context.scale(1, -1) // Vertical flip
+            }
+            if (mirrorImage) {
+              context.scale(-1, 1) // Additional horizontal mirror
+            }
+            context.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, -targetWidth, flipImage ? -targetHeight : 0, targetWidth, targetHeight)
+          } else {
+            if (flipImage) {
+              context.scale(1, -1) // Vertical flip
+            }
+            if (mirrorImage) {
+              context.scale(-1, 1) // Horizontal mirror
+            }
+            context.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, mirrorImage ? -targetWidth : 0, flipImage ? -targetHeight : 0, targetWidth, targetHeight)
+          }
         } else {
-          context.drawImage(video, 0, 0)
+          // Set canvas size to match video (default)
+          canvas.width = video.videoWidth
+          canvas.height = video.videoHeight
+          
+          // Apply transforms for front camera and flip/mirror if enabled
+          if (cameraMode === 'front') {
+            context.scale(-1, 1) // Front camera mirror
+            if (flipImage) {
+              context.scale(1, -1) // Vertical flip
+            }
+            if (mirrorImage) {
+              context.scale(-1, 1) // Additional horizontal mirror
+            }
+            context.drawImage(video, -canvas.width, flipImage ? -canvas.height : 0)
+          } else {
+            if (flipImage) {
+              context.scale(1, -1) // Vertical flip
+            }
+            if (mirrorImage) {
+              context.scale(-1, 1) // Horizontal mirror
+            }
+            context.drawImage(video, mirrorImage ? -canvas.width : 0, flipImage ? -canvas.height : 0)
+          }
         }
         
         // Get image data with high quality
@@ -427,6 +511,17 @@ export default function AIImageAnalysis() {
     setMatchedProject(null)
     setError(null)
     setImageSource(null)
+    setAspectRatio('default')
+    setFlipImage(false)
+    setFlipCapturedImage(false)
+    setMirrorImage(false)
+    setMirrorCapturedImage(false)
+  }
+
+  const handleMobileCameraCapture = (imageData: string) => {
+    setPreview(imageData)
+    setImageSource('camera')
+    handleImageAnalysis(imageData)
   }
 
   const filteredProjects = (projects || []).filter(project =>
@@ -441,8 +536,15 @@ export default function AIImageAnalysis() {
         {/* Top navigation */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
-            <div className="flex items-center">
+            <div className="flex items-center gap-4">
               <h2 className="text-2xl font-semibold text-gray-900">AI Phân tích Hóa đơn</h2>
+              <button
+                onClick={() => setShowCameraGuidePopup(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
+              >
+                <Camera className="h-4 w-4" />
+                Hướng dẫn Camera
+              </button>
             </div>
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded flex items-center gap-2">
@@ -493,6 +595,11 @@ export default function AIImageAnalysis() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* Left Side - Analysis Results */}
             <div className="space-y-6">
+              {/* Camera Status */}
+              <CameraStatus onStatusChange={(status) => {
+                console.log('Camera status changed:', status)
+              }} />
+
               {/* AI Analysis Summary */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -682,8 +789,65 @@ export default function AIImageAnalysis() {
                           <Camera className="h-5 w-5 text-green-600" />
                         </div>
                         <p className="text-sm font-semibold text-gray-700">Hoặc chụp ảnh trực tiếp</p>
+                        
+                        {/* Mobile Camera Button */}
+                        {isMobile && (
+                          <button
+                            onClick={() => setShowMobileCamera(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-semibold mt-2"
+                          >
+                            <Camera className="h-4 w-4" />
+                            Camera Mobile
+                          </button>
+                        )}
                       </div>
                       
+                      {/* Aspect Ratio Selection */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Tỉ lệ khung hình:
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => setAspectRatio('default')}
+                            className={`px-3 py-2 rounded-lg border-2 font-semibold text-sm ${
+                              aspectRatio === 'default'
+                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                            }`}
+                          >
+                            📱 Mặc định (16:9)
+                          </button>
+                          <button
+                            onClick={() => setAspectRatio('a4')}
+                            className={`px-3 py-2 rounded-lg border-2 font-semibold text-sm ${
+                              aspectRatio === 'a4'
+                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                            }`}
+                          >
+                            📄 A4 (3:4)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Flip Image Toggle */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Lật ngược hình ảnh:
+                        </label>
+                        <button
+                          onClick={() => setFlipImage(!flipImage)}
+                          className={`w-full px-3 py-2 rounded-lg border-2 font-semibold text-sm ${
+                            flipImage
+                              ? 'border-green-500 bg-green-50 text-green-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                          }`}
+                        >
+                          {flipImage ? '🔄 Đã lật ngược' : '🔄 Lật ngược hình ảnh'}
+                        </button>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => {
@@ -724,16 +888,52 @@ export default function AIImageAnalysis() {
                 ) : (
                   <div className="space-y-4">
                     <div className="bg-white rounded-xl p-4 border border-gray-200">
-                      <div className="relative">
-                        <img 
-                          src={preview} 
-                          alt="Preview" 
-                          className="w-full h-48 object-contain rounded-lg border border-gray-200"
-                        />
+                        <div className="relative">
+                         <img 
+                           src={preview} 
+                           alt="Preview" 
+                           className={`w-full object-contain rounded-lg border border-gray-200 ${
+                             aspectRatio === 'a4' ? 'h-64' : 'h-48'
+                           }`}
+                           style={{
+                             aspectRatio: aspectRatio === 'a4' ? '3/4' : '16/9',
+                             transform: (() => {
+                               let transforms = []
+                               if (flipCapturedImage) transforms.push('scaleY(-1)')
+                               if (mirrorCapturedImage) transforms.push('scaleX(-1)')
+                               return transforms.length > 0 ? transforms.join(' ') : 'none'
+                             })()
+                           }}
+                          />
                         
                         {/* Image info overlay */}
                         <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
                           📷 Đã chụp
+                        </div>
+                        
+                        {/* Image control buttons */}
+                        <div className="absolute bottom-2 right-2 flex gap-2">
+                          <button
+                            onClick={() => setFlipCapturedImage(!flipCapturedImage)}
+                            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
+                              flipCapturedImage
+                                ? 'bg-green-600 text-white'
+                                : 'bg-black bg-opacity-70 text-white hover:bg-opacity-80'
+                            }`}
+                          >
+                            {flipCapturedImage ? '🔄 Đã lật' : '🔄 Lật'}
+                          </button>
+                          
+                          <button
+                            onClick={() => setMirrorCapturedImage(!mirrorCapturedImage)}
+                            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
+                              mirrorCapturedImage
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-black bg-opacity-70 text-white hover:bg-opacity-80'
+                            }`}
+                          >
+                            {mirrorCapturedImage ? '🪞 Đã gương' : '🪞 Gương'}
+                          </button>
                         </div>
                         
                         {/* Image size info */}
@@ -796,23 +996,38 @@ export default function AIImageAnalysis() {
                 {/* Camera Interface */}
                 {showCamera && (
                   <div className="mt-4 space-y-3">
-                    {/* Debug info */}
-                    <div className="bg-yellow-100 border border-yellow-300 rounded p-2 text-xs">
-                      <p>Debug: showCamera = {showCamera.toString()}</p>
-                      <p>Debug: cameraMode = {cameraMode}</p>
-                      <p>Debug: cameraLoading = {cameraLoading.toString()}</p>
-                      <p>Debug: videoRef.current = {videoRef.current ? 'EXISTS' : 'NULL'}</p>
-                    </div>
                     <div className="relative bg-black rounded-lg overflow-hidden">
                       <video
                         ref={setVideoRef}
                         autoPlay
                         playsInline
                         muted
-                        className="w-full h-64 object-cover"
+                        className={`w-full object-cover ${
+                          aspectRatio === 'a4' ? 'h-80' : 'h-64'
+                        }`}
                         style={{ 
-                          transform: cameraMode === 'front' ? 'scaleX(-1)' : 'none',
-                          backgroundColor: '#000'
+                          transform: (() => {
+                            let transforms = []
+                            
+                            // Front camera always has mirror effect
+                            if (cameraMode === 'front') {
+                              transforms.push('scaleX(-1)')
+                            }
+                            
+                            // Apply vertical flip if enabled
+                            if (flipImage) {
+                              transforms.push('scaleY(-1)')
+                            }
+                            
+                            // Apply horizontal mirror if enabled
+                            if (mirrorImage) {
+                              transforms.push('scaleX(-1)')
+                            }
+                            
+                            return transforms.length > 0 ? transforms.join(' ') : 'none'
+                          })(),
+                          backgroundColor: '#000',
+                          aspectRatio: aspectRatio === 'a4' ? '3/4' : '16/9'
                         }}
                         onLoadedMetadata={() => console.log('Video metadata loaded')}
                         onCanPlay={() => console.log('Video can play')}
@@ -843,7 +1058,14 @@ export default function AIImageAnalysis() {
                         
                         {/* Center focus guide */}
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-32 h-32 border-2 border-white border-dashed rounded-lg opacity-50"></div>
+                          <div 
+                            className="border-2 border-white border-dashed rounded-lg opacity-50"
+                            style={{
+                              width: aspectRatio === 'a4' ? '96px' : '128px',
+                              height: aspectRatio === 'a4' ? '128px' : '72px',
+                              aspectRatio: aspectRatio === 'a4' ? '3/4' : '16/9'
+                            }}
+                          ></div>
                         </div>
                         
                         {/* Bottom status */}
@@ -851,6 +1073,31 @@ export default function AIImageAnalysis() {
                           <div className="bg-black bg-opacity-50 text-white px-3 py-1 rounded text-xs">
                             Đặt hóa đơn trong khung để chụp
                           </div>
+                        </div>
+                        
+                        {/* Flip and mirror toggles in camera */}
+                        <div className="absolute top-4 right-4 flex gap-2">
+                          <button
+                            onClick={() => setFlipImage(!flipImage)}
+                            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                              flipImage
+                                ? 'bg-green-600 text-white'
+                                : 'bg-black bg-opacity-50 text-white hover:bg-opacity-70'
+                            }`}
+                          >
+                            {flipImage ? '🔄 Đã lật' : '🔄 Lật'}
+                          </button>
+                          
+                          <button
+                            onClick={() => setMirrorImage(!mirrorImage)}
+                            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                              mirrorImage
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-black bg-opacity-50 text-white hover:bg-opacity-70'
+                            }`}
+                          >
+                            {mirrorImage ? '🪞 Đã gương' : '🪞 Gương'}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -863,6 +1110,29 @@ export default function AIImageAnalysis() {
                         <Camera className="h-5 w-5" />
                         📸 Chụp ảnh
                       </button>
+                      
+                      <button
+                        onClick={() => setFlipImage(!flipImage)}
+                        className={`px-4 py-3 rounded-lg font-semibold text-sm shadow-lg transition-all duration-200 ${
+                          flipImage
+                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            : 'bg-gray-600 text-white hover:bg-gray-700'
+                        }`}
+                      >
+                        {flipImage ? '🔄 Đã lật' : '🔄 Lật'}
+                      </button>
+                      
+                      <button
+                        onClick={() => setMirrorImage(!mirrorImage)}
+                        className={`px-4 py-3 rounded-lg font-semibold text-sm shadow-lg transition-all duration-200 ${
+                          mirrorImage
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-gray-600 text-white hover:bg-gray-700'
+                        }`}
+                      >
+                        {mirrorImage ? '🪞 Đã gương' : '🪞 Gương'}
+                      </button>
+                      
                       <button
                         onClick={stopCamera}
                         className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold text-sm shadow-lg"
@@ -1039,6 +1309,25 @@ export default function AIImageAnalysis() {
           </div>
         </div>
       </div>
+      
+      {/* Camera Setup Guide Modal */}
+      {showCameraGuide && (
+        <CameraSetupGuide onClose={() => setShowCameraGuide(false)} />
+      )}
+      
+      {/* Camera Guide Popup */}
+      <CameraGuidePopup 
+        isOpen={showCameraGuidePopup} 
+        onClose={() => setShowCameraGuidePopup(false)} 
+      />
+      
+      {/* Mobile Camera */}
+      <MobileCamera
+        isOpen={showMobileCamera}
+        onClose={() => setShowMobileCamera(false)}
+        onCapture={handleMobileCameraCapture}
+        aspectRatio={aspectRatio}
+      />
     </div>
   )
 }

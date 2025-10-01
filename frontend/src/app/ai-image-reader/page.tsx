@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Upload, Camera, FileText, Loader2, CheckCircle, AlertCircle, X, Download, Copy, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import CameraGuideButton from '@/components/CameraGuideButton'
 
 interface AIAnalysis {
   amount: number
@@ -256,13 +257,16 @@ export default function AIImageReaderPage() {
               <p className="text-sm text-gray-600">Upload hình ảnh và xem kết quả AI đọc dữ liệu</p>
             </div>
           </div>
-          <button
-            onClick={resetForm}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Reset
-          </button>
+          <div className="flex items-center gap-3">
+            <CameraGuideButton size="md" variant="secondary" />
+            <button
+              onClick={resetForm}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reset
+            </button>
+          </div>
         </div>
 
         {/* Success/Error Messages */}
