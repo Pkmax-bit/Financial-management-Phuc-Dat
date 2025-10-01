@@ -145,19 +145,19 @@ export default function ReportsPage() {
         router.push('/reports/balance-sheet')
         break
       case 'cash-flow':
-        setShowCashFlowModal(true)
+        router.push('/reports/cash-flow')
         break
       case 'sales-by-customer':
-        setShowSalesByCustomerModal(true)
+        router.push('/reports/sales-by-customer')
         break
       case 'expenses-by-vendor':
         setShowExpensesByVendorModal(true)
         break
       case 'general-ledger':
-        setShowGeneralLedgerModal(true)
+        router.push('/reports/general-ledger')
         break
-      case 'project-reports':
-        router.push('/projects/reports')
+      case 'project-report':
+        router.push('/reports/project-report')
         break
       default:
         console.log('Report not implemented:', reportId)
