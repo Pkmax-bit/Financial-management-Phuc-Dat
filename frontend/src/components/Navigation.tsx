@@ -15,7 +15,9 @@ import {
   Package,
   FileSpreadsheet,
   DollarSign,
-  HelpCircle
+  HelpCircle,
+  Brain,
+  TestTube
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 
@@ -49,7 +51,19 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       name: 'Chi phí',
       href: '/expenses',
       icon: Receipt,
-      description: 'Theo dõi chi phí'
+      description: 'Quản lý chi phí với AI'
+    },
+    {
+      name: 'AI Image Reader',
+      href: '/ai-image-reader',
+      icon: FileText,
+      description: 'Upload hình ảnh và xem kết quả AI'
+    },
+    {
+      name: 'AI Analysis',
+      href: '/ai-analysis',
+      icon: FileText,
+      description: 'AI phân tích hình với camera và auto-matching'
     },
     {
       name: 'Bán hàng',
@@ -86,6 +100,18 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       href: '/files',
       icon: FileSpreadsheet,
       description: 'Quản lý tài liệu'
+    },
+    {
+      name: 'AI Model Info',
+      href: '/ai-model-info',
+      icon: Brain,
+      description: 'Thông tin model AI'
+    },
+    {
+      name: 'Test API',
+      href: '/test-api',
+      icon: TestTube,
+      description: 'Test AI API'
     }
   ]
 
