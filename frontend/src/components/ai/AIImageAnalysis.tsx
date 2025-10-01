@@ -46,6 +46,14 @@ export default function AIImageAnalysis() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   
+  // Callback ref to ensure video element is set
+  const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    if (node) {
+      videoRef.current = node
+      console.log('Video ref set:', node)
+    }
+  }, [])
+  
   // State for expenses
   const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -61,6 +69,13 @@ export default function AIImageAnalysis() {
   useEffect(() => {
     loadAllProjects()
   }, [])
+
+  // Ensure video element is ready when showCamera changes
+  useEffect(() => {
+    if (showCamera && videoRef.current) {
+      console.log('Video element is ready:', videoRef.current)
+    }
+  }, [showCamera])
 
   const loadAllProjects = async () => {
     try {
@@ -281,10 +296,10 @@ export default function AIImageAnalysis() {
           category: item.category,
           expense_date: item.date,
           project_id: matchedProject?.id || null,
-          status: 'pending',
-          ai_generated: item.confidence > 0,
-          ai_confidence: item.confidence
+          status: 'pending'
         }
+        
+        console.log('Sending expense data:', expenseData)
 
         const response = await fetch('/api/expenses', {
           method: 'POST',
@@ -295,7 +310,9 @@ export default function AIImageAnalysis() {
         })
 
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
+          const errorText = await response.text()
+          console.error('API Error Response:', errorText)
+          throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
         }
       }
 
@@ -310,6 +327,7 @@ export default function AIImageAnalysis() {
   }
 
   const startCamera = async () => {
+    console.log('startCamera called, cameraMode:', cameraMode)
     setCameraLoading(true)
     setError(null)
     
@@ -324,15 +342,35 @@ export default function AIImageAnalysis() {
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       
+      // Set showCamera first to render video element
+      setShowCamera(true)
+      
+      // Wait for video element to be rendered
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Retry logic for videoRef
+      let retries = 0
+      const maxRetries = 10
+      
+      while (retries < maxRetries && !videoRef.current) {
+        console.log(`Waiting for videoRef, attempt ${retries + 1}`)
+        await new Promise(resolve => setTimeout(resolve, 100))
+        retries++
+      }
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         videoRef.current.play()
-        setShowCamera(true)
-        console.log('Camera started successfully')
+        console.log('Camera started successfully, video element found')
+      } else {
+        console.error('videoRef.current is still null after retries')
+        setError('Không thể khởi tạo video element. Vui lòng thử lại.')
+        setShowCamera(false)
       }
     } catch (error) {
       console.error('Error accessing camera:', error)
       setError('Không thể truy cập camera. Vui lòng kiểm tra quyền truy cập.')
+      setShowCamera(false)
     } finally {
       setCameraLoading(false)
     }
@@ -647,14 +685,15 @@ export default function AIImageAnalysis() {
                       </div>
                       
                       <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => {
-                            setCameraMode('rear')
-                            startCamera()
-                          }}
-                          disabled={cameraLoading}
-                          className="flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-sm"
-                        >
+                      <button
+                        onClick={() => {
+                          console.log('Rear camera button clicked')
+                          setCameraMode('rear')
+                          startCamera()
+                        }}
+                        disabled={cameraLoading}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-sm"
+                      >
                           {cameraLoading ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
@@ -665,6 +704,7 @@ export default function AIImageAnalysis() {
                         
                         <button
                           onClick={() => {
+                            console.log('Front camera button clicked')
                             setCameraMode('front')
                             startCamera()
                           }}
@@ -756,9 +796,16 @@ export default function AIImageAnalysis() {
                 {/* Camera Interface */}
                 {showCamera && (
                   <div className="mt-4 space-y-3">
+                    {/* Debug info */}
+                    <div className="bg-yellow-100 border border-yellow-300 rounded p-2 text-xs">
+                      <p>Debug: showCamera = {showCamera.toString()}</p>
+                      <p>Debug: cameraMode = {cameraMode}</p>
+                      <p>Debug: cameraLoading = {cameraLoading.toString()}</p>
+                      <p>Debug: videoRef.current = {videoRef.current ? 'EXISTS' : 'NULL'}</p>
+                    </div>
                     <div className="relative bg-black rounded-lg overflow-hidden">
                       <video
-                        ref={videoRef}
+                        ref={setVideoRef}
                         autoPlay
                         playsInline
                         muted
@@ -769,6 +816,8 @@ export default function AIImageAnalysis() {
                         }}
                         onLoadedMetadata={() => console.log('Video metadata loaded')}
                         onCanPlay={() => console.log('Video can play')}
+                        onLoadStart={() => console.log('Video load started')}
+                        onError={(e) => console.error('Video error:', e)}
                       />
                       <canvas ref={canvasRef} className="hidden" />
                       <div className="absolute inset-0 border-2 border-white rounded-lg pointer-events-none"></div>

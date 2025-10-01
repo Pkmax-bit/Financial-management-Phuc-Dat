@@ -61,7 +61,7 @@ export default function ExpensesPage() {
       
       if (data.success) {
         setExpenses(data.data || [])
-      } else {
+        } else {
         console.error('Error fetching expenses:', data.error)
       }
     } catch (error) {
@@ -117,25 +117,25 @@ export default function ExpensesPage() {
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="container mx-auto px-6 py-8">
-        {/* Header */}
+          {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <FileText className="h-6 w-6 text-blue-600" />
             </div>
-            <div>
+          <div>
               <h1 className="text-3xl font-bold text-gray-900">Quản lý chi phí</h1>
               <p className="text-sm text-gray-600">Quản lý và theo dõi chi phí dự án với AI</p>
-            </div>
-          </div>
-          <button
+                  </div>
+              </div>
+                <button
             onClick={() => setShowAIUpload(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
             Thêm chi phí AI
-          </button>
-        </div>
+                </button>
+              </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -158,10 +158,10 @@ export default function ExpensesPage() {
                 <p className="text-2xl font-semibold text-gray-900 mt-1">
                   {expenses.filter(e => e.status === 'pending').length}
                 </p>
-              </div>
+                </div>
               <FileText className="h-8 w-8 text-yellow-500" />
+              </div>
             </div>
-          </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
@@ -169,12 +169,12 @@ export default function ExpensesPage() {
                 <p className="text-sm font-medium text-gray-500">Đã duyệt</p>
                 <p className="text-2xl font-semibold text-gray-900 mt-1">
                   {expenses.filter(e => e.status === 'approved').length}
-                </p>
-              </div>
+                  </p>
+                </div>
               <FileText className="h-8 w-8 text-green-500" />
+              </div>
             </div>
-          </div>
-
+            
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -182,12 +182,12 @@ export default function ExpensesPage() {
                 <p className="text-2xl font-semibold text-gray-900 mt-1">
                   {expenses.filter(e => e.ai_generated).length}
                 </p>
-              </div>
+                </div>
               <FileText className="h-8 w-8 text-purple-500" />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-
+            
         {/* Filters */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
@@ -202,7 +202,7 @@ export default function ExpensesPage() {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-            </div>
+                </div>
             <div className="md:w-48">
               <select
                 value={statusFilter}
@@ -215,10 +215,10 @@ export default function ExpensesPage() {
                 <option value="rejected">Từ chối</option>
                 <option value="paid">Đã thanh toán</option>
               </select>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-
+            
         {/* Expenses List */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="p-6 border-b border-gray-200">
@@ -254,7 +254,7 @@ export default function ExpensesPage() {
                           </span>
                         )}
                       </div>
-                    </div>
+                </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-lg font-semibold text-gray-900">
@@ -274,10 +274,10 @@ export default function ExpensesPage() {
                         <button className="p-2 text-gray-400 hover:text-red-600">
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      </div>
-                    </div>
-                  </div>
                 </div>
+              </div>
+            </div>
+          </div>
               ))}
             </div>
           ) : (
@@ -285,16 +285,16 @@ export default function ExpensesPage() {
               <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có chi phí nào</h3>
               <p className="text-gray-500 mb-4">Bắt đầu bằng cách thêm chi phí với AI</p>
-              <button
+                  <button
                 onClick={() => setShowAIUpload(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
               >
                 <Plus className="h-4 w-4" />
                 Thêm chi phí AI
-              </button>
-            </div>
+                  </button>
+              </div>
           )}
-        </div>
+            </div>
 
         {/* AI Upload Modal */}
         {showAIUpload && (
@@ -303,19 +303,19 @@ export default function ExpensesPage() {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Thêm chi phí bằng AI</h3>
-                  <button
+                    <button 
                     onClick={() => setShowAIUpload(false)}
                     className="text-gray-400 hover:text-gray-600"
-                  >
+                    >
                     <X className="h-6 w-6" />
-                  </button>
+                    </button>
                 </div>
                 <AIReceiptUpload onExpenseCreated={handleExpenseCreated} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+              )}
+            </div>
     </div>
   )
 }

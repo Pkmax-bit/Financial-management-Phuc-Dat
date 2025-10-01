@@ -9,18 +9,43 @@ interface ExpenseData {
   vendor?: string
   project_id?: string
   status?: string
-  ai_generated?: boolean
-  ai_confidence?: number
 }
 
 export async function POST(request: NextRequest) {
   try {
     const expenseData: ExpenseData = await request.json()
+    console.log('Received expense data:', expenseData)
     
     // Validate required fields
     if (!expenseData.amount || !expenseData.description || !expenseData.expense_date) {
+      console.error('Validation failed:', {
+        amount: expenseData.amount,
+        description: expenseData.description,
+        expense_date: expenseData.expense_date
+      })
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { 
+          error: 'Missing required fields',
+          received: {
+            amount: expenseData.amount,
+            description: expenseData.description,
+            expense_date: expenseData.expense_date
+          }
+        },
+        { status: 400 }
+      )
+    }
+    
+    // Validate category enum
+    const validCategories = ['travel', 'meals', 'accommodation', 'transportation', 'supplies', 'equipment', 'training', 'other']
+    if (!validCategories.includes(expenseData.category)) {
+      console.error('Invalid category:', expenseData.category)
+      return NextResponse.json(
+        { 
+          error: 'Invalid category',
+          received: expenseData.category,
+          validCategories
+        },
         { status: 400 }
       )
     }
@@ -42,32 +67,78 @@ export async function POST(request: NextRequest) {
     // Skip cost category lookup for now
     console.log('Category mapping:', categoryName)
     
-    // Create expense record
+    // Create expense record using available columns
     const expenseRecord = {
+      expense_code: `EXP-${Date.now()}`, // Generate unique code
+      employee_id: null, // Will be set by user later
       project_id: expenseData.project_id || null,
-      cost_category_id: null, // Skip cost category for now
-      amount: expenseData.amount,
+      category: expenseData.category || 'other',
       description: expenseData.description,
-      vendor: expenseData.vendor || null,
-      cost_date: expenseData.expense_date,
+      amount: expenseData.amount,
+      currency: 'VND',
+      expense_date: expenseData.expense_date,
+      receipt_url: null,
       status: expenseData.status || 'pending',
-      ai_generated: expenseData.ai_generated || false,
-      ai_confidence: expenseData.ai_confidence || 0
+      approved_by: null,
+      approved_at: null,
+      notes: expenseData.vendor ? `Vendor: ${expenseData.vendor}` : null
+    }
+    
+    console.log('Expense record to insert:', expenseRecord)
+    
+    // Validate project_id if provided
+    if (expenseRecord.project_id) {
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', expenseRecord.project_id)
+        .single()
+      
+      if (projectError || !project) {
+        console.error('Invalid project_id:', expenseRecord.project_id)
+        return NextResponse.json(
+          { 
+            error: 'Invalid project_id',
+            received: expenseRecord.project_id
+          },
+          { status: 400 }
+        )
+      }
     }
     
     const { data: expense, error } = await supabase
-      .from('project_costs')
+      .from('expenses')
       .insert(expenseRecord)
       .select(`
-        *,
+        id,
+        expense_code,
+        project_id,
+        category,
+        description,
+        amount,
+        currency,
+        expense_date,
+        status,
+        notes,
+        created_at,
         projects(name, project_code)
       `)
       .single()
     
     if (error) {
       console.error('Error creating expense:', error)
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      })
       return NextResponse.json(
-        { error: 'Failed to create expense' },
+        { 
+          error: 'Failed to create expense',
+          details: error.message,
+          code: error.code
+        },
         { status: 500 }
       )
     }
@@ -95,9 +166,19 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
     
     let query = supabase
-      .from('project_costs')
+      .from('expenses')
       .select(`
-        *,
+        id,
+        expense_code,
+        project_id,
+        category,
+        description,
+        amount,
+        currency,
+        expense_date,
+        status,
+        notes,
+        created_at,
         projects(name, project_code)
       `)
       .order('created_at', { ascending: false })
