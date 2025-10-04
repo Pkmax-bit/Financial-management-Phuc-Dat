@@ -463,9 +463,32 @@ async def convert_quote_to_invoice(
         due_days = convert_data.due_days if convert_data else 30
         due_date = (datetime.now() + timedelta(days=due_days)).date()
         
+        # Get quote items from quote_items table
+        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+        quote_items = quote_items_result.data if quote_items_result.data else []
+        
+        # Convert quote items to invoice items
+        converted_items = []
+        for item in quote_items:
+            # Create new invoice item from quote item
+            invoice_item = {
+                "id": str(uuid.uuid4()),
+                "invoice_id": "",  # Will be set after invoice creation
+                "product_service_id": item.get("product_service_id"),
+                "description": item.get("description", ""),
+                "quantity": item.get("quantity", 0),
+                "unit_price": item.get("unit_price", 0),
+                "total_price": item.get("total_price", 0),
+                "name_product": item.get("name_product"),
+                "discount_rate": item.get("discount_rate", 0.0),
+                "created_at": datetime.utcnow().isoformat()
+            }
+            converted_items.append(invoice_item)
+        
         # Create invoice from quote
+        invoice_id = str(uuid.uuid4())
         invoice_data = {
-            "id": str(uuid.uuid4()),
+            "id": invoice_id,
             "invoice_number": invoice_number,
             "customer_id": quote["customer_id"],
             "project_id": quote["project_id"],
@@ -480,8 +503,8 @@ async def convert_quote_to_invoice(
             "status": "draft",
             "payment_status": "pending",
             "paid_amount": 0.0,
-            "items": quote["items"],
-            "notes": quote["notes"],
+            "items": [],  # Empty JSONB field, items will be in invoice_items table
+            "notes": f"Hóa đơn được tạo từ báo giá {quote.get('quote_number', 'N/A')}",
             "terms_and_conditions": quote.get("terms_and_conditions"),
             "payment_terms": convert_data.payment_terms if convert_data else None,
             "created_by": current_user.id,
@@ -493,6 +516,19 @@ async def convert_quote_to_invoice(
         invoice_result = supabase.table("invoices").insert(invoice_data).execute()
         
         if invoice_result.data:
+            # Create invoice items in invoice_items table
+            if converted_items:
+                # Update invoice_id for all converted items
+                for item in converted_items:
+                    item["invoice_id"] = invoice_id
+                
+                # Insert invoice items
+                invoice_items_result = supabase.table("invoice_items").insert(converted_items).execute()
+                
+                if not invoice_items_result.data:
+                    # If invoice items creation failed, we should handle this
+                    print(f"Warning: Failed to create invoice items for invoice {invoice_id}")
+            
             # Update quote status to closed
             supabase.table("quotes").update({
                 "status": "closed",
@@ -502,7 +538,12 @@ async def convert_quote_to_invoice(
             return {
                 "message": "Quote converted to invoice successfully",
                 "invoice": invoice_result.data[0],
-                "quote": quote_result.data[0]
+                "quote": quote_result.data[0],
+                "converted_items": {
+                    "count": len(converted_items),
+                    "items": converted_items,
+                    "total_amount": sum(item.get("total_price", 0) for item in converted_items)
+                }
             }
         
         raise HTTPException(

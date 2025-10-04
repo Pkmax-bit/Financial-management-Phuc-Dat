@@ -8,7 +8,7 @@ from models.accounting_entry import AccountingEntry, AccountingEntryCreate, Acco
 from utils.auth import get_current_user
 from services.supabase_client import get_supabase_client
 
-router = APIRouter(prefix="/api/sales/receipts", tags=["sales-receipts"])
+router = APIRouter(prefix="/receipts", tags=["sales-receipts"])
 
 @router.get("/", response_model=List[SalesReceipt])
 async def get_sales_receipts(

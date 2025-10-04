@@ -59,7 +59,7 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"]
 app.include_router(employees.router, prefix="/api/employees", tags=["Employees"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])
 app.include_router(sales.router, prefix="/api/sales", tags=["Sales"])
-app.include_router(sales_receipts.router, tags=["Sales Receipts"])
+app.include_router(sales_receipts.router, prefix="/api/sales", tags=["Sales Receipts"])
 app.include_router(credit_memos.router, tags=["Credit Memos"])
 app.include_router(expenses.router, prefix="/api/expenses", tags=["Expenses"])
 app.include_router(purchase_orders.router, tags=["Purchase Orders"])

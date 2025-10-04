@@ -15,7 +15,9 @@ import {
   DollarSign,
   Clock,
   HelpCircle,
-  X
+  X,
+  Package,
+  CheckCircle2
 } from 'lucide-react'
 import CreateQuoteSidebar from './CreateQuoteSidebar'
 import { apiGet, apiPost } from '@/lib/api'
@@ -59,6 +61,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [filter, setFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showConversionSuccess, setShowConversionSuccess] = useState(false)
+  const [conversionData, setConversionData] = useState<{
+    invoiceNumber: string
+    totalAmount: number
+    dueDate: string
+    convertedItems: any[]
+  } | null>(null)
 
   useEffect(() => {
     fetchQuotes()
@@ -129,13 +138,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     try {
       console.log('🔍 Converting quote to invoice:', quoteId)
       
-      // First, get the quote details
+      // First, get the quote details with items
       const { data: quote, error: quoteError } = await supabase
         .from('quotes')
         .select(`
           *,
           customers:customer_id(name, email),
-          projects:project_id(name, project_code)
+          projects:project_id(name, project_code),
+          quote_items(*)
         `)
         .eq('id', quoteId)
         .single()
@@ -171,6 +181,26 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       const dueDate = new Date(issueDate)
       dueDate.setDate(dueDate.getDate() + 30)
       
+      // Convert quote items to invoice items
+      const convertedItems = []
+      if (quote.quote_items && Array.isArray(quote.quote_items)) {
+        for (const item of quote.quote_items) {
+          const invoiceItem = {
+            id: crypto.randomUUID(),
+            invoice_id: '', // Will be set after invoice creation
+            product_service_id: item.product_service_id,
+            description: item.description || '',
+            quantity: item.quantity || 0,
+            unit_price: item.unit_price || 0,
+            total_price: item.total_price || 0,
+            name_product: item.name_product,
+            discount_rate: item.discount_rate || 0.0,
+            created_at: new Date().toISOString()
+          }
+          convertedItems.push(invoiceItem)
+        }
+      }
+
       // Create invoice from quote data
       const invoiceData = {
         invoice_number: invoiceNumber,
@@ -187,7 +217,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         status: 'draft',
         payment_status: 'pending',
         paid_amount: 0.0,
-        items: quote.items || [],
+        items: [], // Empty JSONB field, items will be in invoice_items table
         notes: `Hóa đơn được tạo từ báo giá ${quote.quote_number}`,
         created_by: quote.created_by
       }
@@ -208,6 +238,27 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       
       console.log('🔍 Invoice created successfully:', newInvoice)
       
+      // Create invoice items in invoice_items table
+      if (convertedItems.length > 0) {
+        // Update invoice_id for all converted items
+        const invoiceItemsData = convertedItems.map(item => ({
+          ...item,
+          invoice_id: newInvoice.id
+        }))
+        
+        const { data: invoiceItems, error: invoiceItemsError } = await supabase
+          .from('invoice_items')
+          .insert(invoiceItemsData)
+          .select()
+        
+        if (invoiceItemsError) {
+          console.error('❌ Error creating invoice items:', invoiceItemsError)
+          // Don't throw error here as invoice was created successfully
+        } else {
+          console.log('🔍 Invoice items created successfully:', invoiceItems)
+        }
+      }
+      
       // Update quote status to 'closed' (following backend logic)
       const { error: updateError } = await supabase
         .from('quotes')
@@ -225,8 +276,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       console.log('🔍 Quote converted to invoice successfully')
       fetchQuotes() // Refresh list
       
-      // Show success message
-      alert(`✅ Báo giá đã được chuyển thành hóa đơn thành công!\n\n📄 Số hóa đơn: ${invoiceNumber}\n💰 Tổng tiền: ${formatCurrency(quote.total_amount)}\n📅 Ngày đáo hạn: ${dueDate.toLocaleDateString('vi-VN')}\n\nBạn có thể xem hóa đơn trong tab "Hóa đơn".`)
+      // Set conversion data for success modal
+      setConversionData({
+        invoiceNumber,
+        totalAmount: quote.total_amount,
+        dueDate: dueDate.toLocaleDateString('vi-VN'),
+        convertedItems
+      })
+      setShowConversionSuccess(true)
       
     } catch (error) {
       console.error('❌ Error converting quote:', error)
@@ -515,9 +572,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
       {/* Help Sidebar */}
       {showHelpModal && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0" onClick={() => setShowHelpModal(false)}></div>
-          <div className="absolute left-0 top-0 h-full w-96 bg-white shadow-xl overflow-y-auto">
+        <div className="fixed inset-0 z-40 overflow-hidden">
+          <div className="absolute inset-0 bg-black bg-opacity-25" onClick={() => setShowHelpModal(false)}></div>
+          <div className="absolute right-0 top-0 h-full w-96 bg-white shadow-xl overflow-y-auto">
             <div className="p-6">
               {/* Header */}
               <div className="flex items-center justify-between mb-6 border-b pb-4">
@@ -680,6 +737,132 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   Đã hiểu
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conversion Success Modal */}
+      {showConversionSuccess && conversionData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-green-100 rounded-full">
+                  <CheckCircle2 className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Chuyển đổi thành công!
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Báo giá đã được chuyển thành hóa đơn
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowConversionSuccess(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {/* Invoice Info */}
+              <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                <h4 className="font-semibold text-gray-900 mb-3">Thông tin hóa đơn</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Số hóa đơn</p>
+                    <p className="font-medium text-gray-900">{conversionData.invoiceNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Tổng tiền</p>
+                    <p className="font-medium text-gray-900">{formatCurrency(conversionData.totalAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Ngày đáo hạn</p>
+                    <p className="font-medium text-gray-900">{conversionData.dueDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Số items</p>
+                    <p className="font-medium text-gray-900">{conversionData.convertedItems.length} sản phẩm/dịch vụ</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Converted Items */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                  <Package className="h-5 w-5 mr-2 text-blue-600" />
+                  Các sản phẩm/dịch vụ đã chuyển đổi
+                </h4>
+                <div className="space-y-3">
+                  {conversionData.convertedItems.map((item, index) => (
+                    <div key={index} className="bg-gray-50 rounded-lg p-4 border">
+                      <div className="flex justify-between items-start mb-2">
+                        <h5 className="font-medium text-gray-900">{item.description}</h5>
+                        <span className="text-sm font-medium text-blue-600">
+                          {formatCurrency(item.total_price)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                        <div>
+                          <span className="font-medium">Số lượng:</span> {item.quantity}
+                        </div>
+                        <div>
+                          <span className="font-medium">Đơn giá:</span> {formatCurrency(item.unit_price)}
+                        </div>
+                        {item.name_product && (
+                          <div className="col-span-2">
+                            <span className="font-medium">Tên sản phẩm:</span> {item.name_product}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-green-50 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-green-900">Tổng cộng</p>
+                    <p className="text-sm text-green-700">
+                      {conversionData.convertedItems.length} items đã được chuyển đổi thành công
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-green-900">
+                      {formatCurrency(conversionData.totalAmount)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end space-x-3 p-6 border-t bg-gray-50">
+              <button
+                onClick={() => setShowConversionSuccess(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => {
+                  setShowConversionSuccess(false)
+                  // Navigate to invoices tab (you can implement this based on your routing)
+                  window.location.hash = '#invoices'
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Xem hóa đơn
+              </button>
             </div>
           </div>
         </div>
