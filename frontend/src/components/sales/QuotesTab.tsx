@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import CreateQuoteSidebar from './CreateQuoteSidebar'
 import { apiGet, apiPost } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 interface Quote {
   id: string
@@ -31,7 +32,7 @@ interface Quote {
   tax_amount: number
   total_amount: number
   currency: string
-  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'closed'
+  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'closed' | 'converted'
   items: unknown[]
   notes?: string
   terms_and_conditions?: string
@@ -69,10 +70,27 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const fetchQuotes = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('/api/sales/quotes')
-      setQuotes(data)
+      console.log('🔍 Fetching quotes from database...')
+      
+      // Use Supabase directly to get quotes
+      const { data: quotes, error } = await supabase
+        .from('quotes')
+        .select(`
+          *,
+          customers:customer_id(name, email),
+          projects:project_id(name, project_code)
+        `)
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('❌ Supabase error fetching quotes:', error)
+        throw error
+      }
+      
+      console.log('🔍 Quotes data from database:', quotes)
+      setQuotes(quotes || [])
     } catch (error) {
-      console.error('Error fetching quotes:', error)
+      console.error('❌ Error fetching quotes:', error)
     } finally {
       setLoading(false)
     }
@@ -80,29 +98,136 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
   const sendQuote = async (quoteId: string) => {
     try {
-      await apiPost(`/api/sales/quotes/${quoteId}/send`, {})
+      console.log('🔍 Sending quote:', quoteId)
+      
+      // Update quote status to 'sent' using Supabase
+      const { error } = await supabase
+        .from('quotes')
+        .update({ 
+          status: 'sent',
+          sent_at: new Date().toISOString()
+        })
+        .eq('id', quoteId)
+      
+      if (error) {
+        console.error('❌ Supabase error sending quote:', error)
+        throw error
+      }
+      
+      console.log('🔍 Quote sent successfully')
       fetchQuotes() // Refresh list
       // Show success message
     } catch (error) {
-      console.error('Error sending quote:', error)
+      console.error('❌ Error sending quote:', error)
     }
   }
 
   const convertToInvoice = async (quoteId: string) => {
     try {
-      const response = await fetch(`/api/sales/quotes/${quoteId}/convert-to-invoice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        fetchQuotes() // Refresh list
-        // Show success message
+      console.log('🔍 Converting quote to invoice:', quoteId)
+      
+      // First, get the quote details
+      const { data: quote, error: quoteError } = await supabase
+        .from('quotes')
+        .select(`
+          *,
+          customers:customer_id(name, email),
+          projects:project_id(name, project_code)
+        `)
+        .eq('id', quoteId)
+        .single()
+      
+      if (quoteError || !quote) {
+        console.error('❌ Error fetching quote:', quoteError)
+        throw new Error('Không thể tìm thấy báo giá')
       }
+      
+      console.log('🔍 Quote data:', quote)
+      
+      // Check if quote can be converted
+      if (quote.status === 'closed' || quote.status === 'converted') {
+        throw new Error('Báo giá này đã được chuyển thành hóa đơn rồi')
+      }
+      
+      if (quote.status === 'declined') {
+        throw new Error('Không thể chuyển báo giá đã bị từ chối')
+      }
+      
+      if (quote.status === 'expired') {
+        throw new Error('Không thể chuyển báo giá đã hết hạn')
+      }
+      
+      // Generate invoice number
+      const now = new Date()
+      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
+      const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase()
+      const invoiceNumber = `INV-${dateStr}-${randomStr}`
+      
+      // Calculate due date (30 days from issue date)
+      const issueDate = new Date(quote.issue_date)
+      const dueDate = new Date(issueDate)
+      dueDate.setDate(dueDate.getDate() + 30)
+      
+      // Create invoice from quote data
+      const invoiceData = {
+        invoice_number: invoiceNumber,
+        customer_id: quote.customer_id,
+        project_id: quote.project_id,
+        quote_id: quoteId, // Link to original quote
+        issue_date: issueDate.toISOString().split('T')[0],
+        due_date: dueDate.toISOString().split('T')[0],
+        subtotal: quote.subtotal,
+        tax_rate: quote.tax_rate,
+        tax_amount: quote.tax_amount,
+        total_amount: quote.total_amount,
+        currency: quote.currency,
+        status: 'draft',
+        payment_status: 'pending',
+        paid_amount: 0.0,
+        items: quote.items || [],
+        notes: `Hóa đơn được tạo từ báo giá ${quote.quote_number}`,
+        created_by: quote.created_by
+      }
+      
+      console.log('🔍 Creating invoice with data:', invoiceData)
+      
+      // Create the invoice
+      const { data: newInvoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .insert(invoiceData)
+        .select()
+        .single()
+      
+      if (invoiceError) {
+        console.error('❌ Error creating invoice:', invoiceError)
+        throw new Error('Không thể tạo hóa đơn')
+      }
+      
+      console.log('🔍 Invoice created successfully:', newInvoice)
+      
+      // Update quote status to 'closed' (following backend logic)
+      const { error: updateError } = await supabase
+        .from('quotes')
+        .update({ 
+          status: 'closed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', quoteId)
+      
+      if (updateError) {
+        console.error('❌ Error updating quote status:', updateError)
+        // Don't throw error here as invoice was created successfully
+      }
+      
+      console.log('🔍 Quote converted to invoice successfully')
+      fetchQuotes() // Refresh list
+      
+      // Show success message
+      alert(`✅ Báo giá đã được chuyển thành hóa đơn thành công!\n\n📄 Số hóa đơn: ${invoiceNumber}\n💰 Tổng tiền: ${formatCurrency(quote.total_amount)}\n📅 Ngày đáo hạn: ${dueDate.toLocaleDateString('vi-VN')}\n\nBạn có thể xem hóa đơn trong tab "Hóa đơn".`)
+      
     } catch (error) {
-      console.error('Error converting quote:', error)
+      console.error('❌ Error converting quote:', error)
+      alert(`Lỗi khi chuyển báo giá: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
     }
   }
 
@@ -319,7 +444,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       </>
                     )}
                     
-                    {quote.status === 'accepted' && (
+                    {(quote.status === 'accepted' || quote.status === 'sent' || quote.status === 'viewed') && quote.status !== 'closed' && quote.status !== 'converted' && (
                       <button 
                         onClick={() => convertToInvoice(quote.id)}
                         className="text-black hover:text-purple-600" 

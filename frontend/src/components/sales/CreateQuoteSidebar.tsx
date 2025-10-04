@@ -47,7 +47,9 @@ interface CreateQuoteSidebarProps {
 
 export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: CreateQuoteSidebarProps) {
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingProjects, setLoadingProjects] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
@@ -89,6 +91,16 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
     calculateSubtotal()
   }, [items])
 
+  // Fetch projects when customer changes
+  useEffect(() => {
+    if (formData.customer_id) {
+      fetchProjectsByCustomer(formData.customer_id)
+    } else {
+      setProjects([])
+      setFormData(prev => ({ ...prev, project_id: '' }))
+    }
+  }, [formData.customer_id])
+
   const fetchCustomers = async () => {
     try {
       setLoading(true)
@@ -116,6 +128,40 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
       alert('Không thể tải danh sách khách hàng từ database: ' + (error as Error).message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchProjectsByCustomer = async (customerId: string) => {
+    if (!customerId) {
+      setProjects([])
+      return
+    }
+
+    try {
+      setLoadingProjects(true)
+      console.log('🔍 Fetching projects for customer:', customerId)
+      
+      // Use Supabase directly to get projects for the customer
+      const { data: projects, error } = await supabase
+        .from('projects')
+        .select('id, project_code, name, status')
+        .eq('customer_id', customerId)
+        .in('status', ['planning', 'active'])
+        .order('name')
+      
+      if (error) {
+        console.error('❌ Supabase error fetching projects:', error)
+        throw error
+      }
+      
+      console.log('🔍 Projects data for customer:', projects)
+      setProjects(projects || [])
+    } catch (error) {
+      console.error('❌ Error fetching projects:', error)
+      // Don't show alert for projects as it's not critical
+      setProjects([])
+    } finally {
+      setLoadingProjects(false)
     }
   }
 
@@ -384,7 +430,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
             
             {expandedSections.basic && (
               <div className="px-4 pb-4 space-y-3">
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-black mb-1">Số báo giá</label>
                     <input
@@ -417,6 +463,36 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                         {customers.map((customer) => (
                           <option key={customer.id} value={customer.id}>
                             {customer.name} {customer.email ? `(${customer.email})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-black mb-1">Dự án</label>
+                    {!formData.customer_id ? (
+                      <div className="w-full border border-gray-300 rounded-md px-2 py-1.5 bg-gray-50">
+                        <span className="text-xs text-gray-500">Chọn khách hàng trước</span>
+                      </div>
+                    ) : loadingProjects ? (
+                      <div className="w-full border border-gray-300 rounded-md px-2 py-1.5 bg-gray-50">
+                        <span className="text-xs text-black">Đang tải dự án...</span>
+                      </div>
+                    ) : projects.length === 0 ? (
+                      <div className="w-full border border-yellow-300 rounded-md px-2 py-1.5 bg-yellow-50">
+                        <span className="text-xs text-yellow-600">Không có dự án</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.project_id}
+                        onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">Chọn dự án (tùy chọn)</option>
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.project_code} - {project.name} ({project.status})
                           </option>
                         ))}
                       </select>
