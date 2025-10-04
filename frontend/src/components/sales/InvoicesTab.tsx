@@ -12,10 +12,13 @@ import {
   Calendar,
   Clock,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  HelpCircle,
+  X
 } from 'lucide-react'
 import CreateInvoiceSidebar from './CreateInvoiceSidebar'
 import { apiGet, apiPost, apiPut } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 interface Invoice {
   id: string
@@ -23,6 +26,10 @@ interface Invoice {
   customer_id: string
   customer_name?: string
   project_id?: string
+  projects?: {
+    name: string
+    project_code: string
+  }
   quote_id?: string
   invoice_type: 'standard' | 'recurring' | 'proforma' | 'credit_note'
   issue_date: string
@@ -64,6 +71,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
 
   useEffect(() => {
     fetchInvoices()
@@ -78,10 +86,27 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const fetchInvoices = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('http://localhost:8000/api/sales/invoices')
-      setInvoices(data)
+      console.log('🔍 Fetching invoices from database...')
+      
+      // Use Supabase directly to get invoices
+      const { data: invoices, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          customers:customer_id(name, email),
+          projects:project_id(name, project_code)
+        `)
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('❌ Supabase error fetching invoices:', error)
+        throw error
+      }
+      
+      console.log('🔍 Invoices data from database:', invoices)
+      setInvoices(invoices || [])
     } catch (error) {
-      console.error('Error fetching invoices:', error)
+      console.error('❌ Error fetching invoices:', error)
     } finally {
       setLoading(false)
     }
@@ -89,34 +114,76 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
 
   const sendInvoice = async (invoiceId: string) => {
     try {
-      const response = await apiPost(`/api/sales/invoices/${invoiceId}/send`, {})
-
-      if (response) {
-        fetchInvoices() // Refresh list
-        // Show success message
+      console.log('🔍 Sending invoice:', invoiceId)
+      
+      // Update invoice status to 'sent' using Supabase
+      const { error } = await supabase
+        .from('invoices')
+        .update({ 
+          status: 'sent',
+          sent_at: new Date().toISOString()
+        })
+        .eq('id', invoiceId)
+      
+      if (error) {
+        console.error('❌ Supabase error sending invoice:', error)
+        throw error
       }
+      
+      console.log('🔍 Invoice sent successfully')
+      fetchInvoices() // Refresh list
+      alert('✅ Hóa đơn đã được gửi thành công!')
     } catch (error) {
-      console.error('Error sending invoice:', error)
+      console.error('❌ Error sending invoice:', error)
+      alert('❌ Lỗi khi gửi hóa đơn. Vui lòng thử lại.')
     }
   }
 
   const recordPayment = async (invoiceId: string, amount: number) => {
     try {
-      // Build URL with query parameters
-      const params = new URLSearchParams({
-        payment_amount: amount.toString(),
-        payment_method: 'bank_transfer',
-        payment_date: new Date().toISOString().split('T')[0]
-      })
+      console.log('🔍 Recording payment for invoice:', invoiceId, 'Amount:', amount)
       
-      const response = await apiPut(`/api/sales/invoices/${invoiceId}/payment?${params.toString()}`, {})
-
-      if (response) {
+      // First get the current invoice to check payment status
+      const { data: invoice, error: fetchError } = await supabase
+        .from('invoices')
+        .select('paid_amount, total_amount, payment_status')
+        .eq('id', invoiceId)
+        .single()
+      
+      if (fetchError || !invoice) {
+        throw new Error('Không thể tìm thấy hóa đơn')
+      }
+      
+      const newPaidAmount = invoice.paid_amount + amount
+      const isFullyPaid = newPaidAmount >= invoice.total_amount
+      
+      // Update payment information
+      const { error } = await supabase
+        .from('invoices')
+        .update({ 
+          paid_amount: newPaidAmount,
+          payment_status: isFullyPaid ? 'paid' : 'partial',
+          status: isFullyPaid ? 'paid' : invoice.status,
+          payment_date: isFullyPaid ? new Date().toISOString() : null
+        })
+        .eq('id', invoiceId)
+      
+      if (error) {
+        console.error('❌ Supabase error recording payment:', error)
+        throw error
+      }
+      
+      console.log('🔍 Payment recorded successfully')
         fetchInvoices() // Refresh list
-        // Show success message
+      
+      if (isFullyPaid) {
+        alert('✅ Hóa đơn đã được thanh toán đầy đủ!')
+      } else {
+        alert(`✅ Đã ghi nhận thanh toán ${formatCurrency(amount)}. Còn lại: ${formatCurrency(invoice.total_amount - newPaidAmount)}`)
       }
     } catch (error) {
-      console.error('Error recording payment:', error)
+      console.error('❌ Error recording payment:', error)
+      alert('❌ Lỗi khi ghi nhận thanh toán. Vui lòng thử lại.')
     }
   }
 
@@ -303,6 +370,21 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         </div>
       </div>
 
+      {/* Header with Help Button */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-4">
+          <h2 className="text-xl font-semibold text-gray-900">Hóa đơn</h2>
+          <button
+            onClick={() => setShowHelpModal(true)}
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            title="Hướng dẫn sử dụng"
+          >
+            <HelpCircle className="h-4 w-4 mr-1" />
+            Hướng dẫn
+          </button>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="flex items-center justify-between">
         <div className="flex space-x-2">
@@ -421,8 +503,15 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">
                   {invoice.customer_name || 'N/A'}
+                  </div>
+                  {invoice.project_id && invoice.projects && (
+                    <div className="text-xs text-blue-600">
+                      📁 {invoice.projects.name}
+                    </div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
@@ -540,6 +629,153 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           setShowCreateModal(false)
         }}
       />
+
+      {/* Help Sidebar */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0" onClick={() => setShowHelpModal(false)}></div>
+          <div className="absolute left-0 top-0 h-full w-96 bg-white shadow-xl overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 border-b pb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  📚 Hướng dẫn sử dụng Hóa đơn
+                </h3>
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="space-y-6">
+                {/* Overview */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-2">🎯 Tổng quan</h4>
+                  <p className="text-sm text-gray-600">
+                    Module Hóa đơn giúp bạn quản lý các hóa đơn bán hàng, theo dõi thanh toán và tình trạng thu tiền từ khách hàng.
+                  </p>
+                </div>
+
+                {/* Features */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">✨ Tính năng chính</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <Plus className="h-4 w-4 text-green-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Tạo hóa đơn</p>
+                          <p className="text-xs text-gray-500">Tạo hóa đơn mới từ báo giá hoặc từ đầu</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <Send className="h-4 w-4 text-blue-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Gửi hóa đơn</p>
+                          <p className="text-xs text-gray-500">Gửi hóa đơn qua email cho khách hàng</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <DollarSign className="h-4 w-4 text-green-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Ghi nhận thanh toán</p>
+                          <p className="text-xs text-gray-500">Cập nhật trạng thái thanh toán</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <Eye className="h-4 w-4 text-purple-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Xem chi tiết</p>
+                          <p className="text-xs text-gray-500">Xem thông tin chi tiết hóa đơn</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <Edit className="h-4 w-4 text-orange-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Chỉnh sửa</p>
+                          <p className="text-xs text-gray-500">Chỉnh sửa hóa đơn (chỉ khi ở trạng thái nháp)</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <Trash2 className="h-4 w-4 text-red-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Xóa hóa đơn</p>
+                          <p className="text-xs text-gray-500">Xóa hóa đơn (chỉ khi ở trạng thái nháp)</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Guide */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">📊 Trạng thái hóa đơn</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Nháp</span>
+                      <span className="text-sm text-gray-600">Hóa đơn đang được soạn thảo, có thể chỉnh sửa</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Đã gửi</span>
+                      <span className="text-sm text-gray-600">Đã gửi cho khách hàng, chờ phản hồi</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Đã thanh toán</span>
+                      <span className="text-sm text-gray-600">Khách hàng đã thanh toán đầy đủ</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Quá hạn</span>
+                      <span className="text-sm text-gray-600">Hóa đơn đã quá hạn thanh toán</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Workflow */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">🔄 Quy trình làm việc</h4>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+                      <li><strong>Tạo hóa đơn:</strong> Tạo hóa đơn mới hoặc chuyển từ báo giá</li>
+                      <li><strong>Kiểm tra thông tin:</strong> Xem lại thông tin khách hàng, sản phẩm, giá cả</li>
+                      <li><strong>Gửi hóa đơn:</strong> Gửi hóa đơn cho khách hàng qua email</li>
+                      <li><strong>Theo dõi thanh toán:</strong> Cập nhật trạng thái khi khách hàng thanh toán</li>
+                      <li><strong>Hoàn tất:</strong> Đánh dấu hóa đơn đã thanh toán đầy đủ</li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Tips */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">💡 Mẹo sử dụng</h4>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                      <li>Sử dụng bộ lọc để tìm hóa đơn theo trạng thái</li>
+                      <li>Kiểm tra hóa đơn quá hạn thường xuyên</li>
+                      <li>Gửi nhắc nhở thanh toán cho khách hàng</li>
+                      <li>Lưu trữ hóa đơn đã thanh toán để báo cáo</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-6 pt-4 border-t">
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  Đã hiểu
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

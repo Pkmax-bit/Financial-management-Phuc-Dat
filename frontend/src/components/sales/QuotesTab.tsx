@@ -13,7 +13,9 @@ import {
   XCircle,
   Calendar,
   DollarSign,
-  Clock
+  Clock,
+  HelpCircle,
+  X
 } from 'lucide-react'
 import CreateQuoteSidebar from './CreateQuoteSidebar'
 import { apiGet, apiPost } from '@/lib/api'
@@ -56,6 +58,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
 
   useEffect(() => {
     fetchQuotes()
@@ -304,6 +307,21 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
   return (
     <div className="space-y-4">
+      {/* Header with Help Button */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-4">
+          <h2 className="text-xl font-semibold text-gray-900">Báo giá</h2>
+          <button
+            onClick={() => setShowHelpModal(true)}
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            title="Hướng dẫn sử dụng"
+          >
+            <HelpCircle className="h-4 w-4 mr-1" />
+            Hướng dẫn
+          </button>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="flex items-center justify-between">
         <div className="flex space-x-2">
@@ -494,6 +512,178 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           fetchQuotes()
         }}
       />
+
+      {/* Help Sidebar */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0" onClick={() => setShowHelpModal(false)}></div>
+          <div className="absolute left-0 top-0 h-full w-96 bg-white shadow-xl overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 border-b pb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  📚 Hướng dẫn sử dụng Báo giá
+                </h3>
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="space-y-6">
+                {/* Overview */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-2">🎯 Tổng quan</h4>
+                  <p className="text-sm text-gray-600">
+                    Module Báo giá giúp bạn tạo và quản lý các báo giá cho khách hàng, theo dõi trạng thái và chuyển đổi thành hóa đơn khi cần thiết.
+                  </p>
+                </div>
+
+                {/* Features */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">✨ Tính năng chính</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <Plus className="h-4 w-4 text-blue-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Tạo báo giá</p>
+                          <p className="text-xs text-gray-500">Tạo báo giá mới với thông tin khách hàng và dự án</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <Send className="h-4 w-4 text-green-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Gửi báo giá</p>
+                          <p className="text-xs text-gray-500">Gửi báo giá qua email cho khách hàng</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <DollarSign className="h-4 w-4 text-purple-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Chuyển thành hóa đơn</p>
+                          <p className="text-xs text-gray-500">Chuyển báo giá đã chấp nhận thành hóa đơn</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <Eye className="h-4 w-4 text-purple-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Xem chi tiết</p>
+                          <p className="text-xs text-gray-500">Xem thông tin chi tiết báo giá</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <Edit className="h-4 w-4 text-orange-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Chỉnh sửa</p>
+                          <p className="text-xs text-gray-500">Chỉnh sửa báo giá (chỉ khi ở trạng thái nháp)</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <Trash2 className="h-4 w-4 text-red-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Xóa báo giá</p>
+                          <p className="text-xs text-gray-500">Xóa báo giá (chỉ khi ở trạng thái nháp)</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Guide */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">📊 Trạng thái báo giá</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Nháp</span>
+                      <span className="text-sm text-gray-600">Báo giá đang được soạn thảo, có thể chỉnh sửa</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Đã gửi</span>
+                      <span className="text-sm text-gray-600">Đã gửi cho khách hàng, chờ phản hồi</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Đã chấp nhận</span>
+                      <span className="text-sm text-gray-600">Khách hàng đã chấp nhận báo giá</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Từ chối</span>
+                      <span className="text-sm text-gray-600">Khách hàng đã từ chối báo giá</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Hết hạn</span>
+                      <span className="text-sm text-gray-600">Báo giá đã hết hạn hiệu lực</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Đã đóng</span>
+                      <span className="text-sm text-gray-600">Báo giá đã được chuyển thành hóa đơn</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Workflow */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">🔄 Quy trình làm việc</h4>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+                      <li><strong>Tạo báo giá:</strong> Tạo báo giá mới với thông tin khách hàng và sản phẩm</li>
+                      <li><strong>Kiểm tra thông tin:</strong> Xem lại thông tin khách hàng, sản phẩm, giá cả</li>
+                      <li><strong>Gửi báo giá:</strong> Gửi báo giá cho khách hàng qua email</li>
+                      <li><strong>Theo dõi phản hồi:</strong> Chờ khách hàng phản hồi (chấp nhận/từ chối)</li>
+                      <li><strong>Chuyển thành hóa đơn:</strong> Khi khách hàng chấp nhận, chuyển thành hóa đơn</li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Tips */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">💡 Mẹo sử dụng</h4>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                      <li>Sử dụng bộ lọc để tìm báo giá theo trạng thái</li>
+                      <li>Kiểm tra báo giá hết hạn thường xuyên</li>
+                      <li>Gửi nhắc nhở cho khách hàng về báo giá</li>
+                      <li>Chuyển báo giá đã chấp nhận thành hóa đơn ngay</li>
+                      <li>Lưu trữ báo giá đã đóng để tham khảo</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Conversion Guide */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">🔄 Chuyển đổi báo giá</h4>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-700 mb-2">
+                      <strong>Khi nào có thể chuyển:</strong> Báo giá có trạng thái "Đã chấp nhận", "Đã gửi", hoặc "Đã xem"
+                    </p>
+                    <p className="text-sm text-gray-700 mb-2">
+                      <strong>Khi nào không thể chuyển:</strong> Báo giá đã bị từ chối, hết hạn, hoặc đã được chuyển rồi
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      <strong>Kết quả:</strong> Tạo hóa đơn mới và cập nhật trạng thái báo giá thành "Đã đóng"
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-6 pt-4 border-t">
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  Đã hiểu
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
