@@ -1,45 +1,33 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { 
   FileText, 
   Plus, 
   Search, 
+  Eye, 
   Edit, 
   Trash2, 
-  Eye,
-  CheckCircle,
-  XCircle,
-  Calendar,
   DollarSign,
-  Clock,
+  Calendar,
   Building2,
+  CheckCircle,
+  Clock,
+  XCircle,
   AlertTriangle
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { billsApi } from '@/lib/api'
 
 interface Bill {
   id: string
   bill_number: string
   vendor_id: string
-  vendor_name?: string
-  issue_date: string
-  due_date: string
-  subtotal: number
-  tax_rate: number
-  tax_amount: number
-  total_amount: number
+  vendor_name: string
+  amount: number
   currency: string
-  status: 'draft' | 'sent' | 'received' | 'approved' | 'paid' | 'overdue' | 'cancelled'
-  items: unknown[]
-  notes?: string
-  payment_terms?: string
-  received_at?: string
-  approved_at?: string
-  paid_at?: string
-  created_by: string
+  bill_date: string
+  due_date: string
+  status: 'pending' | 'approved' | 'paid' | 'overdue'
+  description?: string
   created_at: string
   updated_at: string
 }
@@ -52,62 +40,85 @@ interface BillsTabProps {
 export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
   const [bills, setBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<string>('all')
-  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    checkUser()
+    fetchBills()
   }, [])
-
-  const checkUser = async () => {
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      
-      if (authUser) {
-        // User is authenticated, proceed to fetch bills
-        fetchBills()
-      } else {
-        router.push('/login')
-      }
-    } catch (error) {
-      console.error('Error checking user:', error)
-      router.push('/login')
-    }
-  }
 
   const fetchBills = async () => {
     try {
       setLoading(true)
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) {
-        router.push('/login')
-        return
-      }
-
-      const data = await billsApi.getBills()
-      setBills(data || [])
+      setError(null)
+      
+      // Mock data for now - replace with actual API call
+      const mockBills: Bill[] = [
+        {
+          id: '1',
+          bill_number: 'BILL-20241201-001',
+          vendor_id: 'vendor-001',
+          vendor_name: 'Công ty ABC',
+          amount: 1000000,
+          currency: 'VND',
+          bill_date: '2024-12-01',
+          due_date: '2024-12-31',
+          status: 'pending',
+          description: 'Hóa đơn dịch vụ tư vấn',
+          created_at: '2024-12-01T09:00:00Z',
+          updated_at: '2024-12-01T09:00:00Z'
+        },
+        {
+          id: '2',
+          bill_number: 'BILL-20241201-002',
+          vendor_id: 'vendor-002',
+          vendor_name: 'Công ty XYZ',
+          amount: 2000000,
+          currency: 'VND',
+          bill_date: '2024-12-01',
+          due_date: '2024-12-15',
+          status: 'paid',
+          description: 'Hóa đơn dịch vụ marketing',
+          created_at: '2024-12-01T10:00:00Z',
+          updated_at: '2024-12-01T10:00:00Z'
+        }
+      ]
+      
+      setBills(mockBills)
     } catch (error) {
       console.error('Error fetching bills:', error)
+      setError('Không thể tải danh sách hóa đơn')
     } finally {
       setLoading(false)
     }
   }
 
-  const approveBill = async (billId: string) => {
-    try {
-      await billsApi.approveBill(billId)
-      fetchBills() // Refresh list
-    } catch (error) {
-      console.error('Error approving bill:', error)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid': return 'bg-green-100 text-green-800'
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'approved': return 'bg-blue-100 text-blue-800'
+      case 'overdue': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const payBill = async (billId: string) => {
-    try {
-      await billsApi.payBill(billId)
-      fetchBills() // Refresh list
-    } catch (error) {
-      console.error('Error paying bill:', error)
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'paid': return 'Đã thanh toán'
+      case 'pending': return 'Chờ duyệt'
+      case 'approved': return 'Đã duyệt'
+      case 'overdue': return 'Quá hạn'
+      default: return status
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'paid': return <CheckCircle className="h-4 w-4" />
+      case 'pending': return <Clock className="h-4 w-4" />
+      case 'approved': return <DollarSign className="h-4 w-4" />
+      case 'overdue': return <XCircle className="h-4 w-4" />
+      default: return <AlertTriangle className="h-4 w-4" />
     }
   }
 
@@ -118,246 +129,129 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
     }).format(amount)
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN')
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'draft': return 'bg-gray-100 text-gray-800'
-      case 'sent': return 'bg-blue-100 text-blue-800'
-      case 'received': return 'bg-yellow-100 text-yellow-800'
-      case 'approved': return 'bg-green-100 text-green-800'
-      case 'paid': return 'bg-green-100 text-green-800'
-      case 'overdue': return 'bg-red-100 text-red-800'
-      case 'cancelled': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'draft': return 'Nháp'
-      case 'sent': return 'Đã gửi'
-      case 'received': return 'Đã nhận'
-      case 'approved': return 'Đã duyệt'
-      case 'paid': return 'Đã thanh toán'
-      case 'overdue': return 'Quá hạn'
-      case 'cancelled': return 'Đã hủy'
-      default: return status
-    }
-  }
-
-  const isOverdue = (bill: Bill) => {
-    if (bill.status === 'paid' || bill.status === 'cancelled') return false
-    return new Date(bill.due_date) < new Date()
-  }
-
-  // Filter bills based on search term
   const filteredBills = bills.filter(bill => {
-    const matchesSearch = bill.bill_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      bill.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesFilter = filter === 'all' || bill.status === filter
-    
-    return matchesSearch && matchesFilter
+    const matchesSearch = bill.bill_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         bill.vendor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (bill.description && bill.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    return matchesSearch
   })
 
   return (
-    <div>
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-          <div className="flex items-center">
-            <FileText className="h-8 w-8 text-blue-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-blue-600">Chưa thanh toán</p>
-              <p className="text-2xl font-bold text-blue-900">
-                {filteredBills.filter(b => ['received', 'approved'].includes(b.status)).length}
-              </p>
-            </div>
+    <div className="space-y-4">
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Đang tải hóa đơn...</p>
           </div>
         </div>
-        <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-          <div className="flex items-center">
-            <AlertTriangle className="h-8 w-8 text-red-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-red-600">Quá hạn</p>
-              <p className="text-2xl font-bold text-red-900">
-                {filteredBills.filter(b => isOverdue(b)).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-          <div className="flex items-center">
-            <CheckCircle className="h-8 w-8 text-green-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-green-600">Đã thanh toán</p>
-              <p className="text-2xl font-bold text-green-900">
-                {filteredBills.filter(b => b.status === 'paid').length}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-          <div className="flex items-center">
-            <DollarSign className="h-8 w-8 text-purple-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-purple-600">Tổng phải trả</p>
-              <p className="text-lg font-bold text-purple-900">
-                {formatCurrency(
-                  filteredBills
-                    .filter(b => ['received', 'approved', 'overdue'].includes(b.status))
-                    .reduce((sum, b) => sum + b.total_amount, 0)
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-4">
-          <h3 className="text-lg font-medium text-gray-900">Công nợ Phải trả (Bills)</h3>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-1 text-sm"
+      ) : error ? (
+        <div className="text-center py-12">
+          <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Có lỗi xảy ra</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={fetchBills}
+            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700"
           >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="received">Chưa thanh toán (Open)</option>
-            <option value="overdue">Quá hạn (Overdue)</option>
-            <option value="paid">Đã thanh toán (Paid)</option>
-            <option value="draft">Nháp</option>
-          </select>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button 
-            className="border border-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50 flex items-center"
-          >
-            <DollarSign className="w-4 h-4 mr-1" />
-            Thanh toán hàng loạt
+            Thử lại
           </button>
-          <button 
+        </div>
+      ) : filteredBills.length === 0 ? (
+        <div className="text-center py-12">
+          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có hóa đơn nào</h3>
+          <p className="text-gray-600 mb-4">Bắt đầu bằng cách tạo hóa đơn đầu tiên</p>
+          <button
             onClick={onCreateBill}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"
+            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 flex items-center space-x-2 mx-auto"
           >
-            <Plus className="w-4 h-4 mr-1" />
-            Nhập Bill mới
+            <Plus className="h-4 w-4" />
+            <span>Tạo hóa đơn đầu tiên</span>
           </button>
         </div>
-      </div>
-
-      {/* Bills Table */}
-      <div className="overflow-x-auto bg-white rounded-lg border">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Số hóa đơn
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Nhà cung cấp
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Số tiền
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Ngày phát hành
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Hạn thanh toán
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Trạng thái
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Hành động
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {loading ? (
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-black">
-                  Đang tải...
-                </td>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Số hóa đơn
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Nhà cung cấp
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Số tiền
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ngày hóa đơn
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Hạn thanh toán
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Trạng thái
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Thao tác
+                </th>
               </tr>
-            ) : filteredBills.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-black">
-                  Không tìm thấy hóa đơn nào
-                </td>
-              </tr>
-            ) : (
-              filteredBills.map((bill) => (
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredBills.map((bill) => (
                 <tr key={bill.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    <div className="flex items-center">
-                      {bill.bill_number || `BILL-${bill.id.slice(-12)}`}
-                      {isOverdue(bill) && (
-                        <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />
-                      )}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {bill.bill_number}
                     </div>
+                    {bill.description && (
+                      <div className="text-sm text-gray-500">
+                        {bill.description}
+                      </div>
+                    )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="flex items-center">
-                      <Building2 className="h-4 w-4 text-black mr-2" />
-                      {bill.vendor_name || 'Chưa có tên'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(bill.total_amount)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                    {formatDate(bill.issue_date)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                    <div className={`${isOverdue(bill) ? 'text-red-600 font-medium' : ''}`}>
-                      {formatDate(bill.due_date)}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {bill.vendor_name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(bill.status)}`}>
-                      {getStatusText(bill.status)}
+                    <div className="text-sm font-medium text-gray-900">
+                      {formatCurrency(bill.amount)}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {bill.currency}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(bill.bill_date).toLocaleDateString('vi-VN')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(bill.due_date).toLocaleDateString('vi-VN')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(bill.status)}`}>
+                      {getStatusIcon(bill.status)}
+                      <span className="ml-1">{getStatusText(bill.status)}</span>
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
-                        className="text-black hover:text-black" 
+                        className="text-blue-600 hover:text-blue-900 p-1"
                         title="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-black hover:text-black" 
-                        title="Sửa"
+                        className="text-gray-600 hover:text-gray-900 p-1"
+                        title="Chỉnh sửa"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      {bill.status === 'received' && (
-                        <button 
-                          onClick={() => approveBill(bill.id)}
-                          className="text-black hover:text-green-600" 
-                          title="Duyệt thanh toán"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                        </button>
-                      )}
-                      {(bill.status === 'approved' || bill.status === 'overdue') && (
-                        <button 
-                          onClick={() => payBill(bill.id)}
-                          className="text-black hover:text-blue-600" 
-                          title="Thanh toán"
-                        >
-                          <DollarSign className="h-4 w-4" />
-                        </button>
-                      )}
                       <button 
-                        className="text-black hover:text-red-600" 
+                        className="text-red-600 hover:text-red-900 p-1"
                         title="Xóa"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -365,11 +259,11 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

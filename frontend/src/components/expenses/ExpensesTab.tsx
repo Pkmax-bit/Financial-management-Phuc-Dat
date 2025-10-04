@@ -1,31 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { 
   Receipt, 
   Plus, 
   Search, 
+  Eye, 
   Edit, 
   Trash2, 
-  Eye,
-  CheckCircle,
-  XCircle,
-  Calendar,
   DollarSign,
-  Clock,
+  Calendar,
   User,
   Building2,
-  CreditCard,
-  Banknote,
-  FileCheck,
-  Paperclip,
-  Filter,
-  Download,
-  Upload
+  CheckCircle,
+  Clock,
+  XCircle,
+  AlertTriangle
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { expensesApi } from '@/lib/api'
 import CreateExpenseSidebar from './CreateExpenseSidebar'
 
 interface Expense {
@@ -33,15 +24,13 @@ interface Expense {
   expense_code: string
   employee_id: string
   project_id?: string
-  category: 'travel' | 'meals' | 'accommodation' | 'transportation' | 'supplies' | 'equipment' | 'training' | 'other'
+  category: string
   description: string
   amount: number
   currency: string
   expense_date: string
   receipt_url?: string
   status: 'pending' | 'approved' | 'rejected' | 'paid'
-  approved_by?: string
-  approved_at?: string
   notes?: string
   created_at: string
   updated_at: string
@@ -50,76 +39,101 @@ interface Expense {
 interface ExpensesTabProps {
   searchTerm: string
   onCreateExpense: () => void
-  shouldOpenCreateModal?: boolean // Prop to control modal opening from parent
-  onCloseCreateModal?: () => void // Prop to close modal from parent
+  shouldOpenCreateModal: boolean
 }
 
-export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCreateModal, onCloseCreateModal }: ExpensesTabProps) {
+export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCreateModal }: ExpensesTabProps) {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<string>('all')
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const router = useRouter()
+  const [showCreateSidebar, setShowCreateSidebar] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    checkUser()
+    fetchExpenses()
   }, [])
 
   useEffect(() => {
     if (shouldOpenCreateModal) {
-      setShowCreateModal(true)
+      setShowCreateSidebar(true)
     }
   }, [shouldOpenCreateModal])
-
-  const checkUser = async () => {
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      
-      if (authUser) {
-        // User is authenticated, proceed to fetch expenses
-        fetchExpenses()
-      } else {
-        router.push('/login')
-      }
-    } catch (error) {
-      console.error('Error checking user:', error)
-      router.push('/login')
-    }
-  }
 
   const fetchExpenses = async () => {
     try {
       setLoading(true)
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) {
-        router.push('/login')
-        return
-      }
-
-      const data = await expensesApi.getExpenses()
-      setExpenses(data || [])
+      setError(null)
+      
+      // Mock data for now - replace with actual API call
+      const mockExpenses: Expense[] = [
+        {
+          id: '1',
+          expense_code: 'EXP-20241201-001',
+          employee_id: 'emp-001',
+          project_id: 'proj-001',
+          category: 'travel',
+          description: 'Chi phí đi lại công tác',
+          amount: 500000,
+          currency: 'VND',
+          expense_date: '2024-12-01',
+          receipt_url: 'https://example.com/receipt1.pdf',
+          status: 'pending',
+          notes: 'Đi công tác Hà Nội',
+          created_at: '2024-12-01T09:00:00Z',
+          updated_at: '2024-12-01T09:00:00Z'
+        },
+        {
+          id: '2',
+          expense_code: 'EXP-20241201-002',
+          employee_id: 'emp-002',
+          project_id: 'proj-002',
+          category: 'meals',
+          description: 'Chi phí ăn uống',
+          amount: 200000,
+          currency: 'VND',
+          expense_date: '2024-12-01',
+          status: 'approved',
+          notes: 'Tiệc khách hàng',
+          created_at: '2024-12-01T10:00:00Z',
+          updated_at: '2024-12-01T10:00:00Z'
+        }
+      ]
+      
+      setExpenses(mockExpenses)
     } catch (error) {
       console.error('Error fetching expenses:', error)
+      setError('Không thể tải danh sách chi phí')
     } finally {
       setLoading(false)
     }
   }
 
-  const approveExpense = async (expenseId: string) => {
-    try {
-      await expensesApi.approveExpense(expenseId)
-      fetchExpenses() // Refresh list
-    } catch (error) {
-      console.error('Error approving expense:', error)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return 'bg-green-100 text-green-800'
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'rejected': return 'bg-red-100 text-red-800'
+      case 'paid': return 'bg-blue-100 text-blue-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const rejectExpense = async (expenseId: string) => {
-    try {
-      await expensesApi.rejectExpense(expenseId)
-      fetchExpenses() // Refresh list
-    } catch (error) {
-      console.error('Error rejecting expense:', error)
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'approved': return 'Đã duyệt'
+      case 'pending': return 'Chờ duyệt'
+      case 'rejected': return 'Từ chối'
+      case 'paid': return 'Đã thanh toán'
+      default: return status
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'approved': return <CheckCircle className="h-4 w-4" />
+      case 'pending': return <Clock className="h-4 w-4" />
+      case 'rejected': return <XCircle className="h-4 w-4" />
+      case 'paid': return <DollarSign className="h-4 w-4" />
+      default: return <AlertTriangle className="h-4 w-4" />
     }
   }
 
@@ -130,276 +144,135 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     }).format(amount)
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN')
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'approved': return 'bg-green-100 text-green-800'
-      case 'rejected': return 'bg-red-100 text-red-800'
-      case 'paid': return 'bg-blue-100 text-blue-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return 'Chờ duyệt'
-      case 'approved': return 'Đã duyệt'
-      case 'rejected': return 'Từ chối'
-      case 'paid': return 'Đã thanh toán'
-      default: return status
-    }
-  }
-
-  const getCategoryText = (category: string) => {
-    switch (category) {
-      case 'office_supplies': return 'Văn phòng phẩm'
-      case 'travel': return 'Du lịch'
-      case 'meals': return 'Ăn uống'
-      case 'equipment': return 'Thiết bị'
-      case 'software': return 'Phần mềm'
-      case 'marketing': return 'Marketing'
-      case 'rent': return 'Thuê mặt bằng'
-      case 'utilities': return 'Điện nước'
-      case 'insurance': return 'Bảo hiểm'
-      case 'legal': return 'Pháp lý'
-      case 'accounting': return 'Kế toán'
-      case 'advertising': return 'Quảng cáo'
-      case 'fuel': return 'Xăng dầu'
-      case 'maintenance': return 'Bảo trì'
-      case 'training': return 'Đào tạo'
-      case 'other': return 'Khác'
-      default: return category
-    }
-  }
-
-  const getPaymentMethodIcon = (method: string) => {
-    switch (method) {
-      case 'cash': return <Banknote className="h-4 w-4" />
-      case 'debit_card': return <CreditCard className="h-4 w-4" />
-      case 'credit_card': return <CreditCard className="h-4 w-4" />
-      case 'check': return <FileCheck className="h-4 w-4" />
-      case 'bank_transfer': return <Building2 className="h-4 w-4" />
-      default: return <DollarSign className="h-4 w-4" />
-    }
-  }
-
-  const getPaymentMethodText = (method: string) => {
-    switch (method) {
-      case 'cash': return 'Tiền mặt'
-      case 'debit_card': return 'Thẻ ghi nợ'
-      case 'credit_card': return 'Thẻ tín dụng'
-      case 'check': return 'Séc'
-      case 'bank_transfer': return 'Chuyển khoản'
-      default: return method
-    }
-  }
-
-  const getTransactionTypeText = (type: string) => {
-    switch (type) {
-      case 'expense': return 'Chi phí'
-      case 'check': return 'Séc'
-      case 'credit_card_credit': return 'Hoàn tiền thẻ'
-      default: return type
-    }
-  }
-
-  // Filter expenses based on search term
   const filteredExpenses = expenses.filter(expense => {
-    const matchesSearch = expense.expense_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.category?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesFilter = filter === 'all' || expense.status === filter
-    
-    return matchesSearch && matchesFilter
+    const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         expense.expense_code.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch
   })
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-4">
-          <h3 className="text-lg font-medium text-gray-900">Lịch sử Chi tiêu</h3>
-          <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-black" />
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-1 text-sm"
-            >
-              <option value="all">Tất cả giao dịch</option>
-              <option value="pending">Chờ duyệt</option>
-              <option value="approved">Đã duyệt</option>
-              <option value="rejected">Từ chối</option>
-              <option value="paid">Đã thanh toán</option>
-            </select>
+    <div className="space-y-4">
+      {/* Create Expense Sidebar */}
+      <CreateExpenseSidebar
+        isOpen={showCreateSidebar}
+        onClose={() => setShowCreateSidebar(false)}
+        onSuccess={() => {
+          fetchExpenses()
+          setShowCreateSidebar(false)
+        }}
+      />
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Đang tải chi phí...</p>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <button 
-            className="border border-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50 flex items-center"
+      ) : error ? (
+        <div className="text-center py-12">
+          <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Có lỗi xảy ra</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={fetchExpenses}
+            className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700"
           >
-            <Upload className="w-4 h-4 mr-1" />
-            Import từ Bank
-          </button>
-          <button 
-            className="border border-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50 flex items-center"
-          >
-            <Download className="w-4 h-4 mr-1" />
-            Xuất Excel
-          </button>
-          <button 
-            onClick={onCreateExpense}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Ghi nhận Chi phí
+            Thử lại
           </button>
         </div>
-      </div>
-
-      {/* Expenses Table */}
-      <div className="overflow-x-auto bg-white rounded-lg border">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Ngày
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Người nhận / Mô tả
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Danh mục
-              </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                    Tiền tệ
-                  </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Số tiền
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Chứng từ
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Hành động
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {loading ? (
+      ) : filteredExpenses.length === 0 ? (
+        <div className="text-center py-12">
+          <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có chi phí nào</h3>
+          <p className="text-gray-600 mb-4">Bắt đầu bằng cách tạo chi phí đầu tiên</p>
+          <button
+            onClick={() => setShowCreateSidebar(true)}
+            className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 flex items-center space-x-2 mx-auto"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Tạo chi phí đầu tiên</span>
+          </button>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-black">
-                  Đang tải...
-                </td>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Mã chi phí
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Mô tả
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Số tiền
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ngày
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Trạng thái
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Thao tác
+                </th>
               </tr>
-            ) : filteredExpenses.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-black">
-                  Không tìm thấy chi phí nào
-                </td>
-              </tr>
-            ) : (
-              filteredExpenses.map((expense) => (
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredExpenses.map((expense) => (
                 <tr key={expense.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="font-medium">{formatDate(expense.expense_date)}</div>
-                    <div className="text-xs text-black">
-                      Expense
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {expense.expense_code}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {expense.category}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
-                    <div>
-                      <div className="font-medium">{expense.description}</div>
-                      <div className="text-sm text-black mt-1">{expense.description}</div>
-                      {expense.notes && (
-                        <div className="text-xs text-black mt-1">{expense.notes}</div>
-                      )}
-                      {expense.notes && (
-                        <div className="text-xs text-black mt-1">Ghi chú: {expense.notes}</div>
-                      )}
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">
+                      {expense.description}
+                    </div>
+                    {expense.notes && (
+                      <div className="text-sm text-gray-500">
+                        {expense.notes}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {formatCurrency(expense.amount)}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {expense.currency}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="font-medium">{getCategoryText(expense.category)}</div>
-                    <div className="flex items-center mt-1 space-x-1">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                        {expense.category}
-                      </span>
-                    </div>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                    <div className="flex items-center">
-                      <span>{expense.currency}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="font-semibold">{formatCurrency(expense.amount)}</div>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
-                      {getStatusText(expense.status)}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
+                      {getStatusIcon(expense.status)}
+                      <span className="ml-1">{getStatusText(expense.status)}</span>
                     </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                    <div className="flex items-center">
-                      {expense.receipt_url ? (
-                        <div className="flex items-center text-green-600">
-                          <Paperclip className="h-4 w-4 mr-1" />
-                          <span className="text-xs">Có</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center text-black">
-                          <Paperclip className="h-4 w-4 mr-1" />
-                          <span className="text-xs">Chưa có</span>
-                        </div>
-                      )}
-                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
-                        className="text-black hover:text-black" 
+                        className="text-blue-600 hover:text-blue-900 p-1"
                         title="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
-                        className="text-black hover:text-black" 
-                        title="Sửa"
+                        className="text-gray-600 hover:text-gray-900 p-1"
+                        title="Chỉnh sửa"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      {!expense.receipt_url && (
-                        <button 
-                          className="text-black hover:text-blue-600" 
-                          title="Đính kèm chứng từ"
-                        >
-                          <Paperclip className="h-4 w-4" />
-                        </button>
-                      )}
-                      {expense.status === 'pending' && (
-                        <>
-                          <button 
-                            onClick={() => approveExpense(expense.id)}
-                            className="text-black hover:text-green-600" 
-                            title="Duyệt"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </button>
-                          <button 
-                            onClick={() => rejectExpense(expense.id)}
-                            className="text-black hover:text-red-600" 
-                            title="Từ chối"
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </button>
-                        </>
-                      )}
                       <button 
-                        className="text-black hover:text-red-600" 
+                        className="text-red-600 hover:text-red-900 p-1"
                         title="Xóa"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -407,25 +280,11 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Create Expense Sidebar */}
-      <CreateExpenseSidebar
-        isOpen={showCreateModal}
-        onClose={() => {
-          setShowCreateModal(false)
-          onCloseCreateModal?.()
-        }}
-        onSuccess={() => {
-          fetchExpenses()
-          setShowCreateModal(false)
-          onCloseCreateModal?.()
-        }}
-      />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
