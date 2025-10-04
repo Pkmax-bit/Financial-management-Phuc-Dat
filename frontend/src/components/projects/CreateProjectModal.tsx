@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { X, Calendar, DollarSign, Users, Target, Clock, AlertCircle, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi, customerApi, employeeApi } from '@/lib/api'
@@ -24,6 +25,7 @@ interface CreateProjectModalProps {
 }
 
 export default function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProjectModalProps) {
+  const router = useRouter()
   const [formData, setFormData] = useState({
     project_code: '',
     name: '',
@@ -226,11 +228,13 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         hourly_rate: ''
       })
       
-      // Close modal after a short delay to show success message
+      // Close modal and redirect to quotes page after showing success message
       setTimeout(() => {
         onClose()
         setSuccess(false)
-      }, 1500)
+        // Redirect to sales page with quotes tab active
+        router.push('/sales?tab=quotes')
+      }, 3000) // Increased to 3 seconds to allow users to read the message
     } catch (error) {
       console.error('Error creating project:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to create project. Please try again.'
@@ -274,17 +278,27 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           )}
           
           {success && (
-            <div className="bg-green-50 border border-green-200 rounded-md p-3">
-              <div className="flex items-center">
+            <div className="bg-green-50 border border-green-200 rounded-md p-4">
+              <div className="flex items-start">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-green-800 font-semibold">
-                    Dự án đã được tạo thành công!
+                  <h3 className="text-sm font-bold text-green-800">
+                    ✅ Dự án đã được tạo thành công!
+                  </h3>
+                  <p className="text-sm text-green-700 mt-1">
+                    Đang chuyển sang trang báo giá để tạo báo giá cho dự án mới...
                   </p>
+                  <div className="mt-2 flex items-center text-xs text-green-600">
+                    <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Vui lòng chờ trong giây lát...
+                  </div>
                 </div>
               </div>
             </div>

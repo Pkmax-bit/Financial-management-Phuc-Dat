@@ -908,124 +908,242 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Add Customer Modal */}
+      {/* Add Customer Modal - Right Sidebar */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-[30rem] shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Thêm khách hàng mới</h3>
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="text-black hover:text-black"
-                >
-                  <span className="sr-only">Đóng</span>
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+        <div className="fixed top-16 right-4 z-50 w-full max-w-2xl">
+          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
+            <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Tạo khách hàng mới</h2>
+                <p className="text-sm font-semibold text-gray-700">Thêm khách hàng vào hệ thống</p>
               </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-black hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                disabled={addSaving}
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
+            <form onSubmit={createCustomer} className="p-6 space-y-6">
+              {/* Error Message */}
               {addError && (
-                <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {addError}
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <p className="text-sm text-red-800 font-semibold">{addError}</p>
                 </div>
               )}
 
-              <form onSubmit={createCustomer} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Basic Information */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin cơ bản</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Mã khách hàng *</label>
-                    <input name="customer_code" value={addForm.customer_code} onChange={handleAddChange} required
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Mã khách hàng *
+                    </label>
+                    <input 
+                      name="customer_code" 
+                      value={addForm.customer_code} 
+                      onChange={handleAddChange} 
+                      required
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập mã khách hàng..."
+                      disabled={addSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Loại khách hàng</label>
-                    <select name="type" value={addForm.type} onChange={handleAddChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Loại khách hàng
+                    </label>
+                    <select 
+                      name="type" 
+                      value={addForm.type} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold"
+                      disabled={addSaving}
+                    >
                       <option value="individual">Cá nhân</option>
                       <option value="company">Công ty</option>
                       <option value="government">Cơ quan nhà nước</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Tên/Công ty *</label>
-                    <input name="name" value={addForm.name} onChange={handleAddChange} required
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Tên/Công ty *
+                    </label>
+                    <input 
+                      name="name" 
+                      value={addForm.name} 
+                      onChange={handleAddChange} 
+                      required
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập tên khách hàng..."
+                      disabled={addSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <input name="email" type="email" value={addForm.email} onChange={handleAddChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Email
+                    </label>
+                    <input 
+                      name="email" 
+                      type="email" 
+                      value={addForm.email} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập email..."
+                      disabled={addSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Điện thoại</label>
-                    <input name="phone" value={addForm.phone} onChange={handleAddChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Điện thoại
+                    </label>
+                    <input 
+                      name="phone" 
+                      value={addForm.phone} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập số điện thoại..."
+                      disabled={addSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Thành phố</label>
-                    <input name="city" value={addForm.city} onChange={handleAddChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Thành phố
+                    </label>
+                    <input 
+                      name="city" 
+                      value={addForm.city} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập thành phố..."
+                      disabled={addSaving}
+                    />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Địa chỉ</label>
-                    <input name="address" value={addForm.address} onChange={handleAddChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Địa chỉ
+                    </label>
+                    <input 
+                      name="address" 
+                      value={addForm.address} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập địa chỉ..."
+                      disabled={addSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Mã số thuế</label>
-                    <input name="tax_id" value={addForm.tax_id} onChange={handleAddChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Mã số thuế
+                    </label>
+                    <input 
+                      name="tax_id" 
+                      value={addForm.tax_id} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập mã số thuế..."
+                      disabled={addSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Quốc gia</label>
-                    <input name="country" value={addForm.country} onChange={handleAddChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Quốc gia
+                    </label>
+                    <input 
+                      name="country" 
+                      value={addForm.country} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập quốc gia..."
+                      disabled={addSaving}
+                    />
                   </div>
                 </div>
-                
-                {/* Financial Information */}
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin tài chính</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Hạn mức tín dụng (VND)</label>
-                      <input name="credit_limit" type="number" value={addForm.credit_limit} onChange={handleAddChange}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Điều khoản thanh toán (ngày)</label>
-                      <input name="payment_terms" type="number" value={addForm.payment_terms} onChange={handleAddChange}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
+              </div>
+              
+              {/* Financial Information */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin tài chính</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Hạn mức tín dụng (VND)
+                    </label>
+                    <input 
+                      name="credit_limit" 
+                      type="number" 
+                      value={addForm.credit_limit} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập hạn mức tín dụng..."
+                      disabled={addSaving}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Điều khoản thanh toán (ngày)
+                    </label>
+                    <input 
+                      name="payment_terms" 
+                      type="number" 
+                      value={addForm.payment_terms} 
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập số ngày thanh toán..."
+                      disabled={addSaving}
+                    />
                   </div>
                 </div>
-                
-                {/* Additional Information */}
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin bổ sung</h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
-                      <textarea name="notes" value={addForm.notes} onChange={handleAddTextareaChange} rows={3}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
+              </div>
+              
+              {/* Additional Information */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin bổ sung</h3>
+                <div className="grid grid-cols-1 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Ghi chú
+                    </label>
+                    <textarea 
+                      name="notes" 
+                      value={addForm.notes} 
+                      onChange={handleAddTextareaChange} 
+                      rows={3}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập ghi chú..."
+                      disabled={addSaving}
+                    />
                   </div>
                 </div>
+              </div>
 
-                <div className="flex justify-end space-x-3">
-                  <button type="button" onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
-                    Hủy
-                  </button>
-                  <button type="submit" disabled={addSaving}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">
-                    {addSaving ? 'Đang lưu...' : 'Thêm khách hàng'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              {/* Actions */}
+              <div className="flex justify-end space-x-4 pt-6 border-t-2 border-gray-200">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddModal(false)}
+                  className="px-6 py-3 text-sm font-semibold text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  disabled={addSaving}
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  className="inline-flex items-center px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 border border-transparent rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
+                  disabled={addSaving}
+                >
+                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  {addSaving ? 'Đang tạo...' : 'Tạo khách hàng'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1306,124 +1424,240 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Edit Customer Modal */}
+      {/* Edit Customer Modal - Right Sidebar */}
       {showEditModal && selectedCustomer && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-[30rem] shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Sửa khách hàng</h3>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="text-black hover:text-black"
-                >
-                  <span className="sr-only">Đóng</span>
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+        <div className="fixed top-16 right-4 z-50 w-full max-w-2xl">
+          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
+            <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Sửa thông tin khách hàng</h2>
+                <p className="text-sm font-semibold text-gray-700">Cập nhật thông tin khách hàng</p>
               </div>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-black hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                disabled={editSaving}
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
+            <form onSubmit={updateCustomer} className="p-6 space-y-6">
+              {/* Error Message */}
               {editError && (
-                <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {editError}
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <p className="text-sm text-red-800 font-semibold">{editError}</p>
                 </div>
               )}
 
-              <form onSubmit={updateCustomer} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Basic Information */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin cơ bản</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Mã khách hàng</label>
-                    <input name="customer_code" value={editForm.customer_code} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Mã khách hàng
+                    </label>
+                    <input 
+                      name="customer_code" 
+                      value={editForm.customer_code} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập mã khách hàng..."
+                      disabled={editSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Loại khách hàng</label>
-                    <select name="type" value={editForm.type} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Loại khách hàng
+                    </label>
+                    <select 
+                      name="type" 
+                      value={editForm.type} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold"
+                      disabled={editSaving}
+                    >
                       <option value="individual">Cá nhân</option>
                       <option value="company">Công ty</option>
                       <option value="government">Cơ quan nhà nước</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Tên/Công ty</label>
-                    <input name="name" value={editForm.name} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Tên/Công ty
+                    </label>
+                    <input 
+                      name="name" 
+                      value={editForm.name} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập tên khách hàng..."
+                      disabled={editSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <input name="email" type="email" value={editForm.email} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Email
+                    </label>
+                    <input 
+                      name="email" 
+                      type="email" 
+                      value={editForm.email} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập email..."
+                      disabled={editSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Điện thoại</label>
-                    <input name="phone" value={editForm.phone} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Điện thoại
+                    </label>
+                    <input 
+                      name="phone" 
+                      value={editForm.phone} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập số điện thoại..."
+                      disabled={editSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Thành phố</label>
-                    <input name="city" value={editForm.city} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Thành phố
+                    </label>
+                    <input 
+                      name="city" 
+                      value={editForm.city} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập thành phố..."
+                      disabled={editSaving}
+                    />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Địa chỉ</label>
-                    <input name="address" value={editForm.address} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Địa chỉ
+                    </label>
+                    <input 
+                      name="address" 
+                      value={editForm.address} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập địa chỉ..."
+                      disabled={editSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Mã số thuế</label>
-                    <input name="tax_id" value={editForm.tax_id} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Mã số thuế
+                    </label>
+                    <input 
+                      name="tax_id" 
+                      value={editForm.tax_id} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập mã số thuế..."
+                      disabled={editSaving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Quốc gia</label>
-                    <input name="country" value={editForm.country} onChange={handleEditChange}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Quốc gia
+                    </label>
+                    <input 
+                      name="country" 
+                      value={editForm.country} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập quốc gia..."
+                      disabled={editSaving}
+                    />
                   </div>
                 </div>
-                
-                {/* Financial Information */}
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin tài chính</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Hạn mức tín dụng (VND)</label>
-                      <input name="credit_limit" type="number" value={editForm.credit_limit} onChange={handleEditChange}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Điều khoản thanh toán (ngày)</label>
-                      <input name="payment_terms" type="number" value={editForm.payment_terms} onChange={handleEditChange}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
+              </div>
+              
+              {/* Financial Information */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin tài chính</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Hạn mức tín dụng (VND)
+                    </label>
+                    <input 
+                      name="credit_limit" 
+                      type="number" 
+                      value={editForm.credit_limit} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập hạn mức tín dụng..."
+                      disabled={editSaving}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Điều khoản thanh toán (ngày)
+                    </label>
+                    <input 
+                      name="payment_terms" 
+                      type="number" 
+                      value={editForm.payment_terms} 
+                      onChange={handleEditChange}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập số ngày thanh toán..."
+                      disabled={editSaving}
+                    />
                   </div>
                 </div>
-                
-                {/* Additional Information */}
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Thông tin bổ sung</h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
-                      <textarea name="notes" value={editForm.notes} onChange={handleEditTextareaChange} rows={3}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
+              </div>
+              
+              {/* Additional Information */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin bổ sung</h3>
+                <div className="grid grid-cols-1 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-900 mb-2">
+                      Ghi chú
+                    </label>
+                    <textarea 
+                      name="notes" 
+                      value={editForm.notes} 
+                      onChange={handleEditTextareaChange} 
+                      rows={3}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                      placeholder="Nhập ghi chú..."
+                      disabled={editSaving}
+                    />
                   </div>
                 </div>
+              </div>
 
-                <div className="flex justify-end space-x-3">
-                  <button type="button" onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
-                    Hủy
-                  </button>
-                  <button type="submit" disabled={editSaving}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">
-                    {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              {/* Actions */}
+              <div className="flex justify-end space-x-4 pt-6 border-t-2 border-gray-200">
+                <button 
+                  type="button" 
+                  onClick={() => setShowEditModal(false)}
+                  className="px-6 py-3 text-sm font-semibold text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  disabled={editSaving}
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  className="inline-flex items-center px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-green-600 to-blue-600 border border-transparent rounded-lg hover:from-green-700 hover:to-blue-700 transition-all shadow-lg"
+                  disabled={editSaving}
+                >
+                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
