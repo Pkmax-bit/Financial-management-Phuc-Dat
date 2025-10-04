@@ -728,6 +728,20 @@ async def update_invoice(
         # Prepare update data
         update_dict = {k: v for k, v in invoice_data.dict().items() if v is not None}
         
+        # Handle empty string UUIDs - convert to None
+        if 'project_id' in update_dict and update_dict['project_id'] == '':
+            update_dict['project_id'] = None
+        if 'customer_id' in update_dict and update_dict['customer_id'] == '':
+            update_dict['customer_id'] = None
+        if 'quote_id' in update_dict and update_dict['quote_id'] == '':
+            update_dict['quote_id'] = None
+        
+        # Convert date objects to strings for JSON serialization
+        if 'issue_date' in update_dict and isinstance(update_dict['issue_date'], date):
+            update_dict['issue_date'] = update_dict['issue_date'].isoformat()
+        if 'due_date' in update_dict and isinstance(update_dict['due_date'], date):
+            update_dict['due_date'] = update_dict['due_date'].isoformat()
+        
         # Recalculate totals if needed
         if any(field in update_dict for field in ["subtotal", "tax_rate", "discount_amount"]):
             current_invoice = existing.data[0]

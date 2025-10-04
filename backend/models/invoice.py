@@ -97,3 +97,11 @@ class InvoiceUpdate(BaseModel):
     payment_date: Optional[date] = None
     items: Optional[List[dict]] = None
     notes: Optional[str] = None
+    terms_and_conditions: Optional[str] = None
+    payment_terms: Optional[str] = None
+    discount_amount: Optional[float] = None
+
+    class Config:
+        json_encoders = {
+            date: lambda v: v.isoformat() if v else None
+        }

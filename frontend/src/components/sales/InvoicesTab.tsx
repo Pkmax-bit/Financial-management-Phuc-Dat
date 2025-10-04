@@ -17,6 +17,7 @@ import {
   X
 } from 'lucide-react'
 import CreateInvoiceSidebar from './CreateInvoiceSidebar'
+import EditInvoiceModal from './EditInvoiceModal'
 import { apiGet, apiPost, apiPut } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
@@ -72,6 +73,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const [filter, setFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
 
   useEffect(() => {
     fetchInvoices()
@@ -185,6 +188,21 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       console.error('❌ Error recording payment:', error)
       alert('❌ Lỗi khi ghi nhận thanh toán. Vui lòng thử lại.')
     }
+  }
+
+  const openEditModal = (invoice: Invoice) => {
+    setSelectedInvoice(invoice)
+    setShowEditModal(true)
+  }
+
+  const closeEditModal = () => {
+    setShowEditModal(false)
+    setSelectedInvoice(null)
+  }
+
+  const handleEditSuccess = () => {
+    fetchInvoices() // Refresh the invoices list
+    closeEditModal()
   }
 
   const formatCurrency = (amount: number) => {
@@ -556,6 +574,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     {invoice.status === 'draft' && (
                       <>
                         <button 
+                          onClick={() => openEditModal(invoice)}
                           className="text-black hover:text-blue-600" 
                           title="Chỉnh sửa"
                         >
@@ -776,6 +795,14 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           </div>
         </div>
       )}
+
+      {/* Edit Invoice Modal */}
+      <EditInvoiceModal
+        isOpen={showEditModal}
+        onClose={closeEditModal}
+        onSuccess={handleEditSuccess}
+        invoice={selectedInvoice}
+      />
     </div>
   )
 }
