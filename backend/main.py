@@ -50,7 +50,7 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline
+from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -80,6 +80,7 @@ app.include_router(expenses_vendor.router, prefix="/api/reports/expenses", tags=
 app.include_router(general_ledger.router, prefix="/api/reports/accountant", tags=["General Ledger"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(files.router, prefix="/api/files", tags=["Files"])
+app.include_router(customer_view.router, prefix="/api", tags=["Customer View"])
 
 if __name__ == "__main__":
     uvicorn.run(

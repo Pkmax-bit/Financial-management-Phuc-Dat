@@ -23,7 +23,8 @@ import {
   Menu,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Eye
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 
@@ -99,6 +100,12 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
       href: '/reports',
       icon: BarChart3,
       description: 'Báo cáo tài chính'
+    },
+    {
+      name: 'View khách hàng',
+      href: '/customer-view',
+      icon: Eye,
+      description: 'Xem thông tin khách hàng và timeline công trình'
     },
     // Phần còn lại
     {
