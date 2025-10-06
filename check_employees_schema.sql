@@ -9,3 +9,4 @@ WHERE table_name = 'employees'
 ORDER BY ordinal_position;
 
 
+

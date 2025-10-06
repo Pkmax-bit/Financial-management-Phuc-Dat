@@ -64,6 +64,10 @@ export default function ExpensesPage() {
     setShouldOpenCreateModal(true)
   }
 
+  const handleCloseCreateModal = () => {
+    setShouldOpenCreateModal(false)
+  }
+
   const checkUser = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
@@ -514,7 +518,6 @@ export default function ExpensesPage() {
                 <ProjectExpensesTab 
                   searchTerm={searchTerm}
                   onCreateExpense={handleCreateProjectExpense}
-                  shouldOpenCreateModal={shouldOpenCreateModal}
                 />
               )}
             </div>

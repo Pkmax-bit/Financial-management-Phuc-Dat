@@ -14,3 +14,4 @@ SELECT 'Sample employees created successfully!' as status;
 SELECT COUNT(*) as employee_count FROM employees;
 
 
+

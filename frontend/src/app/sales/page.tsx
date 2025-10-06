@@ -30,6 +30,7 @@ import PaymentsTab from '@/components/sales/PaymentsTab'
 import CustomersTab from '@/components/sales/CustomersTab'
 import ProductsServicesTab from '@/components/sales/ProductsServicesTab'
 import SalesReceiptsTab from '@/components/sales/SalesReceiptsTab'
+import ComparisonTab from '@/components/sales/ComparisonTab'
 import CreateSalesReceiptModal from '@/components/sales/CreateSalesReceiptModal'
 import QuickGuideModal from '@/components/sales/QuickGuideModal'
 import { apiGet } from '@/lib/api'
@@ -553,6 +554,16 @@ export default function SalesPage() {
                 >
                   Sản phẩm & Dịch vụ
                 </button>
+                <button
+                  onClick={() => setActiveTab('comparison')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'comparison'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  So sánh
+                </button>
               </nav>
             </div>
 
@@ -571,6 +582,7 @@ export default function SalesPage() {
                       activeTab === 'invoices' ? 'Tìm kiếm hóa đơn...' : 
                       activeTab === 'customers' ? 'Tìm kiếm khách hàng...' :
                       activeTab === 'products' ? 'Tìm kiếm sản phẩm...' :
+                      activeTab === 'comparison' ? 'Tìm kiếm so sánh...' :
                       'Tìm kiếm...'
                     }
                     value={searchTerm}
@@ -623,6 +635,11 @@ export default function SalesPage() {
               )}
               {activeTab === 'products' && (
                 <ProductsServicesTab 
+                  searchTerm={searchTerm}
+                />
+              )}
+              {activeTab === 'comparison' && (
+                <ComparisonTab 
                   searchTerm={searchTerm}
                 />
               )}

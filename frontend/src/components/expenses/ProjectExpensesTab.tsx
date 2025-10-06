@@ -18,7 +18,7 @@ import {
   Target,
   BarChart3
 } from 'lucide-react'
-import CreateProjectExpenseModal from './CreateProjectExpenseModal'
+import CreateProjectExpenseDialog from './CreateProjectExpenseDialog'
 
 interface ProjectExpense {
   id: string
@@ -40,10 +40,9 @@ interface ProjectExpense {
 interface ProjectExpensesTabProps {
   searchTerm: string
   onCreateExpense: () => void
-  shouldOpenCreateModal?: boolean
 }
 
-export default function ProjectExpensesTab({ searchTerm, onCreateExpense, shouldOpenCreateModal }: ProjectExpensesTabProps) {
+export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: ProjectExpensesTabProps) {
   const [expenses, setExpenses] = useState<ProjectExpense[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -54,11 +53,6 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense, should
     fetchProjectExpenses()
   }, [])
 
-  useEffect(() => {
-    if (shouldOpenCreateModal) {
-      setShowCreateModal(true)
-    }
-  }, [shouldOpenCreateModal])
 
   const fetchProjectExpenses = async () => {
     try {
@@ -174,6 +168,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense, should
 
   const handleCreateExpense = () => {
     setShowCreateModal(true)
+    onCreateExpense()
   }
 
   const handleCloseModal = () => {
@@ -426,8 +421,8 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense, should
         </div>
       )}
 
-      {/* Create Project Expense Modal */}
-      <CreateProjectExpenseModal
+      {/* Create Project Expense Dialog */}
+      <CreateProjectExpenseDialog
         isOpen={showCreateModal}
         onClose={handleCloseModal}
         onSuccess={handleCreateSuccess}
