@@ -17,7 +17,7 @@ import {
 import { Employee } from '@/types'
 import { supabase } from '@/lib/supabase'
 import { employeeApi } from '@/lib/api'
-import Navigation from '@/components/Navigation'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import CreateEmployeeModal from '@/components/employees/CreateEmployeeModal'
 import EditEmployeeSidebar from '@/components/employees/EditEmployeeSidebar'
 import EmployeeDetailSidebar from '@/components/employees/EmployeeDetailSidebar'
@@ -271,11 +271,8 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation user={user || undefined} onLogout={handleLogout} />
-
-        {/* Main content */}
-      <div className="pl-64">
+    <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+      <div className="w-full">
         {/* Top navigation */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
@@ -796,6 +793,6 @@ export default function EmployeesPage() {
           onClose={() => setShowPositionManagerSidebar(false)}
         />
       )}
-    </div>
+    </LayoutWithSidebar>
   )
 }

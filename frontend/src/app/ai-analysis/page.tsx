@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import Navigation from '@/components/Navigation'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import AIImageAnalysis from '@/components/ai/AIImageAnalysis'
 
 export default function AIAnalysisPage() {
@@ -35,6 +35,15 @@ export default function AIAnalysisPage() {
     getUser()
   }, [router])
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Error logging out:', error)
+    }
+  }
+
   const handleExpenseSaved = (expense: any) => {
     console.log('Expense saved:', expense)
     // You can add additional logic here, like showing a success message
@@ -56,11 +65,10 @@ export default function AIAnalysisPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Navigation />
-      <div className="container mx-auto px-6 py-8">
+    <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+      <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
         <AIImageAnalysis onExpenseSaved={handleExpenseSaved} />
       </div>
-    </div>
+    </LayoutWithSidebar>
   )
 }

@@ -28,6 +28,8 @@ class Project(BaseModel):
     description: Optional[str] = None
     customer_id: Optional[str] = None
     manager_id: Optional[str] = None
+    customer_name: Optional[str] = None  # Added for display
+    manager_name: Optional[str] = None  # Added for display
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None

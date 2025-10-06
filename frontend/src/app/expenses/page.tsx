@@ -17,7 +17,7 @@ import {
   TrendingDown
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import Navigation from '@/components/Navigation'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import ExpensesTab from '@/components/expenses/ExpensesTab'
 import BillsTab from '@/components/expenses/BillsTab'
 import VendorsTab from '@/components/expenses/VendorsTab'
@@ -195,11 +195,8 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation user={user || undefined} onLogout={handleLogout} />
-      
-      <div className="pl-64">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+      <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           <div className="space-y-8">
           {/* Header */}
           <div>
@@ -524,7 +521,6 @@ export default function ExpensesPage() {
           </div>
           </div>
         </div>
-      </div>
-    </div>
+    </LayoutWithSidebar>
   )
 }

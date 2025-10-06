@@ -19,10 +19,12 @@ import {
   XCircle,
   Pause,
   X,
-  Save
+  Save,
+  BarChart3
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi } from '@/lib/api'
+import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface Project {
   id: string
@@ -103,6 +105,7 @@ export default function ProjectsTab({
   onViewProject, 
   onDeleteProject 
 }: ProjectsTabProps) {
+  const { sidebarOpen } = useSidebar()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -177,6 +180,7 @@ export default function ProjectsTab({
       // Try API first, fallback to Supabase
       try {
         const data = await projectApi.getProjects()
+        // API now returns customer_name and manager_name directly
         setProjects(data || [])
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
@@ -441,16 +445,33 @@ export default function ProjectsTab({
       </div>
 
       {/* Projects Grid */}
-      <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className={`grid gap-6 ${
+          sidebarOpen 
+            ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-8'
+            : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10'
+        }`}>
         {sortedProjects.map((project) => {
           const StatusIcon = statusIcons[project.status]
           return (
-            <div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group">
-              <div className="p-4">
-                <div className="flex items-start justify-between mb-5 gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="p-2 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg group-hover:from-blue-200 group-hover:to-blue-300 transition-colors flex-shrink-0">
+             <div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group relative">
+               {/* Custom Tooltip */}
+               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
+                 <div className="text-center">
+                   <div className="font-semibold">{project.name}</div>
+                   <div className="text-gray-300 text-xs mt-1">
+                     {project.customer_name || 'Chưa xác định khách hàng'}
+                   </div>
+                   <div className="text-xs text-gray-400 mt-1">
+                     {project.project_code} • {project.progress}%
+                   </div>
+                 </div>
+                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+               </div>
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4 gap-3">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="p-2.5 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg group-hover:from-blue-200 group-hover:to-blue-300 transition-colors flex-shrink-0">
                       <FolderOpen className="h-5 w-5 text-blue-600" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -470,88 +491,65 @@ export default function ProjectsTab({
                       >
                         {project.name}
                       </h3>
-                      <p className="text-xs text-black font-medium mt-1">#{project.project_code}</p>
+                      <p className="text-sm text-gray-600 font-medium mt-1">{project.customer_name || 'Khách hàng'}</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-1 flex-shrink-0">
+                  <div className="flex items-start gap-1.5 flex-shrink-0">
                     <button
-                      onClick={() => onViewProject(project)}
-                      className="p-1.5 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
-                      title="Xem chi tiết"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleQuickSave(project)}
+                      onClick={() => window.open(`/projects/${project.id}/detail`, '_blank')}
                       className="p-1.5 text-black hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 hover:scale-110"
-                      title="Lưu nhanh"
+                      title="Xem chi tiết tài chính"
                     >
-                      <Save className="h-3.5 w-3.5" />
+                      <BarChart3 className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => onEditProject(project)}
                       className="p-1.5 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Chỉnh sửa dự án"
                     >
-                      <Edit className="h-3.5 w-3.5" />
+                      <Edit className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(project)}
                       className="p-1.5 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xóa dự án"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <StatusIcon className="h-3 w-3 text-black" />
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[project.status]} shadow-sm`}>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[project.status]}`}>
                       {getStatusText(project.status)}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${priorityColors[project.priority]} shadow-sm`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[project.priority]}`}>
                       {getPriorityText(project.priority)}
                     </span>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-black bg-blue-50 rounded-lg p-2">
-                      <Users className="h-3 w-3 text-blue-600" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-semibold truncate block">{project.customer_name || 'Không có khách hàng'}</span>
-                        {project.customer_name && (
-                          <span className="text-blue-600 text-xs">Khách hàng</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-black bg-gray-50 rounded-lg p-2">
-                      <Calendar className="h-3 w-3 text-green-500" />
-                      <span className="font-medium">{new Date(project.start_date).toLocaleDateString()}</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                      <Calendar className="h-3 w-3" />
+                      <span>{new Date(project.start_date).toLocaleDateString()}</span>
                     </div>
                     {project.budget && (
-                      <div className="flex items-center gap-2 text-xs text-black bg-gray-50 rounded-lg p-2">
-                        <DollarSign className="h-3 w-3 text-emerald-500" />
-                        <span className="font-medium">VND {project.budget.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {project.manager_name && (
-                      <div className="flex items-center gap-2 text-xs text-black bg-gray-50 rounded-lg p-2">
-                        <Users className="h-3 w-3 text-purple-500" />
-                        <span className="font-medium truncate">Quản lý: {project.manager_name}</span>
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <DollarSign className="h-3 w-3" />
+                        <span>VND {project.budget.toLocaleString()}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className="text-black font-medium">Tiến độ</span>
-                      <span className="font-semibold text-gray-900">{project.progress}%</span>
+                  <div className="pt-2 border-t border-gray-100">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-600">Tiến độ</span>
+                      <span className="font-medium text-gray-900">{project.progress}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 shadow-inner">
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div 
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-700 shadow-sm"
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-1.5 rounded-full transition-all duration-700"
                         style={{ width: `${project.progress}%` }}
                       ></div>
                     </div>

@@ -530,9 +530,7 @@ export default function AIImageAnalysis() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Main content */}
-      <div className="pl-64">
+    <div className="w-full">
         {/* Top navigation */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
@@ -1308,7 +1306,6 @@ export default function AIImageAnalysis() {
             </div>
           </div>
         </div>
-      </div>
       
       {/* Camera Setup Guide Modal */}
       {showCameraGuide && (

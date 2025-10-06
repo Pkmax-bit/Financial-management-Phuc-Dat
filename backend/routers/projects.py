@@ -59,7 +59,11 @@ async def get_projects(
     try:
         supabase = get_supabase_client()
         
-        query = supabase.table("projects").select("*")
+        query = supabase.table("projects").select("""
+            *,
+            customers:customer_id(name),
+            employees:manager_id(first_name, last_name)
+        """)
         
         # Apply filters
         if search:
@@ -75,7 +79,15 @@ async def get_projects(
         # Apply pagination
         result = query.range(skip, skip + limit - 1).execute()
         
-        return [Project(**project) for project in result.data]
+        # Process data to add customer_name and manager_name
+        processed_projects = []
+        for project in result.data:
+            project_data = dict(project)
+            project_data['customer_name'] = project.get('customers', {}).get('name') if project.get('customers') else None
+            project_data['manager_name'] = f"{project.get('employees', {}).get('first_name', '')} {project.get('employees', {}).get('last_name', '')}".strip() if project.get('employees') else None
+            processed_projects.append(Project(**project_data))
+        
+        return processed_projects
         
     except Exception as e:
         raise HTTPException(
@@ -251,7 +263,7 @@ async def update_project(
             )
         
         # Update project
-        update_data = project_update.dict(exclude_unset=True)
+        update_data = project_update.model_dump(exclude_unset=True)
         update_data["updated_at"] = datetime.utcnow().isoformat()
         
         result = supabase.table("projects").update(update_data).eq("id", project_id).execute()

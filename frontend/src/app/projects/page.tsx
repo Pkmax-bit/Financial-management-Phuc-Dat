@@ -16,7 +16,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import Navigation from '@/components/Navigation'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import ProjectsTab from '@/components/projects/ProjectsTab'
 import CreateProjectModal from '@/components/projects/CreateProjectModal'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
@@ -165,10 +165,8 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <LayoutWithSidebar user={user || undefined} onLogout={() => router.push('/login')}>
+      <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -303,6 +301,6 @@ export default function ProjectsPage() {
         onEdit={handleEditProject}
         onDelete={handleDeleteProject}
       />
-    </div>
+    </LayoutWithSidebar>
   )
 }

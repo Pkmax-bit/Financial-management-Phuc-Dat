@@ -50,7 +50,7 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, sales_customer, expenses_vendor, general_ledger, project_reports
+from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -66,6 +66,7 @@ app.include_router(purchase_orders.router, tags=["Purchase Orders"])
 app.include_router(expense_claims.router, tags=["Expense Claims"])
 app.include_router(budgeting.router, tags=["Budgeting"])
 app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
+app.include_router(projects_financial.router, prefix="/api/projects", tags=["Project Financial"])
 app.include_router(project_reports.router, prefix="/api/reports", tags=["Project Reports"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(pl_report.router, prefix="/api/reports/financial", tags=["P&L Reports"])

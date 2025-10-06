@@ -32,7 +32,7 @@ import {
   Eye
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import Navigation from '@/components/Navigation'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import PLReportModal from '@/components/reports/PLReportModal'
 import BalanceSheetModal from '@/components/reports/BalanceSheetModal'
 import CashFlowModal from '@/components/reports/CashFlowModal'
@@ -136,6 +136,15 @@ export default function ReportsPage() {
     getUser()
   }, [])
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Error logging out:', error)
+    }
+  }
+
     const handleReportClick = (reportId: string) => {
     switch (reportId) {
       case 'pl-report':
@@ -182,10 +191,8 @@ export default function ReportsPage() {
     }
 
     return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+      <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-4">
@@ -382,6 +389,6 @@ export default function ReportsPage() {
           endDate={new Date().toISOString().split('T')[0]}
       />
       )}
-    </div>
+    </LayoutWithSidebar>
   )
 }
