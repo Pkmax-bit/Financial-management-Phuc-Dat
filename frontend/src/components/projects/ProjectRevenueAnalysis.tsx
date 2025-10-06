@@ -40,14 +40,14 @@ interface ProjectRevenueAnalysisProps {
 }
 
 const typeConfig = {
-  invoice: {
+  invoices: {
     label: 'Hóa đơn',
     icon: FileText,
     color: 'bg-blue-500',
     bgColor: 'bg-blue-50',
     textColor: 'text-blue-700'
   },
-  sales_receipt: {
+  sales_receipts: {
     label: 'Biên lai bán hàng',
     icon: Receipt,
     color: 'bg-green-500',

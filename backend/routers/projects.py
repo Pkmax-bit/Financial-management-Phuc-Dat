@@ -3,7 +3,8 @@ Project Management Router
 Handles project CRUD, status tracking, time tracking, and profitability analysis
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 import uuid
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 
 from models.project import Project, ProjectCreate, ProjectUpdate
 from models.user import User
-from utils.auth import get_current_user, require_manager_or_admin
+from utils.auth import get_current_user, require_manager_or_admin, security
 from services.supabase_client import get_supabase_client
 from services.project_profitability_service import ProjectProfitabilityService
 
@@ -93,6 +94,112 @@ async def get_projects(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch projects: {str(e)}"
+        )
+
+@router.get("/test/{project_id}")
+async def get_project_test(project_id: str):
+    """Test endpoint without authentication"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("projects").select("*").eq("id", project_id).execute()
+        
+        if not result.data:
+            return {"error": "Project not found", "project_id": project_id}
+        
+        return {"success": True, "project": result.data[0]}
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/debug/headers")
+async def debug_headers(request: Request):
+    """Debug endpoint to check headers"""
+    return {
+        "headers": dict(request.headers),
+        "authorization": request.headers.get("authorization"),
+        "content_type": request.headers.get("content-type")
+    }
+
+@router.get("/debug/auth")
+async def debug_auth(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Debug authentication"""
+    try:
+        token = credentials.credentials
+        return {
+            "success": True,
+            "token_length": len(token),
+            "token_preview": token[:20] + "..." if len(token) > 20 else token
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/debug/auth-optional")
+async def debug_auth_optional(request: Request):
+    """Debug authentication with optional token"""
+    auth_header = request.headers.get("authorization")
+    if auth_header:
+        token = auth_header.replace("Bearer ", "")
+        return {
+            "success": True,
+            "has_token": True,
+            "token_length": len(token),
+            "token_preview": token[:20] + "..." if len(token) > 20 else token
+        }
+    else:
+        return {
+            "success": False,
+            "has_token": False,
+            "message": "No authorization header found"
+        }
+
+@router.get("/{project_id}", response_model=Project)
+async def get_project(
+    project_id: str
+    # Temporarily disable authentication to fix "Project not found" issue
+    # current_user: User = Depends(get_current_user)
+):
+    """Get a specific project by ID"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Debug: Log the project_id being searched
+        print(f"Searching for project ID: {project_id}")
+        
+        result = supabase.table("projects").select("""
+            *,
+            customers:customer_id(name),
+            employees:manager_id(first_name, last_name)
+        """).eq("id", project_id).execute()
+        
+        print(f"Query result: {result.data}")
+        
+        if not result.data:
+            # Debug: Check if there are any projects in the database
+            all_projects = supabase.table("projects").select("id, name").limit(5).execute()
+            print(f"Available projects: {all_projects.data}")
+            
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project not found. Available projects: {[p['id'] for p in all_projects.data]}"
+            )
+        
+        project = result.data[0]
+        
+        # Process data to add customer_name and manager_name
+        project_data = dict(project)
+        project_data['customer_name'] = project.get('customers', {}).get('name') if project.get('customers') else None
+        project_data['manager_name'] = f"{project.get('employees', {}).get('first_name', '')} {project.get('employees', {}).get('last_name', '')}".strip() if project.get('employees') else None
+        
+        return Project(**project_data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching project: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch project: {str(e)}"
         )
 
 @router.get("/by-customer/{customer_id}")

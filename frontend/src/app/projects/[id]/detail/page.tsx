@@ -23,10 +23,12 @@ import {
   Pause
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import Navigation from '@/components/Navigation'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import ProjectFinancialDashboard from '@/components/projects/ProjectFinancialDashboard'
 import ProjectCostBreakdown from '@/components/projects/ProjectCostBreakdown'
 import ProjectRevenueAnalysis from '@/components/projects/ProjectRevenueAnalysis'
+import ProjectTeam from '@/components/projects/ProjectTeam'
+import ProjectTimeline from '@/components/projects/ProjectTimeline'
 
 interface Project {
   id: string
@@ -171,34 +173,45 @@ export default function ProjectDetailPage() {
     })
   }
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Error logging out:', error)
+    }
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+        <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
         </div>
-      </div>
+      </LayoutWithSidebar>
     )
   }
 
   if (error || !project) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-600">{error || 'Project not found'}</p>
-            <button
-              onClick={() => router.push('/projects')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Quay lại danh sách dự án
-            </button>
+      <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+        <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <p className="text-red-600">{error || 'Project not found'}</p>
+              <button
+                onClick={() => router.push('/projects')}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Quay lại danh sách dự án
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </LayoutWithSidebar>
     )
   }
 
@@ -207,26 +220,43 @@ export default function ProjectDetailPage() {
   const StatusIcon = statusInfo.icon
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+      <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-4 mb-6">
             <button
               onClick={() => router.push('/projects')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
             >
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
+              <ArrowLeft className="h-4 w-4" />
+              <span className="text-sm font-medium">Quay lại</span>
             </button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
-              <p className="text-gray-600">#{project.project_code}</p>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}>
+                  {statusInfo.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <span className="font-mono bg-gray-100 px-2 py-1 rounded">#{project.project_code}</span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  {formatDate(project.start_date)}
+                </span>
+                {project.end_date && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    {formatDate(project.end_date)}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <Edit className="h-5 w-5 text-gray-600" />
+              <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <Edit className="h-4 w-4" />
+                <span className="text-sm font-medium">Chỉnh sửa</span>
               </button>
               <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <Settings className="h-5 w-5 text-gray-600" />
@@ -234,40 +264,77 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* Project Status and Info */}
-          <div className="flex flex-wrap items-center gap-4 mb-6">
-            <div className="flex items-center gap-2">
-              <StatusIcon className="h-5 w-5 text-gray-600" />
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}>
-                {statusInfo.label}
-              </span>
-            </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${priorityInfo.color}`}>
-              {priorityInfo.label}
-            </span>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Calendar className="h-4 w-4" />
-              <span>Bắt đầu: {formatDate(project.start_date)}</span>
-            </div>
-            {project.end_date && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Calendar className="h-4 w-4" />
-                <span>Kết thúc: {formatDate(project.end_date)}</span>
+          {/* Progress and Priority Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {/* Progress Card */}
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Tiến độ</h3>
+                <span className="text-2xl font-bold text-blue-600">{project.progress}%</span>
               </div>
-            )}
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between text-sm mb-2">
-              <span className="text-gray-600">Tiến độ dự án</span>
-              <span className="font-medium">{project.progress}%</span>
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${project.progress}%` }}
+                ></div>
+              </div>
+              <p className="text-sm text-gray-600">
+                {project.progress < 25 ? 'Dự án mới bắt đầu' :
+                 project.progress < 50 ? 'Đang triển khai' :
+                 project.progress < 75 ? 'Tiến triển tốt' :
+                 project.progress < 100 ? 'Gần hoàn thành' : 'Đã hoàn thành'}
+              </p>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div 
-                className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                style={{ width: `${project.progress}%` }}
-              ></div>
+
+            {/* Priority Card */}
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`p-2 rounded-lg ${priorityInfo.color.replace('text-', 'bg-').replace('100', '50')}`}>
+                  <Target className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Ưu tiên</h3>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${priorityInfo.color}`}>
+                    {priorityInfo.label}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                {project.priority === 'urgent' ? 'Cần xử lý ngay lập tức' :
+                 project.priority === 'high' ? 'Ưu tiên cao' :
+                 project.priority === 'medium' ? 'Ưu tiên trung bình' : 'Ưu tiên thấp'}
+              </p>
+            </div>
+
+            {/* Budget Card */}
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-lg bg-green-50">
+                  <DollarSign className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Ngân sách</h3>
+                  <p className="text-sm text-gray-600">
+                    {project.budget ? formatCurrency(project.budget) : 'Chưa xác định'}
+                  </p>
+                </div>
+              </div>
+              {project.actual_cost && (
+                <div className="text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Đã chi:</span>
+                    <span className="font-medium">{formatCurrency(project.actual_cost)}</span>
+                  </div>
+                  {project.budget && (
+                    <div className="flex justify-between mt-1">
+                      <span className="text-gray-600">Còn lại:</span>
+                      <span className={`font-medium ${project.actual_cost > project.budget ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(project.budget - project.actual_cost)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -282,32 +349,35 @@ export default function ProjectDetailPage() {
 
         {/* Navigation Tabs */}
         <div className="mb-8">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
-            {[
-              { id: 'overview', label: 'Tổng quan', icon: BarChart3 },
-              { id: 'financials', label: 'Tài chính', icon: DollarSign },
-              { id: 'costs', label: 'Chi phí', icon: TrendingDown },
-              { id: 'revenue', label: 'Doanh thu', icon: TrendingUp },
-              { id: 'timeline', label: 'Timeline', icon: Calendar },
-              { id: 'team', label: 'Đội ngũ', icon: Users },
-              { id: 'documents', label: 'Tài liệu', icon: FileText }
-            ].map((tab) => {
-              const Icon = tab.icon
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-white shadow-sm text-blue-600'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              )
-            })}
+          <div className="bg-white rounded-xl shadow-sm border p-2">
+            <div className="flex space-x-1 overflow-x-auto">
+              {[
+                { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
+                { id: 'financials', label: 'Tài chính', icon: DollarSign, color: 'green' },
+                { id: 'costs', label: 'Chi phí', icon: TrendingDown, color: 'red' },
+                { id: 'revenue', label: 'Doanh thu', icon: TrendingUp, color: 'purple' },
+                { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
+                { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
+                { id: 'documents', label: 'Tài liệu', icon: FileText, color: 'gray' }
+              ].map((tab) => {
+                const Icon = tab.icon
+                const isActive = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
+                      isActive
+                        ? `bg-${tab.color}-50 text-${tab.color}-700 border border-${tab.color}-200 shadow-sm`
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className={`h-4 w-4 ${isActive ? `text-${tab.color}-600` : ''}`} />
+                    <span className="whitespace-nowrap">{tab.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -318,35 +388,48 @@ export default function ProjectDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Project Info */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-lg shadow-sm border p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin dự án</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">Khách hàng:</span>
-                        <span className="font-medium">{project.customer_name || 'Chưa có'}</span>
+                <div className="bg-white rounded-xl shadow-sm border p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <BarChart3 className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900">Thông tin dự án</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Users className="h-5 w-5 text-blue-600" />
+                          <span className="font-medium text-gray-900">Khách hàng</span>
+                        </div>
+                        <p className="text-lg font-semibold text-gray-800">{project.customer_name || 'Chưa có'}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">Quản lý:</span>
-                        <span className="font-medium">{project.manager_name || 'Chưa có'}</span>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Users className="h-5 w-5 text-green-600" />
+                          <span className="font-medium text-gray-900">Quản lý dự án</span>
+                        </div>
+                        <p className="text-lg font-semibold text-gray-800">{project.manager_name || 'Chưa có'}</p>
                       </div>
                     </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">Loại thanh toán:</span>
-                        <span className="font-medium">
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Clock className="h-5 w-5 text-purple-600" />
+                          <span className="font-medium text-gray-900">Loại thanh toán</span>
+                        </div>
+                        <p className="text-lg font-semibold text-gray-800">
                           {project.billing_type === 'fixed' ? 'Cố định' : 
                            project.billing_type === 'hourly' ? 'Theo giờ' : 'Theo milestone'}
-                        </span>
+                        </p>
                       </div>
                       {project.hourly_rate && (
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm text-gray-600">Giá/giờ:</span>
-                          <span className="font-medium">{formatCurrency(project.hourly_rate)}</span>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <DollarSign className="h-5 w-5 text-green-600" />
+                            <span className="font-medium text-gray-900">Giá/giờ</span>
+                          </div>
+                          <p className="text-lg font-semibold text-gray-800">{formatCurrency(project.hourly_rate)}</p>
                         </div>
                       )}
                     </div>
@@ -354,69 +437,155 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {/* Budget Info */}
-                {(project.budget || project.actual_cost) && (
-                  <div className="bg-white rounded-lg shadow-sm border p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin ngân sách</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {project.budget && (
-                        <div className="text-center p-4 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-gray-600 mb-1">Ngân sách dự kiến</p>
-                          <p className="text-2xl font-bold text-blue-600">{formatCurrency(project.budget)}</p>
-                        </div>
-                      )}
-                      {project.actual_cost && (
-                        <div className="text-center p-4 bg-green-50 rounded-lg">
-                          <p className="text-sm text-gray-600 mb-1">Chi phí thực tế</p>
-                          <p className="text-2xl font-bold text-green-600">{formatCurrency(project.actual_cost)}</p>
-                        </div>
-                      )}
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin ngân sách</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {project.budget && (
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-gray-600 mb-1">Ngân sách dự kiến</p>
+                        <p className="text-2xl font-bold text-blue-600">{formatCurrency(project.budget)}</p>
+                      </div>
+                    )}
+                    {project.actual_cost && (
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <p className="text-sm text-gray-600 mb-1">Chi phí thực tế</p>
+                        <p className="text-2xl font-bold text-green-600">{formatCurrency(project.actual_cost)}</p>
+                      </div>
+                    )}
+                    {project.budget && project.actual_cost && (
+                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                        <p className="text-sm text-gray-600 mb-1">Chênh lệch</p>
+                        <p className={`text-2xl font-bold ${project.actual_cost > project.budget ? 'text-red-600' : 'text-green-600'}`}>
+                          {formatCurrency(project.actual_cost - project.budget)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Project Details */}
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Chi tiết dự án</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Mã dự án</label>
+                        <p className="text-lg font-mono text-gray-900">#{project.project_code}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tên dự án</label>
+                        <p className="text-lg text-gray-900">{project.name}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+                        <p className="text-gray-900">{project.description || 'Không có mô tả'}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Ngày bắt đầu</label>
+                        <p className="text-gray-900">{formatDate(project.start_date)}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Ngày kết thúc</label>
+                        <p className="text-gray-900">{project.end_date ? formatDate(project.end_date) : 'Chưa xác định'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Ngày tạo</label>
+                        <p className="text-gray-900">{formatDate(project.created_at)}</p>
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Quick Stats */}
               <div className="space-y-6">
-                <div className="bg-white rounded-lg shadow-sm border p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Thống kê nhanh</h3>
+                <div className="bg-white rounded-xl shadow-sm border p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-green-50 rounded-lg">
+                      <Activity className="h-5 w-5 text-green-600" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900">Thống kê nhanh</h3>
+                  </div>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Trạng thái</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
-                        {statusInfo.label}
-                      </span>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">Trạng thái</span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}>
+                          {statusInfo.label}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Ưu tiên</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityInfo.color}`}>
-                        {priorityInfo.label}
-                      </span>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">Ưu tiên</span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${priorityInfo.color}`}>
+                          {priorityInfo.label}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Tiến độ</span>
-                      <span className="font-medium">{project.progress}%</span>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">Tiến độ</span>
+                        <span className="text-lg font-bold text-blue-600">{project.progress}%</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Ngày tạo</span>
-                      <span className="text-sm">{formatDate(project.created_at)}</span>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">Loại thanh toán</span>
+                        <span className="text-sm font-semibold text-gray-800">
+                          {project.billing_type === 'fixed' ? 'Cố định' : 
+                           project.billing_type === 'hourly' ? 'Theo giờ' : 'Theo milestone'}
+                        </span>
+                      </div>
+                    </div>
+                    {project.hourly_rate && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-600">Giá/giờ</span>
+                          <span className="text-sm font-semibold text-gray-800">{formatCurrency(project.hourly_rate)}</span>
+                        </div>
+                      </div>
+                    )}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">Ngày tạo</span>
+                        <span className="text-sm font-semibold text-gray-800">{formatDate(project.created_at)}</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">Cập nhật cuối</span>
+                        <span className="text-sm font-semibold text-gray-800">{formatDate(project.updated_at)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm border p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Hành động</h3>
-                  <div className="space-y-2">
-                    <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg transition-colors">
-                      Chỉnh sửa dự án
+                <div className="bg-white rounded-xl shadow-sm border p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-purple-50 rounded-lg">
+                      <Settings className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900">Hành động</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-blue-50 rounded-lg transition-colors group">
+                      <Edit className="h-4 w-4 text-blue-600 group-hover:text-blue-700" />
+                      <span className="font-medium text-gray-900">Chỉnh sửa dự án</span>
                     </button>
-                    <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg transition-colors">
-                      Thêm thành viên
+                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-green-50 rounded-lg transition-colors group">
+                      <Users className="h-4 w-4 text-green-600 group-hover:text-green-700" />
+                      <span className="font-medium text-gray-900">Thêm thành viên</span>
                     </button>
-                    <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg transition-colors">
-                      Tạo báo cáo
+                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-orange-50 rounded-lg transition-colors group">
+                      <BarChart3 className="h-4 w-4 text-orange-600 group-hover:text-orange-700" />
+                      <span className="font-medium text-gray-900">Tạo báo cáo</span>
                     </button>
-                    <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg transition-colors">
-                      Xuất dữ liệu
+                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 rounded-lg transition-colors group">
+                      <FileText className="h-4 w-4 text-gray-600 group-hover:text-gray-700" />
+                      <span className="font-medium text-gray-900">Xuất dữ liệu</span>
                     </button>
                   </div>
                 </div>
@@ -441,45 +610,12 @@ export default function ProjectDetailPage() {
 
           {/* Timeline Tab */}
           {activeTab === 'timeline' && (
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline dự án</h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-lg">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <div>
-                    <p className="font-medium">Dự án được tạo</p>
-                    <p className="text-sm text-gray-600">{formatDate(project.created_at)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 p-4 bg-green-50 rounded-lg">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <div>
-                    <p className="font-medium">Dự án bắt đầu</p>
-                    <p className="text-sm text-gray-600">{formatDate(project.start_date)}</p>
-                  </div>
-                </div>
-                {project.end_date && (
-                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                    <div>
-                      <p className="font-medium">Dự án kết thúc</p>
-                      <p className="text-sm text-gray-600">{formatDate(project.end_date)}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <ProjectTimeline projectId={projectId} projectName={project.name} />
           )}
 
           {/* Team Tab */}
           {activeTab === 'team' && (
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Đội ngũ dự án</h3>
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Chức năng quản lý đội ngũ sẽ được phát triển trong phiên bản tiếp theo</p>
-              </div>
-            </div>
+            <ProjectTeam projectId={projectId} projectName={project.name} />
           )}
 
           {/* Documents Tab */}
@@ -494,6 +630,6 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
-    </div>
+    </LayoutWithSidebar>
   )
 }

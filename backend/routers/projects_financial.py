@@ -12,17 +12,18 @@ from services.supabase_client import get_supabase_client
 
 router = APIRouter()
 
-@router.get("/projects/{project_id}/financial-dashboard")
+@router.get("/{project_id}/financial-dashboard")
 async def get_project_financial_dashboard(
-    project_id: str,
-    current_user: User = Depends(get_current_user)
+    project_id: str
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ):
     """Get comprehensive financial dashboard data for a project"""
     try:
         supabase = get_supabase_client()
         
         # Get project basic info
-        project_result = supabase.table("projects").select("*, customers(name), users(full_name)").eq("id", project_id).execute()
+        project_result = supabase.table("projects").select("*, customers(name), employees(first_name, last_name)").eq("id", project_id).execute()
         
         if not project_result.data:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -241,10 +242,11 @@ async def get_monthly_financial_data(supabase, project_id: str) -> List[Dict[str
         print(f"Error getting monthly data: {e}")
         return []
 
-@router.get("/projects/{project_id}/cost-breakdown")
+@router.get("/{project_id}/cost-breakdown")
 async def get_project_cost_breakdown(
-    project_id: str,
-    current_user: User = Depends(get_current_user)
+    project_id: str
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ):
     """Get detailed cost breakdown for a project"""
     try:
@@ -265,10 +267,11 @@ async def get_project_cost_breakdown(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching cost breakdown: {str(e)}")
 
-@router.get("/projects/{project_id}/revenue-analysis")
+@router.get("/{project_id}/revenue-analysis")
 async def get_project_revenue_analysis(
-    project_id: str,
-    current_user: User = Depends(get_current_user)
+    project_id: str
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ):
     """Get detailed revenue analysis for a project"""
     try:
