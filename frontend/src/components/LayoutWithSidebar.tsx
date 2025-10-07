@@ -120,11 +120,11 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
             <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
             
             {/* Navigation items with padding for scroll indicators */}
-            <div className="pt-2 pb-2">
+            <div className="pt-1 pb-1">
             {Object.entries(navigationByCategory).map(([category, items]) => (
-              <div key={category} className="mb-4">
+              <div key={category} className="mb-2">
                 {/* Category header */}
-                <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   {getCategoryDisplayName(category)}
                 </div>
                 
@@ -137,14 +137,14 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                     <button
                       key={item.name}
                       onClick={() => handleNavigation(item.href)}
-                      className={`w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
+                      className={`w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
                         isActive
                           ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
                           : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                       title={item.description}
                     >
-                      <Icon className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                      <Icon className={`mr-3 h-4 w-4 flex-shrink-0 ${
                         isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
                       }`} />
                       <span className="truncate">{item.name}</span>
@@ -153,45 +153,50 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                 })}
               </div>
             ))}
+            
+            {/* Support Center - Moved into scrollable area */}
+            <div className="mt-4 mb-2">
+              <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Hỗ trợ
+              </div>
+              <div className="px-3">
+                <SupportCenterButton />
+              </div>
+            </div>
             </div>
           </nav>
 
-          {/* User Section */}
+          {/* User Section - Moved down */}
           {user && (
-            <div className="border-t border-gray-200 p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-gray-700">
+            <div className="border-t border-gray-200 p-3 bg-gray-50">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-xs font-bold text-white">
                     {user.full_name?.charAt(0) || 'U'}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-xs font-semibold text-gray-900 truncate">
                     {user.full_name || 'User'}
                   </p>
-                  <div className="flex items-center space-x-2">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(userRole)} text-white`}>
+                  <div className="flex items-center space-x-1 mt-0.5">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(userRole)} text-white shadow-sm`}>
                       {getRoleDisplayName(userRole)}
                     </span>
                   </div>
                 </div>
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    className="flex items-center justify-center px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200"
+                    title="Đăng xuất"
+                  >
+                    <LogOut className="h-3 w-3" />
+                  </button>
+                )}
               </div>
-              {onLogout && (
-                <button
-                  onClick={onLogout}
-                  className="mt-3 w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                >
-                  <LogOut className="mr-3 h-4 w-4" />
-                  Đăng xuất
-                </button>
-              )}
             </div>
           )}
-
-          {/* Support Center */}
-          <div className="border-t border-gray-200 p-4">
-            <SupportCenterButton />
-          </div>
         </div>
 
         {/* Toggle Button */}

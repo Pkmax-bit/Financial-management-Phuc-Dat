@@ -26,6 +26,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
+import { getRoleDisplayName, getRoleColor, type UserRole } from '@/utils/rolePermissions'
 
 interface NavigationWithToggleProps {
   user?: {
@@ -40,6 +41,8 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  
+  const userRole = (user?.role?.toLowerCase() || 'customer') as UserRole
 
   const navigation = [
     {
@@ -185,43 +188,50 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
               </button>
             )
           })}
+          
+          {/* Support Center - Moved into scrollable area */}
+          <div className="mt-4 mb-2">
+            <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Hỗ trợ
+            </div>
+            <div className="px-3">
+              <SupportCenterButton />
+            </div>
+          </div>
           </div>
         </nav>
 
         {/* User Section */}
         {user && (
-          <div className="border-t border-gray-200 p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-gray-700">
+          <div className="border-t border-gray-200 p-3 bg-gray-50">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                <span className="text-xs font-bold text-white">
                   {user.full_name?.charAt(0) || 'U'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-xs font-semibold text-gray-900 truncate">
                   {user.full_name || 'User'}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {user.role || 'User'}
-                </p>
+                <div className="flex items-center space-x-1 mt-0.5">
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(userRole)} text-white shadow-sm`}>
+                    {getRoleDisplayName(userRole)}
+                  </span>
+                </div>
               </div>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="flex items-center justify-center px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200"
+                  title="Đăng xuất"
+                >
+                  <LogOut className="h-3 w-3" />
+                </button>
+              )}
             </div>
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="mt-3 w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                <LogOut className="mr-3 h-4 w-4" />
-                Đăng xuất
-              </button>
-            )}
           </div>
         )}
-
-        {/* Support Center */}
-        <div className="border-t border-gray-200 p-4">
-          <SupportCenterButton />
-        </div>
       </div>
 
       {/* Toggle Button */}
