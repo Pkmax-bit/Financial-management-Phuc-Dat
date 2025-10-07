@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
-from services.supabase_client import get_supabase
+from services.supabase_client import get_supabase_client
 from utils.auth import get_current_user
 from models.user import User
 
@@ -10,7 +10,7 @@ router = APIRouter()
 async def get_customers_with_stats(current_user: User = Depends(get_current_user)):
     """Get all customers with project statistics"""
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_client()
         
         # Get customers with project counts and total values
         query = supabase.table("customers").select("""
@@ -50,7 +50,7 @@ async def get_customers_with_stats(current_user: User = Depends(get_current_user
 async def get_customer_details(customer_id: str, current_user: User = Depends(get_current_user)):
     """Get detailed customer information"""
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_client()
         
         # Get customer details
         customer_result = supabase.table("customers").select("*").eq("id", customer_id).execute()
@@ -100,7 +100,7 @@ async def get_customer_details(customer_id: str, current_user: User = Depends(ge
 async def get_customer_projects(customer_id: str, current_user: User = Depends(get_current_user)):
     """Get all projects for a specific customer"""
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_client()
         
         # Get projects with manager information
         result = supabase.table("projects").select("""
@@ -130,7 +130,7 @@ async def get_customer_projects(customer_id: str, current_user: User = Depends(g
 async def get_customer_timeline(customer_id: str, current_user: User = Depends(get_current_user)):
     """Get timeline entries for all customer projects"""
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_client()
         
         # First get all project IDs for this customer
         projects_result = supabase.table("projects").select("id").eq("customer_id", customer_id).execute()
@@ -185,7 +185,7 @@ async def get_customer_timeline(customer_id: str, current_user: User = Depends(g
 async def get_customer_timeline_images(customer_id: str, current_user: User = Depends(get_current_user)):
     """Get all images from customer timeline"""
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_client()
         
         # First get all project IDs for this customer
         projects_result = supabase.table("projects").select("id").eq("customer_id", customer_id).execute()
@@ -231,7 +231,7 @@ async def get_customer_timeline_images(customer_id: str, current_user: User = De
 async def get_customer_statistics(customer_id: str, current_user: User = Depends(get_current_user)):
     """Get comprehensive statistics for a customer"""
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_client()
         
         # Get customer projects
         projects_result = supabase.table("projects").select("*").eq("customer_id", customer_id).execute()

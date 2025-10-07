@@ -63,6 +63,39 @@ async def get_customers_public():
             "customers": []
         }
 
+@router.get("/public-list")
+async def get_customers_public_list():
+    """Public endpoint to get customers list without authentication - compatible with frontend API"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get basic customer info without authentication
+        result = supabase.table("customers").select("""
+            id,
+            customer_code,
+            name,
+            email,
+            type,
+            status,
+            created_at
+        """).limit(100).execute()
+        
+        return {
+            "message": "Customers fetched successfully (public)",
+            "customers_count": len(result.data) if result.data else 0,
+            "customers": result.data or [],
+            "status": "success"
+        }
+        
+    except Exception as e:
+        return {
+            "message": f"Error fetching customers: {str(e)}",
+            "customers_count": 0,
+            "customers": [],
+            "status": "error"
+        }
+
+
 @router.get("/", response_model=List[Customer])
 async def get_customers(
     skip: int = Query(0, ge=0),
@@ -96,7 +129,7 @@ async def get_customers(
         customers_with_level = []
         for customer in result.data:
             customer_dict = dict(customer)
-            customer_dict["level"] = calculate_customer_level(customer["id"])
+            customer_dict["level"] = await calculate_customer_level(customer["id"])
             customers_with_level.append(customer_dict)
         
         return [Customer(**customer) for customer in customers_with_level]
@@ -125,7 +158,7 @@ async def get_customer(
             )
         
         customer_data = result.data[0]
-        customer_data["level"] = calculate_customer_level(customer_id)
+        customer_data["level"] = await calculate_customer_level(customer_id)
         
         return Customer(**customer_data)
         
@@ -233,7 +266,7 @@ async def update_customer(
         
         if result.data:
             customer_data = result.data[0]
-            customer_data["level"] = calculate_customer_level(customer_id)
+            customer_data["level"] = await calculate_customer_level(customer_id)
             return Customer(**customer_data)
         
         raise HTTPException(
@@ -393,7 +426,7 @@ async def get_customer_revenue(
             "total_revenue": total_revenue,
             "monthly_revenue": monthly_revenue,
             "invoice_count": len(result.data),
-            "customer_level": calculate_customer_level(customer_id)
+            "customer_level": await calculate_customer_level(customer_id)
         }
         
     except Exception as e:
@@ -439,7 +472,7 @@ async def get_customer_stats(current_user: User = Depends(get_current_user)):
             detail=f"Failed to fetch customer stats: {str(e)}"
         )
 
-def calculate_customer_level(customer_id: str) -> str:
+async def calculate_customer_level(customer_id: str) -> str:
     """Calculate customer level based on total revenue"""
     try:
         supabase = get_supabase_client()
@@ -447,7 +480,7 @@ def calculate_customer_level(customer_id: str) -> str:
         # Get total revenue from paid invoices
         result = supabase.table("invoices").select("total_amount").eq("customer_id", customer_id).eq("status", "paid").execute()
         
-        total_revenue = sum(invoice["total_amount"] for invoice in result.data)
+        total_revenue = sum(float(invoice.get("total_amount", 0) or 0) for invoice in result.data)
         
         # Determine level based on revenue
         if total_revenue >= CUSTOMER_LEVELS["platinum"]["min_revenue"]:

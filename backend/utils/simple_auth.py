@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from services.supabase_client import get_supabase_client
-from models.user import User
+from models.user import User, UserRole
 
 security = HTTPBearer()
 
@@ -36,7 +36,7 @@ async def get_current_user_simple(credentials: HTTPAuthorizationCredentials = De
             id=supabase_user.id,
             email=supabase_user.email,
             full_name=supabase_user.email.split('@')[0],  # Use email prefix as name
-            role="employee",  # Default role
+            role=UserRole.EMPLOYEE,  # Use enum instead of hard-coded string
             is_active=True
         )
         

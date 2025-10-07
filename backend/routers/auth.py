@@ -8,7 +8,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
-import bcrypt
 import jwt
 from jwt import PyJWTError
 from pydantic import BaseModel, EmailStr
@@ -16,7 +15,7 @@ from pydantic import BaseModel, EmailStr
 from config import settings
 from services.supabase_client import get_supabase_client
 from models.user import User, UserCreate, UserUpdate, UserLogin, UserResponse
-from utils.auth import create_access_token, verify_token, get_current_user
+from utils.auth import create_access_token, verify_token, get_current_user, hash_password
 
 router = APIRouter()
 security = HTTPBearer()
@@ -41,106 +40,6 @@ class ChangePassword(BaseModel):
     current_password: str
     new_password: str
 
-@router.post("/create-demo-user")
-async def create_demo_user():
-    """Create demo user for testing"""
-    try:
-        supabase = get_supabase_client()
-        
-        demo_email = "admin@example.com"
-        demo_password = "admin123"
-        
-        # Check if demo user already exists
-        existing_user = supabase.table("users").select("*").eq("email", demo_email).execute()
-        if existing_user.data:
-            return {"message": "Demo user already exists", "email": demo_email}
-        
-        # Create user in Supabase Auth
-        try:
-            auth_response = supabase.auth.admin.create_user({
-                "email": demo_email,
-                "password": demo_password,
-                "email_confirm": True,
-                "user_metadata": {
-                    "full_name": "Admin User",
-                    "role": "admin"
-                }
-            })
-            
-            if auth_response.user:
-                # Create user record in custom users table
-                user_record = {
-                    "id": auth_response.user.id,
-                    "email": demo_email,
-                    "full_name": "Admin User",
-                    "role": "admin",
-                    "is_active": True,
-                    "created_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat()
-                }
-                
-                result = supabase.table("users").insert(user_record).execute()
-                
-                if result.data:
-                    return {
-                        "message": "Demo user created successfully",
-                        "email": demo_email,
-                        "password": demo_password,
-                        "user_id": auth_response.user.id
-                    }
-        
-        except Exception as create_error:
-            # If user creation fails, it might be because the user already exists in auth but not in our table
-            # Try to get the auth user
-            try:
-                users = supabase.auth.admin.list_users()
-                auth_user = None
-                for user in users:
-                    if user.email == demo_email:
-                        auth_user = user
-                        break
-                
-                if auth_user:
-                    # Create user record in our table
-                    user_record = {
-                        "id": auth_user.id,
-                        "email": demo_email,
-                        "full_name": "Admin User",
-                        "role": "admin",
-                        "is_active": True,
-                        "created_at": datetime.utcnow().isoformat(),
-                        "updated_at": datetime.utcnow().isoformat()
-                    }
-                    
-                    result = supabase.table("users").insert(user_record).execute()
-                    
-                    if result.data:
-                        return {
-                            "message": "Demo user profile created successfully",
-                            "email": demo_email,
-                            "password": demo_password,
-                            "user_id": auth_user.id
-                        }
-            except Exception as e2:
-                pass
-            
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create demo user: {str(create_error)}"
-            )
-        
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to create demo user"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Demo user creation failed: {str(e)}"
-        )
 
 @router.post("/register", response_model=UserResponse)
 async def register(user_data: UserCreate):
@@ -157,7 +56,7 @@ async def register(user_data: UserCreate):
             )
         
         # Hash password
-        hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        hashed_password = hash_password(user_data.password)
         
         # Create user in Supabase Auth
         auth_response = supabase.auth.sign_up({
@@ -178,6 +77,7 @@ async def register(user_data: UserCreate):
                 "email": user_data.email,
                 "full_name": user_data.full_name,
                 "role": user_data.role,
+                "password_hash": hashed_password,
                 "is_active": True,
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()

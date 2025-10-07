@@ -34,6 +34,7 @@ class Customer(BaseModel):
     payment_terms: int = 30  # days
     notes: Optional[str] = None
     assigned_to: Optional[str] = None
+    level: Optional[str] = None  # Customer level (bronze, silver, gold, platinum)
     created_at: datetime
     updated_at: datetime
 

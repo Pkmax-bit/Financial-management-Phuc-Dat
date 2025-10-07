@@ -40,7 +40,7 @@ export function useDashboardStats() {
     }
   }, [])
 
-  // Auto-refresh every 5 minutes
+  // Auto-refresh every 5 minutes - optimized
   useEffect(() => {
     fetchStats()
 
@@ -54,7 +54,7 @@ export function useDashboardStats() {
       clearInterval(interval)
       mountedRef.current = false
     }
-  }, [fetchStats, loading])
+  }, [fetchStats]) // Removed loading dependency to prevent re-creation
 
   // Manual refresh function
   const refresh = useCallback(() => {

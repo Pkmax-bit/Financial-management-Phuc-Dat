@@ -9,9 +9,20 @@ from enum import Enum
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    MANAGER = "manager"
+    SALES = "sales"
+    ACCOUNTANT = "accountant"
+    WORKSHOP_EMPLOYEE = "workshop_employee"
+    WORKER = "worker"
+    TRANSPORT = "transport"
+    CUSTOMER = "customer"
     EMPLOYEE = "employee"
-    VIEWER = "viewer"
+    
+    @classmethod
+    def _missing_(cls, value):
+        """Handle aliases for role values"""
+        if value == "Admin User":
+            return cls.ADMIN
+        return None
 
 class User(BaseModel):
     """User model"""
@@ -19,6 +30,7 @@ class User(BaseModel):
     email: EmailStr
     full_name: str
     role: UserRole
+    password_hash: Optional[str] = None
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
@@ -29,7 +41,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    role: UserRole = UserRole.EMPLOYEE
+    role: UserRole = UserRole.WORKER
 
 class UserUpdate(BaseModel):
     """User update model"""

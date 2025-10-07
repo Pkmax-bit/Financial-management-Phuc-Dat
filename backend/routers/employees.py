@@ -13,8 +13,8 @@ from models.employee import (
     Department, Position, DepartmentCreate, DepartmentUpdate, 
     PositionCreate, PositionUpdate
 )
-from models.user import User
-from utils.auth import get_current_user, require_manager_or_admin
+from models.user import User, UserRole
+from utils.auth import get_current_user, require_manager_or_admin, hash_password
 from utils.simple_auth import get_current_user_simple
 from services.supabase_client import get_supabase_client
 
@@ -60,7 +60,8 @@ async def get_employees_public():
             last_name,
             email,
             status,
-            created_at
+            created_at,
+            users:user_id(role)
         """).limit(10).execute()
         
         return {
@@ -78,74 +79,6 @@ async def get_employees_public():
             "status": "error"
         }
 
-@router.post("/create-sample")
-async def create_sample_employees():
-    """Create sample employees for testing (public endpoint)"""
-    try:
-        supabase = get_supabase_client()
-        
-        # Check if employees already exist
-        existing = supabase.table("employees").select("id").limit(1).execute()
-        if existing.data:
-            return {
-                "message": "Sample employees already exist",
-                "employees_count": len(existing.data),
-                "status": "info"
-            }
-        
-        # Sample employees data
-        sample_employees = [
-            {
-                "id": str(uuid.uuid4()),
-                "employee_code": "EMP001",
-                "first_name": "Nguyen Van",
-                "last_name": "A",
-                "email": "nguyenvana@phucdat.com",
-                "phone": "0901234567",
-                "hire_date": "2023-01-15",
-                "salary": 15000000,
-                "status": "active"
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "employee_code": "EMP002", 
-                "first_name": "Tran Thi",
-                "last_name": "B",
-                "email": "tranthib@phucdat.com",
-                "phone": "0901234568",
-                "hire_date": "2023-02-01",
-                "salary": 12000000,
-                "status": "active"
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "employee_code": "EMP003",
-                "first_name": "Le Van", 
-                "last_name": "C",
-                "email": "levanc@phucdat.com",
-                "phone": "0901234569",
-                "hire_date": "2023-03-01",
-                "salary": 18000000,
-                "status": "active"
-            }
-        ]
-        
-        # Insert sample employees
-        result = supabase.table("employees").insert(sample_employees).execute()
-        
-        return {
-            "message": "Sample employees created successfully",
-            "employees_created": len(result.data) if result.data else 0,
-            "employees": result.data or [],
-            "status": "success"
-        }
-        
-    except Exception as e:
-        return {
-            "message": f"Error creating sample employees: {str(e)}",
-            "employees_created": 0,
-            "status": "error"
-        }
 
 @router.get("/public-departments")
 async def get_departments_public():
@@ -252,7 +185,8 @@ async def get_employees_simple(current_user: User = Depends(get_current_user_sim
             hire_date,
             salary,
             status,
-            created_at
+            created_at,
+            users:user_id(role)
         """).execute()
         
         print(f"DEBUG: Found {len(result.data) if result.data else 0} employees")
@@ -341,29 +275,60 @@ async def create_employee(
                     detail="Employee code already exists"
                 )
         
-        # Create user account in Supabase Auth with default password
-        default_password = "123456"
+        # Get password for employee (use provided password or default)
+        plain_password = employee_data.password or "123456"
         
         try:
-            # Create user in Supabase Auth
-            auth_response = supabase.auth.admin.create_user({
-                "email": employee_data.email,
-                "password": default_password,
-                "email_confirm": True,
-                "user_metadata": {
-                    "full_name": f"{employee_data.first_name} {employee_data.last_name}",
-                    "role": "employee"
-                }
-            })
+            # Check if user already exists in Supabase Auth by trying to create first
+            # If user exists, it will throw an error which we'll catch
+            try:
+                # Try to create new user in Supabase Auth
+                auth_response = supabase.auth.admin.create_user({
+                    "email": employee_data.email,
+                    "password": plain_password,
+                    "email_confirm": True,
+                    "user_metadata": {
+                        "full_name": f"{employee_data.first_name} {employee_data.last_name}",
+                        "role": employee_data.user_role
+                    }
+                })
+                
+                if not auth_response.user:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Failed to create user account"
+                    )
+                
+                user_id = auth_response.user.id
+                print(f"Created new user: {employee_data.email}")
+                
+            except Exception as create_error:
+                # If user already exists, try to get user by listing all users
+                if "already been registered" in str(create_error) or "already exists" in str(create_error):
+                    print(f"User already exists, trying to find: {employee_data.email}")
+                    
+                    # List all users and find by email
+                    users_response = supabase.auth.admin.list_users()
+                    user_id = None
+                    
+                    for user in users_response:
+                        if user.email == employee_data.email:
+                            user_id = user.id
+                            print(f"Found existing user: {employee_data.email}")
+                            break
+                    
+                    if not user_id:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"User {employee_data.email} exists but cannot be found"
+                        )
+                else:
+                    # Re-raise if it's a different error
+                    raise create_error
             
-            if not auth_response.user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Failed to create user account"
-                )
-            
-            user_id = auth_response.user.id
-            
+        except HTTPException:
+            # Re-raise HTTP exceptions as they are
+            raise
         except Exception as auth_error:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -371,51 +336,91 @@ async def create_employee(
             )
         
         try:
-            # Create user record in users table
-            user_record = {
-                "id": user_id,
-                "email": employee_data.email,
-                "full_name": f"{employee_data.first_name} {employee_data.last_name}",
-                "role": "employee",
-                "is_active": True,
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
-            }
+            # Check if user already exists in users table
+            existing_user = supabase.table("users").select("*").eq("id", user_id).execute()
             
-            supabase.table("users").insert(user_record).execute()
+            if existing_user.data:
+                # User already exists in users table, update the record
+                user_update_data = {
+                    "email": employee_data.email,
+                    "full_name": f"{employee_data.first_name} {employee_data.last_name}",
+                    "role": employee_data.user_role,
+                    "is_active": True,
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                supabase.table("users").update(user_update_data).eq("id", user_id).execute()
+                print(f"Updated existing user: {employee_data.email}")
+            else:
+                # Hash password for storage in custom users table
+                hashed_password = hash_password(plain_password)
+                
+                # Create new user record in users table
+                user_record = {
+                    "id": user_id,
+                    "email": employee_data.email,
+                    "full_name": f"{employee_data.first_name} {employee_data.last_name}",
+                    "role": employee_data.user_role,
+                    "password_hash": hashed_password,
+                    "is_active": True,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                supabase.table("users").insert(user_record).execute()
+                print(f"Created new user: {employee_data.email}")
             
         except Exception as user_error:
-            # If user table creation fails, delete the auth user
-            try:
-                supabase.auth.admin.delete_user(user_id)
-            except:
-                pass
+            # If user table creation fails, don't delete auth user since it might already exist
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create user record: {str(user_error)}"
+                detail=f"Failed to create/update user record: {str(user_error)}"
             )
         
         try:
-            # Create employee record
-            employee_dict = {
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "employee_code": employee_code,
-                "first_name": employee_data.first_name,
-                "last_name": employee_data.last_name,
-                "email": employee_data.email,
-                "phone": employee_data.phone,
-                "department_id": employee_data.department_id,
-                "position_id": employee_data.position_id,
-                "hire_date": employee_data.hire_date.isoformat(),
-                "salary": employee_data.salary,
-                "status": "active",
-                "manager_id": employee_data.manager_id,
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
-            }
+            # Check if employee already exists
+            existing_employee = supabase.table("employees").select("*").eq("user_id", user_id).execute()
             
-            result = supabase.table("employees").insert(employee_dict).execute()
+            if existing_employee.data:
+                # Employee already exists, update the record
+                employee_update_data = {
+                    "employee_code": employee_code,
+                    "first_name": employee_data.first_name,
+                    "last_name": employee_data.last_name,
+                    "email": employee_data.email,
+                    "phone": employee_data.phone,
+                    "department_id": employee_data.department_id,
+                    "position_id": employee_data.position_id,
+                    "hire_date": employee_data.hire_date.isoformat(),
+                    "salary": employee_data.salary,
+                    "status": "active",
+                    "manager_id": employee_data.manager_id,
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                result = supabase.table("employees").update(employee_update_data).eq("user_id", user_id).execute()
+                print(f"Updated existing employee: {employee_data.email}")
+            else:
+                # Create new employee record
+                employee_dict = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "employee_code": employee_code,
+                    "first_name": employee_data.first_name,
+                    "last_name": employee_data.last_name,
+                    "email": employee_data.email,
+                    "phone": employee_data.phone,
+                    "department_id": employee_data.department_id,
+                    "position_id": employee_data.position_id,
+                    "hire_date": employee_data.hire_date.isoformat(),
+                    "salary": employee_data.salary,
+                    "status": "active",
+                    "manager_id": employee_data.manager_id,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                result = supabase.table("employees").insert(employee_dict).execute()
+                print(f"Created new employee: {employee_data.email}")
             
             if not result.data:
                 raise Exception("No data returned from insert")
@@ -426,7 +431,8 @@ async def create_employee(
                     *,
                     departments:department_id(name),
                     positions:position_id(name),
-                    managers:manager_id(first_name, last_name)
+                    managers:manager_id(first_name, last_name),
+                    users:user_id(role)
                 """)\
                 .eq("id", result.data[0]["id"])\
                 .execute()
@@ -451,6 +457,7 @@ async def create_employee(
                     status=emp_data["status"],
                     manager_id=emp_data["manager_id"],
                     manager_name=f"{emp_data['managers']['first_name']} {emp_data['managers']['last_name']}" if emp_data.get("managers") else None,
+                    user_role=emp_data["users"]["role"] if emp_data.get("users") else None,
                     created_at=datetime.fromisoformat(emp_data["created_at"].replace('Z', '+00:00')),
                     updated_at=datetime.fromisoformat(emp_data["updated_at"].replace('Z', '+00:00'))
                 )

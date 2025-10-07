@@ -51,7 +51,8 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
     department_id: '',
     position_id: '',
     hire_date: new Date().toISOString().split('T')[0], // Add hire_date
-    password: '123456' // Default password
+    password: '123456', // Default password
+    user_role: 'employee' // Default role
   })
 
   useEffect(() => {
@@ -133,7 +134,8 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
         department_id: formData.department_id || undefined,
         position_id: formData.position_id || undefined,
         hire_date: formData.hire_date,
-        employee_code: generateEmployeeCode()
+        employee_code: generateEmployeeCode(),
+        user_role: formData.user_role
       }
 
       console.log('Creating employee via API with data:', employeeData)
@@ -184,7 +186,8 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
       department_id: '',
       position_id: '',
       hire_date: new Date().toISOString().split('T')[0],
-      password: '123456'
+      password: '123456',
+      user_role: 'employee'
     })
     setError(null)
   }
@@ -326,6 +329,29 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
                       {pos.name} ({pos.code})
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  <User className="h-4 w-4 inline mr-2 text-purple-600" />
+                  Vai trò người dùng *
+                </label>
+                <select
+                  value={formData.user_role}
+                  onChange={(e) => setFormData({...formData, user_role: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 font-semibold"
+                  disabled={submitting}
+                  required
+                >
+                  <option value="admin">Admin</option>
+                  <option value="accountant">Kế toán</option>
+                  <option value="sales">Bán hàng</option>
+                  <option value="workshop_employee">Nhân viên xưởng</option>
+                  <option value="employee">Nhân viên</option>
+                  <option value="worker">Công nhân</option>
+                  <option value="transport">Vận chuyển</option>
+                  <option value="customer">Khách hàng</option>
                 </select>
               </div>
 

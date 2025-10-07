@@ -27,6 +27,7 @@ import {
   Eye
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
+import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode
@@ -58,99 +59,26 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
-  const navigation = [
-    {
-      name: 'Dashboard',
-      href: '/dashboard',
-      icon: Home,
-      description: 'Tổng quan hệ thống'
-    },
-    {
-      name: 'Khách hàng',
-      href: '/customers',
-      icon: Building2,
-      description: 'Quản lý khách hàng'
-    },
-    {
-      name: 'Dự án',
-      href: '/projects',
-      icon: FolderOpen,
-      description: 'Quản lý dự án'
-    },
-    {
-      name: 'Bán hàng',
-      href: '/sales',
-      icon: Receipt,
-      description: 'Quản lý bán hàng'
-    },
-    {
-      name: 'Chi phí',
-      href: '/expenses',
-      icon: DollarSign,
-      description: 'Quản lý chi phí'
-    },
-    {
-      name: 'AI Analysis',
-      href: '/ai-analysis',
-      icon: Brain,
-      description: 'Phân tích AI'
-    },
-    {
-      name: 'Báo cáo',
-      href: '/reports',
-      icon: BarChart3,
-      description: 'Báo cáo tài chính'
-    },
-    {
-      name: 'View khách hàng',
-      href: '/customer-view',
-      icon: Eye,
-      description: 'Xem thông tin khách hàng và timeline công trình'
-    },
-    // Phần còn lại
-    {
-      name: 'Nhân viên',
-      href: '/employees',
-      icon: Users,
-      description: 'Quản lý nhân viên'
-    },
-    {
-      name: 'Thông báo',
-      href: '/notifications',
-      icon: Bell,
-      description: 'Quản lý thông báo'
-    },
-    {
-      name: 'Files',
-      href: '/files',
-      icon: FileText,
-      description: 'Quản lý files'
-    },
-    {
-      name: 'AI Image Reader',
-      href: '/ai-image-reader',
-      icon: Camera,
-      description: 'Đọc ảnh bằng AI'
-    },
-    {
-      name: 'AI Model Info',
-      href: '/ai-model-info',
-      icon: Brain,
-      description: 'Thông tin model AI'
-    },
-    {
-      name: 'Test API',
-      href: '/test-api',
-      icon: TestTube,
-      description: 'Test AI API'
-    },
-    {
-      name: 'Camera Guide',
-      href: '/camera-guide',
-      icon: Camera,
-      description: 'Hướng dẫn setup camera cho AI'
-    }
-  ]
+  // Get user role and navigation based on role
+  const userRole = (user?.role?.toLowerCase() || 'customer') as UserRole
+  const navigationByCategory = getNavigationByCategory(userRole)
+  
+  // Icon mapping for dynamic icons
+  const iconMap: Record<string, any> = {
+    Home,
+    Building2,
+    FolderOpen,
+    Receipt,
+    DollarSign,
+    BarChart3,
+    Eye,
+    Users,
+    Bell,
+    FileText,
+    Brain,
+    Camera,
+    TestTube
+  }
 
   const handleNavigation = (href: string) => {
     router.push(href)
@@ -193,28 +121,38 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
             
             {/* Navigation items with padding for scroll indicators */}
             <div className="pt-2 pb-2">
-            {navigation.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href
-              
-              return (
-                <button
-                  key={item.name}
-                  onClick={() => handleNavigation(item.href)}
-                  className={`w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
-                    isActive
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                  title={item.description}
-                >
-                  <Icon className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                    isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
-                  }`} />
-                  <span className="truncate">{item.name}</span>
-                </button>
-              )
-            })}
+            {Object.entries(navigationByCategory).map(([category, items]) => (
+              <div key={category} className="mb-4">
+                {/* Category header */}
+                <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {getCategoryDisplayName(category)}
+                </div>
+                
+                {/* Category items */}
+                {items.map((item) => {
+                  const Icon = iconMap[item.icon] || Home
+                  const isActive = pathname === item.href
+                  
+                  return (
+                    <button
+                      key={item.name}
+                      onClick={() => handleNavigation(item.href)}
+                      className={`w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                      title={item.description}
+                    >
+                      <Icon className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                        isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
+                      }`} />
+                      <span className="truncate">{item.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
             </div>
           </nav>
 
@@ -231,9 +169,11 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                   <p className="text-sm font-medium text-gray-900 truncate">
                     {user.full_name || 'User'}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {user.role || 'User'}
-                  </p>
+                  <div className="flex items-center space-x-2">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(userRole)} text-white`}>
+                      {getRoleDisplayName(userRole)}
+                    </span>
+                  </div>
                 </div>
               </div>
               {onLogout && (

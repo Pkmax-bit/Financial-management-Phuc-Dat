@@ -14,84 +14,6 @@ from services.supabase_client import get_supabase_client
 
 router = APIRouter()
 
-@router.get("/balance-sheet-demo")
-async def get_balance_sheet_demo(
-    as_of_date: date = Query(..., description="As of date for balance sheet")
-):
-    """
-    Generate Balance Sheet report (Demo version - no auth required)
-    """
-    try:
-        # Sample data for demo
-        sample_data = {
-            "as_of_date": as_of_date.isoformat(),
-            "currency": "VND",
-            "generated_at": datetime.now().isoformat(),
-            "assets": {
-                "total_assets": 184000000,
-                "current_assets": 134000000,
-                "fixed_assets": 50000000,
-                "asset_breakdown": [
-                    {
-                        "category": "Cash",
-                        "amount": 10000000,
-                        "percentage": 5.434782608695652
-                    },
-                    {
-                        "category": "Accounts Receivable",
-                        "amount": 124000000,
-                        "percentage": 67.3913043478261
-                    },
-                    {
-                        "category": "Fixed Assets",
-                        "amount": 50000000,
-                        "percentage": 27.173913043478258
-                    }
-                ]
-            },
-            "liabilities": {
-                "total_liabilities": 38000000,
-                "current_liabilities": 38000000,
-                "long_term_liabilities": 0,
-                "liability_breakdown": [
-                    {
-                        "category": "Accounts Payable",
-                        "amount": 38000000,
-                        "percentage": 100
-                    },
-                    {
-                        "category": "Long-term Liabilities",
-                        "amount": 0,
-                        "percentage": 0
-                    }
-                ]
-            },
-            "equity": {
-                "total_equity": 146000000,
-                "retained_earnings": 146000000,
-                "equity_breakdown": [
-                    {
-                        "category": "Retained Earnings",
-                        "amount": 146000000,
-                        "percentage": 100
-                    }
-                ]
-            },
-            "summary": {
-                "total_assets": 184000000,
-                "total_liabilities": 38000000,
-                "total_equity": 146000000,
-                "balance_check": True
-            }
-        }
-        
-        return sample_data
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate balance sheet: {str(e)}"
-        )
 
 @router.get("/balance-sheet")
 async def get_balance_sheet(
@@ -190,13 +112,48 @@ async def get_assets_data(supabase, as_of_date: str) -> Dict[str, Any]:
         for invoice in invoices.data
     )
     
-    # Cash - simplified calculation
-    cash_balance = 10000000  # Placeholder cash balance
+    # Cash - get from cash accounts
+    cash_result = supabase.table("chart_of_accounts")\
+        .select("account_code, account_name")\
+        .like("account_code", "111%")\
+        .execute()
+    
+    # Calculate cash balance from journal entries
+    cash_balance = 0
+    if cash_result.data:
+        for account in cash_result.data:
+            # Get cash balance from journal entries
+            cash_entries = supabase.table("journal_entries")\
+                .select("debit_amount, credit_amount")\
+                .eq("account_code", account["account_code"])\
+                .lte("entry_date", as_of_date)\
+                .execute()
+            
+            for entry in cash_entries.data:
+                cash_balance += float(entry.get("debit_amount", 0) or 0)
+                cash_balance -= float(entry.get("credit_amount", 0) or 0)
     
     current_assets = accounts_receivable + cash_balance
     
-    # Fixed assets - simplified
-    fixed_assets = 50000000  # Placeholder fixed assets
+    # Fixed assets - get from fixed asset accounts
+    fixed_assets_result = supabase.table("chart_of_accounts")\
+        .select("account_code, account_name")\
+        .like("account_code", "2%")\
+        .execute()
+    
+    fixed_assets = 0
+    if fixed_assets_result.data:
+        for account in fixed_assets_result.data:
+            # Get fixed assets balance from journal entries
+            asset_entries = supabase.table("journal_entries")\
+                .select("debit_amount, credit_amount")\
+                .eq("account_code", account["account_code"])\
+                .lte("entry_date", as_of_date)\
+                .execute()
+            
+            for entry in asset_entries.data:
+                fixed_assets += float(entry.get("debit_amount", 0) or 0)
+                fixed_assets -= float(entry.get("credit_amount", 0) or 0)
     
     total_assets = current_assets + fixed_assets
     

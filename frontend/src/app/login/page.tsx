@@ -3,8 +3,93 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+
+// Test accounts with different roles - Updated with real accounts
+const testAccounts = [
+  {
+    name: 'Admin Test',
+    email: 'admin@test.com',
+    password: '123456',
+    role: 'ADMIN',
+    icon: Crown,
+    color: 'bg-red-500',
+    description: 'Toàn quyền - Quản lý hệ thống'
+  },
+  {
+    name: 'Admin Example',
+    email: 'admin@example.com',
+    password: '123456',
+    role: 'ADMIN',
+    icon: Crown,
+    color: 'bg-red-600',
+    description: 'Toàn quyền - Quản lý hệ thống'
+  },
+  {
+    name: 'Sales Manager',
+    email: 'sales@example.com',
+    password: '123456',
+    role: 'SALES',
+    icon: DollarSign,
+    color: 'bg-blue-500',
+    description: 'Quản lý báo giá và chi phí'
+  },
+  {
+    name: 'Workshop Employee',
+    email: 'workshop@test.com',
+    password: '123456',
+    role: 'WORKSHOP_EMPLOYEE',
+    icon: Wrench,
+    color: 'bg-orange-500',
+    description: 'Nhân viên xưởng - Tạo chi phí sản xuất'
+  },
+  {
+    name: 'Transport Employee',
+    email: 'transport@test.com',
+    password: '123456',
+    role: 'TRANSPORT',
+    icon: Truck,
+    color: 'bg-yellow-500',
+    description: 'Nhân viên vận chuyển - Tạo chi phí vận chuyển'
+  },
+  {
+    name: 'Customer',
+    email: 'customer@test.com',
+    password: '123456',
+    role: 'CUSTOMER',
+    icon: Users,
+    color: 'bg-indigo-500',
+    description: 'Khách hàng - Portal khách hàng'
+  },
+  {
+    name: 'Worker',
+    email: 'worker@test.com',
+    password: '123456',
+    role: 'WORKER',
+    icon: User,
+    color: 'bg-purple-500',
+    description: 'Công nhân - Tạo chi phí cơ bản'
+  },
+  {
+    name: 'Test Employee',
+    email: 'test.employee.new@company.com',
+    password: '123456',
+    role: 'EMPLOYEE',
+    icon: User,
+    color: 'bg-green-500',
+    description: 'Nhân viên test - Tạo chi phí cơ bản'
+  },
+  {
+    name: 'Test Employee Auth',
+    email: 'test.employee.auth@company.com',
+    password: '123456',
+    role: 'EMPLOYEE',
+    icon: User,
+    color: 'bg-green-600',
+    description: 'Nhân viên test - Tạo chi phí cơ bản'
+  }
+]
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -21,19 +106,73 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
+    // Validate form data
+    if (!formData.email || !formData.password) {
+      setError('Vui lòng nhập đầy đủ email và mật khẩu')
+      setLoading(false)
+      return
+    }
+
+    if (!formData.email.includes('@')) {
+      setError('Email không hợp lệ')
+      setLoading(false)
+      return
+    }
+
     try {
+      // Try Supabase auth first
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
       })
 
       if (error) {
-        setError((error as Error).message)
+        console.log('Supabase auth error:', error)
+        
+        // If Supabase auth fails, try backend API
+        try {
+          console.log('Trying backend API with:', { email: formData.email, password: formData.password })
+          
+          const response = await fetch('http://localhost:8000/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: formData.email.trim(),
+              password: formData.password,
+            }),
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            console.log('Backend auth success:', result)
+            
+            // Store token and user info
+            if (result.access_token) {
+              localStorage.setItem('access_token', result.access_token)
+              localStorage.setItem('user', JSON.stringify(result.user))
+              
+              // Redirect to dashboard
+              router.push('/dashboard')
+            }
+          } else {
+            console.log('Backend API error:', response.status, response.statusText)
+            const errorData = await response.json()
+            console.log('Backend API error details:', errorData)
+            setError(errorData.detail || `Login failed: ${response.status}`)
+          }
+        } catch (apiError) {
+          console.log('Backend API error:', apiError)
+          setError('Login failed. Please check your credentials.')
+        }
       } else if (data.user) {
-        // Redirect to dashboard
+        // Supabase auth successful
+        console.log('Supabase auth success:', data)
         router.push('/dashboard')
       }
     } catch (err) {
+      console.log('General error:', err)
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -45,6 +184,14 @@ export default function LoginPage() {
       ...formData,
       [e.target.name]: e.target.value
     })
+  }
+
+  const handleTestAccountClick = (account: typeof testAccounts[0]) => {
+    setFormData({
+      email: account.email,
+      password: account.password
+    })
+    setError('')
   }
 
   return (
@@ -174,14 +321,57 @@ export default function LoginPage() {
           </div>
 
           <div className="text-center">
-            <p className="text-sm text-black">
-              Thông tin demo: <br />
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
-                admin@example.com / admin123
-              </span>
+            <p className="text-sm text-black mb-4">
+              Hoặc chọn tài khoản test để đăng nhập nhanh:
             </p>
           </div>
         </form>
+
+        {/* Test Accounts Section */}
+        <div className="mt-8">
+          <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">
+            Tài khoản Test
+          </h3>
+          <div className="grid grid-cols-1 gap-3">
+            {testAccounts.map((account, index) => {
+              const IconComponent = account.icon
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleTestAccountClick(account)}
+                  className={`relative flex items-center p-4 rounded-lg border-2 border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 ${
+                    formData.email === account.email ? 'border-blue-500 bg-blue-50' : 'bg-white'
+                  }`}
+                >
+                  <div className={`flex-shrink-0 w-10 h-10 ${account.color} rounded-full flex items-center justify-center text-white`}>
+                    <IconComponent className="h-5 w-5" />
+                  </div>
+                  <div className="ml-4 flex-1 text-left">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-gray-900">{account.name}</h4>
+                      <span className="text-xs font-mono text-gray-500">{account.role}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{account.description}</p>
+                    <p className="text-xs text-gray-500 mt-1 font-mono">
+                      {account.email} / {account.password}
+                    </p>
+                  </div>
+                  {formData.email === account.email && (
+                    <div className="absolute top-2 right-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-500">
+              💡 Bấm vào tài khoản để tự động điền thông tin đăng nhập
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )

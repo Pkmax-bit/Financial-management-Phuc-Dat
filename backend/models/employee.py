@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime, date
 from enum import Enum
+from .user import UserRole
 
 class EmploymentStatus(str, Enum):
     ACTIVE = "active"
@@ -50,6 +51,7 @@ class EmployeeCreate(BaseModel):
     hire_date: date
     salary: Optional[float] = Field(None, ge=0)
     manager_id: Optional[str] = None
+    user_role: UserRole = Field(default=UserRole.EMPLOYEE, description="User role for the employee")
     # Auto-generated fields
     employee_code: Optional[str] = None  # Will be generated automatically
     password: Optional[str] = Field(default="123456", description="Default password is 123456")
@@ -86,6 +88,7 @@ class EmployeeResponse(BaseModel):
     status: EmploymentStatus
     manager_id: Optional[str]
     manager_name: Optional[str] = None
+    user_role: Optional[str] = None  # Role from users table
     created_at: datetime
     updated_at: datetime
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Plus, 
@@ -55,11 +55,8 @@ export default function DashboardPage() {
     refreshAll
   } = useDashboard()
 
-  useEffect(() => {
-    checkUser()
-  }, [])
-
-  const checkUser = async () => {
+  // Optimized user check with useCallback
+  const checkUser = useCallback(async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       
@@ -72,19 +69,24 @@ export default function DashboardPage() {
         
         if (userData) {
           setUser(userData)
-        } else {
-          router.push('/login')
+          return true
         }
-      } else {
-        router.push('/login')
       }
+      router.push('/login')
+      return false
     } catch (error) {
       console.error('Error checking user:', error)
       router.push('/login')
+      return false
     } finally {
       setUserLoading(false)
     }
-  }
+  }, [router])
+
+  // Single useEffect for initialization
+  useEffect(() => {
+    checkUser()
+  }, [checkUser])
 
   // Handle realtime updates toggle
   const handleToggleRealtime = () => {
@@ -131,12 +133,15 @@ export default function DashboardPage() {
     }
   ]
 
-  if (userLoading || (isLoading && !stats.stats)) {
+  // Optimized loading state
+  const isInitialLoading = userLoading || (isLoading && !stats.stats)
+  
+  if (isInitialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-black">Đang tải...</p>
+          <p className="mt-4 text-black">Đang tải dashboard...</p>
         </div>
       </div>
     )

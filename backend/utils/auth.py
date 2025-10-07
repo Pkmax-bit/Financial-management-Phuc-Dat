@@ -13,7 +13,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from config import settings
 from services.supabase_client import get_supabase_client
-from models.user import User
+from models.user import User, UserRole
 
 security = HTTPBearer()
 
@@ -113,7 +113,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 "id": user_id,
                 "email": email,
                 "full_name": user_metadata.get("full_name", email.split("@")[0]),
-                "role": app_metadata.get("role", "employee"),  # default role
+                "role": app_metadata.get("role", UserRole.EMPLOYEE),  # default role
                 "is_active": True,
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()

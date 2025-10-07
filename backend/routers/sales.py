@@ -13,8 +13,10 @@ from models.quote import Quote, QuoteCreate, QuoteUpdate, QuoteConvertToInvoice
 from models.invoice import Invoice, InvoiceCreate, InvoiceUpdate, InvoiceItem
 from models.sales_receipt import SalesReceipt, SalesReceiptCreate, SalesReceiptUpdate
 from models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentWithAllocations
+from models.expense import Expense, ExpenseCreate, ExpenseUpdate
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
+from utils.permissions import require_permission, Permission
 from services.supabase_client import get_supabase_client
 from services.journal_service import journal_service
 from services.project_validation_service import ProjectValidationService
@@ -75,42 +77,6 @@ async def validate_project_for_sales(
 # QUOTES MANAGEMENT - Báo giá
 # ============================================================================
 
-@router.get("/quotes/public")
-async def get_quotes_public():
-    """Public endpoint to get quotes without authentication"""
-    return {
-        "message": "Public quotes endpoint (mock data)",
-        "quotes": [
-            {
-                "id": "1",
-                "quote_number": "QUO-20241227-001",
-                "customer_id": "1",
-                "customer_name": "Công ty ABC",
-                "issue_date": "2024-12-27",
-                "valid_until": "2025-01-27",
-                "subtotal": 1000000,
-                "tax_rate": 10,
-                "tax_amount": 100000,
-                "total_amount": 1100000,
-                "currency": "VND",
-                "status": "draft",
-                "items": [
-                    {
-                        "description": "Sản phẩm A",
-                        "quantity": 1,
-                        "unit_price": 1000000,
-                        "subtotal": 1000000
-                    }
-                ],
-                "notes": "Báo giá mẫu",
-                "terms_and_conditions": "Điều khoản mẫu",
-                "created_by": "user1",
-                "created_at": "2024-12-27T08:00:00Z",
-                "updated_at": "2024-12-27T08:00:00Z"
-            }
-        ],
-        "count": 1
-    }
 
 @router.get("/quotes", response_model=List[Quote])
 async def get_quotes(
@@ -225,7 +191,7 @@ async def get_quote(
 @router.post("/quotes", response_model=Quote)
 async def create_quote(
     quote_data: QuoteCreate,
-    current_user: User = Depends(require_manager_or_admin)
+    current_user: User = Depends(require_permission(Permission.CREATE_QUOTE))
 ):
     """Create a new quote"""
     try:
@@ -274,7 +240,7 @@ async def create_quote(
 async def update_quote(
     quote_id: str,
     quote_data: QuoteUpdate,
-    current_user: User = Depends(require_manager_or_admin)
+    current_user: User = Depends(require_permission(Permission.EDIT_QUOTE))
 ):
     """Update a quote"""
     try:
@@ -370,6 +336,61 @@ async def send_quote_to_customer(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to send quote: {str(e)}"
+        )
+
+@router.post("/quotes/{quote_id}/approve")
+async def approve_quote(
+    quote_id: str,
+    current_user: User = Depends(require_permission(Permission.APPROVE_QUOTE))
+):
+    """Approve a quote (requires APPROVE_QUOTE permission)"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get quote
+        quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        if not quote_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Quote not found"
+            )
+        
+        quote = quote_result.data[0]
+        
+        # Check if quote can be approved
+        if quote["status"] not in ["draft", "sent", "viewed"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Quote cannot be approved in current status"
+            )
+        
+        # Update quote status to approved
+        update_data = {
+            "status": "approved",
+            "approved_at": datetime.utcnow().isoformat(),
+            "approved_by": current_user.id,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        result = supabase.table("quotes").update(update_data).eq("id", quote_id).execute()
+        
+        if result.data:
+            return {
+                "message": "Quote approved successfully",
+                "quote": result.data[0]
+            }
+        
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to approve quote"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to approve quote: {str(e)}"
         )
 
 @router.post("/quotes/{quote_id}/accept")
@@ -1398,3 +1419,163 @@ async def get_quotes_simple():
             "error": str(e),
             "message": "Error fetching quotes"
         }
+
+# ============================================================================
+# COST MANAGEMENT - Quản lý chi phí cho SALES
+# ============================================================================
+
+@router.get("/costs", response_model=List[Expense])
+async def get_costs(
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    current_user: User = Depends(require_permission(Permission.VIEW_COST))
+):
+    """Get costs for projects - SALES can view all costs"""
+    try:
+        supabase = get_supabase_client()
+        
+        query = supabase.table("project_costs").select("*")
+        
+        if project_id:
+            query = query.eq("project_id", project_id)
+        
+        result = query.order("created_at", desc=True).execute()
+        
+        if result.data:
+            return [Expense(**cost) for cost in result.data]
+        
+        return []
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch costs: {str(e)}"
+        )
+
+@router.post("/costs", response_model=Expense)
+async def create_cost(
+    cost_data: ExpenseCreate,
+    current_user: User = Depends(require_permission(Permission.CREATE_COST))
+):
+    """Create a new cost - SALES can create planned and actual costs"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Create cost record
+        cost_dict = cost_data.dict()
+        cost_dict["id"] = str(uuid.uuid4())
+        cost_dict["created_by"] = current_user.id
+        cost_dict["created_at"] = datetime.utcnow().isoformat()
+        cost_dict["updated_at"] = datetime.utcnow().isoformat()
+        
+        result = supabase.table("project_costs").insert(cost_dict).execute()
+        
+        if result.data:
+            return Expense(**result.data[0])
+        
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to create cost"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create cost: {str(e)}"
+        )
+
+@router.put("/costs/{cost_id}", response_model=Expense)
+async def update_cost(
+    cost_id: str,
+    cost_data: ExpenseUpdate,
+    current_user: User = Depends(require_permission(Permission.EDIT_COST))
+):
+    """Update a cost - SALES can edit costs during project execution"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if cost exists
+        existing = supabase.table("project_costs").select("*").eq("id", cost_id).execute()
+        if not existing.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Cost not found"
+            )
+        
+        # Update cost
+        update_data = cost_data.dict(exclude_unset=True)
+        update_data["updated_at"] = datetime.utcnow().isoformat()
+        
+        result = supabase.table("project_costs").update(update_data).eq("id", cost_id).execute()
+        
+        if result.data:
+            return Expense(**result.data[0])
+        
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to update cost"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update cost: {str(e)}"
+        )
+
+@router.post("/costs/{cost_id}/approve")
+async def approve_cost(
+    cost_id: str,
+    current_user: User = Depends(require_permission(Permission.APPROVE_COST))
+):
+    """Approve a cost - SALES can approve actual costs"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if cost exists
+        existing = supabase.table("project_costs").select("*").eq("id", cost_id).execute()
+        if not existing.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Cost not found"
+            )
+        
+        cost = existing.data[0]
+        
+        # Check if cost can be approved
+        if cost.get("status") == "approved":
+            raise HTTPException(
+                status_code=400,
+                detail="Cost is already approved"
+            )
+        
+        # Update cost status to approved
+        update_data = {
+            "status": "approved",
+            "approved_at": datetime.utcnow().isoformat(),
+            "approved_by": current_user.id,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        result = supabase.table("project_costs").update(update_data).eq("id", cost_id).execute()
+        
+        if result.data:
+            return {
+                "message": "Cost approved successfully",
+                "cost": result.data[0]
+            }
+        
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to approve cost"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to approve cost: {str(e)}"
+        )

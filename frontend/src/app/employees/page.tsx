@@ -48,7 +48,7 @@ export default function EmployeesPage() {
   const [showDepartmentManagerSidebar, setShowDepartmentManagerSidebar] = useState(false)
   const [showCreateDepartmentSidebar, setShowCreateDepartmentSidebar] = useState(false)
   const [showPositionManagerSidebar, setShowPositionManagerSidebar] = useState(false)
-  const [user, setUser] = useState<{ email?: string } | null>(null)
+  const [user, setUser] = useState<{ full_name?: string; role?: string; email?: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 

@@ -166,33 +166,64 @@ async def get_dashboard_stats(
             reverse=True
         )[:5]
         
-        # Recent Transactions (placeholder)
+        # Recent Transactions - get from journal entries
         recent_transactions = []
-        
-        # Bank Accounts (placeholder - in real system would integrate with banks)
-        bank_accounts = [
-            {
-                "name": "Tài khoản chính",
-                "balance": cash_balance,
-                "type": "Tài khoản thanh toán"
-            }
-        ]
-        
-        # If we have actual bank account data in the system
         try:
-            actual_accounts = supabase.table("bank_accounts").select("*").execute()
-            if actual_accounts.data:
-                bank_accounts = []
-                for account in actual_accounts.data:
-                    bank_accounts.append({
-                        "name": account.get("account_name", "Unknown Account"),
-                        "balance": account.get("balance", 0),
-                        "type": account.get("account_type", "Banking Account")
+            recent_entries = supabase.table("journal_entries")\
+                .select("entry_date, description, debit_amount, credit_amount, account_code")\
+                .order("entry_date", desc=True)\
+                .limit(10)\
+                .execute()
+            
+            if recent_entries.data:
+                for entry in recent_entries.data:
+                    recent_transactions.append({
+                        "date": entry.get("entry_date"),
+                        "description": entry.get("description"),
+                        "amount": float(entry.get("debit_amount", 0) or 0) + float(entry.get("credit_amount", 0) or 0),
+                        "type": "debit" if entry.get("debit_amount") else "credit"
                     })
         except Exception as e:
-            # If bank_accounts table doesn't exist, use placeholder
+            print(f"Recent transactions not available: {e}")
+        
+        # Bank Accounts - get from chart of accounts
+        bank_accounts = []
+        try:
+            # Get cash and bank accounts from chart of accounts
+            cash_accounts = supabase.table("chart_of_accounts")\
+                .select("account_code, account_name")\
+                .like("account_code", "111%")\
+                .execute()
+            
+            if cash_accounts.data:
+                for account in cash_accounts.data:
+                    # Calculate balance for this account
+                    account_balance = 0
+                    try:
+                        balance_entries = supabase.table("journal_entries")\
+                            .select("debit_amount, credit_amount")\
+                            .eq("account_code", account["account_code"])\
+                            .execute()
+                        
+                        for entry in balance_entries.data:
+                            account_balance += float(entry.get("debit_amount", 0) or 0)
+                            account_balance -= float(entry.get("credit_amount", 0) or 0)
+                    except Exception as balance_error:
+                        print(f"Could not calculate balance for account {account['account_code']}: {balance_error}")
+                    
+                    bank_accounts.append({
+                        "name": account.get("account_name", "Unknown Account"),
+                        "balance": account_balance,
+                        "type": "Cash Account"
+                    })
+        except Exception as e:
             print(f"Bank accounts not available: {e}")
-            pass
+            # If no bank accounts found, create a default one with calculated cash balance
+            bank_accounts = [{
+                "name": "Cash Account",
+                "balance": cash_balance,
+                "type": "Cash Account"
+            }]
         
         return {
             "totalRevenue": total_revenue,
