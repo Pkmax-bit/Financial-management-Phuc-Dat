@@ -80,7 +80,7 @@ app.include_router(expenses_vendor.router, prefix="/api/reports/expenses", tags=
 app.include_router(general_ledger.router, prefix="/api/reports/accountant", tags=["General Ledger"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(files.router, prefix="/api/files", tags=["Files"])
-app.include_router(customer_view.router, prefix="/api", tags=["Customer View"])
+app.include_router(customer_view.router, prefix="/api/customer-view", tags=["Customer View"])
 
 if __name__ == "__main__":
     uvicorn.run(

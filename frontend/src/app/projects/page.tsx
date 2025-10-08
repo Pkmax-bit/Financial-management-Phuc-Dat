@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import StickyTopNav from '@/components/StickyTopNav'
 import ProjectsTab from '@/components/projects/ProjectsTab'
 import CreateProjectModal from '@/components/projects/CreateProjectModal'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
@@ -166,37 +167,30 @@ export default function ProjectsPage() {
 
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={() => router.push('/login')}>
-      <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-4 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl shadow-sm">
-                <FolderOpen className="h-8 w-8 text-blue-600" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Dự án</h1>
-                <p className="text-black mt-1">Quản lý và theo dõi dự án một cách hiệu quả</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setActiveTab('reports')}
-                className="flex items-center gap-2 px-4 py-2.5 text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-              >
-                <BarChart3 className="h-4 w-4" />
-                Báo cáo
-              </button>
-              <button
-                onClick={handleCreateProject}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl font-medium"
-              >
-                <Plus className="h-5 w-5" />
-                Dự án mới
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className="w-full">
+        {/* Sticky Top Navigation */}
+        <StickyTopNav 
+          title="Dự án" 
+          subtitle="Quản lý và theo dõi dự án"
+        >
+          <button
+            onClick={() => setActiveTab('reports')}
+            className="flex items-center gap-2 px-4 py-2 text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Báo cáo
+          </button>
+          <button
+            onClick={handleCreateProject}
+            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl font-medium"
+          >
+            <Plus className="h-5 w-5" />
+            Dự án mới
+          </button>
+        </StickyTopNav>
+
+        {/* Page content */}
+        <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -301,6 +295,7 @@ export default function ProjectsPage() {
         onEdit={handleEditProject}
         onDelete={handleDeleteProject}
       />
-    </LayoutWithSidebar>
+    </div>
+  </LayoutWithSidebar>
   )
 }

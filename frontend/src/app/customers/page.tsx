@@ -226,10 +226,24 @@ export default function CustomersPage() {
     setEditForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  const openAddModal = () => {
+  const openAddModal = async () => {
     setAddForm(defaultCustomerForm)
     setAddError('')
     setShowAddModal(true)
+    
+    // Auto-fill customer code when opening modal
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('/api/customers/next-customer-code', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAddForm(prev => ({ ...prev, customer_code: data.next_customer_code }));
+      }
+    } catch (error) {
+      console.error('Error auto-filling customer code:', error);
+    }
   }
 
   const openEditModal = (customer: Customer) => {
@@ -926,7 +940,20 @@ export default function CustomersPage() {
             </div>
 
             <form onSubmit={createCustomer} className="p-6 space-y-6">
-              {/* Error Message */}
+              {/* Success/Error Messages */}
+              {addForm.customer_code && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <p className="text-sm text-green-800 font-semibold">
+                      Mã khách hàng đã được tự động tạo: <span className="font-bold">{addForm.customer_code}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+              
               {addError && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-3">
                   <p className="text-sm text-red-800 font-semibold">{addError}</p>
@@ -941,15 +968,45 @@ export default function CustomersPage() {
                     <label className="block text-sm font-bold text-gray-900 mb-2">
                       Mã khách hàng *
                     </label>
-                    <input 
-                      name="customer_code" 
-                      value={addForm.customer_code} 
-                      onChange={handleAddChange} 
-                      required
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
-                      placeholder="Nhập mã khách hàng..."
-                      disabled={addSaving}
-                    />
+                    <div className="flex items-center space-x-2">
+                      <input 
+                        name="customer_code" 
+                        value={addForm.customer_code} 
+                        onChange={handleAddChange} 
+                        required
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-semibold placeholder-gray-500"
+                        placeholder="CUS001 (tự động tạo)"
+                        disabled={addSaving}
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const token = localStorage.getItem('access_token');
+                            const response = await fetch('/api/customers/next-customer-code', {
+                              headers: { 'Authorization': `Bearer ${token}` },
+                            });
+                            if (response.ok) {
+                              const data = await response.json();
+                              setAddForm(prev => ({ ...prev, customer_code: data.next_customer_code }));
+                            }
+                          } catch (error) {
+                            console.error('Error generating customer code:', error);
+                          }
+                        }}
+                        disabled={addSaving}
+                        className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+                        title="Tự động tạo mã khách hàng"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span className="text-sm font-medium">Auto</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Mã khách hàng sẽ được tự động tạo theo định dạng CUS000
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-900 mb-2">

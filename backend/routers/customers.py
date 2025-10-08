@@ -10,7 +10,19 @@ import uuid
 
 from models.customer import Customer, CustomerCreate, CustomerUpdate
 from models.user import User
-from utils.auth import get_current_user, require_manager_or_admin
+from utils.auth import get_current_user
+from utils.rbac_middleware import (
+    require_manager_or_admin, 
+    require_customer_management,
+    require_financial_access,
+    get_user_role_info,
+    rbac_manager
+)
+from utils.customer_code_generator import (
+    get_next_available_customer_code,
+    validate_customer_code,
+    check_customer_code_exists
+)
 from services.supabase_client import get_supabase_client
 
 router = APIRouter()
@@ -39,6 +51,76 @@ async def test_auth(current_user: User = Depends(get_current_user)):
             "role": current_user.role
         }
     }
+
+@router.get("/debug-permissions")
+async def debug_permissions(current_user: User = Depends(get_current_user)):
+    """Debug endpoint to check user permissions"""
+    try:
+        # Check various permissions
+        can_access_customers = rbac_manager.can_access_feature(current_user, 'customers')
+        can_access_projects = rbac_manager.can_access_feature(current_user, 'projects')
+        can_access_financial = rbac_manager.can_access_feature(current_user, 'financial')
+        
+        # Get role info
+        role_info = get_user_role_info(current_user)
+        
+        return {
+            "user": {
+                "id": current_user.id,
+                "email": current_user.email,
+                "role": current_user.role
+            },
+            "permissions": {
+                "customers": can_access_customers,
+                "projects": can_access_projects,
+                "financial": can_access_financial
+            },
+            "role_info": role_info
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "user": {
+                "id": current_user.id,
+                "email": current_user.email,
+                "role": current_user.role
+            }
+        }
+
+@router.get("/user-permissions")
+async def get_user_permissions(current_user: User = Depends(get_current_user)):
+    """Get current user's role and permissions information"""
+    role_info = get_user_role_info(current_user)
+    return {
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "role": current_user.role.value
+        },
+        "permissions": role_info
+    }
+
+@router.get("/next-customer-code")
+async def get_next_customer_code():
+    """Get the next available customer code (no authentication required)"""
+    try:
+        next_code = get_next_available_customer_code()
+        return {
+            "next_customer_code": next_code,
+            "format": "CUS000",
+            "description": "Auto-generated customer code in format CUS + 3 digits"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate customer code: {str(e)}"
+        )
+
+@router.get("/test-public")
+async def test_public():
+    """Test public endpoint without authentication"""
+    return {"message": "This is a public endpoint", "status": "success"}
 
 @router.get("/public")
 async def get_customers_public():
@@ -104,7 +186,7 @@ async def get_customers(
     customer_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     level: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_customer_management)
 ):
     """Get all customers with optional filtering"""
     try:
@@ -175,17 +257,27 @@ async def create_customer(
     customer_data: CustomerCreate,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Create a new customer"""
+    """Create a new customer with auto-generated customer code"""
     try:
         supabase = get_supabase_client()
         
-        # Check if customer code already exists
-        existing = supabase.table("customers").select("id").eq("customer_code", customer_data.customer_code).execute()
-        if existing.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Customer code already exists"
-            )
+        # Auto-generate customer code if not provided
+        if not customer_data.customer_code:
+            customer_data.customer_code = get_next_available_customer_code()
+        else:
+            # Validate provided customer code format
+            if not validate_customer_code(customer_data.customer_code):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Customer code must be in format CUS000 (e.g., CUS001, CUS002, etc.)"
+                )
+            
+            # Check if provided customer code already exists
+            if check_customer_code_exists(customer_data.customer_code):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Customer code already exists"
+                )
         
         # Check if email already exists (if provided)
         if customer_data.email:

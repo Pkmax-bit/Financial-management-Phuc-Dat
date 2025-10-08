@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import StickyTopNav from '@/components/StickyTopNav'
 import PLReportModal from '@/components/reports/PLReportModal'
 import BalanceSheetModal from '@/components/reports/BalanceSheetModal'
 import CashFlowModal from '@/components/reports/CashFlowModal'
@@ -192,19 +193,15 @@ export default function ReportsPage() {
 
     return (
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
-      <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-blue-100 rounded-xl">
-              <BarChart3 className="h-8 w-8 text-blue-600" />
-            </div>
-                  <div>
-              <h1 className="text-3xl font-bold text-gray-900">Báo cáo</h1>
-              <p className="text-gray-600">Xem và tạo các báo cáo tài chính</p>
-                  </div>
-          </div>
-        </div>
+      <div className="w-full">
+        {/* Sticky Top Navigation */}
+        <StickyTopNav 
+          title="Báo cáo" 
+          subtitle="Xem và tạo các báo cáo tài chính"
+        />
+
+        {/* Page content */}
+        <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
 
         {/* Overview Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -389,6 +386,7 @@ export default function ReportsPage() {
           endDate={new Date().toISOString().split('T')[0]}
       />
       )}
-    </LayoutWithSidebar>
+    </div>
+  </LayoutWithSidebar>
   )
 }

@@ -40,7 +40,7 @@ class Customer(BaseModel):
 
 class CustomerCreate(BaseModel):
     """Customer creation model"""
-    customer_code: str
+    customer_code: Optional[str] = None  # Optional - sẽ được auto-generate nếu không cung cấp
     name: str
     type: CustomerType
     email: Optional[str] = None

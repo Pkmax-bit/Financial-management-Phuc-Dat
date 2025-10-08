@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { 
   FileText, 
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import StickyTopNav from '@/components/StickyTopNav'
 import OverviewTab from '@/components/sales/OverviewTab'
 import AllSalesTab from '@/components/sales/AllSalesTab'
 import QuotesTab from '@/components/sales/QuotesTab'
@@ -41,7 +42,7 @@ interface User {
   email?: string
 }
 
-export default function SalesPage() {
+function SalesPageContent() {
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -661,5 +662,13 @@ export default function SalesPage() {
         onClose={() => setShowQuickGuide(false)}
       />
     </LayoutWithSidebar>
+  )
+}
+
+export default function SalesPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SalesPageContent />
+    </Suspense>
   )
 }
