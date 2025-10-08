@@ -29,9 +29,8 @@ import QuotesTab from '@/components/sales/QuotesTab'
 import InvoicesTab from '@/components/sales/InvoicesTab'
 import PaymentsTab from '@/components/sales/PaymentsTab'
 import CustomersTab from '@/components/sales/CustomersTab'
-import ProductsServicesTab from '@/components/sales/ProductsServicesTab'
 import SalesReceiptsTab from '@/components/sales/SalesReceiptsTab'
-import ComparisonTab from '@/components/sales/ComparisonTab'
+import VarianceTab from '@/components/sales/VarianceTab'
 import CreateSalesReceiptModal from '@/components/sales/CreateSalesReceiptModal'
 import QuickGuideModal from '@/components/sales/QuickGuideModal'
 import { apiGet } from '@/lib/api'
@@ -62,7 +61,7 @@ function SalesPageContent() {
   // Handle tab parameter from URL
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'customers', 'products'].includes(tab)) {
+    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'customers', 'variance'].includes(tab)) {
       setActiveTab(tab)
     }
   }, [searchParams])
@@ -543,24 +542,14 @@ function SalesPageContent() {
                   Khách hàng
                 </button>
                 <button
-                  onClick={() => setActiveTab('products')}
+                  onClick={() => setActiveTab('variance')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'products'
+                    activeTab === 'variance'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Sản phẩm & Dịch vụ
-                </button>
-                <button
-                  onClick={() => setActiveTab('comparison')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'comparison'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  So sánh
+                  Chênh lệch trước hóa đơn
                 </button>
               </nav>
             </div>
@@ -579,8 +568,7 @@ function SalesPageContent() {
                       activeTab === 'quotes' ? 'Tìm kiếm báo giá...' : 
                       activeTab === 'invoices' ? 'Tìm kiếm hóa đơn...' : 
                       activeTab === 'customers' ? 'Tìm kiếm khách hàng...' :
-                      activeTab === 'products' ? 'Tìm kiếm sản phẩm...' :
-                      activeTab === 'comparison' ? 'Tìm kiếm so sánh...' :
+                      activeTab === 'variance' ? 'Tìm kiếm dự án chênh lệch...' :
                       'Tìm kiếm...'
                     }
                     value={searchTerm}
@@ -631,13 +619,8 @@ function SalesPageContent() {
                   searchTerm={searchTerm}
                 />
               )}
-              {activeTab === 'products' && (
-                <ProductsServicesTab 
-                  searchTerm={searchTerm}
-                />
-              )}
-              {activeTab === 'comparison' && (
-                <ComparisonTab 
+              {activeTab === 'variance' && (
+                <VarianceTab 
                   searchTerm={searchTerm}
                 />
               )}

@@ -633,6 +633,39 @@ async def get_invoices(
             detail=f"Failed to fetch invoices: {str(e)}"
         )
 
+@router.get("/variance")
+async def get_variance_data(
+    current_user: User = Depends(get_current_user)
+):
+    """Get variance data between quotes and invoices with customer and project names"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get quotes with customer and project names
+        quotes_result = supabase.table("quotes").select("""
+            id, project_id, customer_id, total_amount, created_at,
+            customers!quotes_customer_id_fkey(name),
+            projects!quotes_project_id_fkey(name, description)
+        """).execute()
+        
+        # Get invoices with customer and project names  
+        invoices_result = supabase.table("invoices").select("""
+            id, project_id, customer_id, total_amount, created_at,
+            customers!invoices_customer_id_fkey(name),
+            projects!invoices_project_id_fkey(name, description)
+        """).execute()
+        
+        return {
+            "quotes": quotes_result.data or [],
+            "invoices": invoices_result.data or []
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch variance data: {str(e)}"
+        )
+
 @router.get("/invoices/{invoice_id}", response_model=Invoice)
 async def get_invoice(
     invoice_id: str,
