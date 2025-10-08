@@ -82,7 +82,7 @@ async def get_expenses(
     project_id: Optional[str] = Query(None),
     customer_id: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None),
     is_billable: Optional[bool] = Query(None),
     is_reimbursable: Optional[bool] = Query(None),
     payment_method: Optional[str] = Query(None),
@@ -110,8 +110,8 @@ async def get_expenses(
         if category:
             query = query.eq("category", category)
         
-        if status:
-            query = query.eq("status", status)
+        if status_filter:
+            query = query.eq("status", status_filter)
         
         if is_billable is not None:
             query = query.eq("is_billable", is_billable)
@@ -124,10 +124,19 @@ async def get_expenses(
         
         # Apply pagination and ordering
         result = query.order("expense_date", desc=True).range(skip, skip + limit - 1).execute()
-        
-        return [Expense(**expense) for expense in result.data]
+
+        # Normalize records to match pydantic model (category required)
+        normalized = []
+        for expense in result.data:
+            if "category" not in expense:
+                # Fallback if only category_id exists or missing entirely
+                expense["category"] = expense.get("category", "other")
+            normalized.append(expense)
+
+        return [Expense(**expense) for expense in normalized]
         
     except Exception as e:
+        # Ensure we reference FastAPI status, not a shadowed variable
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch expenses: {str(e)}"

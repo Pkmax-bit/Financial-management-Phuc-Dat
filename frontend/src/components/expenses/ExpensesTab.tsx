@@ -16,7 +16,8 @@ import {
   Clock,
   XCircle,
   AlertTriangle,
-  Tag
+  Tag,
+  Minus
 } from 'lucide-react'
 import CreateExpenseSidebar from './CreateExpenseSidebar'
 import CreateExpenseDialog from './CreateExpenseDialog'
@@ -69,6 +70,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetchExpenses()
@@ -183,6 +185,104 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     return matchesSearch
   })
 
+  // Build children map for hierarchy
+  const childrenMap: Record<string, Expense[]> = filteredExpenses.reduce((acc, exp) => {
+    const parentId = exp.id_parent || 'root'
+    if (!acc[parentId]) acc[parentId] = []
+    acc[parentId].push(exp)
+    return acc
+  }, {} as Record<string, Expense[]>)
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const hasChildren = (id: string) => {
+    return (childrenMap[id] && childrenMap[id].length > 0) || false
+  }
+
+  const renderRows = (items: Expense[] = [], depth = 0): JSX.Element[] => {
+    return items.flatMap((exp) => {
+      const isExpanded = !!expandedIds[exp.id]
+      const indentStyle = { paddingLeft: `${depth * 20}px` }
+      const expandBtnClass = isExpanded
+        ? "w-6 h-6 flex items-center justify-center rounded-full border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"
+        : "w-6 h-6 flex items-center justify-center rounded-full border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100"
+      const rows: JSX.Element[] = [
+        (
+          <tr key={exp.id} className="hover:bg-gray-50">
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="flex items-center space-x-2" style={indentStyle as any}>
+                {hasChildren(exp.id) ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(exp.id)}
+                    className={expandBtnClass}
+                    aria-label={isExpanded ? 'Thu gọn' : 'Mở rộng'}
+                    title={isExpanded ? 'Thu gọn' : 'Mở rộng'}
+                  >
+                    {isExpanded ? (
+                      <Minus className="h-4 w-4" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                  </button>
+                ) : (
+                  <span className="w-5 h-5" />
+                )}
+                <div>
+                  <div className="text-sm font-medium text-gray-900">{exp.expense_code}</div>
+                  <div className="text-sm text-gray-500">{exp.expense_categories?.name || 'Chưa phân loại'}</div>
+                </div>
+              </div>
+            </td>
+            <td className="px-6 py-4">
+              <div className="text-sm text-gray-900">{exp.description}</div>
+              {(exp.employees?.users?.full_name || exp.employees?.first_name) && (
+                <div className="text-xs text-gray-500">
+                  Nhân viên: {exp.employees?.users?.full_name || `${exp.employees?.first_name || ''} ${exp.employees?.last_name || ''}`.trim()}
+                </div>
+              )}
+              {exp.notes && (
+                <div className="text-sm text-gray-500">{exp.notes}</div>
+              )}
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="text-sm font-medium text-gray-900">{formatCurrency(exp.amount)}</div>
+              <div className="text-sm text-gray-500">{exp.currency}</div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(exp.expense_date).toLocaleDateString('vi-VN')}</td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(exp.status)}`}>
+                {getStatusIcon(exp.status)}
+                <span className="ml-1">{getStatusText(exp.status)}</span>
+              </span>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div className="flex space-x-2">
+                <button className="text-blue-600 hover:text-blue-900 p-1" title="Xem chi tiết">
+                  <Eye className="h-4 w-4" />
+                </button>
+                <button className="text-gray-600 hover:text-gray-900 p-1" title="Chỉnh sửa">
+                  <Edit className="h-4 w-4" />
+                </button>
+                <button className="text-red-600 hover:text-red-900 p-1" title="Xóa">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </td>
+          </tr>
+        )
+      ]
+
+      if (isExpanded && hasChildren(exp.id)) {
+        rows.push(...renderRows(childrenMap[exp.id], depth + 1))
+      }
+
+      return rows
+    })
+  }
+
   return (
     <div className="space-y-4">
       {/* Header with Action Buttons */}
@@ -296,72 +396,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredExpenses.map((expense) => (
-                <tr key={expense.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {expense.expense_code}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {expense.expense_categories?.name || 'Chưa phân loại'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">
-                      {expense.description}
-                    </div>
-                    {(expense.employees?.users?.full_name || expense.employees?.first_name) && (
-                      <div className="text-xs text-gray-500">
-                        Nhân viên: {expense.employees?.users?.full_name || `${expense.employees?.first_name || ''} ${expense.employees?.last_name || ''}`.trim()}
-                      </div>
-                    )}
-                    {expense.notes && (
-                      <div className="text-sm text-gray-500">
-                        {expense.notes}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {formatCurrency(expense.amount)}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {expense.currency}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
-                      {getStatusIcon(expense.status)}
-                      <span className="ml-1">{getStatusText(expense.status)}</span>
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button 
-                        className="text-blue-600 hover:text-blue-900 p-1"
-                        title="Xem chi tiết"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button 
-                        className="text-gray-600 hover:text-gray-900 p-1"
-                        title="Chỉnh sửa"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button 
-                        className="text-red-600 hover:text-red-900 p-1"
-                        title="Xóa"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {renderRows(childrenMap['root'] || [])}
             </tbody>
           </table>
         </div>
