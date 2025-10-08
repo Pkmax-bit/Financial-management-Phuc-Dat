@@ -50,9 +50,10 @@ interface CreateExpenseDialogProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  defaultParentId?: string
 }
 
-export default function CreateExpenseDialog({ isOpen, onClose, onSuccess }: CreateExpenseDialogProps) {
+export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaultParentId }: CreateExpenseDialogProps) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [parentExpenses, setParentExpenses] = useState<ParentExpense[]>([])
@@ -83,6 +84,10 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess }: Crea
       const initializeForm = async () => {
         // Reset form first
         resetForm()
+        // Prefill parent id if provided
+        if (defaultParentId) {
+          setFormData(prev => ({ ...prev, id_parent: defaultParentId }))
+        }
         
         // Fetch data and generate code in parallel
         await Promise.all([
@@ -94,7 +99,7 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess }: Crea
       }
       initializeForm()
     }
-  }, [isOpen])
+  }, [isOpen, defaultParentId])
 
   const fetchEmployees = async () => {
     try {

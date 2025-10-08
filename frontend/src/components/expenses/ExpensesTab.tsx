@@ -68,6 +68,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
   const [loading, setLoading] = useState(true)
   const [showCreateSidebar, setShowCreateSidebar] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [defaultParentId, setDefaultParentId] = useState<string | undefined>(undefined)
   const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({})
@@ -193,6 +194,33 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     return acc
   }, {} as Record<string, Expense[]>)
 
+  // Parent lookup map for quick percent calculation
+  const parentMap: Record<string, string> = filteredExpenses.reduce((acc, exp) => {
+    if (exp.id) acc[exp.id] = exp.id_parent || 'root'
+    return acc
+  }, {} as Record<string, string>)
+
+  // Sum of immediate children only
+  const getImmediateChildrenTotal = (id: string): number => {
+    const children = childrenMap[id] || []
+    return children.reduce((sum, c) => sum + (c.amount || 0), 0)
+  }
+
+  // Display amount: if has direct children, show sum(children); else show own amount
+  const getDisplayAmount = (exp: Expense): number => {
+    return hasChildren(exp.id) ? getImmediateChildrenTotal(exp.id) : (exp.amount || 0)
+  }
+
+  // Percent for a child relative to its parent immediate total
+  const getChildPercent = (exp: Expense): string | null => {
+    const parentId = parentMap[exp.id]
+    if (!parentId || parentId === 'root') return null
+    const total = getImmediateChildrenTotal(parentId)
+    if (!total) return null
+    const pct = (exp.amount / total) * 100
+    return `${pct.toFixed(1)}%`
+  }
+
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }))
   }
@@ -248,8 +276,11 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
               )}
             </td>
             <td className="px-6 py-4 whitespace-nowrap">
-              <div className="text-sm font-medium text-gray-900">{formatCurrency(exp.amount)}</div>
+              <div className="text-sm font-medium text-gray-900">{formatCurrency(getDisplayAmount(exp))}</div>
               <div className="text-sm text-gray-500">{exp.currency}</div>
+              {!hasChildren(exp.id) && getChildPercent(exp) && (
+                <div className="text-xs text-gray-500 mt-1">Tỉ lệ trong cha: {getChildPercent(exp)}</div>
+              )}
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(exp.expense_date).toLocaleDateString('vi-VN')}</td>
             <td className="px-6 py-4 whitespace-nowrap">
@@ -260,6 +291,16 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
             </td>
             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
               <div className="flex space-x-2">
+                <button
+                  className="text-orange-600 hover:text-orange-800 p-1"
+                  title="Tạo chi phí con"
+                  onClick={() => {
+                    setDefaultParentId(exp.id)
+                    setShowCreateDialog(true)
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
                 <button className="text-blue-600 hover:text-blue-900 p-1" title="Xem chi tiết">
                   <Eye className="h-4 w-4" />
                 </button>
@@ -326,7 +367,9 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
         onSuccess={() => {
           fetchExpenses()
           setShowCreateDialog(false)
+          setDefaultParentId(undefined)
         }}
+        defaultParentId={defaultParentId}
       />
 
       {/* Create Expense Category Dialog */}
