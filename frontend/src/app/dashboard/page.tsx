@@ -23,12 +23,14 @@ import {
   HelpCircle,
   RefreshCw,
   Activity,
-  Zap
+  Zap,
+  RotateCcw
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import { useDashboard } from '@/hooks/useDashboard'
 import { CashflowWidget, EventsWidget, MonthlyChartWidget } from '@/components/DashboardWidgets'
+import TourButton, { TourProgress } from '@/components/TourButton'
 
 interface User {
   full_name?: string
@@ -40,6 +42,8 @@ export default function DashboardPage() {
   const [user, setUser] = useState<unknown>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [activeWidget, setActiveWidget] = useState('overview')
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [refreshCount, setRefreshCount] = useState(0)
   const router = useRouter()
 
   // Use the comprehensive dashboard hook
@@ -88,10 +92,61 @@ export default function DashboardPage() {
     checkUser()
   }, [checkUser])
 
+  // Auto refresh effect
+  useEffect(() => {
+    if (!userLoading && user && autoRefresh) {
+      // Initial load after user is confirmed
+      const initialRefresh = async () => {
+        try {
+          await refreshAll()
+          setRefreshCount(prev => prev + 1)
+        } catch (error) {
+          console.error('Initial refresh failed:', error)
+        }
+      }
+      
+      initialRefresh()
+
+      // Set up auto refresh every 30 seconds
+      const interval = setInterval(async () => {
+        try {
+          await refreshAll()
+          setRefreshCount(prev => prev + 1)
+        } catch (error) {
+          console.error('Auto refresh failed:', error)
+        }
+      }, 30000)
+
+      return () => clearInterval(interval)
+    }
+  }, [userLoading, user, autoRefresh, refreshAll])
+
+  // Handle page visibility change for better performance
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user && !isLoading) {
+        // Refresh when page becomes visible
+        refreshAll()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [user, isLoading, refreshAll])
+
   // Handle realtime updates toggle
   const handleToggleRealtime = () => {
-    // This would be implemented in the useDashboard hook if needed
-    console.log('Toggle realtime updates')
+    setAutoRefresh(!autoRefresh)
+  }
+
+  // Manual refresh handler
+  const handleManualRefresh = async () => {
+    try {
+      await refreshAll()
+      setRefreshCount(prev => prev + 1)
+    } catch (error) {
+      console.error('Manual refresh failed:', error)
+    }
   }
 
   const handleLogout = async () => {
@@ -151,8 +206,11 @@ export default function DashboardPage() {
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           <div className="space-y-8">
+            {/* Tour Progress */}
+            <TourProgress page="dashboard" />
+
             {/* Header */}
-            <div>
+            <div data-tour="dashboard-header">
               <div className="flex justify-between items-center">
                 <div>
                   <h1 className="text-3xl font-bold text-gray-900">Tổng quan kinh doanh</h1>
@@ -160,7 +218,7 @@ export default function DashboardPage() {
                     Nắm bắt tình hình tài chính và thực hiện các công việc hàng ngày
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4" data-tour="dashboard-controls">
                   {(stats.error || hasErrors) && (
                     <div className="bg-red-50 border border-red-200 rounded-md p-3">
                       <div className="flex">
@@ -180,6 +238,20 @@ export default function DashboardPage() {
                     <div className="text-sm text-black flex items-center gap-1">
                       <Clock className="h-4 w-4" />
                       Cập nhật: {stats.lastUpdated.toLocaleTimeString('vi-VN')}
+                    </div>
+                  )}
+
+                  {refreshCount > 0 && (
+                    <div className="text-sm text-gray-600 flex items-center gap-1">
+                      <RefreshCw className="h-4 w-4" />
+                      Đã làm mới: {refreshCount} lần
+                    </div>
+                  )}
+
+                  {autoRefresh && (
+                    <div className="text-sm text-green-600 flex items-center gap-1">
+                      <Activity className="h-4 w-4" />
+                      Tự động làm mới mỗi 30s
                     </div>
                   )}
 
@@ -203,12 +275,40 @@ export default function DashboardPage() {
                   </button>
                   
                   <button
-                    onClick={refreshAll}
+                    onClick={handleManualRefresh}
                     disabled={isLoading}
+                    data-tour="refresh-button"
                     className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                   >
                     <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                     Làm mới
+                  </button>
+
+                  <button
+                    onClick={handleToggleRealtime}
+                    className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                      autoRefresh 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                        : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                    }`}
+                  >
+                    <Activity className="h-4 w-4" />
+                    {autoRefresh ? 'Tự động' : 'Thủ công'}
+                  </button>
+                  
+                  <TourButton page="dashboard" />
+                  
+                  <button
+                    onClick={() => {
+                      // Clear localStorage for testing
+                      localStorage.removeItem('completedTours')
+                      window.location.reload()
+                    }}
+                    className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors flex items-center gap-2"
+                    title="Reset tour để test lại"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset Tour
                   </button>
                   
                   <button
@@ -223,7 +323,7 @@ export default function DashboardPage() {
             </div>
 
           {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6" data-tour="quick-actions">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Lối tắt truy cập nhanh</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {quickActions.map((action, index) => (
@@ -245,7 +345,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Financial Overview Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-tour="stats-cards">
             {/* Profit & Loss */}
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">

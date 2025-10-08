@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // Test accounts with different roles - Updated with real accounts
@@ -196,6 +196,17 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      {/* Back to Home Button */}
+      <div className="absolute top-4 left-4">
+        <Link 
+          href="/" 
+          className="inline-flex items-center space-x-2 bg-white/80 backdrop-blur-sm text-gray-700 px-4 py-2 rounded-full font-medium hover:bg-white hover:shadow-lg transition-all duration-300 border border-gray-200"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Trở về trang chủ</span>
+        </Link>
+      </div>
+
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100">
@@ -204,12 +215,6 @@ export default function LoginPage() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Đăng nhập vào tài khoản
           </h2>
-          <p className="mt-2 text-center text-sm text-black">
-            Hoặc{' '}
-            <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-              tạo tài khoản mới
-            </Link>
-          </p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
