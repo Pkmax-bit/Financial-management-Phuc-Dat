@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { X, Calendar, DollarSign, Users, Target, Clock, AlertCircle, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi, customerApi, employeeApi } from '@/lib/api'
+import ProjectSuccessModal from '../ProjectSuccessModal'
 
 interface Customer {
   id: string
@@ -47,6 +48,8 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [createdProject, setCreatedProject] = useState({ name: '', code: '' })
 
   useEffect(() => {
     if (isOpen) {
@@ -207,6 +210,18 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
       // Show success notification
       setSuccess(true)
+      setCreatedProject({ name: formData.name, code: formData.project_code })
+      setShowSuccessModal(true)
+      
+      // Play success sound (if available)
+      try {
+        const audio = new Audio('/sounds/success.mp3')
+        audio.play().catch(() => {
+          // Ignore if audio file doesn't exist
+        })
+      } catch (error) {
+        // Ignore audio errors
+      }
       
       // Call onSuccess to reload data
       onSuccess()
@@ -228,13 +243,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         hourly_rate: ''
       })
       
-      // Close modal and redirect to quotes page after showing success message
-      setTimeout(() => {
-        onClose()
-        setSuccess(false)
-        // Redirect to sales page with quotes tab active
-        router.push('/sales?tab=quotes')
-      }, 3000) // Increased to 3 seconds to allow users to read the message
+      // Don't auto-close modal, let success modal handle it
     } catch (error) {
       console.error('Error creating project:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to create project. Please try again.'
@@ -255,7 +264,22 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   if (!isOpen) return null
 
   return (
-    <div className="fixed top-16 right-4 z-50 w-full max-w-2xl">
+    <>
+      <ProjectSuccessModal
+        isVisible={showSuccessModal}
+        projectName={createdProject.name}
+        projectCode={createdProject.code}
+        onContinue={() => {
+          setShowSuccessModal(false)
+          onClose()
+          router.push('/sales?tab=quotes')
+        }}
+        onCancel={() => {
+          setShowSuccessModal(false)
+          onClose()
+        }}
+      />
+      <div className="fixed top-16 right-4 z-50 w-full max-w-2xl">
       <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div>
@@ -278,26 +302,29 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           )}
           
           {success && (
-            <div className="bg-green-50 border border-green-200 rounded-md p-4">
+            <div className="bg-green-50 border border-green-200 rounded-md p-4 animate-pulse">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
-                  <svg className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-6 w-6 text-green-500 animate-bounce" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-bold text-green-800">
-                    ✅ Dự án đã được tạo thành công!
+                  <h3 className="text-lg font-bold text-green-800">
+                    🎉 Dự án đã được tạo thành công!
                   </h3>
                   <p className="text-sm text-green-700 mt-1">
-                    Đang chuyển sang trang báo giá để tạo báo giá cho dự án mới...
+                    Dự án <strong>"{formData.name}"</strong> với mã <strong>"{formData.project_code}"</strong> đã được tạo thành công.
                   </p>
-                  <div className="mt-2 flex items-center text-xs text-green-600">
-                    <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <p className="text-sm text-green-600 mt-2 font-medium">
+                    📋 Đang chuyển sang trang báo giá để tạo báo giá cho dự án mới...
+                  </p>
+                  <div className="mt-3 flex items-center text-sm text-green-600 bg-green-100 rounded-lg p-2">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Vui lòng chờ trong giây lát...
+                    <span className="font-medium">Vui lòng chờ trong giây lát...</span>
                   </div>
                 </div>
               </div>
@@ -564,5 +591,6 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         </form>
       </div>
     </div>
+    </>
   )
 }
