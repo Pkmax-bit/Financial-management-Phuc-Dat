@@ -15,16 +15,18 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  Tag
 } from 'lucide-react'
 import CreateExpenseSidebar from './CreateExpenseSidebar'
+import CreateExpenseDialog from './CreateExpenseDialog'
+import CreateExpenseCategoryDialog from './CreateExpenseCategoryDialog'
+import { supabase } from '@/lib/supabase'
 
 interface Expense {
   id: string
   expense_code: string
   employee_id: string
-  project_id?: string
-  category: string
   description: string
   amount: number
   currency: string
@@ -32,8 +34,26 @@ interface Expense {
   receipt_url?: string
   status: 'pending' | 'approved' | 'rejected' | 'paid'
   notes?: string
+  id_parent?: string
+  category_id?: string
   created_at: string
   updated_at: string
+  employees?: {
+    id: string
+    user_id?: string
+    first_name?: string
+    last_name?: string
+    email?: string
+    users?: {
+      full_name: string
+      email: string
+    }
+  }
+  expense_categories?: {
+    id: string
+    name: string
+    description: string
+  }
 }
 
 interface ExpensesTabProps {
@@ -46,6 +66,8 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateSidebar, setShowCreateSidebar] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -54,7 +76,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
 
   useEffect(() => {
     if (shouldOpenCreateModal) {
-      setShowCreateSidebar(true)
+      setShowCreateDialog(true)
     }
   }, [shouldOpenCreateModal])
 
@@ -63,42 +85,49 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
       setLoading(true)
       setError(null)
       
-      // Mock data for now - replace with actual API call
-      const mockExpenses: Expense[] = [
-        {
-          id: '1',
-          expense_code: 'EXP-20241201-001',
-          employee_id: 'emp-001',
-          project_id: 'proj-001',
-          category: 'travel',
-          description: 'Chi phí đi lại công tác',
-          amount: 500000,
-          currency: 'VND',
-          expense_date: '2024-12-01',
-          receipt_url: 'https://example.com/receipt1.pdf',
-          status: 'pending',
-          notes: 'Đi công tác Hà Nội',
-          created_at: '2024-12-01T09:00:00Z',
-          updated_at: '2024-12-01T09:00:00Z'
-        },
-        {
-          id: '2',
-          expense_code: 'EXP-20241201-002',
-          employee_id: 'emp-002',
-          project_id: 'proj-002',
-          category: 'meals',
-          description: 'Chi phí ăn uống',
-          amount: 200000,
-          currency: 'VND',
-          expense_date: '2024-12-01',
-          status: 'approved',
-          notes: 'Tiệc khách hàng',
-          created_at: '2024-12-01T10:00:00Z',
-          updated_at: '2024-12-01T10:00:00Z'
-        }
-      ]
+      const { data, error } = await supabase
+        .from('expenses')
+        .select(`
+          id,
+          expense_code,
+          employee_id,
+          description,
+          amount,
+          currency,
+          expense_date,
+          receipt_url,
+          status,
+          notes,
+          id_parent,
+          category_id,
+          created_at,
+          updated_at,
+          employees!expenses_employee_id_fkey (
+            id,
+            user_id,
+            first_name,
+            last_name,
+            email,
+            users!employees_user_id_fkey (
+              full_name,
+              email
+            )
+          ),
+          expense_categories!expenses_category_id_fkey (
+            id,
+            name,
+            description
+          )
+        `)
+        .order('created_at', { ascending: false })
       
-      setExpenses(mockExpenses)
+      if (error) {
+        console.error('Supabase error fetching expenses:', error)
+        throw error
+      }
+      
+      console.log('Expenses fetched successfully:', data?.length || 0)
+      setExpenses(data || [])
     } catch (error) {
       console.error('Error fetching expenses:', error)
       setError('Không thể tải danh sách chi phí')
@@ -145,13 +174,41 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
   }
 
   const filteredExpenses = expenses.filter(expense => {
+    const empName = (expense.employees?.users?.full_name || `${expense.employees?.first_name || ''} ${expense.employees?.last_name || ''}`.trim()).toLowerCase()
+    const catName = expense.expense_categories?.name?.toLowerCase() || ''
     const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expense.expense_code.toLowerCase().includes(searchTerm.toLowerCase())
+                         expense.expense_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         empName.includes(searchTerm.toLowerCase()) ||
+                         catName.includes(searchTerm.toLowerCase())
     return matchesSearch
   })
 
   return (
     <div className="space-y-4">
+      {/* Header with Action Buttons */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Chi phí công ty</h3>
+          <p className="text-sm text-gray-600">Quản lý và theo dõi chi phí của công ty</p>
+        </div>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowCreateCategoryDialog(true)}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <Tag className="h-4 w-4 mr-2" />
+            Loại chi phí
+          </button>
+          <button
+            onClick={() => setShowCreateDialog(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Tạo chi phí
+          </button>
+        </div>
+      </div>
+
       {/* Create Expense Sidebar */}
       <CreateExpenseSidebar
         isOpen={showCreateSidebar}
@@ -159,6 +216,25 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
         onSuccess={() => {
           fetchExpenses()
           setShowCreateSidebar(false)
+        }}
+      />
+
+      {/* Create Expense Dialog */}
+      <CreateExpenseDialog
+        isOpen={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onSuccess={() => {
+          fetchExpenses()
+          setShowCreateDialog(false)
+        }}
+      />
+
+      {/* Create Expense Category Dialog */}
+      <CreateExpenseCategoryDialog
+        isOpen={showCreateCategoryDialog}
+        onClose={() => setShowCreateCategoryDialog(false)}
+        onSuccess={() => {
+          setShowCreateCategoryDialog(false)
         }}
       />
 
@@ -227,13 +303,18 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                       {expense.expense_code}
                     </div>
                     <div className="text-sm text-gray-500">
-                      {expense.category}
+                      {expense.expense_categories?.name || 'Chưa phân loại'}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
                       {expense.description}
                     </div>
+                    {(expense.employees?.users?.full_name || expense.employees?.first_name) && (
+                      <div className="text-xs text-gray-500">
+                        Nhân viên: {expense.employees?.users?.full_name || `${expense.employees?.first_name || ''} ${expense.employees?.last_name || ''}`.trim()}
+                      </div>
+                    )}
                     {expense.notes && (
                       <div className="text-sm text-gray-500">
                         {expense.notes}
