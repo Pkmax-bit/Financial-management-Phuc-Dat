@@ -19,6 +19,7 @@ import {
   BarChart3
 } from 'lucide-react'
 import CreateProjectExpenseDialog from './CreateProjectExpenseDialog'
+import { supabase } from '@/lib/supabase'
 
 interface ProjectExpense {
   id: string
@@ -47,7 +48,58 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'all' | 'planned' | 'actual'>('all')
+
+// Filter expenses based on view mode
+const getFilteredExpenses = () => {
+  switch (viewMode) {
+    case 'planned':
+      return expenses.filter(e => e.category === 'planned')
+    case 'actual':
+      return expenses.filter(e => e.category === 'actual')
+    default:
+      return expenses
+  }
+}
+
+// CRUD permissions
+const canEdit = (expense: ProjectExpense) => {
+  return expense.category === 'planned' && expense.status !== 'approved'
+}
+
+const canDelete = (expense: ProjectExpense) => {
+  return expense.category === 'planned' && expense.status !== 'approved'
+}
+
+const handleEditExpense = (expense: ProjectExpense) => {
+  if (!canEdit(expense)) return
+  // Open edit dialog logic here
+}
+
+const handleDeleteExpense = async (expenseId: string) => {
+  const expense = expenses.find(e => e.id === expenseId)
+  if (!expense || !canDelete(expense)) return
+  
+  if (window.confirm('Bạn có chắc chắn muốn xóa chi phí này?')) {
+    try {
+      const { error } = await supabase
+        .from('project_expenses_quote')
+        .delete()
+        .eq('id', expenseId)
+      
+      if (error) throw error
+      
+      // Refresh list after delete
+      fetchProjectExpenses()
+    } catch (e) {
+      console.error('Error deleting expense:', e)
+      setError('Không thể xóa chi phí')
+    }
+  }
+}
   const [showCreateModal, setShowCreateModal] = useState(false)
+
+  // Define projectsMap at the top of the component after fetching data
+  const [projectsMap, setProjectsMap] = useState(new Map())
 
   useEffect(() => {
     fetchProjectExpenses()
@@ -58,66 +110,85 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
     try {
       setLoading(true)
       setError(null)
-      
-      // Mock data for now - replace with actual API call
-      const mockExpenses: ProjectExpense[] = [
-        {
-          id: '1',
-          project_id: 'proj-001',
-          project_name: 'Dự án Website',
-          project_code: 'WEB-2024',
-          planned_amount: 5000000,
-          actual_amount: 4500000,
-          variance: -500000,
-          variance_percentage: -10,
-          category: 'planned',
-          description: 'Chi phí phát triển website',
-          expense_date: '2024-12-01',
-          status: 'approved',
-          created_at: '2024-12-01T09:00:00Z',
-          updated_at: '2024-12-01T09:00:00Z'
-        },
-        {
-          id: '2',
-          project_id: 'proj-001',
-          project_name: 'Dự án Website',
-          project_code: 'WEB-2024',
-          planned_amount: 0,
-          actual_amount: 3200000,
-          variance: 3200000,
-          variance_percentage: 100,
-          category: 'actual',
-          description: 'Chi phí thực tế phát triển',
-          expense_date: '2024-12-01',
-          status: 'approved',
-          created_at: '2024-12-01T10:00:00Z',
-          updated_at: '2024-12-01T10:00:00Z'
-        },
-        {
-          id: '3',
-          project_id: 'proj-002',
-          project_name: 'Dự án Mobile App',
-          project_code: 'MOB-2024',
-          planned_amount: 8000000,
+
+      const [quotesRes, actualRes, projectsRes] = await Promise.all([
+        supabase
+          .from('project_expenses_quote')
+          .select('id, project_id, expense_code, description, amount, currency, expense_date, status, created_at, updated_at')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('project_expenses')
+          .select('id, project_id, expense_code, description, amount, currency, expense_date, status, created_at, updated_at')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('projects')
+          .select('id, name, project_code'),
+      ])
+
+      if (quotesRes.error) throw quotesRes.error
+      if (actualRes.error) throw actualRes.error
+      if (projectsRes.error) throw projectsRes.error
+
+      // After fetching projectsRes
+      setProjectsMap(new Map(projectsRes.data.map(p => [p.id, p])))
+
+      const expensesMapped = [
+        ...quotesRes.data.map(e => ({
+          id: e.id,
+          project_id: e.project_id,
+          project_name: projectsMap.get(e.project_id)?.name || '',
+          project_code: projectsMap.get(e.project_id)?.project_code || '',
+          planned_amount: e.amount || 0,
           actual_amount: 0,
-          variance: -8000000,
-          variance_percentage: -100,
           category: 'planned',
-          description: 'Chi phí kế hoạch mobile app',
-          expense_date: '2024-12-01',
-          status: 'pending',
-          created_at: '2024-12-01T11:00:00Z',
-          updated_at: '2024-12-01T11:00:00Z'
-        }
+          description: e.description,
+          expense_date: e.expense_date,
+          status: e.status,
+          created_at: e.created_at,
+          updated_at: e.updated_at,
+        })),
+        ...actualRes.data.map(e => ({
+          id: e.id,
+          project_id: e.project_id,
+          project_name: projectsMap.get(e.project_id)?.name || '',
+          project_code: projectsMap.get(e.project_id)?.project_code || '',
+          planned_amount: 0,
+          actual_amount: e.amount || 0,
+          category: 'actual',
+          description: e.description,
+          expense_date: e.expense_date,
+          status: e.status,
+          created_at: e.created_at,
+          updated_at: e.updated_at,
+        })),
       ]
-      
-      setExpenses(mockExpenses)
+
+      setExpenses(expensesMapped)
     } catch (error) {
       console.error('Error fetching project expenses:', error)
       setError('Không thể tải chi phí dự án')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Calculate group totals and variance for comparison
+  const calculateComparison = (expenses: ProjectExpense[]) => {
+    const comparison = expenses.reduce((acc, exp) => {
+      const key = exp.project_id
+      if (!acc[key]) {
+        acc[key] = { planned: 0, actual: 0 }
+      }
+      acc[key][exp.category] += exp.category === 'planned' ? exp.planned_amount : exp.actual_amount
+      return acc
+    }, {})
+    return Object.entries(comparison).map(([projectId, { planned, actual }]) => ({
+      projectId,
+      planned,
+      actual,
+      variance: actual - planned,
+      variance_percentage: planned ? ((actual - planned) / planned) * 100 : 0
+    }))
   }
 
   const getStatusColor = (status: string) => {
@@ -166,6 +237,31 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
     }).format(amount)
   }
 
+  const handleApprove = async (quoteId: string) => {
+    try {
+      setLoading(true)
+      // Add auth header using Supabase session token
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/project-expenses/quotes/${quoteId}/approve`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || err.message || 'Duyệt thất bại')
+      }
+      await fetchProjectExpenses()
+    } catch (e) {
+      console.error('Approve quote failed:', e)
+      setError((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleCreateExpense = () => {
     setShowCreateModal(true)
     onCreateExpense()
@@ -196,9 +292,79 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const totalVariance = totalActual - totalPlanned
   const variancePercentage = totalPlanned > 0 ? (totalVariance / totalPlanned) * 100 : 0
 
-  return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
+  const formatProjects = (expenses: ProjectExpense[]) => {
+    const projectTotals = expenses.reduce((acc, expense) => {
+      const { project_id, planned_amount, actual_amount } = expense
+      if (!acc[project_id]) {
+        acc[project_id] = { planned: 0, actual: 0 }
+      }
+      acc[project_id].planned += planned_amount
+      acc[project_id].actual += actual_amount
+      return acc
+    }, {})
+
+    return Object.keys(projectTotals).map(project_id => {
+      const { planned, actual } = projectTotals[project_id]
+      return {
+        project_id,
+        planned,
+        actual,
+        variance: actual - planned,
+        variance_percentage: planned ? ((actual - planned) / planned) * 100 : 0
+      }
+    })
+  }
+
+  const projectDisplay = formatProjects(expenses)
+
+return (
+  <div className="space-y-6">
+    {/* View Mode Tabs */}
+    <div className="flex space-x-2">
+      <button
+        onClick={() => setViewMode('all')}
+        className={`px-4 py-2 rounded-lg ${
+          viewMode === 'all' 
+            ? 'bg-blue-100 text-blue-700' 
+            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+        }`}
+      >
+        Tất cả
+      </button>
+      <button
+        onClick={() => setViewMode('planned')}
+        className={`px-4 py-2 rounded-lg ${
+          viewMode === 'planned'
+            ? 'bg-blue-100 text-blue-700'
+            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+        }`}
+      >
+        Kế hoạch
+      </button>
+      <button
+        onClick={() => setViewMode('actual')}
+        className={`px-4 py-2 rounded-lg ${
+          viewMode === 'actual'
+            ? 'bg-blue-100 text-blue-700'
+            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+        }`}
+      >
+        Thực tế
+      </button>
+    </div>
+
+    {/* Add New Button - Only show in Planned tab */}
+    {viewMode === 'planned' && (
+      <button
+        onClick={() => setShowCreateDialog(true)}
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+      >
+        <Plus className="w-4 h-4 mr-2" />
+        Thêm chi phí kế hoạch
+      </button>
+    )}
+
+    {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center">
@@ -235,7 +401,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-600">Chênh lệch</p>
-              <p className={`text-lg font-bold ${getVarianceColor(totalVariance)}`}>
+              <p className="text-lg font-bold text-gray-900">
                 {formatCurrency(totalVariance)}
               </p>
             </div>
@@ -249,7 +415,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-600">Tỷ lệ %</p>
-              <p className={`text-lg font-bold ${getVarianceColor(totalVariance)}`}>
+              <p className="text-lg font-bold text-gray-900">
                 {variancePercentage.toFixed(1)}%
               </p>
             </div>
@@ -311,19 +477,6 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
             Thử lại
           </button>
         </div>
-      ) : filteredExpenses.length === 0 ? (
-        <div className="text-center py-12">
-          <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có chi phí dự án nào</h3>
-          <p className="text-gray-600 mb-4">Bắt đầu bằng cách thêm chi phí dự án đầu tiên</p>
-          <button
-            onClick={handleCreateExpense}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 flex items-center space-x-2 mx-auto"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Thêm chi phí dự án</span>
-          </button>
-        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -353,43 +506,37 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredExpenses.map((expense) => (
-                <tr key={expense.id} className="hover:bg-gray-50">
+              {projectDisplay.map((project) => (
+                <tr key={project.project_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
-                      {expense.project_name}
+                      {projectsMap.get(project.project_id)?.name || 'N/A'}
                     </div>
                     <div className="text-sm text-gray-500">
-                      {expense.project_code}
+                      {projectsMap.get(project.project_id)?.project_code || 'N/A'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      expense.category === 'planned' 
-                        ? 'bg-blue-100 text-blue-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {expense.category === 'planned' ? 'Kế hoạch' : 'Thực tế'}
-                    </span>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    Cộng dồn
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(expense.planned_amount)}
+                    {formatCurrency(project.planned)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(expense.actual_amount)}
+                    {formatCurrency(project.actual)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`flex items-center text-sm ${getVarianceColor(expense.variance)}`}>
-                      {getVarianceIcon(expense.variance)}
+                    <div className={`flex items-center text-sm ${getVarianceColor(project.variance)}`}>
+                      {getVarianceIcon(project.variance)}
                       <span className="ml-1">
-                        {formatCurrency(expense.variance)} ({expense.variance_percentage.toFixed(1)}%)
+                        {formatCurrency(project.variance)} ({project.variance_percentage.toFixed(1)}%)
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
-                      {getStatusIcon(expense.status)}
-                      <span className="ml-1">{getStatusText(expense.status)}</span>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.variance_percentage > 0 ? 'rejected' : 'approved')} ${getStatusColor(project.variance_percentage < 0 ? 'approved' : 'pending')}`}>
+                      {project.variance_percentage > 0 ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                      <span className="ml-1">{project.variance_percentage > 0 ? 'Từ chối' : 'Đã duyệt'}</span>
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -406,6 +553,15 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
                       >
                         <Edit className="h-4 w-4" />
                       </button>
+                      {project.variance_percentage > 0 && (
+                        <button
+                          onClick={() => handleApprove(project.project_id)}
+                          className="text-green-600 hover:text-green-900 p-1"
+                          title="Duyệt thành thực tế"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                        </button>
+                      )}
                       <button 
                         className="text-red-600 hover:text-red-900 p-1"
                         title="Xóa"

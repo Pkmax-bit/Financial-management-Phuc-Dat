@@ -34,8 +34,6 @@ interface Employee {
   id: string
   full_name: string
   email?: string
-  position?: string
-  department?: string
 }
 
 interface CreateProjectExpenseDialogProps {
@@ -47,6 +45,7 @@ interface CreateProjectExpenseDialogProps {
 export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess }: CreateProjectExpenseDialogProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [parentQuotes, setParentQuotes] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
@@ -67,7 +66,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
     status: 'pending',
     notes: '',
     receipt_url: '',
-    currency: 'VND'
+    currency: 'VND',
+    id_parent: ''
   })
 
   // Form validation
@@ -80,6 +80,29 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
       resetForm()
     }
   }, [isOpen])
+
+  // Load parent quotes when a project is selected (only planned quotes without parent or allow any as parent)
+  useEffect(() => {
+    const loadParents = async () => {
+      if (!formData.project_id) {
+        setParentQuotes([])
+        return
+      }
+      try {
+        const { data, error } = await supabase
+          .from('project_expenses_quote')
+          .select('id, expense_code, description, amount')
+          .eq('project_id', formData.project_id)
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        setParentQuotes(data || [])
+      } catch (e) {
+        console.error('❌ Error fetching parent quotes:', e)
+        setParentQuotes([])
+      }
+    }
+    loadParents()
+  }, [formData.project_id])
 
   const fetchProjects = async () => {
     try {
@@ -112,17 +135,22 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
       
       const { data, error } = await supabase
         .from('employees')
-        .select('id, full_name, email, position, department')
-        .eq('status', 'active')
-        .order('full_name', { ascending: true })
+        .select('id, user_id, first_name, last_name, email')
+        .order('first_name', { ascending: true })
       
       if (error) {
         console.error('❌ Supabase error fetching employees:', error)
         throw error
       }
       
-      console.log('✅ Employees fetched successfully:', data?.length || 0)
-      setEmployees(data || [])
+      const mapped: Employee[] = (data || []).map((e: any) => ({
+        id: e.id,
+        full_name: ((e.first_name || '') + ' ' + (e.last_name || '')).trim() || e.email || e.id,
+        email: e.email
+      }))
+      
+      console.log('✅ Employees fetched successfully:', mapped.length)
+      setEmployees(mapped)
     } catch (error) {
       console.error('❌ Error fetching employees:', error)
     }
@@ -150,16 +178,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
       newErrors.expense_date = 'Vui lòng chọn ngày chi phí'
     }
 
-    if (formData.planned_amount < 0) {
-      newErrors.planned_amount = 'Số tiền kế hoạch không được âm'
-    }
-
-    if (formData.actual_amount < 0) {
-      newErrors.actual_amount = 'Số tiền thực tế không được âm'
-    }
-
-    if (formData.planned_amount === 0 && formData.actual_amount === 0) {
-      newErrors.amounts = 'Vui lòng nhập ít nhất một số tiền'
+    if (formData.planned_amount <= 0) {
+      newErrors.planned_amount = 'Số tiền kế hoạch phải lớn hơn 0'
     }
 
     setErrors(newErrors)
@@ -174,17 +194,40 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
     setSubmitting(true)
     
     try {
+      // Chỉ lưu số tiền kế hoạch → map vào amount; luôn là kế hoạch (planned)
       const expenseData = {
-        ...formData,
-        planned_amount: parseFloat(formData.planned_amount.toString()),
-        actual_amount: parseFloat(formData.actual_amount.toString()),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        project_id: formData.project_id,
+        employee_id: formData.employee_id || null,
+        description: formData.description,
+        amount: parseFloat(formData.planned_amount.toString()) || 0,
+        currency: formData.currency,
+        expense_date: formData.expense_date,
+        status: 'pending',
+        notes: formData.notes || null,
+        receipt_url: formData.receipt_url || null,
+        id_parent: formData.id_parent || null,
       }
 
-      console.log('📤 Submitting project expense:', expenseData)
-      const result = await apiPost('http://localhost:8000/api/project-expenses', expenseData)
+      console.log('📤 Submitting project expense quote (planned only):', expenseData)
+      const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
       console.log('✅ Project expense created successfully:', result)
+      // After create, if has parent, update parent quote amount = sum(children)
+      if (expenseData.id_parent) {
+        try {
+          const parentId = expenseData.id_parent as string
+          const { data: children } = await supabase
+            .from('project_expenses_quote')
+            .select('amount')
+            .eq('id_parent', parentId)
+          const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
+          await supabase
+            .from('project_expenses_quote')
+            .update({ amount: total, updated_at: new Date().toISOString() })
+            .eq('id', parentId)
+        } catch (e) {
+          console.error('❌ Error updating parent quote amount:', e)
+        }
+      }
         
       onSuccess()
       onClose()
@@ -209,7 +252,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
       status: 'pending',
       notes: '',
       receipt_url: '',
-      currency: 'VND'
+      currency: 'VND',
+      id_parent: ''
     })
     setErrors({})
   }
@@ -236,8 +280,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
+      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center space-x-3">
@@ -246,7 +290,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">Tạo chi phí dự án</h2>
-              <p className="text-sm text-gray-600 mt-1">Quản lý chi phí kế hoạch và thực tế cho dự án</p>
+              <p className="text-sm text-black mt-1">Quản lý chi phí kế hoạch và thực tế cho dự án</p>
             </div>
           </div>
           <button
@@ -258,7 +302,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="flex-1 overflow-y-auto p-6 text-gray-900">
           <div className="space-y-6">
             {/* Basic Information Section */}
             <div className="bg-white border border-gray-200 rounded-lg">
@@ -281,12 +325,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                 <div className="px-4 pb-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Dự án <span className="text-red-500">*</span>
                       </label>
                       {loading ? (
                         <div className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                          <span className="text-sm text-gray-500">Đang tải...</span>
+                          <span className="text-sm text-black">Đang tải...</span>
                         </div>
                       ) : projects.length === 0 ? (
                         <div className="w-full border border-red-300 rounded-md px-3 py-2 bg-red-50">
@@ -296,7 +340,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                         <select
                           value={formData.project_id}
                           onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                          className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
                             errors.project_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
                           }`}
                         >
@@ -317,48 +361,66 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Nhân viên
                       </label>
                       <select
                         value={formData.employee_id}
                         onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                       >
                         <option value="">Chọn nhân viên (tùy chọn)</option>
                         {employees.map((employee) => (
                           <option key={employee.id} value={employee.id}>
-                            {employee.full_name} {employee.position ? `(${employee.position})` : ''}
+                            {employee.full_name}
                           </option>
                         ))}
                       </select>
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Chi phí cha (tuỳ chọn)
+                    </label>
+                    <select
+                      value={formData.id_parent}
+                      onChange={(e) => setFormData({ ...formData, id_parent: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    >
+                      <option value="">Không chọn</option>
+                      {parentQuotes.map((pq) => (
+                        <option key={pq.id} value={pq.id}>
+                          {(pq.expense_code ? pq.expense_code + ' - ' : '') + pq.description} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pq.amount || 0)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Loại chi phí <span className="text-red-500">*</span>
                       </label>
                       <select
                         value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => setFormData({ ...formData, category: 'planned' })}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+                        disabled
                       >
                         <option value="planned">Kế hoạch</option>
-                        <option value="actual">Thực tế</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Ngày chi phí <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="date"
                         value={formData.expense_date}
                         onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
-                        className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
                           errors.expense_date ? 'border-red-300 bg-red-50' : 'border-gray-300'
                         }`}
                       />
@@ -372,13 +434,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
                       Mô tả <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
                         errors.description ? 'border-red-300 bg-red-50' : 'border-gray-300'
                       }`}
                       rows={3}
@@ -395,7 +457,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
               )}
             </div>
 
-            {/* Amounts Section */}
+            {/* Amount Section - planned only */}
             <div className="bg-white border border-gray-200 rounded-lg">
               <button
                 onClick={() => toggleSection('amounts')}
@@ -403,7 +465,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
               >
                 <div className="flex items-center space-x-2">
                   <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="font-medium text-gray-900">Số tiền</span>
+                  <span className="font-medium text-gray-900">Số tiền kế hoạch</span>
                 </div>
                 {expandedSections.amounts ? (
                   <ChevronDown className="h-4 w-4 text-gray-400" />
@@ -414,87 +476,28 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
               
               {expandedSections.amounts && (
                 <div className="px-4 pb-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Số tiền kế hoạch (VND)
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.planned_amount}
-                        onChange={(e) => setFormData({ ...formData, planned_amount: parseFloat(e.target.value) || 0 })}
-                        className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          errors.planned_amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                        }`}
-                        min="0"
-                        step="0.01"
-                        placeholder="0"
-                      />
-                      {errors.planned_amount && (
-                        <p className="text-red-500 text-xs mt-1 flex items-center">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          {errors.planned_amount}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Số tiền thực tế (VND)
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.actual_amount}
-                        onChange={(e) => setFormData({ ...formData, actual_amount: parseFloat(e.target.value) || 0 })}
-                        className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          errors.actual_amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                        }`}
-                        min="0"
-                        step="0.01"
-                        placeholder="0"
-                      />
-                      {errors.actual_amount && (
-                        <p className="text-red-500 text-xs mt-1 flex items-center">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          {errors.actual_amount}
-                        </p>
-                      )}
-                    </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Số tiền kế hoạch (VND)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.planned_amount}
+                      onChange={(e) => setFormData({ ...formData, planned_amount: parseFloat(e.target.value) || 0 })}
+                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
+                        errors.planned_amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                    />
+                    {errors.planned_amount && (
+                      <p className="text-red-500 text-xs mt-1 flex items-center">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.planned_amount}
+                      </p>
+                    )}
                   </div>
-
-                  {/* Variance Display */}
-                  {formData.planned_amount > 0 && (
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Phân tích chênh lệch</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Chênh lệch:</span>
-                          <span className={`font-medium text-sm ${getVarianceColor(formData.actual_amount - formData.planned_amount)}`}>
-                            {formatCurrency(formData.actual_amount - formData.planned_amount)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Tỷ lệ %:</span>
-                          <span className={`font-medium text-sm ${getVarianceColor(formData.actual_amount - formData.planned_amount)}`}>
-                            {((formData.actual_amount - formData.planned_amount) / formData.planned_amount * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center space-x-2">
-                        {getVarianceIcon(formData.actual_amount - formData.planned_amount)}
-                        <span className="text-sm text-gray-600">
-                          {formData.actual_amount > formData.planned_amount ? 'Vượt ngân sách' : 
-                           formData.actual_amount < formData.planned_amount ? 'Tiết kiệm' : 'Đúng ngân sách'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {errors.amounts && (
-                    <p className="text-red-500 text-xs flex items-center">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      {errors.amounts}
-                    </p>
-                  )}
                 </div>
               )}
             </div>
@@ -520,28 +523,24 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                 <div className="px-4 pb-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Trạng thái
                       </label>
-                      <select
-                        value={formData.status}
-                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="pending">Chờ duyệt</option>
-                        <option value="approved">Đã duyệt</option>
-                        <option value="rejected">Từ chối</option>
-                      </select>
+                      <input
+                        value="Chờ duyệt"
+                        readOnly
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-900"
+                      />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Đơn vị tiền tệ
                       </label>
                       <select
                         value={formData.currency}
                         onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                       >
                         <option value="VND">VND (Việt Nam Đồng)</option>
                         <option value="USD">USD (US Dollar)</option>
@@ -551,26 +550,26 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
                       URL hóa đơn/chứng từ
                     </label>
                     <input
                       type="url"
                       value={formData.receipt_url}
                       onChange={(e) => setFormData({ ...formData, receipt_url: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                       placeholder="https://example.com/receipt.pdf"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
                       Ghi chú
                     </label>
                     <textarea
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                       rows={3}
                       placeholder="Ghi chú thêm về chi phí dự án..."
                     />
