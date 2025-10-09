@@ -51,9 +51,26 @@ interface CreateExpenseDialogProps {
   onClose: () => void
   onSuccess: () => void
   defaultParentId?: string
+  // Edit mode support
+  mode?: 'create' | 'edit'
+  expense?: {
+    id: string
+    expense_code: string
+    employee_id: string
+    description: string
+    amount: number
+    currency: string
+    expense_date: string
+    receipt_url?: string
+    status: string
+    notes?: string
+    id_parent?: string | null
+    category_id?: string | null
+  }
+  isLeaf?: boolean
 }
 
-export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaultParentId }: CreateExpenseDialogProps) {
+export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaultParentId, mode = 'create', expense, isLeaf = true }: CreateExpenseDialogProps) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [parentExpenses, setParentExpenses] = useState<ParentExpense[]>([])
@@ -89,17 +106,36 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
           setFormData(prev => ({ ...prev, id_parent: defaultParentId }))
         }
         
-        // Fetch data and generate code in parallel
+        // Fetch supporting data
         await Promise.all([
           fetchEmployees(),
           fetchExpenseCategories(),
           fetchParentExpenses(),
-          generateExpenseCode()
         ])
+        
+        // In edit mode, prefill from expense and skip generating code
+        if (mode === 'edit' && expense) {
+          setFormData({
+            expense_code: expense.expense_code || '',
+            employee_id: expense.employee_id || '',
+            description: expense.description || '',
+            amount: String(expense.amount ?? ''),
+            currency: expense.currency || 'VND',
+            expense_date: expense.expense_date ? expense.expense_date.split('T')[0] : new Date().toISOString().split('T')[0],
+            receipt_url: expense.receipt_url || '',
+            status: expense.status || 'pending',
+            notes: expense.notes || '',
+            id_parent: expense.id_parent || '',
+            category_id: expense.category_id || ''
+          })
+        } else {
+          // Create mode: generate code
+          await generateExpenseCode()
+        }
       }
       initializeForm()
     }
-  }, [isOpen, defaultParentId])
+  }, [isOpen, defaultParentId, mode, expense])
 
   const fetchEmployees = async () => {
     try {
@@ -253,20 +289,27 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
         id_parent: formData.id_parent || null,
         category_id: formData.category_id || null
       }
-
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert([expenseData])
-        .select()
-
-      if (error) throw error
+      if (mode === 'edit' && expense?.id) {
+        // Update existing expense
+        const { error } = await supabase
+          .from('expenses')
+          .update(expenseData)
+          .eq('id', expense.id)
+        if (error) throw error
+      } else {
+        // Create new expense
+        const { error } = await supabase
+          .from('expenses')
+          .insert([expenseData])
+        if (error) throw error
+      }
 
       onSuccess()
       onClose()
       resetForm()
     } catch (error) {
-      console.error('Error creating expense:', error)
-      alert('Có lỗi xảy ra khi tạo chi phí: ' + (error as Error).message)
+      console.error('Error saving expense:', error)
+      alert('Có lỗi xảy ra khi lưu chi phí: ' + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -307,8 +350,8 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
           <div className="flex items-center">
             <Receipt className="h-6 w-6 text-blue-600 mr-3" />
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Tạo chi phí mới</h2>
-              <p className="text-sm text-black mt-1">Tạo và quản lý chi phí công ty</p>
+              <h2 className="text-xl font-semibold text-gray-900">{mode === 'edit' ? 'Chỉnh sửa chi phí' : 'Tạo chi phí mới'}</h2>
+              <p className="text-sm textblack mt-1">{mode === 'edit' ? 'Cập nhật thông tin chi phí' : 'Tạo và quản lý chi phí công ty'}</p>
             </div>
           </div>
           <button
@@ -401,6 +444,7 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
                 min="0"
                 step="1000"
                 required
+                disabled={mode === 'edit' && !isLeaf}
               />
               {errors.amount && (
                 <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
@@ -491,12 +535,12 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
             {submitting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Đang tạo...
+                Đang lưu...
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Tạo chi phí
+                {mode === 'edit' ? 'Lưu thay đổi' : 'Tạo chi phí'}
               </>
             )}
           </button>

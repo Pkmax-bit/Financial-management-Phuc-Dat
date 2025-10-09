@@ -321,28 +321,55 @@ async def approve_expense(
     expense_id: str,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Approve an expense"""
+    """Approve an expense and all its children"""
     try:
         supabase = get_supabase_client()
         
         # Check if expense exists
-        existing = supabase.table("expenses").select("id").eq("id", expense_id).execute()
+        existing = supabase.table("expenses").select("id, status").eq("id", expense_id).execute()
         if not existing.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Expense not found"
             )
         
-        # Update expense status
-        result = supabase.table("expenses").update({
+        expense = existing.data[0]
+        
+        # Check if expense can be approved
+        if expense["status"] not in ["pending", "draft"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Expense cannot be approved in current status"
+            )
+        
+        # Get employee ID for the current user
+        employee_result = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
+        approved_by_employee_id = employee_result.data[0]["id"] if employee_result.data else None
+        
+        # Get all child expenses
+        child_expenses = supabase.table("expenses").select("id").eq("id_parent", expense_id).execute()
+        child_ids = [child["id"] for child in child_expenses.data]
+        
+        # Update parent expense status
+        update_data = {
             "status": "approved",
-            "approved_by": current_user.id,
             "approved_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", expense_id).execute()
+        }
+        if approved_by_employee_id:
+            update_data["approved_by"] = approved_by_employee_id
+            
+        result = supabase.table("expenses").update(update_data).eq("id", expense_id).execute()
+        
+        # Update all child expenses status
+        if child_ids:
+            supabase.table("expenses").update(update_data).in_("id", child_ids).execute()
         
         if result.data:
-            return {"message": "Expense approved successfully"}
+            return {
+                "message": "Expense and all children approved successfully",
+                "approved_count": 1 + len(child_ids)
+            }
         
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -398,6 +425,53 @@ async def reject_expense(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reject expense: {str(e)}"
+        )
+
+@router.delete("/expenses/{expense_id}")
+async def delete_expense(
+    expense_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Delete an expense"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if expense exists
+        existing = supabase.table("expenses").select("*").eq("id", expense_id).execute()
+        if not existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Expense not found"
+            )
+        
+        expense = existing.data[0]
+        
+        # Check if user can delete this expense
+        if expense["employee_id"] != current_user.id and not current_user.is_manager:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this expense"
+            )
+        
+        # Allow deletion at any status - no restriction
+        
+        # Delete the expense
+        result = supabase.table("expenses").delete().eq("id", expense_id).execute()
+        
+        if result.data:
+            return {"message": "Expense deleted successfully"}
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to delete expense"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete expense: {str(e)}"
         )
 
 @router.post("/expenses/reimbursement")

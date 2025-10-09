@@ -17,7 +17,8 @@ import {
   XCircle,
   AlertTriangle,
   Tag,
-  Minus
+  Minus,
+  Check
 } from 'lucide-react'
 import CreateExpenseSidebar from './CreateExpenseSidebar'
 import CreateExpenseDialog from './CreateExpenseDialog'
@@ -72,6 +73,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
   const [showCreateCategoryDialog, setShowCreateCategoryDialog] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({})
+  const [editDialogState, setEditDialogState] = useState<{ mode: 'create' | 'edit'; expense?: Expense; isLeaf?: boolean } | null>(null)
 
   useEffect(() => {
     fetchExpenses()
@@ -137,6 +139,176 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     } finally {
       setLoading(false)
     }
+  }
+
+  const updateParentExpenseAmount = async (parentId: string) => {
+    try {
+      // Get all child expenses
+      const { data: childExpenses } = await supabase
+        .from('expenses')
+        .select('amount')
+        .eq('id_parent', parentId)
+      
+      // Calculate total amount from children
+      const totalAmount = childExpenses?.reduce((sum, child) => sum + (child.amount || 0), 0) || 0
+      
+      // Update parent expense amount
+      const { error } = await supabase
+        .from('expenses')
+        .update({ 
+          amount: totalAmount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', parentId)
+      
+      if (error) throw error
+      
+      // Update local state
+      setExpenses(expenses.map(exp => 
+        exp.id === parentId 
+          ? { ...exp, amount: totalAmount }
+          : exp
+      ))
+      
+      console.log('Parent expense amount updated:', totalAmount)
+    } catch (error) {
+      console.error('Error updating parent expense amount:', error)
+    }
+  }
+
+  const handleDeleteExpense = async (expenseId: string, expenseCode: string) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa chi phí ${expenseCode}? Hành động này không thể hoàn tác.`)) {
+      try {
+        // Try API first, fallback to Supabase
+        try {
+          // Get the current session token
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session?.access_token) {
+            throw new Error('No authentication token found')
+          }
+          
+          // Call the backend API with correct endpoint
+          const response = await fetch(`/api/expenses/expenses/${expenseId}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+          })
+          
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.detail || errorData.error || 'Failed to delete expense')
+          }
+        } catch (apiError) {
+          console.log('API failed, falling back to Supabase:', apiError)
+          
+          // Check if expense exists and get its status
+          const { data: expense, error: fetchError } = await supabase
+            .from('expenses')
+            .select('id, status, expense_code')
+            .eq('id', expenseId)
+            .single()
+          
+          if (fetchError || !expense) {
+            throw new Error('Expense not found')
+          }
+          
+          // Allow deletion at any status - no restriction
+          
+          // Delete the expense directly from Supabase
+          const { error: deleteError } = await supabase
+            .from('expenses')
+            .delete()
+            .eq('id', expenseId)
+          
+          if (deleteError) {
+            console.error('Error deleting expense:', deleteError)
+            throw new Error('Failed to delete expense')
+          }
+        }
+
+        // Update local state
+        setExpenses(expenses.filter(exp => exp.id !== expenseId))
+        console.log('Expense deleted successfully')
+      } catch (error) {
+        console.error('Error deleting expense:', error)
+        setError(`Không thể xóa chi phí: ${(error as Error)?.message || 'Lỗi không xác định'}`)
+      }
+    }
+  }
+
+  const handleApproveExpense = async (expenseId: string, expenseCode: string) => {
+    if (window.confirm(`Bạn có chắc chắn muốn duyệt chi phí ${expenseCode}? Tất cả chi phí con cũng sẽ được duyệt.`)) {
+      try {
+        setLoading(true)
+        
+        // Get all child expenses first
+        const { data: childExpenses } = await supabase
+          .from('expenses')
+          .select('id')
+          .eq('id_parent', expenseId)
+        
+        const childIds = childExpenses?.map(child => child.id) || []
+        
+        // Update parent expense status
+        const { error: parentError } = await supabase
+          .from('expenses')
+          .update({
+            status: 'approved',
+            approved_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', expenseId)
+        
+        if (parentError) throw parentError
+        
+        // Update all child expenses status
+        if (childIds.length > 0) {
+          const { error: childrenError } = await supabase
+            .from('expenses')
+            .update({
+              status: 'approved',
+              approved_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .in('id', childIds)
+          
+          if (childrenError) throw childrenError
+        }
+        
+        // Update local state
+        setExpenses(expenses.map(exp => {
+          if (exp.id === expenseId || childIds.includes(exp.id)) {
+            return { ...exp, status: 'approved' }
+          }
+          return exp
+        }))
+        
+        console.log('Expense and children approved successfully')
+      } catch (error) {
+        console.error('Error approving expense:', error)
+        setError(`Không thể duyệt chi phí: ${(error as Error)?.message || 'Lỗi không xác định'}`)
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  const handleEditExpense = (expenseId: string, expenseCode: string) => {
+    const expense = expenses.find(exp => exp.id === expenseId)
+    if (!expense) return
+    
+    const isLeaf = isLeafExpense(expenseId)
+    
+    // Open edit dialog with expense data and amount field enabled/disabled
+    setEditDialogState({ mode: 'edit', expense, isLeaf })
+    setDefaultParentId(expense.id_parent)
+    setShowCreateDialog(true)
+    
+    // You can pass additional props to CreateExpenseDialog to handle edit mode
+    // For now, we'll use the existing dialog but with different behavior
+    console.log('Edit expense:', expenseCode, 'Is leaf:', isLeaf)
   }
 
   const getStatusColor = (status: string) => {
@@ -229,6 +401,10 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     return (childrenMap[id] && childrenMap[id].length > 0) || false
   }
 
+  const isLeafExpense = (id: string) => {
+    return !hasChildren(id)
+  }
+
   const renderRows = (items: Expense[] = [], depth = 0): JSX.Element[] => {
     return items.flatMap((exp) => {
       const isExpanded = !!expandedIds[exp.id]
@@ -304,10 +480,27 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                 <button className="text-blue-600 hover:text-blue-900 p-1" title="Xem chi tiết">
                   <Eye className="h-4 w-4" />
                 </button>
-                <button className="text-gray-600 hover:text-gray-900 p-1" title="Chỉnh sửa">
+                <button 
+                  className="text-gray-600 hover:text-gray-900 p-1" 
+                  title="Chỉnh sửa"
+                  onClick={() => handleEditExpense(exp.id, exp.expense_code)}
+                >
                   <Edit className="h-4 w-4" />
                 </button>
-                <button className="text-red-600 hover:text-red-900 p-1" title="Xóa">
+                {exp.status === 'pending' && (
+                  <button 
+                    className="text-green-600 hover:text-green-900 p-1" 
+                    title="Duyệt chi phí"
+                    onClick={() => handleApproveExpense(exp.id, exp.expense_code)}
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                )}
+                <button 
+                  className="text-red-600 hover:text-red-900 p-1" 
+                  title="Xóa"
+                  onClick={() => handleDeleteExpense(exp.id, exp.expense_code)}
+                >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -368,8 +561,13 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
           fetchExpenses()
           setShowCreateDialog(false)
           setDefaultParentId(undefined)
+          setEditDialogState(null)
         }}
         defaultParentId={defaultParentId}
+        // If we opened via Edit button, pass edit params stored in temp state
+        mode={(editDialogState as any)?.mode || 'create'}
+        expense={(editDialogState as any)?.expense}
+        isLeaf={(editDialogState as any)?.isLeaf ?? true}
       />
 
       {/* Create Expense Category Dialog */}
