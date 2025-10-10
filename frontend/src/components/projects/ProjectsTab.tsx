@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { ProjectTeamDialog } from './ProjectTeamDialog'
 import { 
   FolderOpen, 
   Plus, 
@@ -115,6 +116,8 @@ export default function ProjectsTab({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [error, setError] = useState<string | null>(null)
   const [generatedCode, setGeneratedCode] = useState<string>('')
+  const [teamDialogOpen, setTeamDialogOpen] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
 
   useEffect(() => {
     fetchProjects()
@@ -122,7 +125,6 @@ export default function ProjectsTab({
 
   const generateProjectCode = async () => {
     try {
-      // Get all existing project codes from database
       const { data, error } = await supabase
         .from('projects')
         .select('project_code')
@@ -130,11 +132,9 @@ export default function ProjectsTab({
 
       if (error) throw error
 
-      // Extract all existing numbers
       const existingNumbers = new Set<number>()
       if (data && data.length > 0) {
         data.forEach(project => {
-          // Check for both #PRJ and PRJ formats
           const match1 = project.project_code.match(/#PRJ(\d+)/)
           const match2 = project.project_code.match(/PRJ(\d+)/)
           if (match1) {
@@ -145,25 +145,20 @@ export default function ProjectsTab({
         })
       }
 
-      // Find the next available number
       let nextNumber = 1
       while (existingNumbers.has(nextNumber)) {
         nextNumber++
       }
 
-      // Format as PRJXXX (3 digits)
       const newCode = `PRJ${nextNumber.toString().padStart(3, '0')}`
       setGeneratedCode(newCode)
       
-      // Copy to clipboard
       await navigator.clipboard.writeText(newCode)
       
-      // Show success message
       alert(`Mã dự án mới: ${newCode}\nĐã sao chép vào clipboard!`)
       
     } catch (error) {
       console.error('Error generating project code:', error)
-      // Fallback to timestamp-based code
       const timestamp = Date.now().toString().slice(-6)
       const fallbackCode = `PRJ${timestamp}`
       setGeneratedCode(fallbackCode)
@@ -177,10 +172,8 @@ export default function ProjectsTab({
       setLoading(true)
       setError(null)
       
-      // Try API first, fallback to Supabase
       try {
         const data = await projectApi.getProjects()
-        // API now returns customer_name and manager_name directly
         setProjects(data || [])
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
@@ -215,7 +208,6 @@ export default function ProjectsTab({
   const handleDelete = async (project: Project) => {
     if (window.confirm(`Are you sure you want to delete project "${project.name}"?`)) {
       try {
-        // Try API first, fallback to Supabase
         try {
           await projectApi.deleteProject(project.id)
         } catch (apiError) {
@@ -239,7 +231,6 @@ export default function ProjectsTab({
 
   const handleQuickSave = async (project: Project) => {
     try {
-      // Quick save - just update the project with current data
       const updateData = {
         name: project.name,
         description: project.description,
@@ -503,6 +494,16 @@ export default function ProjectsTab({
                       <BarChart3 className="h-4 w-4" />
                     </button>
                     <button
+                      onClick={() => {
+                        setSelectedProjectId(project.id);
+                        setTeamDialogOpen(true);
+                      }}
+                      className="p-1.5 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      title="Thêm thành viên"
+                    >
+                      <Users className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={() => onEditProject(project)}
                       className="p-1.5 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Chỉnh sửa dự án"
@@ -587,6 +588,17 @@ export default function ProjectsTab({
           </div>
         </div>
       )}
+
+      {/* Team Dialog */}
+      <ProjectTeamDialog
+        open={teamDialogOpen}
+        onClose={() => setTeamDialogOpen(false)}
+        projectId={selectedProjectId}
+        onSuccess={() => {
+          setTeamDialogOpen(false);
+          fetchProjects();
+        }}
+      />
     </div>
   )
 }
