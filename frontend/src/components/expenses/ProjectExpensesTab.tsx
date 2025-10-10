@@ -57,17 +57,26 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'all' | 'planned' | 'actual'>('all')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [employees, setEmployees] = useState<Map<string, string>>(new Map())
 
-// Filter expenses based on view mode
+// Filter expenses based on view mode and build tree
 const getFilteredExpenses = () => {
+  let filtered: ProjectExpense[] = []
+  
   switch (viewMode) {
     case 'planned':
-      return expenses.filter(e => e.category === 'planned')
+      filtered = expenses.filter(e => e.category === 'planned')
+      break
     case 'actual':
-      return expenses.filter(e => e.category === 'actual')
+      filtered = expenses.filter(e => e.category === 'actual')
+      break
     default:
-      return expenses
+      filtered = expenses
   }
+  
+  // Build tree structure and flatten for display
+  const tree = buildTree(filtered)
+  return flattenTree(tree)
 }
 
 // Get display data based on view mode
@@ -237,6 +246,65 @@ const handleApproveExpense = async (expenseId: string) => {
   // Define projectsMap at the top of the component after fetching data
   const [projectsMap, setProjectsMap] = useState(new Map())
 
+  // Toggle expand/collapse for parent items
+  const toggleExpand = (itemId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId)
+      } else {
+        newSet.add(itemId)
+      }
+      return newSet
+    })
+  }
+
+  // Build tree structure from flat list
+  const buildTree = (flatList: ProjectExpense[]): ProjectExpense[] => {
+    const map = new Map<string, ProjectExpense>()
+    const roots: ProjectExpense[] = []
+
+    // First pass: create map of all items
+    flatList.forEach(item => {
+      map.set(item.id, { ...item, children: [], hasChildren: false })
+    })
+
+    // Second pass: build tree
+    flatList.forEach(item => {
+      const node = map.get(item.id)!
+      if (item.id_parent) {
+        const parent = map.get(item.id_parent)
+        if (parent) {
+          parent.children = parent.children || []
+          parent.children.push(node)
+          parent.hasChildren = true
+        } else {
+          // Parent not found in same category, treat as root
+          roots.push(node)
+        }
+      } else {
+        roots.push(node)
+      }
+    })
+
+    return roots
+  }
+
+  // Flatten tree for rendering with level info
+  const flattenTree = (tree: ProjectExpense[], level = 0): ProjectExpense[] => {
+    const result: ProjectExpense[] = []
+    
+    tree.forEach(item => {
+      result.push({ ...item, level })
+      
+      if (item.hasChildren && item.children && expandedItems.has(item.id)) {
+        result.push(...flattenTree(item.children, level + 1))
+      }
+    })
+    
+    return result
+  }
+
   useEffect(() => {
     fetchProjectExpenses()
   }, [])
@@ -306,6 +374,44 @@ const handleApproveExpense = async (expenseId: string) => {
       ]
 
       setExpenses(expensesMapped)
+
+      // Fetch employees data for display names
+      console.log('Fetching employees data in ProjectExpensesTab...')
+      
+      // Try fetching from users table first
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, full_name')
+      
+      if (usersError) {
+        console.error('Error fetching users:', usersError)
+        // Try employees table as fallback
+        const { data: employeesData, error: employeesError } = await supabase
+          .from('employees')
+          .select('id, full_name')
+        
+        if (employeesError) {
+          console.error('Error fetching employees:', employeesError)
+        } else {
+          console.log('Employees fetch successful, data:', employeesData)
+          if (employeesData) {
+            const employeesMap = new Map<string, string>()
+            employeesData.forEach(emp => {
+              employeesMap.set(emp.id, emp.full_name)
+            })
+            setEmployees(employeesMap)
+          }
+        }
+      } else {
+        console.log('Users fetch successful, data:', usersData)
+        if (usersData) {
+          const employeesMap = new Map<string, string>()
+          usersData.forEach(user => {
+            employeesMap.set(user.id, user.full_name)
+          })
+          setEmployees(employeesMap)
+        }
+      }
     } catch (error) {
       console.error('Error fetching project expenses:', error)
       setError('Không thể tải chi phí dự án')
@@ -775,14 +881,53 @@ return (
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {expense.description}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Mã: {expense.id.substring(0, 8)}...
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
+                      <div className="flex items-center">
+                        {/* Indent based on level */}
+                        <div style={{ marginLeft: `${(expense.level || 0) * 24}px` }} className="flex items-center flex-1">
+                          {/* Expand/Collapse button for parents */}
+                          {expense.hasChildren ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleExpand(expense.id)
+                              }}
+                              className="mr-2 p-1 hover:bg-gray-100 rounded"
+                              title={expandedItems.has(expense.id) ? 'Thu gọn' : 'Mở rộng'}
+                            >
+                              {expandedItems.has(expense.id) ? (
+                                <ChevronDown className="h-4 w-4 text-gray-600" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-600" />
+                              )}
+                            </button>
+                          ) : (
+                            <div className="w-6 mr-2" />
+                          )}
+                          
+                          {/* Icon for parent/child */}
+                          {expense.hasChildren ? (
+                            <Folder className="h-4 w-4 text-blue-500 mr-2" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-gray-400 mr-2" />
+                          )}
+                          
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900">
+                              {expense.description}
+                              {expense.hasChildren && expense.children && (
+                                <span className="ml-2 text-xs text-gray-500">
+                                  ({expense.children.length} mục)
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Mã: {expense.id.substring(0, 8)}...
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </td>
                     {/* Show only planned amount in 'planned' view */}

@@ -112,6 +112,7 @@ export default function ProjectDetailedReportDetailPage() {
   const [invoices, setInvoices] = useState<InvoiceItem[]>([])
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
   const [expenseQuotes, setExpenseQuotes] = useState<any[]>([])
+  const [employees, setEmployees] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     checkUser()
@@ -194,48 +195,61 @@ export default function ProjectDetailedReportDetailPage() {
 
       setInvoices(invoicesData || [])
 
-      // Fetch project expenses (actual costs - dùng tính lợi nhuận)
-      const { data: projectExpensesData } = await supabase
-        .from('project_expenses')
-        .select(`
-          *,
-          employees:employee_id (
-            id,
-            full_name,
-            department_id
-          ),
-          expense_categories:department_id (
-            id,
-            name
-          )
-        `)
-        .eq('project_id', projectId)
-        .eq('status', 'approved')
-        .order('expense_date', { ascending: false })
+       // Fetch project expenses (actual costs - dùng tính lợi nhuận)
+       const { data: projectExpensesData } = await supabase
+         .from('project_expenses')
+         .select('*')
+         .eq('project_id', projectId)
+         .eq('status', 'approved')
+         .order('expense_date', { ascending: false })
 
       setExpenses(projectExpensesData || [])
 
       // Fetch project expense quotes (planned costs - dùng so sánh)
       const { data: projectExpenseQuotesData } = await supabase
         .from('project_expenses_quote')
-        .select(`
-          *,
-          employees:employee_id (
-            id,
-            full_name,
-            department_id
-          ),
-          expense_categories:department_id (
-            id,
-            name
-          )
-        `)
+        .select('*')
         .eq('project_id', projectId)
         .order('expense_date', { ascending: false })
 
       setExpenseQuotes(projectExpenseQuotesData || [])
 
-    } catch (error) {
+      // Resolve employee full names via employees.user_id -> users.full_name
+      const employeeIds = Array.from(new Set([
+        ...(projectExpensesData || []).map((e: any) => e.employee_id).filter(Boolean),
+        ...(projectExpenseQuotesData || []).map((e: any) => e.employee_id).filter(Boolean),
+      ])) as string[]
+
+      if (employeeIds.length > 0) {
+        const { data: empRows } = await supabase
+          .from('employees')
+          .select('id, user_id')
+          .in('id', employeeIds)
+
+        if (empRows && empRows.length > 0) {
+          const userIds = Array.from(new Set(empRows.map((r: any) => r.user_id).filter(Boolean))) as string[]
+          if (userIds.length > 0) {
+            const { data: userRows } = await supabase
+              .from('users')
+              .select('id, full_name')
+              .in('id', userIds)
+
+            if (userRows) {
+              const map = new Map<string, string>()
+              // Build map from employee_id -> user.full_name
+              empRows.forEach((emp: any) => {
+                const user = userRows.find((u: any) => u.id === emp.user_id)
+                if (user?.full_name) {
+                  map.set(emp.id, user.full_name)
+                }
+              })
+              setEmployees(map)
+            }
+          }
+        }
+      }
+
+     } catch (error) {
       console.error('Error fetching project data:', error)
     } finally {
       setLoading(false)
@@ -442,8 +456,10 @@ export default function ProjectDetailedReportDetailPage() {
       employees: Set<string>
     }>()
     
-    expenseQuotes.forEach(eq => {
-      const category = (eq as any).expense_categories?.name || eq.description?.split(' ')[0] || 'Khác'
+    // Only include APPROVED planned quotes
+    const approvedPlanned = (expenseQuotes || []).filter((eq: any) => eq.status === 'approved')
+    approvedPlanned.forEach(eq => {
+      const category = eq.description?.split(' ')[0] || 'Khác'
       const current = plannedMap.get(category) || { 
         amount: 0, 
         department: 'Chưa xác định',
@@ -452,13 +468,13 @@ export default function ProjectDetailedReportDetailPage() {
       
       current.amount += eq.amount || 0
       
-      // Get department info
-      if ((eq as any).expense_categories?.name) {
-        current.department = (eq as any).expense_categories.name
+      // Get department info from department_id
+      if (eq.department_id) {
+        current.department = `Department ${eq.department_id}`
       }
-      if ((eq as any).employees?.full_name) {
-        current.employees.add((eq as any).employees.full_name)
-      }
+       if (eq.employee_id) {
+         current.employees.add(employees.get(eq.employee_id) || `Employee ${eq.employee_id}`)
+       }
       
       plannedMap.set(category, current)
     })
@@ -471,7 +487,7 @@ export default function ProjectDetailedReportDetailPage() {
     }>()
     
     expenses.forEach(exp => {
-      const category = (exp as any).expense_categories?.name || exp.description?.split(' ')[0] || 'Khác'
+      const category = exp.description?.split(' ')[0] || 'Khác'
       const current = actualMap.get(category) || { 
         amount: 0, 
         department: 'Chưa xác định',
@@ -480,18 +496,18 @@ export default function ProjectDetailedReportDetailPage() {
       
       current.amount += exp.amount || 0
       
-      // Get department info
-      if ((exp as any).expense_categories?.name) {
-        current.department = (exp as any).expense_categories.name
+      // Get department info from department_id
+      if (exp.department_id) {
+        current.department = `Department ${exp.department_id}`
       }
-      if ((exp as any).employees?.full_name) {
-        current.employees.add((exp as any).employees.full_name)
-      }
+       if (exp.employee_id) {
+         current.employees.add(employees.get(exp.employee_id) || `Employee ${exp.employee_id}`)
+       }
       
       actualMap.set(category, current)
     })
     
-    // Get all unique categories from both planned and actual
+    // Compare categories that exist in approved planned OR actual expenses
     const allCategories = new Set([...plannedMap.keys(), ...actualMap.keys()])
     
     const comparisons: ExpenseComparison[] = []
@@ -555,7 +571,33 @@ export default function ProjectDetailedReportDetailPage() {
     })
     
     return comparisons.sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))
-  }, [expenses, expenseQuotes])
+   }, [expenses, expenseQuotes, employees])
+
+  // Approved planned maps for per-item badge logic
+  const approvedPlannedQuotes = useMemo(() => (expenseQuotes || []).filter((eq: any) => eq.status === 'approved'), [expenseQuotes])
+  const plannedByDescription = useMemo(() => {
+    const map = new Map<string, number>()
+    approvedPlannedQuotes.forEach((eq: any) => {
+      const key = (eq.description || '').trim().toLowerCase()
+      if (!key) return
+      map.set(key, (map.get(key) || 0) + (eq.amount || 0))
+    })
+    return map
+  }, [approvedPlannedQuotes])
+  const plannedByCategoryToken = useMemo(() => {
+    const map = new Map<string, number>()
+    approvedPlannedQuotes.forEach((eq: any) => {
+      const token = ((eq.description || '').trim().toLowerCase().split(' ')[0]) || 'khác'
+      map.set(token, (map.get(token) || 0) + (eq.amount || 0))
+    })
+    return map
+  }, [approvedPlannedQuotes])
+  const getPlannedAmountForExpense = (desc?: string) => {
+    const key = (desc || '').trim().toLowerCase()
+    if (key && plannedByDescription.has(key)) return plannedByDescription.get(key) || 0
+    const token = (key.split(' ')[0]) || 'khác'
+    return plannedByCategoryToken.get(token) || 0
+  }
 
   // Chart data for comparison
   const comparisonChartData = {
@@ -578,12 +620,42 @@ export default function ProjectDetailedReportDetailPage() {
     ]
   }
 
-  // Pie chart for expense breakdown
+  // Pie chart for revenue-expense-profit breakdown
+  const revenueExpenseProfitPieData = {
+    labels: ['Doanh thu', 'Chi phí', 'Lợi nhuận'],
+    datasets: [{
+      data: [totalInvoices, totalExpenses, actualProfit],
+      backgroundColor: [
+        'rgba(59, 130, 246, 0.6)',   // revenue - blue
+        'rgba(239, 68, 68, 0.6)',    // expense - red
+        'rgba(16, 185, 129, 0.6)'    // profit  - green
+      ],
+      borderColor: [
+        'rgb(59, 130, 246)',
+        'rgb(239, 68, 68)',
+        'rgb(16, 185, 129)'
+      ],
+      borderWidth: 1
+    }]
+  }
+
+  // Pie chart for expense breakdown by category
   const expenseCategories = expenses.reduce((acc, expense) => {
     const category = expense.category || 'other'
     acc[category] = (acc[category] || 0) + expense.amount
     return acc
   }, {} as { [key: string]: number })
+
+  // Pie chart for expense breakdown by employee
+  const expenseByEmployee = useMemo(() => {
+    return expenses.reduce((acc, expense) => {
+      if (expense.employee_id) {
+        const employeeName = employees.get(expense.employee_id) || `Nhân viên ${expense.employee_id.slice(0, 8)}...`
+        acc[employeeName] = (acc[employeeName] || 0) + expense.amount
+      }
+      return acc
+    }, {} as { [key: string]: number })
+  }, [expenses, employees])
 
   const expensePieData = {
     labels: Object.keys(expenseCategories).map(key => {
@@ -611,6 +683,39 @@ export default function ProjectDetailedReportDetailPage() {
         'rgba(255, 206, 86, 1)',
         'rgba(75, 192, 192, 1)',
         'rgba(153, 102, 255, 1)'
+      ],
+      borderWidth: 1
+    }]
+  }
+
+  // Pie chart data for employee breakdown
+  const employeePieData = {
+    labels: Object.keys(expenseByEmployee),
+    datasets: [{
+      data: Object.values(expenseByEmployee),
+      backgroundColor: [
+        'rgba(255, 99, 132, 0.6)',
+        'rgba(54, 162, 235, 0.6)',
+        'rgba(255, 206, 86, 0.6)',
+        'rgba(75, 192, 192, 0.6)',
+        'rgba(153, 102, 255, 0.6)',
+        'rgba(255, 159, 64, 0.6)',
+        'rgba(199, 199, 199, 0.6)',
+        'rgba(83, 102, 255, 0.6)',
+        'rgba(255, 99, 255, 0.6)',
+        'rgba(99, 255, 132, 0.6)'
+      ],
+      borderColor: [
+        'rgba(255, 99, 132, 1)',
+        'rgba(54, 162, 235, 1)',
+        'rgba(255, 206, 86, 1)',
+        'rgba(75, 192, 192, 1)',
+        'rgba(153, 102, 255, 1)',
+        'rgba(255, 159, 64, 1)',
+        'rgba(199, 199, 199, 1)',
+        'rgba(83, 102, 255, 1)',
+        'rgba(255, 99, 255, 1)',
+        'rgba(99, 255, 132, 1)'
       ],
       borderWidth: 1
     }]
@@ -789,9 +894,20 @@ export default function ProjectDetailedReportDetailPage() {
                       expenseQuotes.map((expenseQuote) => (
                         <div key={expenseQuote.id} className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
                           <div className="flex-1">
-                            <p className="text-xs font-medium text-gray-900">{expenseQuote.expense_code || 'N/A'}</p>
-                            <p className="text-xs text-gray-500">{expenseQuote.description || 'Không có mô tả'}</p>
-                            <p className="text-xs text-gray-400">{formatDate(expenseQuote.expense_date)}</p>
+                             <p className="text-sm font-medium text-gray-900">{expenseQuote.description || 'Không có mô tả'}</p>
+                             {expenseQuote.employee_id && (
+                               <p className="text-xs text-gray-500 mt-1">
+                                 👤 Nhân viên: {employees.get(expenseQuote.employee_id) || expenseQuote.employee_id}
+                               </p>
+                             )}
+                            <p className="text-xs text-gray-400 mt-1">
+                              📅 {formatDate(expenseQuote.expense_date)}
+                            </p>
+                            {expenseQuote.department_id && (
+                              <p className="text-xs text-gray-500">
+                                🏷️ Phòng ban: {expenseQuote.department_id}
+                              </p>
+                            )}
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-orange-600">{formatCurrency(expenseQuote.amount)}</p>
@@ -879,15 +995,31 @@ export default function ProjectDetailedReportDetailPage() {
                       expenses.map((expense) => (
                         <div key={expense.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
                           <div className="flex-1">
-                            <p className="text-xs font-medium text-gray-900">{expense.expense_code || 'N/A'}</p>
-                            <p className="text-xs text-gray-500">{expense.description || 'Không có mô tả'}</p>
-                            <p className="text-xs text-gray-400">{formatDate(expense.expense_date)}</p>
+                             <p className="text-sm font-medium text-gray-900">{expense.description || 'Không có mô tả'}</p>
+                             {expense.employee_id && (
+                               <p className="text-xs text-gray-500 mt-1">
+                                 👤 Nhân viên: {employees.get(expense.employee_id) || expense.employee_id}
+                               </p>
+                             )}
+                            <p className="text-xs text-gray-400 mt-1">
+                              📅 {formatDate(expense.expense_date)}
+                            </p>
+                            {expense.department_id && (
+                              <p className="text-xs text-gray-500">
+                                🏷️ Phòng ban: {expense.department_id}
+                              </p>
+                            )}
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-red-600">{formatCurrency(expense.amount)}</p>
-                            <span className={`text-xs px-2 py-1 rounded-full bg-green-100 text-green-800`}>
-                              Đã duyệt
-                            </span>
+                            {(() => {
+                              const planned = getPlannedAmountForExpense(expense.description)
+                              return expense.amount > planned ? (
+                                <span className={`text-xs px-2 py-1 rounded-full bg-red-100 text-red-700`}>
+                                  Vượt kế hoạch
+                                </span>
+                              ) : null
+                            })()}
                           </div>
                         </div>
                       ))
@@ -918,47 +1050,15 @@ export default function ProjectDetailedReportDetailPage() {
 
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Comparison Bar Chart */}
+            {/* Revenue - Expense - Profit Pie Chart */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <BarChart3 className="h-6 w-6 text-teal-600" />
-                <h3 className="text-lg font-semibold text-gray-900">So sánh Kế hoạch vs Thực tế</h3>
+                <PieChart className="h-6 w-6 text-indigo-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Phân bổ Doanh thu – Chi phí – Lợi nhuận</h3>
               </div>
-              <Bar 
-                data={comparisonChartData}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'top' as const,
-                    },
-                    title: {
-                      display: false
-                    }
-                  },
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        callback: function(value) {
-                          return new Intl.NumberFormat('vi-VN').format(value as number)
-                        }
-                      }
-                    }
-                  }
-                }}
-              />
-            </div>
-
-            {/* Expense Pie Chart */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <PieChart className="h-6 w-6 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Phân bổ Chi phí</h3>
-              </div>
-              {Object.keys(expenseCategories).length > 0 ? (
+              {(totalInvoices > 0 || totalExpenses > 0) ? (
                 <Pie 
-                  data={expensePieData}
+                  data={revenueExpenseProfitPieData}
                   options={{
                     responsive: true,
                     plugins: {
@@ -983,10 +1083,50 @@ export default function ProjectDetailedReportDetailPage() {
                 />
               ) : (
                 <div className="flex items-center justify-center h-64 text-gray-500">
-                  Chưa có dữ liệu chi phí
+                  Chưa có dữ liệu doanh thu/chi phí/lợi nhuận
                 </div>
               )}
             </div>
+
+            {/* Expense Pie Chart (by employee) */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <PieChart className="h-6 w-6 text-purple-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Phân bổ Chi phí theo Nhân viên</h3>
+              </div>
+              {Object.keys(expenseByEmployee).length > 0 ? (
+                <Pie 
+                  data={employeePieData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: 'right' as const,
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function(context) {
+                            const label = context.label || ''
+                            const value = context.parsed || 0
+                            const formatted = new Intl.NumberFormat('vi-VN', {
+                              style: 'currency',
+                              currency: 'VND'
+                            }).format(value)
+                            return `${label}: ${formatted}`
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-64 text-gray-500">
+                  Chưa có dữ liệu chi phí theo nhân viên
+                </div>
+              )}
+            </div>
+
+            
           </div>
 
           {/* Expense Comparison Analysis */}
@@ -1130,6 +1270,207 @@ export default function ProjectDetailedReportDetailPage() {
                     <p className="text-sm font-medium text-gray-700">Đúng kế hoạch (On Budget)</p>
                     <p className="text-xs text-gray-600">Chênh lệch dưới 5%, được chấp nhận</p>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Expenses List - Planned & Actual */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900">Chi tiết Chi phí Kế hoạch & Thực tế</h3>
+              <p className="text-gray-600">Danh sách đầy đủ các khoản chi phí đã duyệt</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
+              {/* Planned Expenses (Approved) */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Chi phí Kế hoạch (Đã duyệt)
+                  </h4>
+                  <span className="text-sm font-medium text-blue-600">
+                    {expenseQuotes.filter((eq: any) => eq.status === 'approved').length} khoản
+                  </span>
+                </div>
+
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {expenseQuotes.filter((eq: any) => eq.status === 'approved').length > 0 ? (
+                    expenseQuotes
+                      .filter((eq: any) => eq.status === 'approved')
+                      .map((expenseQuote: any) => (
+                        <div key={expenseQuote.id} className="border border-blue-200 rounded-lg p-4 bg-blue-50 hover:shadow-md transition-shadow">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                             <div className="flex items-center gap-2 mb-1">
+                                {expenseQuote.id_parent && (
+                                  <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                                    📂 Chi phí con
+                                  </span>
+                                )}
+                              </div>
+                               <p className="font-medium text-gray-900">{expenseQuote.description || 'Không có mô tả'}</p>
+                               {expenseQuote.employee_id && (
+                                 <p className="text-xs text-gray-500 mt-1">
+                                   👤 Nhân viên: {employees.get(expenseQuote.employee_id) || expenseQuote.employee_id}
+                                 </p>
+                               )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                📅 {formatDate(expenseQuote.expense_date)}
+                              </p>
+                              {expenseQuote.department_id && (
+                                <p className="text-xs text-gray-500">
+                                  🏷️ Phòng ban: {expenseQuote.department_id}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right ml-4">
+                              <p className="text-lg font-bold text-blue-600">
+                                {formatCurrency(expenseQuote.amount)}
+                              </p>
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                ✓ Đã duyệt
+                              </span>
+                            </div>
+                          </div>
+                          {expenseQuote.notes && (
+                            <p className="text-xs text-gray-600 mt-2 italic border-t border-blue-200 pt-2">
+                              💭 {expenseQuote.notes}
+                            </p>
+                          )}
+                        </div>
+                      ))
+                  ) : (
+                    <div className="text-center py-12 text-gray-500">
+                      <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>Chưa có chi phí kế hoạch đã duyệt</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 p-4 bg-blue-100 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-blue-900">Tổng Kế hoạch (Đã duyệt):</span>
+                    <span className="text-xl font-bold text-blue-600">
+                      {formatCurrency(expenseQuotes.filter((eq: any) => eq.status === 'approved').reduce((sum: number, eq: any) => sum + (eq.amount || 0), 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actual Expenses (Approved) */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+                    <Receipt className="h-5 w-5" />
+                    Chi phí Thực tế (Đã phát sinh)
+                  </h4>
+                  <span className="text-sm font-medium text-green-600">
+                    {expenses.length} khoản
+                  </span>
+                </div>
+
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {expenses.length > 0 ? (
+                    expenses.map((expense: any) => (
+                      <div key={expense.id} className="border border-green-200 rounded-lg p-4 bg-green-50 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                             <div className="flex items-center gap-2 mb-1">
+                              {expense.id_parent && (
+                                <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                                  📂 Chi phí con
+                                </span>
+                              )}
+                            </div>
+                             <p className="font-medium text-gray-900">{expense.description || 'Không có mô tả'}</p>
+                             {expense.employee_id && (
+                               <p className="text-xs text-gray-500 mt-1">
+                                 👤 Nhân viên: {employees.get(expense.employee_id) || expense.employee_id}
+                               </p>
+                             )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              📅 {formatDate(expense.expense_date)}
+                            </p>
+                            {expense.department_id && (
+                              <p className="text-xs text-gray-500">
+                                🏷️ Phòng ban: {expense.department_id}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="text-lg font-bold text-green-600">
+                              {formatCurrency(expense.amount)}
+                            </p>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                              ✓ Đã phát sinh
+                            </span>
+                          </div>
+                        </div>
+                        {expense.notes && (
+                          <p className="text-xs text-gray-600 mt-2 italic border-t border-green-200 pt-2">
+                            💭 {expense.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-12 text-gray-500">
+                      <Receipt className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>Chưa có chi phí thực tế</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 p-4 bg-green-100 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-green-900">Tổng Thực tế (Đã phát sinh):</span>
+                    <span className="text-xl font-bold text-green-600">
+                      {formatCurrency(totalExpenses)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Comparison Summary */}
+            <div className="p-6 bg-gray-50 border-t border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-lg p-4 border-2 border-blue-200">
+                  <p className="text-sm text-gray-600 mb-1">Chi phí Kế hoạch</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {formatCurrency(expenseQuotes.filter((eq: any) => eq.status === 'approved').reduce((sum: number, eq: any) => sum + (eq.amount || 0), 0))}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {expenseQuotes.filter((eq: any) => eq.status === 'approved').length} khoản đã duyệt
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border-2 border-green-200">
+                  <p className="text-sm text-gray-600 mb-1">Chi phí Thực tế</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {formatCurrency(totalExpenses)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {expenses.length} khoản đã phát sinh
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border-2 border-purple-200">
+                  <p className="text-sm text-gray-600 mb-1">Chênh lệch</p>
+                  <p className={`text-2xl font-bold ${
+                    (totalExpenses - expenseQuotes.filter((eq: any) => eq.status === 'approved').reduce((sum: number, eq: any) => sum + (eq.amount || 0), 0)) > 0 
+                      ? 'text-red-600' 
+                      : 'text-green-600'
+                  }`}>
+                    {formatCurrency(totalExpenses - expenseQuotes.filter((eq: any) => eq.status === 'approved').reduce((sum: number, eq: any) => sum + (eq.amount || 0), 0))}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {totalExpenses > expenseQuotes.filter((eq: any) => eq.status === 'approved').reduce((sum: number, eq: any) => sum + (eq.amount || 0), 0)
+                      ? '⚠️ Vượt kế hoạch'
+                      : '✅ Tiết kiệm'}
+                  </p>
                 </div>
               </div>
             </div>

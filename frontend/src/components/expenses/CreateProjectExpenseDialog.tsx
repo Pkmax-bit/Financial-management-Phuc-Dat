@@ -199,6 +199,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       newErrors.planned_amount = 'Số tiền kế hoạch phải lớn hơn 0'
     }
 
+    // Validate parent selection - cannot select self as parent
+    if (formData.id_parent && formData.id_parent === formData.project_id) {
+      newErrors.id_parent = 'Không thể chọn chính nó làm chi phí cha'
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
