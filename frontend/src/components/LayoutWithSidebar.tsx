@@ -2,7 +2,7 @@
 
 import { useState, createContext, useContext } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { 
+  import { 
   Home,
   Users,
   Building2,
@@ -24,7 +24,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Eye
+  Eye,
+  Shield
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
@@ -77,7 +78,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     FileText,
     Brain,
     Camera,
-    TestTube
+    TestTube,
+    Shield
   }
 
   const handleNavigation = (href: string) => {

@@ -25,6 +25,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { projectApi } from '@/lib/api'
 import { useSidebar } from '@/components/LayoutWithSidebar'
+import ProjectTeamDialog from './ProjectTeamDialog'
 
 interface Project {
   id: string
@@ -115,10 +116,22 @@ export default function ProjectsTab({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [error, setError] = useState<string | null>(null)
   const [generatedCode, setGeneratedCode] = useState<string>('')
+  const [showTeamDialog, setShowTeamDialog] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchProjects()
   }, [])
+
+  const handleOpenTeamDialog = (projectId: string) => {
+    setSelectedProjectId(projectId)
+    setShowTeamDialog(true)
+  }
+
+  const handleCloseTeamDialog = () => {
+    setShowTeamDialog(false)
+    setSelectedProjectId(null)
+  }
 
   const generateProjectCode = async () => {
     try {
@@ -180,7 +193,6 @@ export default function ProjectsTab({
       // Try API first, fallback to Supabase
       try {
         const data = await projectApi.getProjects()
-        // API now returns customer_name and manager_name directly
         setProjects(data || [])
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
@@ -215,52 +227,12 @@ export default function ProjectsTab({
   const handleDelete = async (project: Project) => {
     if (window.confirm(`Are you sure you want to delete project "${project.name}"?`)) {
       try {
-        // Try API first, fallback to Supabase
-        try {
-          await projectApi.deleteProject(project.id)
-        } catch (apiError) {
-          console.log('API failed, falling back to Supabase:', apiError)
-          
-          const { error } = await supabase
-            .from('projects')
-            .delete()
-            .eq('id', project.id)
-
-          if (error) throw error
-        }
-
+        await projectApi.deleteProject(project.id)
         setProjects(projects.filter(p => p.id !== project.id))
       } catch (error) {
         console.error('Error deleting project:', error)
         alert('Failed to delete project')
       }
-    }
-  }
-
-  const handleQuickSave = async (project: Project) => {
-    try {
-      // Quick save - just update the project with current data
-      const updateData = {
-        name: project.name,
-        description: project.description,
-        customer_id: project.customer_id,
-        manager_id: project.manager_id,
-        start_date: project.start_date,
-        end_date: project.end_date,
-        budget: project.budget,
-        status: project.status,
-        priority: project.priority,
-        progress: project.progress,
-        billing_type: project.billing_type,
-        hourly_rate: project.hourly_rate
-      }
-
-      await projectApi.updateProject(project.id, updateData)
-      alert('Dự án đã được lưu thành công!')
-      fetchProjects()
-    } catch (error) {
-      console.error('Error saving project:', error)
-      alert('Có lỗi xảy ra khi lưu dự án')
     }
   }
 
@@ -446,37 +418,38 @@ export default function ProjectsTab({
 
       {/* Projects Grid */}
       <div className="p-4 sm:p-6 lg:p-8">
-        <div className={`grid gap-6 ${
+        <div className={`grid gap-8 ${
           sidebarOpen 
-            ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-8'
-            : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10'
+            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
         }`}>
         {sortedProjects.map((project) => {
           const StatusIcon = statusIcons[project.status]
           return (
-             <div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group relative">
-               {/* Custom Tooltip */}
-               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
-                 <div className="text-center">
-                   <div className="font-semibold">{project.name}</div>
-                   <div className="text-gray-300 text-xs mt-1">
-                     {project.customer_name || 'Chưa xác định khách hàng'}
-                   </div>
-                   <div className="text-xs text-gray-400 mt-1">
-                     {project.project_code} • {project.progress}%
-                   </div>
-                 </div>
-                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-               </div>
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-4 gap-3">
+            <div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group relative">
+              {/* Custom Tooltip */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
+                <div className="text-center">
+                  <div className="font-semibold">{project.name}</div>
+                  <div className="text-gray-300 text-xs mt-1">
+                    {project.customer_name || 'Chưa xác định khách hàng'}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {project.project_code} • {project.progress}%
+                  </div>
+                </div>
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+              </div>
+
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-5 gap-4">
                   <div className="flex items-start gap-4 flex-1 min-w-0">
-                    <div className="p-2.5 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg group-hover:from-blue-200 group-hover:to-blue-300 transition-colors flex-shrink-0">
-                      <FolderOpen className="h-5 w-5 text-blue-600" />
+                    <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg group-hover:from-blue-200 group-hover:to-blue-300 transition-colors flex-shrink-0">
+                      <FolderOpen className="h-6 w-6 text-blue-600" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 
-                        className="font-semibold text-gray-900 text-base group-hover:text-blue-700 transition-colors break-words leading-tight"
+                        className="font-semibold text-gray-900 text-lg group-hover:text-blue-700 transition-colors break-words leading-tight"
                         style={{
                           display: '-webkit-box',
                           WebkitLineClamp: 2,
@@ -484,72 +457,79 @@ export default function ProjectsTab({
                           overflow: 'hidden',
                           wordWrap: 'break-word',
                           hyphens: 'auto',
-                          lineHeight: '1.3',
-                          maxHeight: '2.6em'
+                          lineHeight: '1.4',
+                          maxHeight: '2.8em'
                         }}
                         title={project.name}
                       >
                         {project.name}
                       </h3>
-                      <p className="text-sm text-gray-600 font-medium mt-1">{project.customer_name || 'Khách hàng'}</p>
+                      <p className="text-base text-gray-600 font-medium mt-2">{project.customer_name || 'Khách hàng'}</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-1.5 flex-shrink-0">
+                  <div className="flex items-start gap-2 flex-shrink-0">
                     <button
                       onClick={() => window.open(`/projects/${project.id}/detail`, '_blank')}
-                      className="p-1.5 text-black hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-2 text-black hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xem chi tiết tài chính"
                     >
-                      <BarChart3 className="h-4 w-4" />
+                      <BarChart3 className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => handleOpenTeamDialog(project.id)}
+                      className="p-2 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      title="Thêm team dự án"
+                    >
+                      <Users className="h-5 w-5" />
                     </button>
                     <button
                       onClick={() => onEditProject(project)}
-                      className="p-1.5 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-2 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Chỉnh sửa dự án"
                     >
-                      <Edit className="h-4 w-4" />
+                      <Edit className="h-5 w-5" />
                     </button>
                     <button
                       onClick={() => handleDelete(project)}
-                      className="p-1.5 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
+                      className="p-2 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xóa dự án"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[project.status]}`}>
+                <div className="space-y-4 mt-6">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${statusColors[project.status]}`}>
                       {getStatusText(project.status)}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[project.priority]}`}>
+                    <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${priorityColors[project.priority]}`}>
                       {getPriorityText(project.priority)}
                     </span>
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1 text-xs text-gray-600">
-                      <Calendar className="h-3 w-3" />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Calendar className="h-4 w-4" />
                       <span>{new Date(project.start_date).toLocaleDateString()}</span>
                     </div>
                     {project.budget && (
-                      <div className="flex items-center gap-1 text-xs text-gray-600">
-                        <DollarSign className="h-3 w-3" />
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <DollarSign className="h-4 w-4" />
                         <span>VND {project.budget.toLocaleString()}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-2 border-t border-gray-100">
-                    <div className="flex items-center justify-between text-xs mb-1">
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between text-sm mb-2">
                       <span className="text-gray-600">Tiến độ</span>
                       <span className="font-medium text-gray-900">{project.progress}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-1.5 rounded-full transition-all duration-700"
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-700"
                         style={{ width: `${project.progress}%` }}
                       ></div>
                     </div>
@@ -561,6 +541,20 @@ export default function ProjectsTab({
         })}
         </div>
       </div>
+
+      {/* Team Dialog */}
+      {showTeamDialog && selectedProjectId && (
+        <ProjectTeamDialog
+          isOpen={showTeamDialog}
+          onClose={handleCloseTeamDialog}
+          onSuccess={() => {
+            handleCloseTeamDialog()
+            // Optionally refresh project data
+            fetchProjects()
+          }}
+          projectId={selectedProjectId}
+        />
+      )}
 
       {sortedProjects.length === 0 && (
         <div className="p-6">

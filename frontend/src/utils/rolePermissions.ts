@@ -138,6 +138,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     description: 'Test AI API',
     roles: ['admin'],
     category: 'development'
+  },
+  {
+    name: 'Phân quyền',
+    href: '/role-permissions',
+    icon: 'Shield',
+    description: 'Quản lý phân quyền hệ thống',
+    roles: ['admin'],
+    category: 'system'
   }
 ]
 
