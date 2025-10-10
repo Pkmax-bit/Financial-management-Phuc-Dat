@@ -3,8 +3,6 @@
  * Xuất báo cáo dự án ra PDF và Excel với format chuyên nghiệp
  */
 
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 
 interface ProjectReportData {
@@ -64,230 +62,7 @@ interface ProjectReportData {
 /**
  * Xuất báo cáo ra PDF với mẫu tiêu chuẩn
  */
-export const exportToPDF = (data: ProjectReportData) => {
-  const doc = new jsPDF()
-  
-  // Font setup
-  doc.setFont('helvetica')
-  
-  // ========== HEADER ==========
-  doc.setFontSize(20)
-  doc.setTextColor(0, 102, 204)
-  doc.text('BÁO CÁO DỰ ÁN CHI TIẾT', 105, 20, { align: 'center' })
-  
-  doc.setFontSize(10)
-  doc.setTextColor(100, 100, 100)
-  doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 105, 28, { align: 'center' })
-  
-  // ========== THÔNG TIN DỰ ÁN ==========
-  let yPos = 40
-  doc.setFontSize(14)
-  doc.setTextColor(0, 0, 0)
-  doc.text('THÔNG TIN DỰ ÁN', 14, yPos)
-  
-  yPos += 8
-  doc.setFontSize(10)
-  doc.setTextColor(60, 60, 60)
-  
-  const projectInfo = [
-    ['Tên dự án:', data.project.name],
-    ['Mã dự án:', data.project.project_code],
-    ['Khách hàng:', data.project.customer_name],
-    ['Trạng thái:', getStatusText(data.project.status)],
-  ]
-  
-  projectInfo.forEach(([label, value]) => {
-    doc.setFont('helvetica', 'bold')
-    doc.text(label, 14, yPos)
-    doc.setFont('helvetica', 'normal')
-    doc.text(value, 50, yPos)
-    yPos += 6
-  })
-  
-  // ========== TÓM TẮT TÀI CHÍNH ==========
-  yPos += 5
-  doc.setFontSize(14)
-  doc.setTextColor(0, 0, 0)
-  doc.text('TÓM TẮT TÀI CHÍNH', 14, yPos)
-  
-  yPos += 8
-  doc.setFontSize(10)
-  
-  const financialSummary = [
-    ['Tổng hóa đơn:', formatCurrency(data.summary.totalInvoices), data.summary.unpaidInvoices > 0 ? `(${data.summary.unpaidInvoices} chưa TT)` : ''],
-    ['Tổng chi phí:', formatCurrency(data.summary.totalExpenses), ''],
-    ['Lợi nhuận:', formatCurrency(data.summary.actualProfit), data.summary.actualProfit >= 0 ? '✓' : '✗'],
-    ['Biên lợi nhuận:', `${data.summary.profitMargin.toFixed(1)}%`, ''],
-  ]
-  
-  financialSummary.forEach(([label, value, note]) => {
-    doc.setFont('helvetica', 'bold')
-    doc.text(label, 14, yPos)
-    doc.setFont('helvetica', 'normal')
-    
-    if (label.includes('Lợi nhuận:') && !label.includes('Biên')) {
-      doc.setTextColor(data.summary.actualProfit >= 0 ? 0 : 255, data.summary.actualProfit >= 0 ? 128 : 0, 0)
-    }
-    
-    doc.text(value, 50, yPos)
-    
-    if (note) {
-      doc.setTextColor(255, 140, 0)
-      doc.text(note, 100, yPos)
-    }
-    
-    doc.setTextColor(60, 60, 60)
-    yPos += 6
-  })
-  
-  // ========== CHI TIẾT HÓA ĐƠN ==========
-  yPos += 5
-  doc.setFontSize(12)
-  doc.setTextColor(0, 0, 0)
-  doc.text('CHI TIẾT HÓA ĐƠN', 14, yPos)
-  yPos += 5
-  
-  const invoiceTableData = data.invoices.map(inv => [
-    inv.invoice_number,
-    inv.description || '-',
-    formatCurrency(inv.total_amount),
-    getStatusText(inv.status),
-    getPaymentStatusText(inv.payment_status),
-    new Date(inv.created_at).toLocaleDateString('vi-VN')
-  ])
-  
-  autoTable(doc, {
-    startY: yPos,
-    head: [['Số HĐ', 'Mô tả', 'Số tiền', 'Trạng thái', 'TT', 'Ngày']],
-    body: invoiceTableData,
-    theme: 'grid',
-    headStyles: { fillColor: [0, 102, 204], textColor: 255, fontSize: 9 },
-    bodyStyles: { fontSize: 8 },
-    columnStyles: {
-      2: { halign: 'right', fontStyle: 'bold' },
-      5: { fontSize: 7 }
-    },
-    didDrawPage: (data) => {
-      yPos = data.cursor?.y || yPos
-    }
-  })
-  
-  // ========== CHI TIẾT CHI PHÍ ==========
-  yPos += 10
-  if (yPos > 250) {
-    doc.addPage()
-    yPos = 20
-  }
-  
-  doc.setFontSize(12)
-  doc.text('CHI TIẾT CHI PHÍ DỰ ÁN', 14, yPos)
-  yPos += 5
-  
-  const expenseTableData = data.expenses.map(exp => [
-    exp.expense_code || '-',
-    exp.description || '-',
-    formatCurrency(exp.amount),
-    getStatusText(exp.status),
-    new Date(exp.expense_date).toLocaleDateString('vi-VN')
-  ])
-  
-  autoTable(doc, {
-    startY: yPos,
-    head: [['Mã CP', 'Mô tả', 'Số tiền', 'Trạng thái', 'Ngày']],
-    body: expenseTableData,
-    theme: 'grid',
-    headStyles: { fillColor: [220, 53, 69], textColor: 255, fontSize: 9 },
-    bodyStyles: { fontSize: 8 },
-    columnStyles: {
-      2: { halign: 'right', fontStyle: 'bold' }
-    },
-    didDrawPage: (data) => {
-      yPos = data.cursor?.y || yPos
-    }
-  })
-
-  // ========== SO SÁNH CHI PHÍ KẾ HOẠCH VS THỰC TẾ ==========
-  if (data.expenseComparison && data.expenseComparison.length > 0) {
-    yPos += 10
-    if (yPos > 240) {
-      doc.addPage()
-      yPos = 20
-    }
-    
-    doc.setFontSize(12)
-    doc.setTextColor(0, 0, 0)
-    doc.text('PHÂN TÍCH CHI PHÍ - KẾ HOẠCH VS THỰC TẾ', 14, yPos)
-    yPos += 5
-    
-    const comparisonTableData = data.expenseComparison.map(item => [
-      item.category,
-      formatCurrency(item.planned),
-      formatCurrency(item.actual),
-      (item.variance > 0 ? '+' : '') + formatCurrency(item.variance),
-      (item.variance > 0 ? '↑' : item.variance < 0 ? '↓' : '=') + ' ' + Math.abs(item.variance_percent).toFixed(1) + '%',
-      item.responsible_party,
-      item.note
-    ])
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Danh mục', 'Kế hoạch', 'Thực tế', 'Chênh lệch', '% Biến động', 'Trách nhiệm', 'Ghi chú']],
-      body: comparisonTableData,
-      theme: 'grid',
-      headStyles: { fillColor: [255, 140, 0], textColor: 255, fontSize: 8 },
-      bodyStyles: { fontSize: 7 },
-      columnStyles: {
-        1: { halign: 'right' },
-        2: { halign: 'right', fontStyle: 'bold' },
-        3: { halign: 'right', fontStyle: 'bold' },
-        4: { halign: 'center' },
-        6: { fontSize: 6 }
-      },
-      didParseCell: function(data) {
-        if (data.section === 'body' && data.column.index === 3) {
-          const value = data.cell.raw as string
-          if (value.startsWith('+')) {
-            data.cell.styles.textColor = [220, 53, 69] // Red for over budget
-          } else if (value.startsWith('-')) {
-            data.cell.styles.textColor = [40, 167, 69] // Green for under budget
-          }
-        }
-      }
-    })
-    
-    // Add legend
-    yPos = (doc as any).lastAutoTable.finalY + 5
-    doc.setFontSize(8)
-    doc.setTextColor(100, 100, 100)
-    doc.text('❌ Vượt chi: Bộ phận chịu trách nhiệm giải trình', 14, yPos)
-    yPos += 4
-    doc.text('✅ Tiết kiệm: Bộ phận được hưởng phần tiết kiệm', 14, yPos)
-  }
-  
-  // ========== FOOTER ==========
-  const pageCount = doc.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    doc.setFontSize(8)
-    doc.setTextColor(150, 150, 150)
-    doc.text(
-      `Trang ${i} / ${pageCount}`,
-      doc.internal.pageSize.getWidth() / 2,
-      doc.internal.pageSize.getHeight() - 10,
-      { align: 'center' }
-    )
-    doc.text(
-      'Báo cáo được tạo bởi Hệ thống Quản lý Tài chính',
-      doc.internal.pageSize.getWidth() / 2,
-      doc.internal.pageSize.getHeight() - 5,
-      { align: 'center' }
-    )
-  }
-  
-  // Save PDF
-  const fileName = `Bao_cao_du_an_${data.project.project_code}_${Date.now()}.pdf`
-  doc.save(fileName)
-}
+// exportToPDF removed per request
 
 /**
  * Xuất báo cáo ra Excel với nhiều sheets
@@ -301,30 +76,37 @@ export const exportToExcel = (data: ProjectReportData) => {
     [`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`],
     [],
     ['THÔNG TIN DỰ ÁN'],
-    ['Tên dự án:', data.project.name],
-    ['Mã dự án:', data.project.project_code],
-    ['Khách hàng:', data.project.customer_name],
-    ['Trạng thái:', getStatusText(data.project.status)],
+    ['Tên dự án', data.project.name],
+    ['Mã dự án', data.project.project_code],
+    ['Khách hàng', data.project.customer_name],
+    ['Trạng thái', getStatusText(data.project.status)],
     [],
     ['TÓM TẮT TÀI CHÍNH'],
-    ['Tổng hóa đơn:', data.summary.totalInvoices],
-    ['  - Chưa thanh toán:', data.summary.unpaidInvoices],
-    ['  - Thanh toán 1 phần:', data.summary.partialInvoices],
-    ['Tổng chi phí:', data.summary.totalExpenses],
-    ['Lợi nhuận:', data.summary.actualProfit],
-    ['Biên lợi nhuận (%):', data.summary.profitMargin],
+    ['Tổng hóa đơn (VND)', data.summary.totalInvoices],
+    ['  - Chưa thanh toán', data.summary.unpaidInvoices],
+    ['  - Thanh toán 1 phần', data.summary.partialInvoices],
+    ['Tổng chi phí (VND)', data.summary.totalExpenses],
+    ['Lợi nhuận (VND)', data.summary.actualProfit],
+    ['Biên lợi nhuận (%)', data.summary.profitMargin],
     [],
     ['PHÂN TÍCH'],
-    ['Số lượng hóa đơn:', data.invoices.length],
-    ['Số lượng chi phí:', data.expenses.length],
-    ['Hóa đơn chưa thanh toán:', data.summary.unpaidInvoices],
+    ['Số lượng hóa đơn', data.invoices.length],
+    ['Số lượng chi phí', data.expenses.length],
+    ['Hóa đơn chưa thanh toán', data.summary.unpaidInvoices],
   ]
-  
+
   const ws1 = XLSX.utils.aoa_to_sheet(summaryData)
-  
-  // Style cho sheet tóm tắt
-  ws1['!cols'] = [{ wch: 25 }, { wch: 30 }]
-  
+  ws1['!cols'] = [{ wch: 30 }, { wch: 35 }]
+  // Merge title row across two columns
+  ws1['!merges'] = (ws1['!merges'] || []).concat([{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }])
+  // Number formatting for VND values and percentage
+  const setFormat = (addr: string, z: string) => { if (ws1[addr]) (ws1[addr] as any).z = z }
+  const toA1 = (r: number, c: number) => XLSX.utils.encode_cell({ r, c })
+  // Total invoices (row 10), total expenses (row 13), profit (row 14)
+  setFormat(toA1(9, 1), '#,##0');
+  setFormat(toA1(12, 1), '#,##0');
+  setFormat(toA1(13, 1), '#,##0');
+  setFormat(toA1(14, 1), '0.0');
   XLSX.utils.book_append_sheet(wb, ws1, 'Tóm tắt')
   
   // ========== SHEET 2: HÓA ĐƠN ==========
@@ -352,32 +134,66 @@ export const exportToExcel = (data: ProjectReportData) => {
     { wch: 20 }, // Thanh toán
     { wch: 15 }  // Ngày
   ]
+  // Merge title row
+  ws2['!merges'] = (ws2['!merges'] || []).concat([{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }])
+  // Number formats, date format, totals as formula
+  const rows2 = invoiceData.length
+  for (let r = 2; r < rows2 - 2; r++) {
+    const amountCell = XLSX.utils.encode_cell({ r, c: 2 })
+    const dateCell = XLSX.utils.encode_cell({ r, c: 5 })
+    if (ws2[amountCell]) (ws2[amountCell] as any).z = '#,##0'
+    if (ws2[dateCell]) (ws2[dateCell] as any).z = 'dd/mm/yyyy'
+  }
+  // Set total formula in C:last-1 (row index rows2-2)
+  const totalRow2 = rows2 - 1
+  const totalCell2 = XLSX.utils.encode_cell({ r: totalRow2 - 1, c: 2 })
+  const firstDataRow2 = 2
+  const lastDataRow2 = rows2 - 3
+  ;(ws2[totalCell2] = ws2[totalCell2] || { t: 'n' } as any).f = `SUM(C${firstDataRow2 + 1}:C${lastDataRow2 + 1})`
+  ;(ws2[totalCell2] as any).z = '#,##0'
+  // AutoFilter for data block
+  ws2['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: rows2 - 3, c: 5 } }) }
   
   XLSX.utils.book_append_sheet(wb, ws2, 'Hóa đơn')
   
   // ========== SHEET 3: CHI PHÍ ==========
   const expenseData = [
     ['DANH SÁCH CHI PHÍ DỰ ÁN'],
-    ['Mã CP', 'Mô tả', 'Số tiền (VND)', 'Trạng thái', 'Ngày chi'],
+    ['Mô tả', 'Số tiền (VND)', 'Trạng thái', 'Ngày chi'],
     ...data.expenses.map(exp => [
-      exp.expense_code || '-',
       exp.description || '-',
       exp.amount,
       getStatusText(exp.status),
       new Date(exp.expense_date).toLocaleDateString('vi-VN')
     ]),
     [],
-    ['TỔNG CỘNG:', '', data.summary.totalExpenses, '', '']
+    ['TỔNG CỘNG:', data.summary.totalExpenses, '', '']
   ]
   
   const ws3 = XLSX.utils.aoa_to_sheet(expenseData)
   ws3['!cols'] = [
-    { wch: 15 }, // Mã CP
     { wch: 40 }, // Mô tả
     { wch: 20 }, // Số tiền
-    { wch: 15 }, // Trạng thái
+    { wch: 18 }, // Trạng thái
     { wch: 15 }  // Ngày
   ]
+  // Merge title row
+  ws3['!merges'] = (ws3['!merges'] || []).concat([{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }])
+  // Number formats, date format, totals as formula
+  const rows3 = expenseData.length
+  for (let r = 2; r < rows3 - 2; r++) {
+    const amountCell = XLSX.utils.encode_cell({ r, c: 1 })
+    const dateCell = XLSX.utils.encode_cell({ r, c: 3 })
+    if (ws3[amountCell]) (ws3[amountCell] as any).z = '#,##0'
+    if (ws3[dateCell]) (ws3[dateCell] as any).z = 'dd/mm/yyyy'
+  }
+  // Set total formula in B:last-1
+  const totalCell3 = XLSX.utils.encode_cell({ r: rows3 - 2, c: 1 })
+  const firstDataRow3 = 2
+  const lastDataRow3 = rows3 - 3
+  ;(ws3[totalCell3] = ws3[totalCell3] || { t: 'n' } as any).f = `SUM(B${firstDataRow3 + 1}:B${lastDataRow3 + 1})`
+  ;(ws3[totalCell3] as any).z = '#,##0'
+  ws3['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: rows3 - 3, c: 3 } }) }
   
   XLSX.utils.book_append_sheet(wb, ws3, 'Chi phí')
   
@@ -405,6 +221,23 @@ export const exportToExcel = (data: ProjectReportData) => {
       { wch: 15 },
       { wch: 15 }
     ]
+    // Merge title row
+    ws4['!merges'] = (ws4['!merges'] || []).concat([{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }])
+    // Number/date formats, totals as formula, and autofilter
+    const rows4 = quoteData.length
+    for (let r = 2; r < rows4 - 2; r++) {
+      const amountCell = XLSX.utils.encode_cell({ r, c: 2 })
+      const dateCell = XLSX.utils.encode_cell({ r, c: 4 })
+      if (ws4[amountCell]) (ws4[amountCell] as any).z = '#,##0'
+      if (ws4[dateCell]) (ws4[dateCell] as any).z = 'dd/mm/yyyy'
+    }
+    // Total formula in C:last-1
+    const totalCell4 = XLSX.utils.encode_cell({ r: rows4 - 2, c: 2 })
+    const firstDataRow4 = 2
+    const lastDataRow4 = rows4 - 3
+    ;(ws4[totalCell4] = ws4[totalCell4] || { t: 'n' } as any).f = `SUM(C${firstDataRow4 + 1}:C${lastDataRow4 + 1})`
+    ;(ws4[totalCell4] as any).z = '#,##0'
+    ws4['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: rows4 - 3, c: 4 } }) }
     
     XLSX.utils.book_append_sheet(wb, ws4, 'Báo giá')
   }
@@ -446,6 +279,19 @@ export const exportToExcel = (data: ProjectReportData) => {
       { wch: 40 }, // Trách nhiệm
       { wch: 50 }  // Ghi chú
     ]
+    // Merge title row
+    ws5['!merges'] = (ws5['!merges'] || []).concat([{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }])
+    // Number formats for money columns
+    const rows5 = comparisonData.length
+    for (let r = 2; r < rows5 - 6; r++) {
+      const plannedCell = XLSX.utils.encode_cell({ r, c: 1 })
+      const actualCell = XLSX.utils.encode_cell({ r, c: 2 })
+      const varianceCell = XLSX.utils.encode_cell({ r, c: 3 })
+      if (ws5[plannedCell]) (ws5[plannedCell] as any).z = '#,##0'
+      if (ws5[actualCell]) (ws5[actualCell] as any).z = '#,##0'
+      if (ws5[varianceCell]) (ws5[varianceCell] as any).z = '#,##0'
+    }
+    ws5['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: rows5 - 7, c: 6 } }) }
     
     XLSX.utils.book_append_sheet(wb, ws5, 'So sánh chi phí')
   }
@@ -490,4 +336,6 @@ const getPaymentStatusText = (status: string): string => {
   }
   return statusMap[status] || status
 }
+
+// tryLoadUnicodeFont removed
 

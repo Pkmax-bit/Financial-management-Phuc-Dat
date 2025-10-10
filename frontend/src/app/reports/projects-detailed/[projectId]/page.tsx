@@ -30,7 +30,7 @@ import {
   ArcElement
 } from 'chart.js'
 import { Bar, Pie } from 'react-chartjs-2'
-import { exportToPDF, exportToExcel } from '@/utils/reportExport'
+import { exportToExcel } from '@/utils/reportExport'
 import { FileSpreadsheet } from 'lucide-react'
 
 ChartJS.register(
@@ -272,65 +272,6 @@ export default function ProjectDetailedReportDetailPage() {
     return new Date(dateString).toLocaleDateString('vi-VN')
   }
 
-  const handleExportToPDF = () => {
-    if (!project) return
-    
-    const reportData = {
-      project: {
-        name: project.name,
-        project_code: project.project_code,
-        customer_name: project.customer_name,
-        status: project.status,
-        start_date: project.start_date,
-        end_date: project.end_date
-      },
-      summary: {
-        totalQuotes,
-        totalInvoices,
-        totalExpenses,
-        actualProfit,
-        profitMargin: totalInvoices > 0 ? (actualProfit / totalInvoices) * 100 : 0,
-        unpaidInvoices: invoices.filter(i => i.payment_status === 'pending').length,
-        partialInvoices: invoices.filter(i => i.payment_status === 'partial').length,
-        plannedCosts: totalExpenseQuotes
-      },
-      invoices: invoices.map(inv => ({
-        invoice_number: inv.invoice_number,
-        description: inv.description || '',
-        total_amount: inv.total_amount,
-        status: inv.status,
-        payment_status: inv.payment_status,
-        created_at: inv.created_at
-      })),
-      expenses: expenses.map(exp => ({
-        expense_code: exp.expense_code || '',
-        description: exp.description || '',
-        amount: exp.amount,
-        status: exp.status,
-        expense_date: exp.expense_date
-      })),
-      quotes: quotes.map(q => ({
-        quote_number: q.quote_number,
-        description: q.description || '',
-        total_amount: q.total_amount,
-        status: q.status,
-        created_at: q.created_at
-      })),
-      expenseComparison: expenseComparison.map(item => ({
-        category: item.category,
-        department: item.department,
-        planned: item.planned,
-        actual: item.actual,
-        variance: item.variance,
-        variance_percent: item.variance_percent,
-        status: item.status,
-        responsible_party: item.responsible_party,
-        note: item.note
-      }))
-    }
-    
-    exportToPDF(reportData)
-  }
 
   const handleExportToExcel = () => {
     if (!project) return
@@ -575,6 +516,7 @@ export default function ProjectDetailedReportDetailPage() {
 
   // Approved planned maps for per-item badge logic
   const approvedPlannedQuotes = useMemo(() => (expenseQuotes || []).filter((eq: any) => eq.status === 'approved'), [expenseQuotes])
+  const approvedPlannedTotal = useMemo(() => approvedPlannedQuotes.reduce((sum: number, eq: any) => sum + (eq.amount || 0), 0), [approvedPlannedQuotes])
   const plannedByDescription = useMemo(() => {
     const map = new Map<string, number>()
     approvedPlannedQuotes.forEach((eq: any) => {
@@ -1222,22 +1164,22 @@ export default function ProjectDetailedReportDetailPage() {
                 <tfoot className="bg-gray-100">
                   <tr>
                     <td className="px-6 py-4 text-sm font-bold text-gray-900">TỔNG CỘNG</td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
-                      {formatCurrency(totalExpenseQuotes)}
+                     <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
+                       {formatCurrency(approvedPlannedTotal)}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
                       {formatCurrency(totalExpenses)}
                     </td>
                     <td className={`px-6 py-4 text-right text-sm font-bold ${
-                      (totalExpenses - totalExpenseQuotes) > 0 ? 'text-red-600' : 'text-green-600'
+                       (totalExpenses - approvedPlannedTotal) > 0 ? 'text-red-600' : 'text-green-600'
                     }`}>
-                      {(totalExpenses - totalExpenseQuotes) > 0 ? '+' : ''}{formatCurrency(totalExpenses - totalExpenseQuotes)}
+                       {(totalExpenses - approvedPlannedTotal) > 0 ? '+' : ''}{formatCurrency(totalExpenses - approvedPlannedTotal)}
                     </td>
                     <td className="px-6 py-4 text-center text-sm font-bold">
-                      {totalExpenseQuotes > 0 ? ((totalExpenses - totalExpenseQuotes) / totalExpenseQuotes * 100).toFixed(1) : 0}%
+                       {approvedPlannedTotal > 0 ? ((totalExpenses - approvedPlannedTotal) / approvedPlannedTotal * 100).toFixed(1) : 0}%
                     </td>
                     <td colSpan={2} className="px-6 py-4 text-sm font-semibold text-gray-900">
-                      {totalExpenses > totalExpenseQuotes ? 
+                       {totalExpenses > approvedPlannedTotal ? 
                         '⚠️ Dự án vượt ngân sách - Cần xem xét' : 
                         '✅ Dự án tiết kiệm ngân sách'}
                     </td>
@@ -1529,14 +1471,7 @@ export default function ProjectDetailedReportDetailPage() {
           </div>
 
           {/* Export Buttons */}
-          <div className="mt-6 flex justify-end gap-3">
-            <button
-              onClick={handleExportToPDF}
-              className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <Download className="h-5 w-5" />
-              Xuất PDF
-            </button>
+           <div className="mt-6 flex justify-end gap-3">
             <button
               onClick={handleExportToExcel}
               className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
