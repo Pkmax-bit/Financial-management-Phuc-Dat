@@ -40,21 +40,9 @@ interface CreateProjectExpenseDialogProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  editExpense?: {
-    id: string
-    project_id: string
-    description: string
-    planned_amount: number
-    expense_date: string
-    notes?: string
-    receipt_url?: string
-    currency: string
-    id_parent?: string
-    employee_id?: string
-  } | null
 }
 
-export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, editExpense }: CreateProjectExpenseDialogProps) {
+export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess }: CreateProjectExpenseDialogProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [parentQuotes, setParentQuotes] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
@@ -72,8 +60,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     employee_id: '',
     category: 'planned', // 'planned' or 'actual'
     description: '',
-    planned_amount: '',  // Đổi thành string để xử lý input number tốt hơn
-    actual_amount: '',   // Đổi thành string để xử lý input number tốt hơn
+    planned_amount: 0,
+    actual_amount: 0,
     expense_date: new Date().toISOString().split('T')[0],
     status: 'pending',
     notes: '',
@@ -89,28 +77,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     if (isOpen) {
       fetchProjects()
       fetchEmployees()
-      if (editExpense) {
-        // Nếu là chỉnh sửa, điền dữ liệu vào form
-        setFormData({
-          project_id: editExpense.project_id,
-          employee_id: editExpense.employee_id || '',
-          category: 'planned',
-          description: editExpense.description,
-          planned_amount: editExpense.planned_amount.toString(),
-          actual_amount: '',
-          expense_date: editExpense.expense_date,
-          status: 'pending',
-          notes: editExpense.notes || '',
-          receipt_url: editExpense.receipt_url || '',
-          currency: editExpense.currency,
-          id_parent: editExpense.id_parent || ''
-        })
-      } else {
-        // Nếu là tạo mới, reset form
-        resetForm()
-      }
+      resetForm()
     }
-  }, [isOpen, editExpense])
+  }, [isOpen])
 
   // Load parent quotes when a project is selected (only planned quotes without parent or allow any as parent)
   useEffect(() => {
@@ -122,15 +91,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       try {
         const { data, error } = await supabase
           .from('project_expenses_quote')
-          .select(`
-            id, 
-            expense_code, 
-            description, 
-            amount,
-            status
-          `)
+          .select('id, expense_code, description, amount')
           .eq('project_id', formData.project_id)
-          .not('status', 'eq', 'approved') // Chỉ lấy các chi phí chưa duyệt
           .order('created_at', { ascending: false })
         if (error) throw error
         setParentQuotes(data || [])
@@ -216,9 +178,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       newErrors.expense_date = 'Vui lòng chọn ngày chi phí'
     }
 
-    const amount = Number(formData.planned_amount)
-    if (isNaN(amount) || amount <= 0) {
-      newErrors.planned_amount = 'Số tiền kế hoạch phải là số dương'
+    if (formData.planned_amount <= 0) {
+      newErrors.planned_amount = 'Số tiền kế hoạch phải lớn hơn 0'
     }
 
     setErrors(newErrors)
@@ -233,46 +194,23 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     setSubmitting(true)
     
     try {
-      // Chuyển đổi số tiền từ string sang number và đảm bảo là số dương
-      const amount = Math.max(0, Number(formData.planned_amount) || 0)
-      
       // Chỉ lưu số tiền kế hoạch → map vào amount; luôn là kế hoạch (planned)
       const expenseData = {
         project_id: formData.project_id,
         employee_id: formData.employee_id || null,
-        description: formData.description.trim(),
-        amount: amount,
+        description: formData.description,
+        amount: parseFloat(formData.planned_amount.toString()) || 0,
         currency: formData.currency,
         expense_date: formData.expense_date,
         status: 'pending',
-        notes: formData.notes?.trim() || null,
-        receipt_url: formData.receipt_url?.trim() || null,
+        notes: formData.notes || null,
+        receipt_url: formData.receipt_url || null,
         id_parent: formData.id_parent || null,
       }
-      
-      console.log('💰 Amount being saved:', amount, typeof amount)
 
-      console.log('📤 Submitting project expense quote:', expenseData)
-      
-      if (editExpense) {
-        // Nếu là chỉnh sửa, gọi API PUT
-        const result = await fetch(`http://localhost:8000/api/project-expenses/quotes/${editExpense.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(expenseData)
-        })
-        if (!result.ok) {
-          const error = await result.json()
-          throw new Error(error.message || 'Failed to update expense')
-        }
-        console.log('✅ Project expense updated successfully')
-      } else {
-        // Nếu là tạo mới, gọi API POST
-        const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
-        console.log('✅ Project expense created successfully:', result)
-      }
+      console.log('📤 Submitting project expense quote (planned only):', expenseData)
+      const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
+      console.log('✅ Project expense created successfully:', result)
       // After create, if has parent, update parent quote amount = sum(children)
       if (expenseData.id_parent) {
         try {
@@ -308,8 +246,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       employee_id: '',
       category: 'planned',
       description: '',
-      planned_amount: '',
-      actual_amount: '',
+      planned_amount: 0,
+      actual_amount: 0,
       expense_date: new Date().toISOString().split('T')[0],
       status: 'pending',
       notes: '',
@@ -351,7 +289,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               <DollarSign className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{editExpense ? 'Chỉnh sửa chi phí dự án' : 'Tạo chi phí dự án'}</h2>
+              <h2 className="text-xl font-bold text-gray-900">Tạo chi phí dự án</h2>
               <p className="text-sm text-black mt-1">Quản lý chi phí kế hoạch và thực tế cho dự án</p>
             </div>
           </div>
@@ -453,7 +391,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       <option value="">Không chọn</option>
                       {parentQuotes.map((pq) => (
                         <option key={pq.id} value={pq.id}>
-                          {(pq.expense_code ? pq.expense_code + ' - ' : '') + pq.description} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pq.amount || 0)}) - {pq.status === 'pending' ? 'Chờ duyệt' : pq.status === 'rejected' ? 'Từ chối' : 'Đã duyệt'}
+                          {(pq.expense_code ? pq.expense_code + ' - ' : '') + pq.description} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pq.amount || 0)})
                         </option>
                       ))}
                     </select>
@@ -545,19 +483,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     <input
                       type="number"
                       value={formData.planned_amount}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        // Chỉ cho phép số và dấu chấm
-                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                          setFormData({ ...formData, planned_amount: value })
-                        }
-                      }}
+                      onChange={(e) => setFormData({ ...formData, planned_amount: parseFloat(e.target.value) || 0 })}
                       className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
                         errors.planned_amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
                       }`}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="Nhập số tiền..."
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
                     />
                     {errors.planned_amount && (
                       <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -663,7 +595,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center space-x-2"
             >
               <Save className="h-4 w-4" />
-              <span>{submitting ? 'Đang lưu...' : editExpense ? 'Lưu thay đổi' : 'Tạo chi phí dự án'}</span>
+              <span>{submitting ? 'Đang lưu...' : 'Tạo chi phí dự án'}</span>
             </button>
           </div>
         </div>
