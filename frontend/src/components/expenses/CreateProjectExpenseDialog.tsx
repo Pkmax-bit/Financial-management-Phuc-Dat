@@ -40,12 +40,14 @@ interface CreateProjectExpenseDialogProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  category?: 'planned' | 'actual' // Add category prop to specify expense type
 }
 
-export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess }: CreateProjectExpenseDialogProps) {
+export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned' }: CreateProjectExpenseDialogProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [parentQuotes, setParentQuotes] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
+  const [parentExpenses, setParentExpenses] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
@@ -81,28 +83,43 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
     }
   }, [isOpen])
 
-  // Load parent quotes when a project is selected (only planned quotes without parent or allow any as parent)
+  // Load parent expenses based on category
   useEffect(() => {
     const loadParents = async () => {
       if (!formData.project_id) {
         setParentQuotes([])
+        setParentExpenses([])
         return
       }
       try {
-        const { data, error } = await supabase
-          .from('project_expenses_quote')
-          .select('id, expense_code, description, amount')
-          .eq('project_id', formData.project_id)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        setParentQuotes(data || [])
+        if (category === 'planned') {
+          // Load from project_expenses_quote for planned expenses
+          const { data, error } = await supabase
+            .from('project_expenses_quote')
+            .select('id, expense_code, description, amount')
+            .eq('project_id', formData.project_id)
+            .order('created_at', { ascending: false })
+          if (error) throw error
+          setParentQuotes(data || [])
+        } else {
+          // Load from project_expenses for actual expenses
+          const { data, error } = await supabase
+            .from('project_expenses')
+            .select('id, expense_code, description, amount')
+            .eq('project_id', formData.project_id)
+            .eq('status', 'approved')
+            .order('created_at', { ascending: false })
+          if (error) throw error
+          setParentExpenses(data || [])
+        }
       } catch (e) {
-        console.error('❌ Error fetching parent quotes:', e)
+        console.error('❌ Error fetching parent expenses:', e)
         setParentQuotes([])
+        setParentExpenses([])
       }
     }
     loadParents()
-  }, [formData.project_id])
+  }, [formData.project_id, category])
 
   const fetchProjects = async () => {
     try {
@@ -194,47 +211,99 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
     setSubmitting(true)
     
     try {
-      // Chỉ lưu số tiền kế hoạch → map vào amount; luôn là kế hoạch (planned)
-      const expenseData = {
-        project_id: formData.project_id,
-        employee_id: formData.employee_id || null,
-        description: formData.description,
-        amount: parseFloat(formData.planned_amount.toString()) || 0,
-        currency: formData.currency,
-        expense_date: formData.expense_date,
-        status: 'pending',
-        notes: formData.notes || null,
-        receipt_url: formData.receipt_url || null,
-        id_parent: formData.id_parent || null,
-      }
+      if (category === 'planned') {
+        // Create planned expense (quote)
+        const expenseData = {
+          project_id: formData.project_id,
+          employee_id: formData.employee_id || null,
+          description: formData.description,
+          amount: parseFloat(formData.planned_amount.toString()) || 0,
+          currency: formData.currency,
+          expense_date: formData.expense_date,
+          status: 'pending',
+          notes: formData.notes || null,
+          receipt_url: formData.receipt_url || null,
+          id_parent: formData.id_parent || null,
+        }
 
-      console.log('📤 Submitting project expense quote (planned only):', expenseData)
-      const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
-      console.log('✅ Project expense created successfully:', result)
-      // After create, if has parent, update parent quote amount = sum(children)
-      if (expenseData.id_parent) {
-        try {
-          const parentId = expenseData.id_parent as string
-          const { data: children } = await supabase
-            .from('project_expenses_quote')
-            .select('amount')
-            .eq('id_parent', parentId)
-          const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
-          await supabase
-            .from('project_expenses_quote')
-            .update({ amount: total, updated_at: new Date().toISOString() })
-            .eq('id', parentId)
-        } catch (e) {
-          console.error('❌ Error updating parent quote amount:', e)
+        console.log('📤 Submitting project expense quote (planned):', expenseData)
+        const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
+        console.log('✅ Project expense quote created successfully:', result)
+        
+        // After create, if has parent, update parent quote amount = sum(children)
+        if (expenseData.id_parent) {
+          try {
+            const parentId = expenseData.id_parent as string
+            const { data: children } = await supabase
+              .from('project_expenses_quote')
+              .select('amount')
+              .eq('id_parent', parentId)
+            const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
+            await supabase
+              .from('project_expenses_quote')
+              .update({ amount: total, updated_at: new Date().toISOString() })
+              .eq('id', parentId)
+          } catch (e) {
+            console.error('❌ Error updating parent quote amount:', e)
+          }
+        }
+      } else {
+        // Create actual expense directly
+        const expenseData: any = {
+          id: crypto.randomUUID(),
+          project_id: formData.project_id,
+          description: formData.description,
+          amount: parseFloat(formData.planned_amount.toString()) || 0,
+          currency: formData.currency,
+          expense_date: formData.expense_date,
+          status: 'approved', // Actual expenses are automatically approved
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        
+        // Add optional fields
+        if (formData.employee_id) expenseData.employee_id = formData.employee_id
+        if (formData.notes) expenseData.notes = formData.notes
+        if (formData.receipt_url) expenseData.receipt_url = formData.receipt_url
+        if (formData.id_parent) expenseData.id_parent = formData.id_parent
+        
+        console.log('📤 Submitting project expense (actual):', expenseData)
+        
+        const { data, error } = await supabase
+          .from('project_expenses')
+          .insert(expenseData)
+          .select()
+        
+        if (error) throw error
+        
+        console.log('✅ Project expense (actual) created successfully:', data)
+        
+        // After create, if has parent, update parent expense amount = sum(children)
+        if (expenseData.id_parent) {
+          try {
+            const parentId = expenseData.id_parent as string
+            const { data: children } = await supabase
+              .from('project_expenses')
+              .select('amount')
+              .eq('id_parent', parentId)
+            const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
+            await supabase
+              .from('project_expenses')
+              .update({ amount: total, updated_at: new Date().toISOString() })
+              .eq('id', parentId)
+          } catch (e) {
+            console.error('❌ Error updating parent expense amount:', e)
+          }
         }
       }
         
+      alert(category === 'planned' ? 'Tạo chi phí kế hoạch thành công!' : 'Tạo chi phí thực tế thành công!')
       onSuccess()
       onClose()
       resetForm()
     } catch (error) {
       console.error('❌ Error creating project expense:', error)
-      alert('Có lỗi xảy ra khi tạo chi phí dự án: ' + (error as Error).message)
+      alert('Có lỗi xảy ra khi tạo chi phí: ' + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -285,12 +354,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-blue-100">
-              <DollarSign className="h-6 w-6 text-blue-600" />
+            <div className={`p-2 rounded-lg ${category === 'actual' ? 'bg-green-100' : 'bg-blue-100'}`}>
+              <DollarSign className={`h-6 w-6 ${category === 'actual' ? 'text-green-600' : 'text-blue-600'}`} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Tạo chi phí dự án</h2>
-              <p className="text-sm text-black mt-1">Quản lý chi phí kế hoạch và thực tế cho dự án</p>
+              <h2 className="text-xl font-bold text-gray-900">
+                {category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch'}
+              </h2>
+              <p className="text-sm text-black mt-1">
+                {category === 'actual' 
+                  ? 'Tạo chi phí thực tế đã phát sinh cho dự án'
+                  : 'Tạo chi phí dự kiến cho dự án'}
+              </p>
             </div>
           </div>
           <button
@@ -386,15 +461,22 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                     <select
                       value={formData.id_parent}
                       onChange={(e) => setFormData({ ...formData, id_parent: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 text-gray-900 ${
+                        category === 'actual' ? 'focus:ring-green-500 border-gray-300' : 'focus:ring-blue-500 border-gray-300'
+                      }`}
                     >
                       <option value="">Không chọn</option>
-                      {parentQuotes.map((pq) => (
-                        <option key={pq.id} value={pq.id}>
-                          {(pq.expense_code ? pq.expense_code + ' - ' : '') + pq.description} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pq.amount || 0)})
+                      {(category === 'planned' ? parentQuotes : parentExpenses).map((parent) => (
+                        <option key={parent.id} value={parent.id}>
+                          {(parent.expense_code ? parent.expense_code + ' - ' : '') + parent.description} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(parent.amount || 0)})
                         </option>
                       ))}
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {category === 'planned' 
+                        ? 'Chọn chi phí kế hoạch làm cha (từ project_expenses_quote)'
+                        : 'Chọn chi phí thực tế làm cha (từ project_expenses)'}
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -403,12 +485,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                         Loại chi phí <span className="text-red-500">*</span>
                       </label>
                       <select
-                        value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: 'planned' })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+                        value={category}
+                        className={`w-full border rounded-md px-3 py-2 text-sm bg-gray-50 cursor-not-allowed ${
+                          category === 'actual' ? 'text-green-700 border-green-300' : 'text-blue-700 border-blue-300'
+                        }`}
                         disabled
                       >
                         <option value="planned">Kế hoạch</option>
+                        <option value="actual">Thực tế</option>
                       </select>
                     </div>
 
@@ -464,8 +548,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                 className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
               >
                 <div className="flex items-center space-x-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="font-medium text-gray-900">Số tiền kế hoạch</span>
+                  <DollarSign className={`h-4 w-4 ${category === 'actual' ? 'text-green-600' : 'text-blue-600'}`} />
+                  <span className="font-medium text-gray-900">
+                    {category === 'actual' ? 'Số tiền thực tế' : 'Số tiền kế hoạch'}
+                  </span>
                 </div>
                 {expandedSections.amounts ? (
                   <ChevronDown className="h-4 w-4 text-gray-400" />
@@ -478,13 +564,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
                 <div className="px-4 pb-4 space-y-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Số tiền kế hoạch (VND)
+                      {category === 'actual' ? 'Số tiền thực tế (VND)' : 'Số tiền kế hoạch (VND)'}
                     </label>
                     <input
                       type="number"
                       value={formData.planned_amount}
                       onChange={(e) => setFormData({ ...formData, planned_amount: parseFloat(e.target.value) || 0 })}
-                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
+                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                        category === 'actual' ? 'focus:ring-green-500' : 'focus:ring-blue-500'
+                      } text-gray-900 ${
                         errors.planned_amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
                       }`}
                       min="0"
@@ -592,10 +680,19 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess 
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center space-x-2"
+              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 flex items-center space-x-2 ${
+                category === 'actual' 
+                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
+                  : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+              }`}
             >
               <Save className="h-4 w-4" />
-              <span>{submitting ? 'Đang lưu...' : 'Tạo chi phí dự án'}</span>
+              <span>
+                {submitting 
+                  ? 'Đang lưu...' 
+                  : (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch')
+                }
+              </span>
             </button>
           </div>
         </div>

@@ -441,15 +441,7 @@ export default function ExpensesPage() {
                         Thêm nhà cung cấp
                       </button>
                     )}
-                    {activeTab === 'project-expenses' && (
-                      <button 
-                        onClick={handleCreateProjectExpense}
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Thêm chi phí dự án
-                      </button>
-                    )}
+                    {/* project-expenses buttons are now in ProjectExpensesTab component */}
                   </div>
                 </div>
               </div>

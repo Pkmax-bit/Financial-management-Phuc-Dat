@@ -166,8 +166,8 @@ export default function ReportsPage() {
       case 'general-ledger':
         router.push('/reports/general-ledger')
         break
-      case 'project-report':
-        router.push('/reports/project-report')
+      case 'project-reports':
+        router.push('/reports/projects-detailed')
         break
       default:
         console.log('Report not implemented:', reportId)
