@@ -30,5 +30,3 @@ create index if not exists idx_project_expenses_quote_date on project_expenses_q
 create index if not exists idx_project_expenses_quote_status on project_expenses_quote(status);
 
 
-
-
