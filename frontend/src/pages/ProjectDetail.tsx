@@ -7,7 +7,7 @@ import {
   Typography,
   Paper,
 } from '@mui/material';
-import { ProjectExpensesTab } from '../components/expenses/ProjectExpensesTab';
+import ProjectExpensesTab from '../components/expenses/ProjectExpensesTab';
 import { ProjectTeamTab } from '../components/projects/ProjectTeamTab';
 
 interface TabPanelProps {
@@ -36,7 +36,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-export const ProjectDetail = () => {
+const ProjectDetail = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const [value, setValue] = useState(0);
   const [project, setProject] = useState<any>(null);
@@ -102,3 +102,5 @@ export const ProjectDetail = () => {
     </Box>
   );
 };
+
+export default ProjectDetail;

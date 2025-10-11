@@ -10,8 +10,15 @@ import {
   User,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Heart,
+  MessageCircle,
+  Smile,
+  Share
 } from 'lucide-react'
+import EmotionsComments from '@/components/emotions-comments/EmotionsComments'
+import ReactionButton from '@/components/emotions-comments/ReactionButton'
+import ImageWithReactions from './ImageWithReactions'
 
 interface TimelineEntry {
   id: string
@@ -74,6 +81,7 @@ export default function CustomerProjectTimeline({ projectId, projectName }: Cust
   const [error, setError] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set())
+  const [authorName, setAuthorName] = useState('')
 
   useEffect(() => {
     fetchTimelineEntries()
@@ -163,6 +171,23 @@ export default function CustomerProjectTimeline({ projectId, projectName }: Cust
 
   return (
     <div className="space-y-6">
+      {/* Author Name Input - Global for all comments */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Tên của bạn (áp dụng cho tất cả bình luận)
+        </label>
+        <input
+          type="text"
+          value={authorName}
+          onChange={(e) => setAuthorName(e.target.value)}
+          placeholder="Nhập tên của bạn..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-black font-medium placeholder-gray-600"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Tên này sẽ được sử dụng cho tất cả bình luận trong timeline này
+        </p>
+      </div>
+
       {timelineEntries.map((entry) => (
         <div key={entry.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
           {/* Facebook-style Header */}
@@ -216,30 +241,20 @@ export default function CustomerProjectTimeline({ projectId, projectName }: Cust
             </div>
             <p className="text-gray-700 mb-4">{entry.description}</p>
 
-            {/* Facebook-style Images */}
+            {/* Images with Individual Reactions and Comments - Full Width */}
             {entry.attachments.filter(att => att.type === 'image' || att.type.startsWith('image/')).length > 0 && (
-              <div className="mt-4">
-                <div className="grid grid-cols-1 gap-4">
+              <div className="mt-6">
+                <div className="space-y-6">
                   {entry.attachments
                     .filter(att => att.type === 'image' || att.type.startsWith('image/'))
                     .map((attachment) => (
-                      <div key={attachment.id} className="group relative">
-                        <div className="bg-gray-100 rounded-lg overflow-hidden">
-                          <div className="aspect-[4/3] w-full">
-                            <img 
-                              src={attachment.url} 
-                              alt={attachment.name}
-                              className="w-full h-full object-contain"
-                              loading="lazy"
-                            />
-                          </div>
-                        </div>
-                        {/* Image info overlay */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 rounded-b-lg">
-                          <p className="text-xs text-white truncate">{attachment.name}</p>
-                          <p className="text-xs text-gray-300">{formatFileSize(attachment.size)}</p>
-                        </div>
-                      </div>
+                      <ImageWithReactions
+                        key={attachment.id}
+                        attachment={attachment}
+                        timelineId={entry.id}
+                        onImageClick={setSelectedImage}
+                        authorName={authorName}
+                      />
                     ))}
                 </div>
               </div>
@@ -273,6 +288,22 @@ export default function CustomerProjectTimeline({ projectId, projectName }: Cust
                 </div>
               </div>
             )}
+
+            {/* Reactions and Comments Section */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              {/* Reactions */}
+              <div className="mb-4">
+                <ReactionButton
+                  entityType="timeline_entry"
+                  entityId={entry.id}
+                  currentUserId={null} // Khách hàng có thể không có user ID
+                  compact={true}
+                />
+              </div>
+              
+              {/* Comments Section - Hidden */}
+              {/* Phần bình luận đã được ẩn theo yêu cầu */}
+            </div>
           </div>
         </div>
       ))}

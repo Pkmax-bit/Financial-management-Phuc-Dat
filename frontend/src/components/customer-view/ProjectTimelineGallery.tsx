@@ -17,7 +17,11 @@ import {
   CheckCircle,
   AlertCircle,
   Star,
-  X
+  X,
+  Heart,
+  MessageCircle,
+  Smile,
+  Share
 } from 'lucide-react'
 
 interface Customer {
@@ -412,10 +416,26 @@ export default function ProjectTimelineGallery({ customer, projects, timelineEnt
                                   />
                                 </div>
                               </div>
-                              {/* Image info overlay */}
+                              {/* Image actions overlay */}
                               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 rounded-b-lg">
-                                <p className="text-xs text-white truncate">{attachment.name}</p>
-                                <p className="text-xs text-gray-300">{formatFileSize(attachment.size)}</p>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <button className="flex items-center gap-1 text-white hover:text-red-400 transition-colors">
+                                      <Heart className="h-4 w-4" />
+                                      <span className="text-xs">0</span>
+                                    </button>
+                                    <button className="flex items-center gap-1 text-white hover:text-blue-400 transition-colors">
+                                      <MessageCircle className="h-4 w-4" />
+                                      <span className="text-xs">0</span>
+                                    </button>
+                                    <button className="flex items-center gap-1 text-white hover:text-yellow-400 transition-colors">
+                                      <Smile className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                  <button className="text-white hover:text-gray-300 transition-colors">
+                                    <Share className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}

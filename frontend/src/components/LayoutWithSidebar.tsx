@@ -99,7 +99,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         {/* Sidebar */}
         <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ${
           sidebarOpen ? 'w-64' : 'w-0'
-        } overflow-hidden`}>
+        } overflow-hidden lg:block ${sidebarOpen ? 'block' : 'hidden lg:block'}`}>
           {/* Logo */}
           <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
             <div className="flex items-center space-x-2">
@@ -239,7 +239,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           onClick={toggleSidebar}
           className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 ${
             sidebarOpen ? 'left-60' : 'left-4'
-          } hover:bg-gray-50`}
+          } hover:bg-gray-50 lg:block`}
           title={sidebarOpen ? 'Đóng sidebar' : 'Mở sidebar'}
         >
           {sidebarOpen ? (
@@ -252,7 +252,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         {/* Content Area */}
         <div className={`transition-all duration-300 ${
           sidebarOpen ? 'ml-64' : 'ml-0'
-        }`}>
+        } lg:ml-64`}>
           {children}
         </div>
       </div>
