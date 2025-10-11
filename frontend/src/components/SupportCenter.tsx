@@ -46,80 +46,47 @@ interface SupportCenterProps {
 
 const modules = [
   {
-    id: 'sales',
-    name: 'Bán hàng',
-    icon: DollarSign,
-    color: 'blue',
-    description: 'Quản lý bán hàng, hóa đơn, thanh toán',
-    guides: [
-      { title: 'Tổng quan Bán hàng', url: '/sales/guide' },
-      { title: 'Hướng dẫn Tạo Hóa đơn', url: '/sales/guide#invoices' },
-      { title: 'Quản lý Thanh toán', url: '/sales/guide#payments' },
-      { title: 'Báo cáo Doanh thu', url: '/sales/guide#reports' }
-    ],
-    quickActions: [
-      { title: 'Tạo hóa đơn mới', action: 'create-invoice' },
-      { title: 'Xem báo cáo doanh thu', action: 'view-reports' },
-      { title: 'Quản lý khách hàng', action: 'manage-customers' }
-    ]
-  },
-  {
-    id: 'expenses',
-    name: 'Chi phí',
-    icon: Receipt,
-    color: 'orange',
-    description: 'Quản lý chi phí, ngân sách, nhà cung cấp',
-    guides: [
-      { title: 'Tổng quan Chi phí', url: '/expenses/guide' },
-      { title: 'Quản lý Ngân sách', url: '/expenses/guide#budgeting' },
-      { title: 'Hóa đơn Nhà cung cấp', url: '/expenses/guide#bills' },
-      { title: 'Đề nghị Hoàn ứng', url: '/expenses/guide#expense-claims' }
-    ],
-    quickActions: [
-      { title: 'Tạo chi phí mới', action: 'create-expense' },
-      { title: 'Thiết lập ngân sách', action: 'create-budget' },
-      { title: 'Quản lý nhà cung cấp', action: 'manage-vendors' }
-    ]
-  },
-  {
-    id: 'employees',
-    name: 'Nhân sự',
-    icon: Users,
-    color: 'green',
-    description: 'Quản lý nhân viên, phòng ban, chức vụ',
-    guides: [
-      { title: 'Tổng quan Nhân sự', url: '/employees/guide' },
-      { title: 'Quản lý Nhân viên', url: '/employees/guide#employees' },
-      { title: 'Phòng ban & Chức vụ', url: '/employees/guide#departments' },
-      { title: 'Báo cáo Nhân sự', url: '/employees/guide#reports' }
-    ],
-    quickActions: [
-      { title: 'Thêm nhân viên mới', action: 'create-employee' },
-      { title: 'Quản lý phòng ban', action: 'manage-departments' },
-      { title: 'Xem báo cáo nhân sự', action: 'view-reports' }
-    ]
-  },
-  {
-    id: 'projects',
-    name: 'Dự án',
+    id: 'workflow',
+    name: 'Quy trình Quản lý Tài chính',
     icon: Target,
-    color: 'purple',
-    description: 'Quản lý dự án, nhiệm vụ, tiến độ',
+    color: 'blue',
+    description: 'Hướng dẫn 8 bước từ tạo khách hàng đến báo cáo',
     guides: [
-      { title: 'Tổng quan Dự án', url: '/projects/guide' },
-      { title: 'Tạo Dự án mới', url: '/projects/guide#create-project' },
-      { title: 'Quản lý Nhiệm vụ', url: '/projects/guide#tasks' },
-      { title: 'Theo dõi Tiến độ', url: '/projects/guide#progress' }
+      { title: 'Bước 1: Tạo Khách hàng', url: '/support#workflow-step-1' },
+      { title: 'Bước 2: Tạo Dự án', url: '/support#workflow-step-2' },
+      { title: 'Bước 3: Tạo Báo giá', url: '/support#workflow-step-3' },
+      { title: 'Bước 4: Ngân sách Dự án', url: '/support#workflow-step-4' },
+      { title: 'Bước 5: Duyệt Báo giá', url: '/support#workflow-step-5' },
+      { title: 'Bước 6: Hóa đơn & Chi phí', url: '/support#workflow-step-6' },
+      { title: 'Bước 7: Báo cáo Tài chính', url: '/support#workflow-step-7' },
+      { title: 'Bước 8: Khách hàng Xem Tiến độ', url: '/support#workflow-step-8' }
     ],
     quickActions: [
-      { title: 'Tạo dự án mới', action: 'create-project' },
-      { title: 'Thêm nhiệm vụ', action: 'create-task' },
-      { title: 'Xem tiến độ dự án', action: 'view-progress' }
+      { title: 'Xem quy trình hoàn chỉnh', action: 'view-complete-workflow' },
+      { title: 'Bảng tóm tắt nhanh', action: 'view-quick-reference' },
+      { title: 'Hướng dẫn từng bước', action: 'view-step-by-step' }
     ]
   }
 ]
 
 const quickGuides = [
+  {
+    id: 'complete-workflow',
+    title: 'Quy trình Quản lý Tài chính Hoàn chỉnh',
+    description: 'Hướng dẫn từ tạo khách hàng đến báo cáo',
+    steps: [
+      'Bước 1: Tạo khách hàng mới',
+      'Bước 2: Tạo dự án và liên kết khách hàng',
+      'Bước 3: Tạo báo giá chi tiết',
+      'Bước 4: Thiết lập ngân sách dự án',
+      'Bước 5: Duyệt báo giá (khách hàng)',
+      'Bước 6: Tạo hóa đơn và ghi nhận chi phí',
+      'Bước 7: Tạo báo cáo tài chính',
+      'Bước 8: Khách hàng xem tiến độ dự án'
+    ],
+    estimatedTime: '45 phút',
+    isComplete: true
+  },
   {
     id: 'getting-started',
     title: 'Bắt đầu sử dụng hệ thống',
@@ -161,76 +128,111 @@ const quickGuides = [
 const faqs = [
   {
     id: 1,
-    question: "Làm thế nào để tạo tài khoản người dùng mới?",
-    answer: "Vào mục Nhân sự > Quản lý Nhân viên > Thêm nhân viên mới. Điền đầy đủ thông tin và hệ thống sẽ tự động tạo tài khoản đăng nhập.",
-    category: "Nhân sự",
-    module: "employees"
+    question: "Quy trình quản lý tài chính hoàn chỉnh gồm những bước nào?",
+    answer: "Quy trình gồm 8 bước: 1) Tạo khách hàng, 2) Tạo dự án, 3) Tạo báo giá, 4) Ngân sách dự án, 5) Duyệt báo giá, 6) Hóa đơn & Chi phí, 7) Báo cáo tài chính, 8) Khách hàng xem tiến độ. Xem tab 'Quy trình hoàn chỉnh' để biết chi tiết.",
+    category: "Quy trình",
+    module: "workflow"
   },
   {
     id: 2,
-    question: "Cách thiết lập ngân sách cho doanh nghiệp?",
-    answer: "Vào mục Chi phí > Quản lý Ngân sách > Tạo ngân sách. Chọn chu kỳ (tháng/quý/năm) và thiết lập ngân sách cho từng danh mục chi phí.",
-    category: "Chi phí",
-    module: "expenses"
+    question: "Làm thế nào để bắt đầu quy trình quản lý tài chính?",
+    answer: "Bắt đầu từ Bước 1: Tạo khách hàng mới. Vào mục Khách hàng > Tạo khách hàng mới. Điền thông tin cơ bản, phân loại khách hàng, thiết lập credit limit và payment terms. Hệ thống sẽ tự động tạo mã khách hàng (CUS001, CUS002...).",
+    category: "Quy trình",
+    module: "workflow"
   },
   {
     id: 3,
-    question: "Làm sao để tạo hóa đơn bán hàng?",
-    answer: "Vào mục Bán hàng > Hóa đơn > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
-    category: "Bán hàng",
-    module: "sales"
+    question: "Sau khi tạo khách hàng, bước tiếp theo là gì?",
+    answer: "Bước 2: Tạo dự án. Vào mục Dự án > Tạo dự án mới. Chọn khách hàng từ danh sách, thiết lập budget, phân công project manager, chọn ngày bắt đầu/kết thúc. Hệ thống sẽ tự động tạo mã dự án (PRJ001, PRJ002...).",
+    category: "Quy trình",
+    module: "workflow"
   },
   {
     id: 4,
-    question: "Cách quản lý thanh toán của khách hàng?",
-    answer: "Vào mục Bán hàng > Thanh toán > Ghi nhận thanh toán. Chọn hóa đơn cần thanh toán, nhập số tiền và phương thức thanh toán.",
-    category: "Bán hàng",
-    module: "sales"
+    question: "Cách tạo báo giá trong quy trình?",
+    answer: "Bước 3: Tạo báo giá. Vào mục Bán hàng & Báo giá > Tạo báo giá. Chọn khách hàng và dự án, thêm sản phẩm/dịch vụ với số lượng và đơn giá, hệ thống sẽ tự động tính thuế và tổng tiền. Sau đó gửi email cho khách hàng.",
+    category: "Quy trình",
+    module: "workflow"
   },
   {
     id: 5,
-    question: "Làm thế nào để phê duyệt chi phí?",
-    answer: "Vào mục Chi phí > Danh sách chi phí. Tìm chi phí cần phê duyệt và nhấn 'Phê duyệt' hoặc 'Từ chối' với ghi chú.",
-    category: "Chi phí",
-    module: "expenses"
+    question: "Thiết lập ngân sách dự án như thế nào?",
+    answer: "Bước 4: Ngân sách dự án. Vào mục Chi phí & Ngân sách > Thiết lập ngân sách. Chọn dự án, phân bổ chi phí theo danh mục (vật liệu 40%, nhân công 35%, máy móc 15%, chi phí khác 10%), thiết lập mục tiêu lợi nhuận và ngưỡng cảnh báo.",
+    category: "Quy trình",
+    module: "workflow"
   },
   {
     id: 6,
-    question: "Cách tạo báo cáo tài chính?",
-    answer: "Vào mục Báo cáo > Báo cáo Tài chính. Chọn loại báo cáo, khoảng thời gian và nhấn 'Tạo báo cáo' để xem kết quả.",
-    category: "Báo cáo",
-    module: "reports"
+    question: "Khách hàng duyệt báo giá trong quy trình như thế nào?",
+    answer: "Bước 5: Duyệt báo giá. Khách hàng nhận email với link báo giá, xem chi tiết và quyết định chấp nhận/từ chối/yêu cầu sửa. Khi duyệt, hệ thống tự động tạo hóa đơn và cập nhật trạng thái dự án sang giai đoạn thực hiện.",
+    category: "Quy trình",
+    module: "workflow"
+  },
+  {
+    id: 7,
+    question: "Ghi nhận chi phí thực tế trong quy trình?",
+    answer: "Bước 6: Hóa đơn & Chi phí. Vào mục Chi phí & Ngân sách > Chi phí thực tế. Ghi nhận chi phí theo loại (vật liệu/nhân công/máy móc), số tiền, ngày phát sinh, đính kèm chứng từ. Manager/Admin sẽ phê duyệt chi phí trước khi cập nhật vào dự án.",
+    category: "Quy trình",
+    module: "workflow"
+  },
+  {
+    id: 8,
+    question: "Tạo báo cáo tài chính trong quy trình?",
+    answer: "Bước 7: Báo cáo tài chính. Vào mục Báo cáo & Phân tích. Có các loại báo cáo: Báo cáo dự án chi tiết (so sánh kế hoạch vs thực tế), P&L Report, Balance Sheet, Cash Flow Report. Chọn khoảng thời gian và dự án để xem báo cáo.",
+    category: "Quy trình",
+    module: "workflow"
+  },
+  {
+    id: 9,
+    question: "Khách hàng xem tiến độ dự án trong quy trình?",
+    answer: "Bước 8: Khách hàng xem tiến độ. Khách hàng truy cập timeline dự án qua link được chia sẻ. Xem tiến độ theo giai đoạn với hình ảnh minh họa, phần trăm hoàn thành, có thể bình luận và yêu cầu thay đổi. Hệ thống gửi thông báo khi có cập nhật.",
+    category: "Quy trình",
+    module: "workflow"
+  },
+  {
+    id: 10,
+    question: "Lợi ích của quy trình quản lý tài chính hoàn chỉnh?",
+    answer: "Quy trình giúp: Quản lý dự án hiệu quả, kiểm soát chi phí chặt chẽ, tăng tính minh bạch, ra quyết định dựa trên dữ liệu, nâng cao trải nghiệm khách hàng, tăng năng suất nhân viên. Tất cả được tích hợp trong một hệ thống thống nhất.",
+    category: "Quy trình",
+    module: "workflow"
   }
 ]
 
 const videoTutorials = [
   {
     id: 1,
-    title: 'Tổng quan hệ thống',
-    duration: '5:30',
-    thumbnail: '/videos/overview-thumb.jpg',
-    description: 'Giới thiệu tổng quan về các chức năng chính'
+    title: 'Quy trình Quản lý Tài chính Hoàn chỉnh',
+    duration: '12:30',
+    thumbnail: '/videos/complete-workflow-thumb.jpg',
+    description: 'Hướng dẫn 8 bước từ tạo khách hàng đến báo cáo'
   },
   {
     id: 2,
-    title: 'Hướng dẫn Bán hàng',
-    duration: '8:15',
-    thumbnail: '/videos/sales-thumb.jpg',
-    description: 'Từ tạo hóa đơn đến thu tiền'
+    title: 'Bước 1-2: Tạo Khách hàng & Dự án',
+    duration: '6:15',
+    thumbnail: '/videos/customer-project-thumb.jpg',
+    description: 'Hướng dẫn tạo khách hàng và dự án mới'
   },
   {
     id: 3,
-    title: 'Quản lý Chi phí',
-    duration: '7:45',
-    thumbnail: '/videos/expenses-thumb.jpg',
-    description: 'Thiết lập ngân sách và quản lý chi phí'
+    title: 'Bước 3-5: Báo giá & Duyệt',
+    duration: '8:45',
+    thumbnail: '/videos/quote-approval-thumb.jpg',
+    description: 'Tạo báo giá, ngân sách và quy trình duyệt'
   },
   {
     id: 4,
-    title: 'Báo cáo & Phân tích',
-    duration: '6:20',
-    thumbnail: '/videos/reports-thumb.jpg',
-    description: 'Tạo và xem các báo cáo tài chính'
+    title: 'Bước 6: Hóa đơn & Chi phí Thực tế',
+    duration: '7:20',
+    thumbnail: '/videos/invoice-expenses-thumb.jpg',
+    description: 'Tạo hóa đơn và ghi nhận chi phí thực tế'
+  },
+  {
+    id: 5,
+    title: 'Bước 7-8: Báo cáo & Khách hàng Xem',
+    duration: '5:40',
+    thumbnail: '/videos/reports-customer-thumb.jpg',
+    description: 'Báo cáo tài chính và khách hàng xem tiến độ'
   }
 ]
 
@@ -314,6 +316,16 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   }`}
                 >
                   Theo Module
+                </button>
+                <button
+                  onClick={() => setActiveTab('workflow')}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+                    activeTab === 'workflow' 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'text-black hover:bg-gray-100'
+                  }`}
+                >
+                  Quy trình hoàn chỉnh
                 </button>
                 <button
                   onClick={() => setActiveTab('quick-guides')}
@@ -496,6 +508,206 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
               </div>
             )}
 
+            {/* Workflow Tab */}
+            {activeTab === 'workflow' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4">Quy trình Quản lý Tài chính Hoàn chỉnh</h3>
+                  <p className="text-black mb-6">
+                    Hướng dẫn chi tiết từ tạo khách hàng đến báo cáo tài chính
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6 mb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Target className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Tổng quan Quy trình</h4>
+                      <p className="text-sm text-gray-600">8 bước từ tạo khách hàng đến báo cáo</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">1</div>
+                      <p className="text-xs text-gray-600">Tạo khách hàng</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">2</div>
+                      <p className="text-xs text-gray-600">Tạo dự án</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">3</div>
+                      <p className="text-xs text-gray-600">Tạo báo giá</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">4</div>
+                      <p className="text-xs text-gray-600">Ngân sách</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">5</div>
+                      <p className="text-xs text-gray-600">Duyệt báo giá</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">6</div>
+                      <p className="text-xs text-gray-600">Hóa đơn & Chi phí</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">7</div>
+                      <p className="text-xs text-gray-600">Báo cáo</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">8</div>
+                      <p className="text-xs text-gray-600">Khách hàng xem</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Bước 1 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">1</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Tạo Khách hàng</h4>
+                        <p className="text-gray-600 text-sm mb-3">Thiết lập thông tin khách hàng làm nền tảng cho toàn bộ quy trình</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /customers</p>
+                          <p><strong>Quyền:</strong> Admin, Manager, Sales</p>
+                          <p><strong>Kết quả:</strong> Khách hàng được tạo với mã tự động (CUS001, CUS002...)</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bước 2 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">2</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Tạo Dự án</h4>
+                        <p className="text-gray-600 text-sm mb-3">Tạo dự án và liên kết với khách hàng để quản lý toàn bộ quy trình</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /projects</p>
+                          <p><strong>Quyền:</strong> Admin, Manager, Sales</p>
+                          <p><strong>Kết quả:</strong> Dự án được tạo với mã tự động, liên kết với khách hàng</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bước 3 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">3</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Tạo Báo giá</h4>
+                        <p className="text-gray-600 text-sm mb-3">Tạo báo giá chi tiết cho khách hàng với các sản phẩm/dịch vụ và giá cả cụ thể</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /sales/quotes</p>
+                          <p><strong>Quyền:</strong> Admin, Manager, Sales</p>
+                          <p><strong>Kết quả:</strong> Báo giá được tạo và gửi email cho khách hàng</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bước 4 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">4</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Chi phí Kế hoạch (Budget)</h4>
+                        <p className="text-gray-600 text-sm mb-3">Lập ngân sách chi tiết cho dự án dựa trên báo giá đã tạo</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /budgeting</p>
+                          <p><strong>Quyền:</strong> Admin, Manager, Accountant</p>
+                          <p><strong>Kết quả:</strong> Ngân sách được phân bổ theo danh mục chi phí</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bước 5 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">5</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Duyệt Báo giá</h4>
+                        <p className="text-gray-600 text-sm mb-3">Khách hàng xem xét và duyệt báo giá, sau đó chuyển đổi thành hóa đơn</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /customers/quotes (cho khách hàng)</p>
+                          <p><strong>Quyền:</strong> Customer</p>
+                          <p><strong>Kết quả:</strong> Báo giá được duyệt, hóa đơn tự động được tạo</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bước 6 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">6</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Hóa đơn & Chi phí Thực tế</h4>
+                        <p className="text-gray-600 text-sm mb-3">Tạo hóa đơn từ báo giá đã duyệt và theo dõi chi phí thực tế</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /sales/invoices, /projects/[id]/expenses</p>
+                          <p><strong>Quyền:</strong> Admin, Manager, Accountant, Workshop, Worker, Transport</p>
+                          <p><strong>Kết quả:</strong> Hóa đơn được tạo, chi phí thực tế được ghi nhận</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bước 7 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">7</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Báo cáo & Phân tích</h4>
+                        <p className="text-gray-600 text-sm mb-3">Tạo các báo cáo tài chính chi tiết để đánh giá hiệu quả dự án</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /reports</p>
+                          <p><strong>Quyền:</strong> Admin, Manager, Accountant</p>
+                          <p><strong>Kết quả:</strong> Báo cáo chi tiết, phân tích tài chính, so sánh hiệu quả</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bước 8 */}
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">8</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-2">Khách hàng Xem Tiến độ</h4>
+                        <p className="text-gray-600 text-sm mb-3">Cho phép khách hàng theo dõi tiến độ dự án thông qua timeline</p>
+                        <div className="bg-gray-50 p-3 rounded text-sm">
+                          <p><strong>Đường dẫn:</strong> /projects/[id]/timeline</p>
+                          <p><strong>Quyền:</strong> Customer, Admin, Manager</p>
+                          <p><strong>Kết quả:</strong> Khách hàng theo dõi được tiến độ, tăng tính minh bạch</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 border-l-4 border-green-400 p-4">
+                  <div className="flex">
+                    <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 mr-3" />
+                    <div>
+                      <p className="text-sm text-green-800">
+                        <strong>Lợi ích:</strong> Quy trình này giúp quản lý dự án hiệu quả, kiểm soát chi phí chặt chẽ, tăng tính minh bạch và ra quyết định dựa trên dữ liệu.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Quick Guides Tab */}
             {activeTab === 'quick-guides' && (
               <div className="space-y-6">
@@ -508,10 +720,21 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
 
                 <div className="space-y-6">
                   {quickGuides.map((guide) => (
-                    <div key={guide.id} className="border border-gray-200 rounded-lg p-6">
+                    <div key={guide.id} className={`border rounded-lg p-6 ${
+                      guide.isComplete 
+                        ? 'border-green-200 bg-green-50' 
+                        : 'border-gray-200'
+                    }`}>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900 mb-2">{guide.title}</h4>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-semibold text-gray-900">{guide.title}</h4>
+                            {guide.isComplete && (
+                              <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                                Quy trình hoàn chỉnh
+                              </span>
+                            )}
+                          </div>
                           <p className="text-black text-sm mb-4">{guide.description}</p>
                           
                           <div className="space-y-2">
@@ -519,7 +742,11 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                             <ol className="space-y-1">
                               {guide.steps.map((step, index) => (
                                 <li key={index} className="flex items-start space-x-2 text-sm text-black">
-                                  <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
+                                  <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ${
+                                    guide.isComplete 
+                                      ? 'bg-green-100 text-green-600' 
+                                      : 'bg-blue-100 text-blue-600'
+                                  }`}>
                                     {index + 1}
                                   </span>
                                   <span>{step}</span>
@@ -530,7 +757,9 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                         </div>
                         <div className="ml-4 text-right">
                           <div className="text-sm text-black mb-2">Thời gian ước tính:</div>
-                          <div className="text-sm font-medium text-blue-600">{guide.estimatedTime}</div>
+                          <div className={`text-sm font-medium ${
+                            guide.isComplete ? 'text-green-600' : 'text-blue-600'
+                          }`}>{guide.estimatedTime}</div>
                         </div>
                       </div>
                     </div>
@@ -646,35 +875,22 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">Liên hệ Hỗ trợ</h3>
                   <p className="text-black mb-6">
-                    Chúng tôi luôn sẵn sàng hỗ trợ bạn 24/7
+                    Cần hỗ trợ về quy trình quản lý tài chính? Chúng tôi luôn sẵn sàng giúp đỡ.
                   </p>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="border border-gray-200 rounded-lg p-6">
                     <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <MessageCircle className="h-5 w-5 text-blue-600" />
-                      Hỗ trợ Trực tuyến
-                    </h4>
-                    <p className="text-black text-sm mb-4">
-                      Nhận hỗ trợ nhanh chóng qua chat trực tuyến
-                    </p>
-                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
-                      Bắt đầu Chat
-                    </button>
-                  </div>
-                  
-                  <div className="border border-gray-200 rounded-lg p-6">
-                    <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Mail className="h-5 w-5 text-green-600" />
+                      <Mail className="h-5 w-5 text-blue-600" />
                       Email Hỗ trợ
                     </h4>
                     <p className="text-black text-sm mb-4">
-                      Gửi email để nhận hỗ trợ chi tiết
+                      Gửi email để nhận hỗ trợ chi tiết về quy trình
                     </p>
                     <a 
                       href="mailto:support@company.com"
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm inline-block"
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm inline-block"
                     >
                       Gửi Email
                     </a>
@@ -682,7 +898,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                   
                   <div className="border border-gray-200 rounded-lg p-6">
                     <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Phone className="h-5 w-5 text-purple-600" />
+                      <Phone className="h-5 w-5 text-green-600" />
                       Điện thoại
                     </h4>
                     <p className="text-black text-sm mb-4">
@@ -690,23 +906,10 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                     </p>
                     <a 
                       href="tel:+84123456789"
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 text-sm inline-block"
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm inline-block"
                     >
                       Gọi ngay
                     </a>
-                  </div>
-                  
-                  <div className="border border-gray-200 rounded-lg p-6">
-                    <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-orange-600" />
-                      Giờ làm việc
-                    </h4>
-                    <p className="text-black text-sm mb-2">
-                      <strong>Thứ 2 - Thứ 6:</strong> 8:00 - 17:00
-                    </p>
-                    <p className="text-black text-sm">
-                      <strong>Thứ 7:</strong> 8:00 - 12:00
-                    </p>
                   </div>
                 </div>
                 
@@ -715,7 +918,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                     <AlertCircle className="h-5 w-5 text-blue-400 mt-0.5 mr-3" />
                     <div>
                       <p className="text-sm text-blue-800">
-                        <strong>Lưu ý:</strong> Để nhận hỗ trợ tốt nhất, vui lòng cung cấp thông tin chi tiết về vấn đề bạn đang gặp phải.
+                        <strong>Lưu ý:</strong> Để nhận hỗ trợ tốt nhất, vui lòng mô tả rõ bước nào trong quy trình bạn đang gặp khó khăn.
                       </p>
                     </div>
                   </div>

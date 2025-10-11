@@ -47,47 +47,47 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     name: 'Khách hàng',
     href: '/customers',
     icon: 'Building2',
-    description: 'Quản lý khách hàng',
+    description: 'Bước 1: Tạo khách hàng mới',
     roles: ['admin', 'sales', 'accountant'],
-    category: 'management'
+    category: 'workflow'
   },
   {
     name: 'Dự án',
     href: '/projects',
     icon: 'FolderOpen',
-    description: 'Quản lý dự án',
+    description: 'Bước 2: Tạo dự án và quản lý team',
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
-    category: 'management'
+    category: 'workflow'
   },
   {
-    name: 'Bán hàng',
+    name: 'Bán hàng & Báo giá',
     href: '/sales',
     icon: 'Receipt',
-    description: 'Quản lý bán hàng',
+    description: 'Bước 3: Tạo báo giá và quản lý thanh toán',
     roles: ['admin', 'sales', 'accountant'],
-    category: 'business'
+    category: 'workflow'
   },
   {
-    name: 'Chi phí',
+    name: 'Chi phí & Ngân sách',
     href: '/expenses',
     icon: 'DollarSign',
-    description: 'Quản lý chi phí',
+    description: 'Bước 4-6: Ngân sách, duyệt và chi phí thực tế',
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
-    category: 'business'
+    category: 'workflow'
   },
   {
-    name: 'Báo cáo',
+    name: 'Báo cáo & Phân tích',
     href: '/reports',
     icon: 'BarChart3',
-    description: 'Báo cáo tài chính',
+    description: 'Bước 7: Báo cáo tài chính chi tiết',
     roles: ['admin', 'sales', 'accountant'],
-    category: 'reports'
+    category: 'workflow'
   },
   {
-    name: 'View khách hàng',
-    href: '/customer-view',
+    name: 'Timeline Khách hàng',
+    href: '/projects/timeline',
     icon: 'Eye',
-    description: 'Xem thông tin khách hàng và timeline công trình',
+    description: 'Bước 8: Khách hàng xem tiến độ dự án',
     roles: ['customer'],
     category: 'customer'
   },
@@ -95,7 +95,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     name: 'Nhân viên',
     href: '/employees',
     icon: 'Users',
-    description: 'Quản lý nhân viên',
+    description: 'Quản lý nhân viên và phân quyền',
     roles: ['admin', 'accountant'],
     category: 'management'
   },
@@ -103,7 +103,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     name: 'Thông báo',
     href: '/notifications',
     icon: 'Bell',
-    description: 'Quản lý thông báo',
+    description: 'Thông báo hệ thống và cập nhật',
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker', 'customer'],
     category: 'system'
   },
@@ -111,33 +111,9 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     name: 'Files',
     href: '/files',
     icon: 'FileText',
-    description: 'Quản lý files',
+    description: 'Quản lý tài liệu và chứng từ',
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
     category: 'system'
-  },
-  {
-    name: 'AI Analysis',
-    href: '/ai-analysis',
-    icon: 'Brain',
-    description: 'Phân tích AI',
-    roles: ['admin', 'sales', 'accountant'],
-    category: 'ai'
-  },
-  {
-    name: 'AI Model Info',
-    href: '/ai-model-info',
-    icon: 'Brain',
-    description: 'Thông tin model AI',
-    roles: ['admin'],
-    category: 'ai'
-  },
-  {
-    name: 'Test API',
-    href: '/test-api',
-    icon: 'TestTube',
-    description: 'Test AI API',
-    roles: ['admin'],
-    category: 'development'
   }
 ]
 
@@ -202,14 +178,10 @@ export function getRoleColor(role: UserRole): string {
 export function getCategoryDisplayName(category: string): string {
   const displayNames: Record<string, string> = {
     main: 'Chính',
+    workflow: 'Quy trình Quản lý Tài chính',
     management: 'Quản lý',
-    business: 'Kinh doanh',
-    reports: 'Báo cáo',
     customer: 'Khách hàng',
     system: 'Hệ thống',
-    ai: 'AI',
-    development: 'Phát triển',
-    help: 'Hỗ trợ',
     other: 'Khác'
   }
   return displayNames[category] || category

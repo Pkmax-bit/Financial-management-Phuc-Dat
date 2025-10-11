@@ -54,6 +54,11 @@ interface ProjectsTabProps {
   onEditProject: (project: Project) => void
   onViewProject: (project: Project) => void
   onDeleteProject: (project: Project) => void
+  user?: {
+    full_name?: string
+    email?: string
+    id?: string
+  }
 }
 
 const statusColors = {
@@ -104,7 +109,8 @@ export default function ProjectsTab({
   onCreateProject, 
   onEditProject, 
   onViewProject, 
-  onDeleteProject 
+  onDeleteProject,
+  user
 }: ProjectsTabProps) {
   const { sidebarOpen } = useSidebar()
   const [projects, setProjects] = useState<Project[]>([])
@@ -118,6 +124,7 @@ export default function ProjectsTab({
   const [generatedCode, setGeneratedCode] = useState<string>('')
   const [teamDialogOpen, setTeamDialogOpen] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+  const [selectedProjectName, setSelectedProjectName] = useState<string>('')
 
   useEffect(() => {
     fetchProjects()
@@ -496,6 +503,7 @@ export default function ProjectsTab({
                     <button
                       onClick={() => {
                         setSelectedProjectId(project.id);
+                        setSelectedProjectName(project.name);
                         setTeamDialogOpen(true);
                       }}
                       className="p-1.5 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
@@ -594,6 +602,8 @@ export default function ProjectsTab({
         open={teamDialogOpen}
         onClose={() => setTeamDialogOpen(false)}
         projectId={selectedProjectId}
+        projectName={selectedProjectName}
+        currentUser={user}
         onSuccess={() => {
           setTeamDialogOpen(false);
           fetchProjects();

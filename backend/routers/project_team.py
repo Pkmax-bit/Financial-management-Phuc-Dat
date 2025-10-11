@@ -67,6 +67,9 @@ async def get_project_team(
         
         team_members = []
         for member in result.data:
+            # Normalize nullable fields from DB
+            if member.get("skills") is None:
+                member["skills"] = []
             team_members.append(TeamMember(**member))
         
         return {"team_members": team_members}

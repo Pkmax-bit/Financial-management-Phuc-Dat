@@ -92,21 +92,9 @@ export default function DashboardPage() {
     checkUser()
   }, [checkUser])
 
-  // Auto refresh effect
+  // Auto refresh effect - optimized to prevent double loading
   useEffect(() => {
     if (!userLoading && user && autoRefresh) {
-      // Initial load after user is confirmed
-      const initialRefresh = async () => {
-        try {
-          await refreshAll()
-          setRefreshCount(prev => prev + 1)
-        } catch (error) {
-          console.error('Initial refresh failed:', error)
-        }
-      }
-      
-      initialRefresh()
-
       // Set up auto refresh every 30 seconds
       const interval = setInterval(async () => {
         try {

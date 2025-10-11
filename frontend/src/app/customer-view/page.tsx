@@ -379,7 +379,7 @@ export default function CustomerViewPage() {
                 <ConstructionImageGallery 
                   images={timelineEntries
                     .flatMap(entry => entry.attachments)
-                    .filter(attachment => attachment.type.startsWith('image/'))
+                    .filter(attachment => attachment.type === 'image' || attachment.type.startsWith('image/'))
                     .map(attachment => ({
                       id: attachment.id,
                       name: attachment.name,

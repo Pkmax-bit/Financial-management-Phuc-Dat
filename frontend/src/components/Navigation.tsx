@@ -46,73 +46,49 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       name: 'Khách hàng',
       href: '/customers',
       icon: Building2,
-      description: 'Quản lý khách hàng'
-    },
-    {
-      name: 'Chi phí',
-      href: '/expenses',
-      icon: Receipt,
-      description: 'Quản lý chi phí với AI'
-    },
-          {
-            name: 'AI Analysis',
-            href: '/ai-analysis',
-            icon: FileText,
-            description: 'AI phân tích hình với camera và auto-matching'
-          },
-    {
-      name: 'Bán hàng',
-      href: '/sales',
-      icon: DollarSign,
-      description: 'Báo giá, hóa đơn và thanh toán'
-    },
-    {
-      name: 'Báo cáo',
-      href: '/reports',
-      icon: BarChart3,
-      description: 'Báo cáo và phân tích'
+      description: 'Bước 1: Tạo khách hàng mới'
     },
     {
       name: 'Dự án',
       href: '/projects',
       icon: FolderOpen,
-      description: 'Quản lý dự án'
+      description: 'Bước 2: Tạo dự án và quản lý team'
+    },
+    {
+      name: 'Bán hàng & Báo giá',
+      href: '/sales',
+      icon: Receipt,
+      description: 'Bước 3: Tạo báo giá và quản lý thanh toán'
+    },
+    {
+      name: 'Chi phí & Ngân sách',
+      href: '/expenses',
+      icon: DollarSign,
+      description: 'Bước 4-6: Ngân sách, duyệt và chi phí thực tế'
+    },
+    {
+      name: 'Báo cáo & Phân tích',
+      href: '/reports',
+      icon: BarChart3,
+      description: 'Bước 7: Báo cáo tài chính chi tiết'
     },
     {
       name: 'Nhân sự',
       href: '/employees',
       icon: Users,
-      description: 'Quản lý nhân viên'
+      description: 'Quản lý nhân viên và phân quyền'
     },
     {
       name: 'Thông báo',
       href: '/notifications',
       icon: Bell,
-      description: 'Thông báo hệ thống'
+      description: 'Thông báo hệ thống và cập nhật'
     },
     {
       name: 'Files',
       href: '/files',
       icon: FileSpreadsheet,
-      description: 'Quản lý tài liệu'
-    },
-    {
-      name: 'AI Model Info',
-      href: '/ai-model-info',
-      icon: Brain,
-      description: 'Thông tin model AI'
-    },
-    {
-      name: 'Test API',
-      href: '/test-api',
-      icon: TestTube,
-      description: 'Test AI API'
-    },
-    {
-      name: 'Camera Guide',
-      href: '/camera-guide',
-      icon: Camera,
-      description: 'Hướng dẫn setup camera cho AI'
+      description: 'Quản lý tài liệu và chứng từ'
     }
   ]
 

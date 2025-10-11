@@ -378,7 +378,7 @@ export default function ProjectDetailedReportDetailPage() {
   // Calculate totals
   // KẾ HOẠCH (chỉ để hiển thị so sánh)
   const totalQuotes = quotes.reduce((sum, q) => sum + (q.total_amount || 0), 0)
-  const totalExpenseQuotes = expenseQuotes.reduce((sum, eq) => sum + (eq.amount || 0), 0) // Chi phí kế hoạch từ DB
+  const totalExpenseQuotes = expenseQuotes.filter((eq: any) => eq.status === 'approved').reduce((sum, eq) => sum + (eq.amount || 0), 0) // Chỉ tính chi phí đã duyệt
   const plannedProfit = totalQuotes - totalExpenseQuotes
   
   // THỰC TẾ (dùng để tính lợi nhuận cuối)

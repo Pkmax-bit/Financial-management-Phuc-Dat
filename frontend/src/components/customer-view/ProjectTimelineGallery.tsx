@@ -55,6 +55,7 @@ interface TimelineEntry {
   date: string
   type: string
   status: string
+  created_by?: string
   attachments: TimelineAttachment[]
 }
 
@@ -174,7 +175,7 @@ export default function ProjectTimelineGallery({ customer, projects, timelineEnt
 
   const allImages = timelineEntries
     .flatMap(entry => entry.attachments)
-    .filter(attachment => attachment.type.startsWith('image/'))
+    .filter(attachment => attachment.type === 'image' || attachment.type.startsWith('image/'))
 
   const openImageModal = (imageUrl: string) => {
     setSelectedImage(imageUrl)
@@ -360,25 +361,26 @@ export default function ProjectTimelineGallery({ customer, projects, timelineEnt
         ) : (
           <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-6'}>
             {filteredEntries.map((entry) => (
-              <div key={entry.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                {/* Entry Header */}
-                <div className="p-4 border-b border-gray-200">
-                  <div className="flex items-start justify-between">
+              <div key={entry.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                {/* Facebook-style Header */}
+                <div className="p-4 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm">
+                        {entry.created_by ? entry.created_by.charAt(0).toUpperCase() : 'U'}
+                      </span>
+                    </div>
                     <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        {getTypeIcon(entry.type)}
-                        <span className="text-sm font-medium text-gray-900">{entry.title}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{entry.description}</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span className="flex items-center">
-                          <Calendar className="h-3 w-3 mr-1" />
-                          {new Date(entry.date).toLocaleDateString('vi-VN')}
-                        </span>
-                        <span className="flex items-center">
-                          {getTypeText(entry.type)}
-                        </span>
-                      </div>
+                      <h3 className="font-semibold text-gray-900">{entry.created_by || 'Người dùng'}</h3>
+                      <p className="text-sm text-gray-500">
+                        {new Date(entry.date).toLocaleDateString('vi-VN', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
                     </div>
                     <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(entry.status)}`}>
                       {getStatusIcon(entry.status)}
@@ -387,73 +389,69 @@ export default function ProjectTimelineGallery({ customer, projects, timelineEnt
                   </div>
                 </div>
 
-                {/* Attachments */}
-                {entry.attachments.length > 0 && (
-                  <div className="p-4">
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">Hình ảnh quá trình thi công ({entry.attachments.length})</h4>
-                    
-                    {/* Image Gallery */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {entry.attachments.map((attachment) => (
-                        <div key={attachment.id} className="group relative">
-                          {attachment.type.startsWith('image/') ? (
-                            // Image Preview
-                            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200"
-                                 onClick={() => openImageModal(attachment.url)}>
-                              <img 
-                                src={attachment.url} 
-                                alt={attachment.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                loading="lazy"
-                              />
-                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
-                                <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                {/* Content Section */}
+                <div className="p-4">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">{entry.title}</h4>
+                  <p className="text-gray-700 mb-4">{entry.description}</p>
+
+                  {/* Facebook-style Images */}
+                  {entry.attachments.filter(att => att.type === 'image' || att.type.startsWith('image/')).length > 0 && (
+                    <div className="mt-4">
+                      <div className="grid grid-cols-1 gap-4">
+                        {entry.attachments
+                          .filter(att => att.type === 'image' || att.type.startsWith('image/'))
+                          .map((attachment) => (
+                            <div key={attachment.id} className="group relative">
+                              <div className="bg-gray-100 rounded-lg overflow-hidden">
+                                <div className="aspect-[4/3] w-full">
+                                  <img 
+                                    src={attachment.url} 
+                                    alt={attachment.name}
+                                    className="w-full h-full object-contain"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              </div>
+                              {/* Image info overlay */}
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 rounded-b-lg">
+                                <p className="text-xs text-white truncate">{attachment.name}</p>
+                                <p className="text-xs text-gray-300">{formatFileSize(attachment.size)}</p>
                               </div>
                             </div>
-                          ) : (
-                            // File Preview
-                            <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors">
-                              <div className="text-center">
-                                {getFileIcon(attachment.type)}
-                                <p className="text-xs text-gray-600 mt-1 truncate px-2">{attachment.name}</p>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Other Files */}
+                  {entry.attachments.filter(att => !(att.type === 'image' || att.type.startsWith('image/'))).length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <h5 className="text-sm font-medium text-gray-700 mb-2">Tệp đính kèm khác</h5>
+                      <div className="space-y-2">
+                        {entry.attachments
+                          .filter(att => !(att.type === 'image' || att.type.startsWith('image/')))
+                          .map((attachment) => (
+                            <div key={attachment.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                              {getFileIcon(attachment.type)}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{attachment.name}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(attachment.size)}</p>
                               </div>
-                            </div>
-                          )}
-                          
-                          {/* File Info Overlay */}
-                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 rounded-b-lg">
-                            <p className="text-xs text-white truncate">{attachment.name}</p>
-                            <p className="text-xs text-gray-300">{formatFileSize(attachment.size)}</p>
-                          </div>
-                          
-                          {/* Action Buttons */}
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <div className="flex space-x-1">
-                              {attachment.type.startsWith('image/') && (
-                                <button
-                                  onClick={() => openImageModal(attachment.url)}
-                                  className="p-1.5 bg-white/90 hover:bg-white rounded-full shadow-sm transition-colors"
-                                  title="Xem hình ảnh"
-                                >
-                                  <Eye className="h-3 w-3 text-gray-700" />
-                                </button>
-                              )}
                               <a
                                 href={attachment.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-1.5 bg-white/90 hover:bg-white rounded-full shadow-sm transition-colors"
+                                className="p-1 rounded-full hover:bg-blue-100 text-blue-600 transition-colors"
                                 title="Tải xuống"
                               >
-                                <Download className="h-3 w-3 text-gray-700" />
+                                <Download className="h-4 w-4" />
                               </a>
                             </div>
-                          </div>
-                        </div>
-                      ))}
+                          ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>

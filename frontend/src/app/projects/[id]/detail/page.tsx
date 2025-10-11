@@ -24,9 +24,6 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import ProjectFinancialDashboard from '@/components/projects/ProjectFinancialDashboard'
-import ProjectCostBreakdown from '@/components/projects/ProjectCostBreakdown'
-import ProjectRevenueAnalysis from '@/components/projects/ProjectRevenueAnalysis'
 import ProjectTeam from '@/components/projects/ProjectTeam'
 import ProjectTimeline from '@/components/projects/ProjectTimeline'
 
@@ -107,7 +104,7 @@ export default function ProjectDetailPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'costs' | 'revenue' | 'timeline' | 'team' | 'documents'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents'>('overview')
 
   useEffect(() => {
     checkUser()
@@ -353,9 +350,6 @@ export default function ProjectDetailPage() {
             <div className="flex space-x-1 overflow-x-auto">
               {[
                 { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
-                { id: 'financials', label: 'Tài chính', icon: DollarSign, color: 'green' },
-                { id: 'costs', label: 'Chi phí', icon: TrendingDown, color: 'red' },
-                { id: 'revenue', label: 'Doanh thu', icon: TrendingUp, color: 'purple' },
                 { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
                 { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
                 { id: 'documents', label: 'Tài liệu', icon: FileText, color: 'gray' }
@@ -593,29 +587,41 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* Financials Tab */}
-          {activeTab === 'financials' && (
-            <ProjectFinancialDashboard projectId={projectId} projectName={project.name} />
-          )}
-
-          {/* Costs Tab */}
-          {activeTab === 'costs' && (
-            <ProjectCostBreakdown projectId={projectId} projectName={project.name} />
-          )}
-
-          {/* Revenue Tab */}
-          {activeTab === 'revenue' && (
-            <ProjectRevenueAnalysis projectId={projectId} projectName={project.name} />
-          )}
+          
 
           {/* Timeline Tab */}
           {activeTab === 'timeline' && (
-            <ProjectTimeline projectId={projectId} projectName={project.name} />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-8">
+                <div className="bg-white rounded-xl shadow-sm border p-4">
+                  <ProjectTimeline projectId={projectId} projectName={project.name} currentUser={user} />
+                </div>
+              </div>
+              <div className="lg:col-span-4">
+                <div className="bg-white rounded-xl shadow-sm border p-4 lg:sticky lg:top-6">
+                  <h3 className="text-base font-semibold text-gray-900">Hỗ trợ Timeline</h3>
+                  <p className="text-sm text-gray-600 mt-1">Xem và theo dõi tiến độ thi công, hình ảnh và mô tả cập nhật.</p>
+                  <ul className="mt-3 text-sm text-gray-700 list-disc list-inside space-y-1">
+                    <li>Nhấp vào từng mục để xem chi tiết.</li>
+                    <li>Dùng bình luận để trao đổi nhanh.</li>
+                    <li>Ảnh minh chứng lưu ở kho `minhchung_chiphi`.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Team Tab */}
           {activeTab === 'team' && (
-            <ProjectTeam projectId={projectId} projectName={project.name} />
+            <div className="bg-white rounded-xl shadow-sm border">
+              <div className="px-5 py-4 border-b">
+                <h3 className="text-base font-semibold text-gray-900">Đội ngũ dự án</h3>
+                <p className="text-sm text-gray-600">Danh sách thành viên, vai trò và thông tin liên hệ.</p>
+              </div>
+              <div className="p-4">
+                <ProjectTeam projectId={projectId} projectName={project.name} currentUser={user} />
+              </div>
+            </div>
           )}
 
           {/* Documents Tab */}

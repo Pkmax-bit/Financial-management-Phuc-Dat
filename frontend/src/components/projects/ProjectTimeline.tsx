@@ -14,7 +14,11 @@ import {
   Plus,
   CheckCircle,
   AlertCircle,
-  Info
+  Info,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Eye
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -43,6 +47,11 @@ interface Attachment {
 interface ProjectTimelineProps {
   projectId: string
   projectName: string
+  currentUser?: {
+    full_name?: string;
+    email?: string;
+    id?: string;
+  };
 }
 
 const typeConfig = {
@@ -94,7 +103,7 @@ const statusConfig = {
   }
 }
 
-export default function ProjectTimeline({ projectId, projectName }: ProjectTimelineProps) {
+export default function ProjectTimeline({ projectId, projectName, currentUser }: ProjectTimelineProps) {
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -102,7 +111,13 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
   const [editingEntry, setEditingEntry] = useState<TimelineEntry | null>(null)
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set())
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [editingFiles, setEditingFiles] = useState<File[]>([])
+  const [uploadingEditFiles, setUploadingEditFiles] = useState(false)
+  const [deletingAttachments, setDeletingAttachments] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchTimelineEntries()
@@ -126,50 +141,79 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
     }
   }
 
-  const uploadFileToSupabase = async (file: File): Promise<string> => {
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = `Timeline/${projectId}/${fileName}`
+  const uploadFileToAPI = async (file: File): Promise<Attachment> => {
+    try {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('File size must be less than 5MB')
+      }
 
-    const { data, error } = await supabase.storage
-      .from('minhchung_chiphi')
-      .upload(filePath, file)
+      // Check file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('File type not supported. Please upload JPG, PNG, GIF, WebP, or PDF files.')
+      }
 
-    if (error) {
-      throw new Error(`Upload failed: ${error.message}`)
+      // Create FormData
+      const formData = new FormData()
+      formData.append('file', file)
+
+      // Upload via API endpoint
+      const response = await fetch(`/api/projects/${projectId}/timeline/upload`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      return result.attachment
+    } catch (err) {
+      console.error('Upload error:', err)
+      throw err
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('minhchung_chiphi')
-      .getPublicUrl(filePath)
-
-    return publicUrl
   }
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
+  const handleFileUpload = async (files: FileList | null): Promise<Attachment[]> => {
+    if (!files || files.length === 0) return []
 
     setUploadingFiles(true)
     try {
       const uploadPromises = Array.from(files).map(async (file) => {
-        const url = await uploadFileToSupabase(file)
-        return {
-          name: file.name,
-          url,
-          type: file.type.startsWith('image/') ? 'image' : 
-                file.type.includes('pdf') || file.type.includes('document') ? 'document' : 'other',
-          size: file.size,
-          uploaded_at: new Date().toISOString()
-        }
+        const attachment = await uploadFileToAPI(file)
+        return attachment
       })
 
       const attachments = await Promise.all(uploadPromises)
-      return attachments
+      return attachments || []
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
       return []
     } finally {
       setUploadingFiles(false)
+    }
+  }
+
+  const handleEditFileUpload = async (files: FileList | null): Promise<Attachment[]> => {
+    if (!files || files.length === 0) return []
+
+    setUploadingEditFiles(true)
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const attachment = await uploadFileToAPI(file)
+        return attachment
+      })
+
+      const attachments = await Promise.all(uploadPromises)
+      return attachments || []
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+      return []
+    } finally {
+      setUploadingEditFiles(false)
     }
   }
 
@@ -180,7 +224,8 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
       if (selectedFiles.length > 0) {
         const fileList = new DataTransfer()
         selectedFiles.forEach(file => fileList.items.add(file))
-        attachments = await handleFileUpload(fileList.files)
+        const uploadedAttachments = await handleFileUpload(fileList.files)
+        attachments = uploadedAttachments || []
       }
 
       const response = await fetch(`/api/projects/${projectId}/timeline`, {
@@ -206,14 +251,59 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
     }
   }
 
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    try {
+      setDeletingAttachments(prev => new Set(prev).add(attachmentId))
+      
+      const response = await fetch(`/api/projects/${projectId}/timeline/attachments/${attachmentId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete attachment')
+      }
+
+      // Update local state
+      if (editingEntry) {
+        setEditingEntry({
+          ...editingEntry,
+          attachments: editingEntry.attachments.filter(att => att.id !== attachmentId)
+        })
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete attachment')
+    } finally {
+      setDeletingAttachments(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(attachmentId)
+        return newSet
+      })
+    }
+  }
+
   const handleUpdateEntry = async (entryId: string, entryData: Partial<TimelineEntry>) => {
     try {
+      let attachments: Attachment[] = []
+      
+      // Upload new files if any
+      if (editingFiles.length > 0) {
+        const fileList = new DataTransfer()
+        editingFiles.forEach(file => fileList.items.add(file))
+        attachments = await handleEditFileUpload(fileList.files)
+      }
+
+      // Prepare update data
+      const updateData = { ...entryData }
+      if (attachments.length > 0) {
+        updateData.attachments = attachments
+      }
+
       const response = await fetch(`/api/projects/${projectId}/timeline/${entryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(entryData),
+        body: JSON.stringify(updateData),
       })
 
       if (!response.ok) {
@@ -222,6 +312,8 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
 
       await fetchTimelineEntries()
       setEditingEntry(null)
+      setEditingFiles([])
+      setDeletingAttachments(new Set())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     }
@@ -255,6 +347,26 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  const toggleExpanded = (entryId: string) => {
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId)
+      } else {
+        newSet.add(entryId)
+      }
+      return newSet
+    })
+  }
+
+  const openImagePreview = (imageUrl: string) => {
+    setSelectedImage(imageUrl)
+  }
+
+  const closeImagePreview = () => {
+    setSelectedImage(null)
   }
 
   const formatFileSize = (bytes: number) => {
@@ -435,34 +547,94 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                           {/* Attachments */}
                           {entry.attachments.length > 0 && (
                             <div className="border-t pt-4">
-                              <h5 className="text-sm font-medium text-gray-900 mb-3">Tệp đính kèm</h5>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {entry.attachments.map((attachment) => {
-                                  const FileIcon = getFileIcon(attachment.type)
-                                  
-                                  return (
-                                    <div key={attachment.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                                      <FileIcon className="h-5 w-5 text-gray-500" />
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-900 truncate">
-                                          {attachment.name}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                          {formatFileSize(attachment.size)}
-                                        </p>
+                              <button
+                                onClick={() => toggleExpanded(entry.id)}
+                                className="flex items-center gap-2 text-sm font-medium text-gray-900 mb-3 hover:text-blue-600 transition-colors"
+                              >
+                                <span>Tệp đính kèm ({entry.attachments.length})</span>
+                                {expandedEntries.has(entry.id) ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4" />
+                                )}
+                              </button>
+                              
+                              {expandedEntries.has(entry.id) && (
+                                <div className="space-y-4">
+                                  {/* Image thumbnails */}
+                                  {entry.attachments.filter(att => att.type === 'image').length > 0 && (
+                                    <div>
+                                      <h6 className="text-xs font-medium text-gray-700 mb-2">Hình ảnh</h6>
+                                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {entry.attachments
+                                          .filter(attachment => attachment.type === 'image')
+                                          .map((attachment) => (
+                                            <div key={attachment.id} className="relative group">
+                                              <img
+                                                src={attachment.url}
+                                                alt={attachment.name}
+                                                className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                                onClick={() => openImagePreview(attachment.url)}
+                                              />
+                                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                                                <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                              </div>
+                                              <div className="absolute top-2 right-2">
+                                                <a
+                                                  href={attachment.url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="p-1 bg-white bg-opacity-80 rounded-full hover:bg-opacity-100 transition-colors"
+                                                  title="Tải xuống"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <Download className="h-3 w-3 text-gray-600" />
+                                                </a>
+                                              </div>
+                                            </div>
+                                          ))}
                                       </div>
-                                      <a
-                                        href={attachment.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-1 text-gray-500 hover:text-blue-600"
-                                      >
-                                        <Download className="h-4 w-4" />
-                                      </a>
                                     </div>
-                                  )
-                                })}
-                              </div>
+                                  )}
+
+                                  {/* Other files */}
+                                  {entry.attachments.filter(att => att.type !== 'image').length > 0 && (
+                                    <div>
+                                      <h6 className="text-xs font-medium text-gray-700 mb-2">Tệp khác</h6>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {entry.attachments
+                                          .filter(attachment => attachment.type !== 'image')
+                                          .map((attachment) => {
+                                            const FileIcon = getFileIcon(attachment.type)
+                                            
+                                            return (
+                                              <div key={attachment.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                                <FileIcon className="h-5 w-5 text-gray-500" />
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                                    {attachment.name}
+                                                  </p>
+                                                  <p className="text-xs text-gray-500">
+                                                    {formatFileSize(attachment.size)}
+                                                  </p>
+                                                </div>
+                                                <a
+                                                  href={attachment.url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+                                                  title="Tải xuống"
+                                                >
+                                                  <Download className="h-4 w-4" />
+                                                </a>
+                                              </div>
+                                            )
+                                          })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -493,17 +665,41 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
 
       {/* Add/Edit Entry Form */}
       {(showAddForm || editingEntry) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {editingEntry ? 'Chỉnh sửa mục timeline' : 'Thêm mục timeline mới'}
-              </h3>
-              
+        <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
+          {/* Right Sidebar - No overlay to not block interface */}
+          <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
+              <div className="flex items-center">
+                <Calendar className="h-6 w-6 text-blue-600 mr-3" />
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    {editingEntry ? 'Chỉnh sửa mục timeline' : 'Thêm mục timeline mới'}
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {editingEntry ? 'Cập nhật thông tin mục timeline' : 'Tạo mục timeline mới cho dự án'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddForm(false)
+                  setEditingEntry(null)
+                  setSelectedFiles([])
+                }}
+                className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 text-gray-900">
               <form onSubmit={async (e) => {
                 e.preventDefault()
                 const formData = new FormData(e.currentTarget)
                 const entryData = {
+                  project_id: projectId,
                   title: formData.get('title') as string,
                   description: formData.get('description') as string,
                   date: formData.get('date') as string,
@@ -602,7 +798,7 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                       <input
                         type="text"
                         name="created_by"
-                        defaultValue={editingEntry?.created_by || ''}
+                        defaultValue={editingEntry?.created_by || currentUser?.full_name || ''}
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
@@ -610,19 +806,25 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                   </div>
 
                   {/* File Upload */}
-                  {!editingEntry && (
+                  <div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Tệp đính kèm
+                        {editingEntry ? 'Thêm tệp đính kèm mới' : 'Tệp đính kèm'}
                       </label>
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                         <input
-                          ref={fileInputRef}
+                          ref={editingEntry ? editFileInputRef : fileInputRef}
                           type="file"
                           multiple
+                          accept="image/*,.pdf,.doc,.docx,.txt"
                           onChange={(e) => {
                             if (e.target.files) {
-                              setSelectedFiles(Array.from(e.target.files))
+                              const files = Array.from(e.target.files)
+                              if (editingEntry) {
+                                setEditingFiles(files)
+                              } else {
+                                setSelectedFiles(files)
+                              }
                             }
                           }}
                           className="hidden"
@@ -632,13 +834,20 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                           Kéo thả tệp vào đây hoặc{' '}
                           <button
                             type="button"
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={() => {
+                              if (editingEntry) {
+                                editFileInputRef.current?.click()
+                              } else {
+                                fileInputRef.current?.click()
+                              }
+                            }}
                             className="text-blue-600 hover:text-blue-700"
                           >
                             chọn tệp
                           </button>
                         </p>
-                        {selectedFiles.length > 0 && (
+                        {/* Show selected files for add mode */}
+                        {!editingEntry && selectedFiles.length > 0 && (
                           <div className="mt-2">
                             <p className="text-sm text-gray-600">
                               Đã chọn {selectedFiles.length} tệp
@@ -655,7 +864,26 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                             </div>
                           </div>
                         )}
-                        {uploadingFiles && (
+
+                        {/* Show selected files for edit mode */}
+                        {editingEntry && editingFiles.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-sm text-gray-600">
+                              Sẽ thêm {editingFiles.length} tệp mới
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {editingFiles.map((file, index) => (
+                                <span
+                                  key={index}
+                                  className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
+                                >
+                                  {file.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {(uploadingFiles || uploadingEditFiles) && (
                           <div className="mt-2">
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mx-auto"></div>
                             <p className="text-sm text-gray-600 mt-1">Đang tải lên...</p>
@@ -663,13 +891,48 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                         )}
                       </div>
                     </div>
-                  )}
+
+                    {/* Show existing attachments for edit mode */}
+                    {editingEntry && editingEntry.attachments.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-600 mb-2">Tệp đính kèm hiện tại:</p>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {editingEntry.attachments.map((attachment) => (
+                            <div key={attachment.id} className="relative group flex items-center gap-2 p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                              {attachment.type === 'image' ? (
+                                <img 
+                                  src={attachment.url} 
+                                  alt={attachment.name}
+                                  className="w-8 h-8 object-cover rounded"
+                                />
+                              ) : (
+                                <FileText className="h-4 w-4 text-gray-500" />
+                              )}
+                              <span className="text-xs text-gray-700 truncate flex-1">{attachment.name}</span>
+                              <button
+                                onClick={() => handleDeleteAttachment(attachment.id)}
+                                disabled={deletingAttachments.has(attachment.id)}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-all"
+                                title="Xóa tệp"
+                              >
+                                {deletingAttachments.has(attachment.id) ? (
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-500"></div>
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex gap-3 mt-6">
                   <button
                     type="submit"
-                    disabled={uploadingFiles}
+                    disabled={uploadingFiles || uploadingEditFiles}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
                     {editingEntry ? 'Cập nhật' : 'Thêm mục'}
@@ -680,6 +943,7 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                       setShowAddForm(false)
                       setEditingEntry(null)
                       setSelectedFiles([])
+                      setEditingFiles([])
                     }}
                     className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
                   >
@@ -688,6 +952,26 @@ export default function ProjectTimeline({ projectId, projectName }: ProjectTimel
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={closeImagePreview}>
+          <div className="relative max-w-4xl max-h-[90vh] p-4">
+            <button
+              onClick={closeImagePreview}
+              className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+            >
+              <X className="h-8 w-8" />
+            </button>
+            <img
+              src={selectedImage}
+              alt="Preview"
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
       )}

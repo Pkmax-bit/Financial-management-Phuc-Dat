@@ -13,6 +13,7 @@ import {
   Star,
   Clock
 } from 'lucide-react'
+import { ProjectTeamDialog } from './ProjectTeamDialog'
 
 interface TeamMember {
   id: string
@@ -30,6 +31,11 @@ interface TeamMember {
 interface ProjectTeamProps {
   projectId: string
   projectName: string
+  currentUser?: {
+    full_name?: string;
+    email?: string;
+    id?: string;
+  };
 }
 
 const roleConfig = {
@@ -83,12 +89,11 @@ const statusConfig = {
   }
 }
 
-export default function ProjectTeam({ projectId, projectName }: ProjectTeamProps) {
+export default function ProjectTeam({ projectId, projectName, currentUser }: ProjectTeamProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [teamDialogOpen, setTeamDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchTeamMembers()
@@ -98,61 +103,20 @@ export default function ProjectTeam({ projectId, projectName }: ProjectTeamProps
     try {
       setLoading(true)
       const response = await fetch(`/api/projects/${projectId}/team`)
-      
       if (!response.ok) {
-        throw new Error('Failed to fetch team members')
+        const text = await response.text().catch(() => '')
+        throw new Error(text || `Failed to fetch team members (status ${response.status})`)
       }
-      
       const data = await response.json()
       setTeamMembers(data.team_members || [])
+      setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      setError(err instanceof Error ? err.message : 'Failed to fetch team members')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleAddMember = async (memberData: Omit<TeamMember, 'id'>) => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}/team`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(memberData),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to add team member')
-      }
-
-      await fetchTeamMembers()
-      setShowAddForm(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    }
-  }
-
-  const handleUpdateMember = async (memberId: string, memberData: Partial<TeamMember>) => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}/team/${memberId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(memberData),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to update team member')
-      }
-
-      await fetchTeamMembers()
-      setEditingMember(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    }
-  }
 
   const handleDeleteMember = async (memberId: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa thành viên này?')) {
@@ -216,7 +180,7 @@ export default function ProjectTeam({ projectId, projectName }: ProjectTeamProps
           <p className="text-gray-600">Quản lý thành viên dự án {projectName}</p>
         </div>
         <button
-          onClick={() => setShowAddForm(true)}
+          onClick={() => setTeamDialogOpen(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <UserPlus className="h-4 w-4" />
@@ -292,7 +256,7 @@ export default function ProjectTeam({ projectId, projectName }: ProjectTeamProps
             <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 mb-4">Chưa có thành viên nào trong dự án</p>
             <button
-              onClick={() => setShowAddForm(true)}
+              onClick={() => setTeamDialogOpen(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               Thêm thành viên đầu tiên
@@ -410,169 +374,18 @@ export default function ProjectTeam({ projectId, projectName }: ProjectTeamProps
         )}
       </div>
 
-      {/* Add/Edit Member Form */}
-      {(showAddForm || editingMember) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {editingMember ? 'Chỉnh sửa thành viên' : 'Thêm thành viên mới'}
-              </h3>
-              
-              <form onSubmit={(e) => {
-                e.preventDefault()
-                const formData = new FormData(e.currentTarget)
-                const memberData = {
-                  name: formData.get('name') as string,
-                  role: formData.get('role') as string,
-                  email: formData.get('email') as string,
-                  phone: formData.get('phone') as string,
-                  start_date: formData.get('start_date') as string,
-                  hourly_rate: formData.get('hourly_rate') ? parseFloat(formData.get('hourly_rate') as string) : undefined,
-                  status: formData.get('status') as 'active' | 'inactive',
-                  skills: (formData.get('skills') as string).split(',').map(s => s.trim()).filter(Boolean)
-                }
-
-                if (editingMember) {
-                  handleUpdateMember(editingMember.id, memberData)
-                } else {
-                  handleAddMember(memberData)
-                }
-              }}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Tên thành viên *
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      defaultValue={editingMember?.name || ''}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Vai trò *
-                    </label>
-                    <select
-                      name="role"
-                      defaultValue={editingMember?.role || ''}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Chọn vai trò</option>
-                      <option value="project_manager">Quản lý dự án</option>
-                      <option value="developer">Lập trình viên</option>
-                      <option value="designer">Thiết kế</option>
-                      <option value="tester">Kiểm thử</option>
-                      <option value="other">Khác</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      defaultValue={editingMember?.email || ''}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Số điện thoại
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      defaultValue={editingMember?.phone || ''}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Ngày bắt đầu *
-                    </label>
-                    <input
-                      type="date"
-                      name="start_date"
-                      defaultValue={editingMember?.start_date || ''}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Giá/giờ (VND)
-                    </label>
-                    <input
-                      type="number"
-                      name="hourly_rate"
-                      defaultValue={editingMember?.hourly_rate || ''}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Trạng thái *
-                    </label>
-                    <select
-                      name="status"
-                      defaultValue={editingMember?.status || 'active'}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="active">Đang hoạt động</option>
-                      <option value="inactive">Không hoạt động</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Kỹ năng (phân cách bằng dấu phẩy)
-                    </label>
-                    <input
-                      type="text"
-                      name="skills"
-                      defaultValue={editingMember?.skills.join(', ') || ''}
-                      placeholder="React, Node.js, TypeScript"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    {editingMember ? 'Cập nhật' : 'Thêm thành viên'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddForm(false)
-                      setEditingMember(null)
-                    }}
-                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-                  >
-                    Hủy
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ProjectTeamDialog */}
+      <ProjectTeamDialog
+        open={teamDialogOpen}
+        onClose={() => setTeamDialogOpen(false)}
+        projectId={projectId}
+        projectName={projectName}
+        currentUser={currentUser}
+        onSuccess={() => {
+          setTeamDialogOpen(false);
+          fetchTeamMembers();
+        }}
+      />
     </div>
   )
 }

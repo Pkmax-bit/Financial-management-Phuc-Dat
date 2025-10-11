@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Calendar, Search } from 'lucide-react';
+import { X, Plus, Calendar, Search, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Employee {
@@ -24,7 +24,13 @@ interface ProjectTeamDialogProps {
   open: boolean;
   onClose: () => void;
   projectId: string;
+  projectName?: string;
   onSuccess: () => void;
+  currentUser?: {
+    full_name?: string;
+    email?: string;
+    id?: string;
+  };
 }
 
 const ROLES = [
@@ -41,7 +47,9 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
   open,
   onClose,
   projectId,
-  onSuccess
+  projectName,
+  onSuccess,
+  currentUser
 }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
@@ -50,12 +58,29 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedType, setSelectedType] = useState<'all' | 'employee' | 'user'>('all');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState<File | null>(null);
 
   useEffect(() => {
     if (open) {
       fetchEmployeesAndUsers();
+      // Auto-select current user if available
+      if (currentUser?.full_name && currentUser?.email) {
+        const currentUserEmployee: Employee = {
+          id: currentUser.id || 'current-user',
+          name: currentUser.full_name,
+          email: currentUser.email,
+          type: 'user',
+          user_id: currentUser.id
+        };
+        setSelectedEmployees([currentUserEmployee]);
+        setEmployeeRoles(prev => ({
+          ...prev,
+          [currentUserEmployee.id]: 'Quản lý dự án'
+        }));
+      }
     }
-  }, [open]);
+  }, [open, currentUser]);
 
   const fetchEmployeesAndUsers = async () => {
     try {
@@ -165,8 +190,52 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
     }));
   };
 
+  const uploadAvatarToSupabase = async (file: File): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `avatars/${projectId}/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('minhchung_chiphi')
+      .upload(filePath, file);
+
+    if (error) {
+      throw new Error(`Upload failed: ${error.message}`);
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('minhchung_chiphi')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    setUploadingAvatar(true);
+    try {
+      const avatarUrl = await uploadAvatarToSupabase(file);
+      return avatarUrl;
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      alert('Lỗi khi upload hình ảnh: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      return null;
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
+      // Upload avatar if selected
+      let avatarUrl = null;
+      if (selectedAvatar) {
+        avatarUrl = await handleAvatarUpload(selectedAvatar);
+        if (!avatarUrl) {
+          alert('Lỗi khi upload hình ảnh. Vui lòng thử lại.');
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('project_team')
         .insert(
@@ -179,7 +248,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
             user_id: employee.user_id,
             status: 'active',
             phone: employee.phone,
-            avatar: employee.avatar_url
+            avatar: avatarUrl || employee.avatar_url
           }))
         );
 
@@ -200,6 +269,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
     setStartDate(new Date().toISOString().split('T')[0]);
     setSearchTerm('');
     setSelectedType('all');
+    setSelectedAvatar(null);
     onClose();
   };
 
@@ -223,35 +293,48 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
   if (!open) return null;
 
   return (
-    <div 
-      className={`fixed top-0 right-0 h-full w-[600px] bg-gradient-to-br from-white to-blue-50/30 shadow-2xl transform transition-transform duration-300 ease-in-out ${
-        open ? 'translate-x-0' : 'translate-x-full'
-      }`}
-      style={{
-        zIndex: 40,
-        marginLeft: 'auto'
-      }}
-    >
-      <div className="flex flex-col h-full">
+    <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
+      {/* Right Sidebar - No overlay to not block interface */}
+      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600">
-          <div>
-            <h2 className="text-2xl font-semibold text-white">Thêm thành viên dự án</h2>
-            <p className="text-blue-100 mt-1 text-sm">Chọn thành viên và phân công vai trò</p>
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
+          <div className="flex items-center">
+            <Plus className="h-6 w-6 text-blue-600 mr-3" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Quản lý thành viên dự án</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {projectName ? `Dự án: ${projectName}` : 'Thêm thành viên mới và phân công vai trò cho dự án'}
+              </p>
+            </div>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-all"
+            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-6 text-gray-900">
+          {/* Project Info */}
+          {projectName && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Users className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900">Dự án được chọn</h3>
+                  <p className="text-sm text-blue-700 font-medium">{projectName}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Filter Type */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-black mb-2">Lọc theo loại</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Lọc theo loại</label>
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value as 'all' | 'employee' | 'user')}
@@ -265,7 +348,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
 
           {/* Search */}
           <div className="relative mb-8">
-            <label className="block text-sm font-medium text-black mb-2">Tìm kiếm</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tìm kiếm</label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
@@ -281,8 +364,8 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           {/* Employee List */}
           <div className="space-y-4 mb-8">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-black">Chọn thành viên</h3>
-              <span className="text-sm font-medium text-black">
+              <h3 className="text-lg font-semibold text-gray-900">Chọn thành viên</h3>
+              <span className="text-sm font-medium text-gray-600">
                 {filteredEmployees.length} thành viên
               </span>
             </div>
@@ -449,31 +532,92 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
               />
             </div>
           </div>
+
+          {/* Avatar Upload */}
+          <div className="space-y-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <label className="block text-lg font-semibold text-gray-900">
+              Hình ảnh đại diện
+            </label>
+            <p className="text-sm font-medium text-gray-600 mb-4">
+              Upload hình ảnh đại diện cho thành viên (tùy chọn)
+            </p>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setSelectedAvatar(e.target.files[0]);
+                  }
+                }}
+                className="hidden"
+                id="avatar-upload"
+              />
+              <label
+                htmlFor="avatar-upload"
+                className="cursor-pointer flex flex-col items-center"
+              >
+                {selectedAvatar ? (
+                  <div className="space-y-2">
+                    <img
+                      src={URL.createObjectURL(selectedAvatar)}
+                      alt="Preview"
+                      className="w-20 h-20 rounded-full object-cover mx-auto border-2 border-blue-200"
+                    />
+                    <p className="text-sm text-blue-600 font-medium">
+                      {selectedAvatar.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Click để thay đổi hình ảnh
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
+                      <Plus className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Click để chọn hình ảnh
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      JPG, PNG, GIF (tối đa 5MB)
+                    </p>
+                  </div>
+                )}
+              </label>
+              {uploadingAvatar && (
+                <div className="mt-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-sm text-gray-600 mt-1">Đang upload...</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-6 border-t border-gray-200 bg-gray-50">
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center">
-            <div className="text-sm font-medium text-black">
+            <div className="text-sm font-medium text-gray-700">
               {selectedEmployees.length} thành viên được chọn
             </div>
             <div className="flex gap-3">
               <button
                 onClick={handleClose}
-                className="px-6 py-2.5 text-sm font-medium text-black bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm hover:shadow transition-all"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Hủy
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={selectedEmployees.length === 0}
-                className={`px-6 py-2.5 text-sm font-medium text-white rounded-lg shadow-sm hover:shadow transition-all ${
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
                   selectedEmployees.length === 0
-                    ? 'bg-blue-400 cursor-not-allowed'
+                    ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
-                Thêm vào dự án
+                {projectName ? `Thêm vào ${projectName}` : 'Thêm vào dự án'}
               </button>
             </div>
           </div>

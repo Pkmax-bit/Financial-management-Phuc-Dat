@@ -55,80 +55,56 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
       name: 'Khách hàng',
       href: '/customers',
       icon: Building2,
-      description: 'Quản lý khách hàng'
+      description: 'Bước 1: Tạo khách hàng mới'
     },
     {
       name: 'Nhân viên',
       href: '/employees',
       icon: Users,
-      description: 'Quản lý nhân viên'
+      description: 'Quản lý nhân viên và phân quyền'
     },
     {
       name: 'Dự án',
       href: '/projects',
       icon: FolderOpen,
-      description: 'Quản lý dự án'
+      description: 'Bước 2: Tạo dự án và quản lý team'
     },
     {
-      name: 'Bán hàng',
+      name: 'Timeline Khách hàng',
+      href: '/projects/timeline',
+      icon: FolderOpen,
+      description: 'Bước 8: Khách hàng xem tiến độ dự án'
+    },
+    {
+      name: 'Bán hàng & Báo giá',
       href: '/sales',
       icon: Receipt,
-      description: 'Quản lý bán hàng'
+      description: 'Bước 3: Tạo báo giá và quản lý thanh toán'
     },
     {
-      name: 'Chi phí',
+      name: 'Chi phí & Ngân sách',
       href: '/expenses',
       icon: DollarSign,
-      description: 'Quản lý chi phí'
+      description: 'Bước 4-6: Ngân sách, duyệt và chi phí thực tế'
     },
     {
-      name: 'Báo cáo',
+      name: 'Báo cáo & Phân tích',
       href: '/reports',
       icon: BarChart3,
-      description: 'Báo cáo tài chính'
+      description: 'Bước 7: Báo cáo tài chính chi tiết'
     },
     {
       name: 'Thông báo',
       href: '/notifications',
       icon: Bell,
-      description: 'Quản lý thông báo'
+      description: 'Thông báo hệ thống và cập nhật'
     },
     {
       name: 'Files',
       href: '/files',
       icon: FileText,
-      description: 'Quản lý files'
+      description: 'Quản lý tài liệu và chứng từ'
     },
-    {
-      name: 'AI Analysis',
-      href: '/ai-analysis',
-      icon: Brain,
-      description: 'Phân tích AI'
-    },
-    {
-      name: 'AI Image Reader',
-      href: '/ai-image-reader',
-      icon: Camera,
-      description: 'Đọc ảnh bằng AI'
-    },
-    {
-      name: 'AI Model Info',
-      href: '/ai-model-info',
-      icon: Brain,
-      description: 'Thông tin model AI'
-    },
-    {
-      name: 'Test API',
-      href: '/test-api',
-      icon: TestTube,
-      description: 'Test AI API'
-    },
-    {
-      name: 'Camera Guide',
-      href: '/camera-guide',
-      icon: Camera,
-      description: 'Hướng dẫn setup camera cho AI'
-    }
   ]
 
   const handleNavigation = (href: string) => {

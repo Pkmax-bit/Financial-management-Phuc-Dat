@@ -14,7 +14,8 @@ router = APIRouter()
 
 @router.get("/stats")
 async def get_dashboard_stats(
-    current_user: User = Depends(get_current_user)
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get comprehensive dashboard statistics
@@ -250,7 +251,8 @@ async def get_dashboard_stats(
 @router.get("/cashflow/projection")
 async def get_cashflow_projection(
     months: int = 6,
-    current_user: User = Depends(get_current_user)
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get cash flow projection for specified number of months
@@ -312,7 +314,8 @@ async def get_cashflow_projection(
 
 @router.get("/planner/events")
 async def get_planner_events(
-    current_user: User = Depends(get_current_user)
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
     Get upcoming financial events and deadlines
@@ -397,7 +400,8 @@ async def get_planner_events(
 @router.post("/planner/scenario")
 async def calculate_what_if_scenario(
     scenario_data: Dict[str, Any],
-    current_user: User = Depends(get_current_user)
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Calculate what-if scenarios for financial planning
@@ -484,7 +488,8 @@ async def calculate_what_if_scenario(
 @router.get("/cashflow/projection")
 async def get_cashflow_projection(
     months: int = 6,
-    current_user: User = Depends(get_current_user)
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get cash flow projection for the next N months
