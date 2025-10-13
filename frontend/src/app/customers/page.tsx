@@ -534,42 +534,7 @@ export default function CustomersPage() {
                   </svg>
                   {loading ? 'Đang tải...' : 'Làm mới'}
                 </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const { data: { user: authUser } } = await supabase.auth.getUser()
-                      
-                      console.log('Debug Info:', {
-                        authUser: authUser?.email || 'No auth user',
-                        userState: (user as { email?: string })?.email || 'No user state'
-                      })
-                      
-                      if (!authUser) {
-                        console.log('Attempting login...')
-                        const loginResult = await supabase.auth.signInWithPassword({
-                          email: 'admin@example.com',
-                          password: 'admin123'
-                        })
-                        
-                        if (loginResult.data.session) {
-                          console.log('Login successful, reloading...')
-                          window.location.reload()
-                        } else {
-                          console.error('Login failed:', loginResult.error?.message)
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Debug error:', error)
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100"
-                >
-                  {user ? 'Debug Auth' : 'Login & Debug'}
-                </button>
-                <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Báo cáo
-                </button>
+                
                 <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                   <Download className="h-4 w-4 mr-2" />
                   Xuất Excel

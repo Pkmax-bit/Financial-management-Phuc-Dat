@@ -245,34 +245,7 @@ function SalesPageContent() {
                 </p>
               </div>
               <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowQuickGuide(true)}
-                  className="inline-flex items-center px-3 py-2 border border-green-300 shadow-sm text-sm leading-4 font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  <HelpCircle className="w-4 h-4 mr-1" />
-                  Hướng dẫn nhanh
-                </button>
-                <button
-                  onClick={() => router.push('/sales/guide')}
-                  className="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <BookOpen className="w-4 h-4 mr-1" />
-                  Hướng dẫn đầy đủ
-                </button>
-                <button
-                  onClick={() => router.push('/sales/help')}
-                  className="inline-flex items-center px-3 py-2 border border-purple-300 shadow-sm text-sm leading-4 font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                >
-                  <HelpCircle className="w-4 h-4 mr-1" />
-                  Trung tâm hỗ trợ
-                </button>
-                <button
-                  onClick={() => router.push('/sales/learning')}
-                  className="inline-flex items-center px-3 py-2 border border-orange-300 shadow-sm text-sm leading-4 font-medium rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                >
-                  <BookOpen className="w-4 h-4 mr-1" />
-                  Trung tâm học tập
-                </button>
+                
                 <button
                   onClick={fetchSalesStats}
                   disabled={loading}
@@ -283,38 +256,7 @@ function SalesPageContent() {
                   </svg>
                   {loading ? 'Đang tải...' : 'Làm mới'}
                 </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const { data: { user: authUser } } = await supabase.auth.getUser()
-                      
-                      console.log('Debug Info:', {
-                        authUser: authUser?.email || 'No auth user',
-                        userState: (user as { email?: string })?.email || 'No user state'
-                      })
-                      
-                      if (!authUser) {
-                        console.log('Attempting login...')
-                        const loginResult = await supabase.auth.signInWithPassword({
-                          email: 'admin@example.com',
-                          password: 'admin123'
-                        })
-                        
-                        if (loginResult.data.session) {
-                          console.log('Login successful, reloading...')
-                          window.location.reload()
-                        } else {
-                          console.error('Login failed:', loginResult.error?.message)
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Debug error:', error)
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100"
-                >
-                  {user ? 'Debug Auth' : 'Login & Debug'}
-                </button>
+                
                 {activeTab !== 'overview' && (
                   <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
                     <Download className="h-4 w-4 mr-2" />
