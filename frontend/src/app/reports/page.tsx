@@ -68,6 +68,14 @@ const REPORT_TYPES = [
         category: 'Tài chính'
       },
       {
+        id: 'cash-flow-vietnamese',
+    name: 'Báo cáo dòng tiền (Chuẩn VN)',
+    description: 'Báo cáo dòng tiền với phân loại bên nợ/bên có',
+    icon: PiggyBank,
+    color: 'bg-purple-600',
+        category: 'Tài chính'
+      },
+      {
     id: 'sales-by-customer',
     name: 'Báo cáo bán hàng theo khách hàng',
     description: 'Doanh thu và số lượng bán hàng theo từng khách hàng',
@@ -156,6 +164,9 @@ export default function ReportsPage() {
         break
       case 'cash-flow':
         router.push('/reports/cash-flow')
+        break
+      case 'cash-flow-vietnamese':
+        router.push('/reports/cash-flow-vietnamese')
         break
       case 'sales-by-customer':
         router.push('/reports/sales-by-customer')
