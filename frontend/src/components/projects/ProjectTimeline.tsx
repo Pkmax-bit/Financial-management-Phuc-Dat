@@ -21,6 +21,7 @@ import {
   Eye
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import TimelineEntryWithImages from './TimelineEntryWithImages'
 
 interface TimelineEntry {
   id: string
@@ -111,7 +112,6 @@ export default function ProjectTimeline({ projectId, projectName, currentUser }:
   const [editingEntry, setEditingEntry] = useState<TimelineEntry | null>(null)
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set())
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [editingFiles, setEditingFiles] = useState<File[]>([])
   const [uploadingEditFiles, setUploadingEditFiles] = useState(false)
@@ -349,17 +349,6 @@ export default function ProjectTimeline({ projectId, projectName, currentUser }:
     })
   }
 
-  const toggleExpanded = (entryId: string) => {
-    setExpandedEntries(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(entryId)) {
-        newSet.delete(entryId)
-      } else {
-        newSet.add(entryId)
-      }
-      return newSet
-    })
-  }
 
   const openImagePreview = (imageUrl: string) => {
     setSelectedImage(imageUrl)
@@ -500,166 +489,21 @@ export default function ProjectTimeline({ projectId, projectName, currentUser }:
         ) : (
           timelineEntries
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .map((entry) => {
-              const typeInfo = typeConfig[entry.type]
-              const statusInfo = statusConfig[entry.status]
-              const TypeIcon = typeInfo.icon
-
-              return (
-                <div key={entry.id} className="bg-white rounded-lg shadow-sm border">
-                  <div className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-4">
-                        {/* Timeline dot */}
-                        <div className="relative">
-                          <div className={`w-4 h-4 rounded-full ${typeInfo.color}`}></div>
-                          <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${statusInfo.dotColor}`}></div>
-                        </div>
-
-                        {/* Entry content */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${typeInfo.bgColor}`}>
-                              <TypeIcon className={`h-4 w-4 ${typeInfo.textColor}`} />
-                              <span className={`text-sm font-medium ${typeInfo.textColor}`}>
-                                {typeInfo.label}
-                              </span>
-                            </div>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
-                              {statusInfo.label}
-                            </span>
-                          </div>
-
-                          <h4 className="text-lg font-semibold text-gray-900 mb-2">{entry.title}</h4>
-                          <p className="text-gray-600 mb-3">{entry.description}</p>
-
-                          <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              <span>{formatDate(entry.date)}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <User className="h-4 w-4" />
-                              <span>Tạo bởi: {entry.created_by}</span>
-                            </div>
-                          </div>
-
-                          {/* Attachments */}
-                          {entry.attachments.length > 0 && (
-                            <div className="border-t pt-4">
-                              <button
-                                onClick={() => toggleExpanded(entry.id)}
-                                className="flex items-center gap-2 text-sm font-medium text-gray-900 mb-3 hover:text-blue-600 transition-colors"
-                              >
-                                <span>Tệp đính kèm ({entry.attachments.length})</span>
-                                {expandedEntries.has(entry.id) ? (
-                                  <ChevronUp className="h-4 w-4" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4" />
-                                )}
-                              </button>
-                              
-                              {expandedEntries.has(entry.id) && (
-                                <div className="space-y-4">
-                                  {/* Image thumbnails */}
-                                  {entry.attachments.filter(att => att.type === 'image').length > 0 && (
-                                    <div>
-                                      <h6 className="text-xs font-medium text-gray-700 mb-2">Hình ảnh</h6>
-                                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                        {entry.attachments
-                                          .filter(attachment => attachment.type === 'image')
-                                          .map((attachment) => (
-                                            <div key={attachment.id} className="relative group">
-                                              <img
-                                                src={attachment.url}
-                                                alt={attachment.name}
-                                                className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                                onClick={() => openImagePreview(attachment.url)}
-                                              />
-                                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
-                                                <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                              </div>
-                                              <div className="absolute top-2 right-2">
-                                                <a
-                                                  href={attachment.url}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="p-1 bg-white bg-opacity-80 rounded-full hover:bg-opacity-100 transition-colors"
-                                                  title="Tải xuống"
-                                                  onClick={(e) => e.stopPropagation()}
-                                                >
-                                                  <Download className="h-3 w-3 text-gray-600" />
-                                                </a>
-                                              </div>
-                                            </div>
-                                          ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Other files */}
-                                  {entry.attachments.filter(att => att.type !== 'image').length > 0 && (
-                                    <div>
-                                      <h6 className="text-xs font-medium text-gray-700 mb-2">Tệp khác</h6>
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {entry.attachments
-                                          .filter(attachment => attachment.type !== 'image')
-                                          .map((attachment) => {
-                                            const FileIcon = getFileIcon(attachment.type)
-                                            
-                                            return (
-                                              <div key={attachment.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                                <FileIcon className="h-5 w-5 text-gray-500" />
-                                                <div className="flex-1 min-w-0">
-                                                  <p className="text-sm font-medium text-gray-900 truncate">
-                                                    {attachment.name}
-                                                  </p>
-                                                  <p className="text-xs text-gray-500">
-                                                    {formatFileSize(attachment.size)}
-                                                  </p>
-                                                </div>
-                                                <a
-                                                  href={attachment.url}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                                                  title="Tải xuống"
-                                                >
-                                                  <Download className="h-4 w-4" />
-                                                </a>
-                                              </div>
-                                            )
-                                          })}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => setEditingEntry(entry)}
-                          className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteEntry(entry.id)}
-                          className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })
+            .map((entry) => (
+              <TimelineEntryWithImages
+                key={entry.id}
+                entry={entry}
+                typeConfig={typeConfig}
+                statusConfig={statusConfig}
+                formatDate={formatDate}
+                formatFileSize={formatFileSize}
+                getFileIcon={getFileIcon}
+                onEdit={setEditingEntry}
+                onDelete={handleDeleteEntry}
+                onImageClick={openImagePreview}
+                currentUser={currentUser}
+              />
+            ))
         )}
       </div>
 
