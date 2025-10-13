@@ -260,7 +260,7 @@ export default function ProjectReportPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 lg:ml-64 relative z-10">
         {/* Header */}
         <div className="mb-8">
           <button

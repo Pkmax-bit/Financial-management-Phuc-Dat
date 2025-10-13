@@ -51,102 +51,104 @@ export default function PLReportPage() {
     setError(null)
     
     try {
-      // Fetch data from database
-      const [invoicesResult, billsResult, projectsResult, expensesResult] = await Promise.all([
-        // Get invoices (revenue)
+      // Fetch data from database - improved business logic
+      const [invoicesResult, billsResult, projectsResult, expensesResult, timeEntriesResult] = await Promise.all([
+        // Get ALL invoices (not just paid) for accurate revenue calculation
         supabase
           .from('invoices')
-          .select('total_amount, payment_status, created_at')
-          .eq('payment_status', 'paid')
-          .gte('created_at', startDate)
-          .lte('created_at', endDate + 'T23:59:59'),
+          .select('total_amount, paid_amount, payment_status, issue_date')
+          .gte('issue_date', startDate)
+          .lte('issue_date', endDate),
         
-        // Get bills (cost of goods sold)
+        // Get ALL bills for accurate cost calculation
         supabase
           .from('bills')
-          .select('amount, status, created_at')
-          .eq('status', 'paid')
-          .gte('created_at', startDate)
-          .lte('created_at', endDate + 'T23:59:59'),
+          .select('amount, paid_amount, status, issue_date')
+          .gte('issue_date', startDate)
+          .lte('issue_date', endDate),
         
-        // Get projects (revenue and costs)
+        // Get ALL projects for revenue and cost analysis
         supabase
           .from('projects')
-          .select('budget, actual_cost, status, created_at')
+          .select('budget, actual_cost, status, created_at, billing_type, hourly_rate')
           .gte('created_at', startDate)
           .lte('created_at', endDate + 'T23:59:59'),
         
-        // Get expenses (operating expenses)
+        // Get ALL expenses for operating cost calculation
         supabase
           .from('expenses')
-          .select('amount, status, expense_date')
-          .eq('status', 'approved')
+          .select('amount, status, expense_date, category')
           .gte('expense_date', startDate)
-          .lte('expense_date', endDate)
+          .lte('expense_date', endDate),
+        
+        // Get time entries for labor cost calculation
+        supabase
+          .from('time_entries')
+          .select('hours, hourly_rate, billable, date')
+          .gte('date', startDate)
+          .lte('date', endDate)
       ])
 
-      // Calculate revenue from invoices and projects - only real data
-      const invoiceRevenue = invoicesResult.data?.reduce((sum, invoice) => 
-        sum + (invoice.total_amount || 0), 0) || 0
+      // IMPROVED REVENUE CALCULATION
+      // 1. Invoice Revenue (actual money received)
+      const paidInvoiceRevenue = invoicesResult.data?.reduce((sum, invoice) => 
+        sum + (invoice.paid_amount || 0), 0) || 0
       
-      // Calculate project revenue from completed projects
-      const completedProjects = projectsResult.data?.filter(project => 
+      // 2. Project Revenue (completed/active projects)
+      const activeProjects = projectsResult.data?.filter(project => 
         project.status === 'completed' || project.status === 'active'
       ) || []
       
-      const projectRevenue = completedProjects.reduce((sum, project) => 
+      const projectRevenue = activeProjects.reduce((sum, project) => 
         sum + (project.budget || 0), 0)
       
-      const totalRevenue = invoiceRevenue + projectRevenue
+      // 3. Time-based Revenue (hourly projects)
+      const hourlyProjects = activeProjects.filter(project => 
+        project.billing_type === 'hourly'
+      )
+      
+      const timeBasedRevenue = timeEntriesResult.data?.reduce((sum, entry) => 
+        sum + ((entry.hours || 0) * (entry.hourly_rate || 0)), 0) || 0
+      
+      const totalRevenue = paidInvoiceRevenue + projectRevenue + timeBasedRevenue
 
-      // Calculate cost of goods sold from bills and project costs
-      const costOfGoodsSold = billsResult.data?.reduce((sum, bill) => 
-        sum + (bill.amount || 0), 0) || 0
+      // IMPROVED COST CALCULATION
+      // 1. Direct Costs (bills paid)
+      const directCosts = billsResult.data?.reduce((sum, bill) => 
+        sum + (bill.paid_amount || 0), 0) || 0
 
-      // Calculate operating expenses from expenses and time entries
+      // 2. Project Costs (actual costs)
+      const projectCosts = projectsResult.data?.reduce((sum, project) => 
+        sum + (project.actual_cost || 0), 0) || 0
+
+      // 3. Labor Costs (time entries)
+      const laborCosts = timeEntriesResult.data?.reduce((sum, entry) => 
+        sum + ((entry.hours || 0) * (entry.hourly_rate || 0)), 0) || 0
+
+      // 4. Operating Expenses (approved expenses)
       const operatingExpenses = expensesResult.data?.reduce((sum, expense) => 
         sum + (expense.amount || 0), 0) || 0
 
-      // Calculate project costs from actual costs and time entries
-      const projectCosts = projectsResult.data?.reduce((sum, project) => 
-        sum + (project.actual_cost || 0), 0) || 0
-      
-      // Calculate time-based costs
-      const timeEntriesResult = await supabase
-        .from('time_entries')
-        .select('hours, hourly_rate, billable')
-        .eq('billable', true)
-        .gte('date', startDate)
-        .lte('date', endDate)
-      
-      const timeBasedCosts = timeEntriesResult.data?.reduce((sum, entry) => 
-        sum + ((entry.hours || 0) * (entry.hourly_rate || 0)), 0) || 0
-
-      // Calculate other income from project overruns
+      // 5. Other Expenses (project overruns)
       const projectOverruns = projectsResult.data?.reduce((sum, project) => {
-        const overrun = (project.budget || 0) - (project.actual_cost || 0)
+        const overrun = (project.actual_cost || 0) - (project.budget || 0)
         return sum + Math.max(0, overrun)
       }, 0) || 0
 
-      // Calculate other expenses from project underruns
-      const projectUnderruns = projectsResult.data?.reduce((sum, project) => {
-        const underrun = (project.actual_cost || 0) - (project.budget || 0)
-        return sum + Math.max(0, underrun)
-      }, 0) || 0
-
-      // Calculate derived values from real data only
+      // IMPROVED PROFIT CALCULATION
+      const costOfGoodsSold = directCosts + projectCosts + laborCosts
       const grossProfit = totalRevenue - costOfGoodsSold
-      const operatingIncome = grossProfit - operatingExpenses - projectCosts - timeBasedCosts
-      const otherIncome = projectOverruns
-      const otherExpenses = projectUnderruns
+      const operatingIncome = grossProfit - operatingExpenses
+      const otherIncome = 0 // No other income for now
+      const otherExpenses = projectOverruns
       const netIncome = operatingIncome + otherIncome - otherExpenses
 
-      // Build P&L data from database only
+      // Build improved P&L data
       const plData: PLData = {
         revenue: totalRevenue,
         costOfGoodsSold: costOfGoodsSold,
         grossProfit: grossProfit,
-        operatingExpenses: operatingExpenses + projectCosts + timeBasedCosts,
+        operatingExpenses: operatingExpenses,
         operatingIncome: operatingIncome,
         otherIncome: otherIncome,
         otherExpenses: otherExpenses,
@@ -184,7 +186,7 @@ export default function PLReportPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 lg:ml-64 relative z-10">
         {/* Header */}
         <div className="mb-8">
           <button
@@ -200,10 +202,10 @@ export default function PLReportPage() {
               <div className="p-3 bg-blue-100 rounded-xl">
                 <TrendingUp className="h-8 w-8 text-blue-600" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Báo cáo Kết quả kinh doanh (P&L)</h1>
-                <p className="text-gray-600">Báo cáo lãi lỗ, doanh thu và chi phí</p>
-              </div>
+               <div>
+                 <h1 className="text-3xl font-bold text-black">Báo cáo Kết quả kinh doanh (P&L)</h1>
+                 <p className="text-black font-medium">Báo cáo lãi lỗ, doanh thu và chi phí</p>
+               </div>
             </div>
             
             <div className="flex items-center gap-3">
@@ -229,14 +231,14 @@ export default function PLReportPage() {
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="h-5 w-5 text-gray-500" />
-              <span className="font-medium text-gray-700">Bộ lọc thời gian:</span>
-            </div>
+             <div className="flex items-center gap-2">
+               <Filter className="h-5 w-5 text-black" />
+               <span className="font-bold text-black">Bộ lọc thời gian:</span>
+             </div>
             
             <div className="flex items-center gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Từ ngày</label>
+                <label className="block text-sm font-bold text-black mb-1">Từ ngày</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
@@ -249,7 +251,7 @@ export default function PLReportPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Đến ngày</label>
+                <label className="block text-sm font-bold text-black mb-1">Đến ngày</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
@@ -301,10 +303,10 @@ export default function PLReportPage() {
                   <div className="p-2 bg-green-100 rounded-lg">
                     <TrendingUp className="h-5 w-5 text-green-600" />
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Tổng doanh thu</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(data.revenue)}</p>
-                  </div>
+                   <div>
+                     <p className="text-sm font-bold text-black">Tổng doanh thu</p>
+                     <p className="text-2xl font-bold text-black">{formatCurrency(data.revenue)}</p>
+                   </div>
                 </div>
               </div>
               
@@ -313,10 +315,10 @@ export default function PLReportPage() {
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <DollarSign className="h-5 w-5 text-blue-600" />
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Lợi nhuận gộp</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(data.grossProfit)}</p>
-                  </div>
+                   <div>
+                     <p className="text-sm font-bold text-black">Lợi nhuận gộp</p>
+                     <p className="text-2xl font-bold text-black">{formatCurrency(data.grossProfit)}</p>
+                   </div>
                 </div>
               </div>
               
@@ -325,10 +327,10 @@ export default function PLReportPage() {
                   <div className="p-2 bg-purple-100 rounded-lg">
                     <BarChart3 className="h-5 w-5 text-purple-600" />
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Lợi nhuận hoạt động</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(data.operatingIncome)}</p>
-                  </div>
+                   <div>
+                     <p className="text-sm font-bold text-black">Lợi nhuận hoạt động</p>
+                     <p className="text-2xl font-bold text-black">{formatCurrency(data.operatingIncome)}</p>
+                   </div>
                 </div>
               </div>
               
@@ -337,93 +339,93 @@ export default function PLReportPage() {
                   <div className="p-2 bg-emerald-100 rounded-lg">
                     <TrendingUp className="h-5 w-5 text-emerald-600" />
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Lợi nhuận ròng</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(data.netIncome)}</p>
-                  </div>
+                   <div>
+                     <p className="text-sm font-bold text-black">Lợi nhuận ròng</p>
+                     <p className="text-2xl font-bold text-black">{formatCurrency(data.netIncome)}</p>
+                   </div>
                 </div>
               </div>
             </div>
 
             {/* Detailed P&L Statement */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Báo cáo Kết quả kinh doanh</h2>
-                <p className="text-gray-600">Từ {startDate} đến {endDate}</p>
-              </div>
+               <div className="p-6 border-b border-gray-200">
+                 <h2 className="text-xl font-bold text-black">Báo cáo Kết quả kinh doanh</h2>
+                 <p className="text-black font-medium">Từ {startDate} đến {endDate}</p>
+               </div>
               
               <div className="p-6">
                 <div className="space-y-4">
                   {/* Revenue Section */}
                   <div className="border-l-4 border-green-500 pl-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">DOANH THU</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-gray-700">Doanh thu bán hàng</span>
-                        <span className="font-semibold text-gray-900">{formatCurrency(data.revenue)}</span>
-                      </div>
-                    </div>
+                     <h3 className="text-lg font-bold text-black mb-2">DOANH THU</h3>
+                     <div className="space-y-2">
+                       <div className="flex justify-between items-center py-2">
+                         <span className="text-black font-medium">Doanh thu bán hàng</span>
+                         <span className="font-bold text-black">{formatCurrency(data.revenue)}</span>
+                       </div>
+                     </div>
                   </div>
 
                   {/* Cost of Goods Sold */}
                   <div className="border-l-4 border-red-500 pl-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">GIÁ VỐN HÀNG BÁN</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-gray-700">Giá vốn hàng bán</span>
-                        <span className="font-semibold text-gray-900">{formatCurrency(data.costOfGoodsSold)}</span>
-                      </div>
-                    </div>
+                    <h3 className="text-lg font-bold text-black mb-2">GIÁ VỐN HÀNG BÁN</h3>
+                     <div className="space-y-2">
+                       <div className="flex justify-between items-center py-2">
+                         <span className="text-black font-medium">Giá vốn hàng bán</span>
+                         <span className="font-bold text-black">{formatCurrency(data.costOfGoodsSold)}</span>
+                       </div>
+                     </div>
                   </div>
 
                   {/* Gross Profit */}
                   <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold text-gray-900">Lợi nhuận gộp</span>
-                      <span className="text-xl font-bold text-green-600">{formatCurrency(data.grossProfit)}</span>
-                    </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-lg font-bold text-black">Lợi nhuận gộp</span>
+                       <span className="text-xl font-bold text-green-600">{formatCurrency(data.grossProfit)}</span>
+                     </div>
                   </div>
 
                   {/* Operating Expenses */}
                   <div className="border-l-4 border-orange-500 pl-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">CHI PHÍ HOẠT ĐỘNG</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-gray-700">Chi phí hoạt động</span>
-                        <span className="font-semibold text-gray-900">{formatCurrency(data.operatingExpenses)}</span>
-                      </div>
-                    </div>
+                    <h3 className="text-lg font-bold text-black mb-2">CHI PHÍ HOẠT ĐỘNG</h3>
+                     <div className="space-y-2">
+                       <div className="flex justify-between items-center py-2">
+                         <span className="text-black font-medium">Chi phí hoạt động</span>
+                         <span className="font-bold text-black">{formatCurrency(data.operatingExpenses)}</span>
+                       </div>
+                     </div>
                   </div>
 
                   {/* Operating Income */}
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold text-gray-900">Lợi nhuận hoạt động</span>
-                      <span className="text-xl font-bold text-blue-600">{formatCurrency(data.operatingIncome)}</span>
-                    </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-lg font-bold text-black">Lợi nhuận hoạt động</span>
+                       <span className="text-xl font-bold text-blue-600">{formatCurrency(data.operatingIncome)}</span>
+                     </div>
                   </div>
 
                   {/* Other Income/Expenses */}
                   <div className="border-l-4 border-purple-500 pl-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">THU NHẬP/KHÁC</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-gray-700">Thu nhập khác</span>
-                        <span className="font-semibold text-green-600">{formatCurrency(data.otherIncome)}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-gray-700">Chi phí khác</span>
-                        <span className="font-semibold text-red-600">{formatCurrency(data.otherExpenses)}</span>
-                      </div>
-                    </div>
+                    <h3 className="text-lg font-bold text-black mb-2">THU NHẬP/KHÁC</h3>
+                     <div className="space-y-2">
+                       <div className="flex justify-between items-center py-2">
+                         <span className="text-black font-medium">Thu nhập khác</span>
+                         <span className="font-bold text-green-600">{formatCurrency(data.otherIncome)}</span>
+                       </div>
+                       <div className="flex justify-between items-center py-2">
+                         <span className="text-black font-medium">Chi phí khác</span>
+                         <span className="font-bold text-red-600">{formatCurrency(data.otherExpenses)}</span>
+                       </div>
+                     </div>
                   </div>
 
                   {/* Net Income */}
                   <div className="bg-emerald-50 p-4 rounded-lg border-2 border-emerald-200">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xl font-bold text-gray-900">LỢI NHUẬN RÒNG</span>
-                      <span className="text-2xl font-bold text-emerald-600">{formatCurrency(data.netIncome)}</span>
-                    </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-xl font-bold text-black">LỢI NHUẬN RÒNG</span>
+                       <span className="text-2xl font-bold text-emerald-600">{formatCurrency(data.netIncome)}</span>
+                     </div>
                   </div>
                 </div>
               </div>
