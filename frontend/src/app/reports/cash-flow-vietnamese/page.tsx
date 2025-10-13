@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Download, RefreshCw, Calendar, PiggyBank, TrendingUp, TrendingDown, CheckCircle, XCircle } from 'lucide-react'
-import { createClient } from '@/utils/supabase/client'
+import { supabase } from '@/lib/supabase'
 
 interface CashFlowItemVietnamese {
   item_name: string
@@ -55,7 +55,6 @@ export default function CashFlowVietnamesePage() {
   const [data, setData] = useState<CashFlowStatementVietnamese | null>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     // Set default date range (last 30 days)
@@ -71,7 +70,8 @@ export default function CashFlowVietnamesePage() {
     setError(null)
     
     try {
-      const response = await fetch(`/api/reports/financial/cash-flow-vietnamese?start_date=${startDate}&end_date=${endDate}`)
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/reports/financial/cash-flow-vietnamese?start_date=${startDate}&end_date=${endDate}`)
       
       if (!response.ok) {
         throw new Error('Không thể tải dữ liệu báo cáo dòng tiền')
