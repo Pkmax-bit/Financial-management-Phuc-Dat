@@ -94,6 +94,12 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
       description: 'Bước 7: Báo cáo tài chính chi tiết'
     },
     {
+      name: 'Báo cáo LCTT (Chuẩn VN)',
+      href: '/reports/cash-flow-vietnamese',
+      icon: FileSpreadsheet,
+      description: 'Lưu chuyển tiền tệ - bên Nợ/Có'
+    },
+    {
       name: 'Thông báo',
       href: '/notifications',
       icon: Bell,
@@ -135,7 +141,7 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 max-h-[calc(100vh-8rem)] relative">
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 max-h-[calc(100vh-8rem)] relative">
           {/* Scroll indicator */}
           <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-white to-transparent pointer-events-none z-10"></div>
           <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
@@ -153,12 +159,12 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
                 className={`w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
                   isActive
                     ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    : 'text-gray-700'
                 }`}
                 title={item.description}
               >
                 <Icon className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                  isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
+                  isActive ? 'text-blue-600' : 'text-gray-400'
                 }`} />
                 <span className="truncate">{item.name}</span>
               </button>
@@ -215,7 +221,7 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
         onClick={toggleSidebar}
         className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 ${
           sidebarOpen ? 'left-60' : 'left-4'
-        } hover:bg-gray-50`}
+        }`}
         title={sidebarOpen ? 'Đóng sidebar' : 'Mở sidebar'}
       >
         {sidebarOpen ? (

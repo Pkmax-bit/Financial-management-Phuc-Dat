@@ -112,7 +112,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           </div>
 
           {/* Navigation Menu */}
-          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400 max-h-[calc(100vh-8rem)] relative">
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 max-h-[calc(100vh-8rem)] relative">
             {/* Scroll indicator */}
             <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-white to-transparent pointer-events-none z-10"></div>
             <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
@@ -138,12 +138,12 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                       className={`w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
                         isActive
                           ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                          : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                          : 'text-gray-700'
                       }`}
                       title={item.description}
                     >
                       <Icon className={`mr-3 h-4 w-4 flex-shrink-0 ${
-                        isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
+                        isActive ? 'text-blue-600' : 'text-gray-400'
                       }`} />
                       <span className="truncate">{item.name}</span>
                     </button>
@@ -162,12 +162,12 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                 className={`w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
                   pathname === '/projects/timeline'
                     ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    : 'text-gray-700'
                 }`}
                 title="Khách hàng xem tiến độ, hình ảnh, bình luận"
               >
                 <FolderOpen className={`mr-3 h-4 w-4 flex-shrink-0 ${
-                  pathname === '/projects/timeline' ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
+                  pathname === '/projects/timeline' ? 'text-blue-600' : 'text-gray-400'
                 }`} />
                 <span className="truncate">Tiến độ dự án (Khách hàng)</span>
               </button>
@@ -223,7 +223,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           onClick={toggleSidebar}
           className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 ${
             sidebarOpen ? 'left-60' : 'left-4'
-          } hover:bg-gray-50 lg:block`}
+          } lg:block`}
           title={sidebarOpen ? 'Đóng sidebar' : 'Mở sidebar'}
         >
           {sidebarOpen ? (
