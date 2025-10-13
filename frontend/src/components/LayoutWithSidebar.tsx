@@ -236,7 +236,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         {/* Content Area */}
         <div className={`transition-all duration-300 ${
           sidebarOpen ? 'ml-64' : 'ml-0'
-        } lg:ml-64`}>
+        }`}>
           {children}
         </div>
       </div>
