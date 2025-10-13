@@ -6,7 +6,6 @@ import {
   Home,
   Users,
   Building2,
-  FileText,
   Receipt,
   FolderOpen,
   BarChart3,
@@ -74,7 +73,6 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     Eye,
     Users,
     Bell,
-    FileText,
     Brain,
     Camera,
     TestTube
@@ -172,20 +170,6 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                   pathname === '/projects/timeline' ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
                 }`} />
                 <span className="truncate">Tiến độ dự án (Khách hàng)</span>
-              </button>
-              <button
-                onClick={() => handleNavigation('/projects/timeline/employee')}
-                className={`mt-1 w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
-                  pathname === '/projects/timeline/employee'
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-                title="Nhân viên upload hình, thêm mô tả, phản hồi bình luận"
-              >
-                <FileText className={`mr-3 h-4 w-4 flex-shrink-0 ${
-                  pathname === '/projects/timeline/employee' ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'
-                }`} />
-                <span className="truncate">Cập nhật tiến độ (Nhân viên)</span>
               </button>
             </div>
             
