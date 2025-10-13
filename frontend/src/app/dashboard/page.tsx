@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Plus, 
@@ -41,10 +41,12 @@ interface User {
 export default function DashboardPage() {
   const [user, setUser] = useState<unknown>(null)
   const [userLoading, setUserLoading] = useState(true)
+  const initRef = useRef(false)
   const [activeWidget, setActiveWidget] = useState('overview')
-  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshCount, setRefreshCount] = useState(0)
   const router = useRouter()
+  const lastRefreshRef = useRef<number>(0)
 
   // Use the comprehensive dashboard hook
   const {
@@ -87,8 +89,10 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  // Single useEffect for initialization
+  // Single useEffect for initialization (guarded to avoid double run)
   useEffect(() => {
+    if (initRef.current) return
+    initRef.current = true
     checkUser()
   }, [checkUser])
 
@@ -100,6 +104,7 @@ export default function DashboardPage() {
         try {
           await refreshAll()
           setRefreshCount(prev => prev + 1)
+          lastRefreshRef.current = Date.now()
         } catch (error) {
           console.error('Auto refresh failed:', error)
         }
@@ -109,12 +114,16 @@ export default function DashboardPage() {
     }
   }, [userLoading, user, autoRefresh, refreshAll])
 
-  // Handle page visibility change for better performance
+  // Handle page visibility change for better performance (throttled)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && user && !isLoading) {
-        // Refresh when page becomes visible
-        refreshAll()
+        const now = Date.now()
+        if (now - lastRefreshRef.current > 15000) {
+          // Refresh when page becomes visible, but throttle to avoid double load
+          refreshAll()
+          lastRefreshRef.current = now
+        }
       }
     }
 
@@ -132,6 +141,7 @@ export default function DashboardPage() {
     try {
       await refreshAll()
       setRefreshCount(prev => prev + 1)
+      lastRefreshRef.current = Date.now()
     } catch (error) {
       console.error('Manual refresh failed:', error)
     }
@@ -176,8 +186,8 @@ export default function DashboardPage() {
     }
   ]
 
-  // Optimized loading state
-  const isInitialLoading = userLoading || (isLoading && !stats.stats)
+  // Optimized initial loading: show layout as soon as user state is ready
+  const isInitialLoading = userLoading
   
   if (isInitialLoading) {
     return (
