@@ -189,7 +189,7 @@ export default function CompactComments({
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newComment.trim() || submitting || !authorName.trim()) return
+    if (!newComment.trim() || submitting) return
 
     setSubmitting(true)
     try {
@@ -216,7 +216,7 @@ export default function CompactComments({
           entity_id: entityId,
           timeline_id: timelineId, // Sử dụng timeline_id thực tế
           parent_id: null,
-          author_name: authorName.trim() // Gửi tên tác giả
+          author_name: (authorName?.trim() || 'Khách hàng') // Gửi tên tác giả hoặc mặc định
         })
       })
 
@@ -264,7 +264,7 @@ export default function CompactComments({
   }
 
   const handleSubmitReply = async (parentId: string) => {
-    if (!replyText.trim() || submitting || !authorName.trim()) return
+    if (!replyText.trim() || submitting) return
 
     setSubmitting(true)
     try {
@@ -291,7 +291,7 @@ export default function CompactComments({
           entity_id: entityId,
           timeline_id: timelineId, // Sử dụng timeline_id thực tế
           parent_id: parentId, // Lưu parent_id của comment gốc
-          author_name: authorName.trim() // Gửi tên tác giả
+          author_name: (authorName?.trim() || 'Khách hàng') // Gửi tên tác giả hoặc mặc định
         })
       })
 
