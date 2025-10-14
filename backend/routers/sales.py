@@ -501,6 +501,7 @@ async def convert_quote_to_invoice(
                 "unit_price": item.get("unit_price", 0),
                 "total_price": item.get("total_price", 0),
                 "name_product": item.get("name_product"),
+                "unit": item.get("unit"),
                 "discount_rate": item.get("discount_rate", 0.0),
                 "created_at": datetime.utcnow().isoformat()
             }

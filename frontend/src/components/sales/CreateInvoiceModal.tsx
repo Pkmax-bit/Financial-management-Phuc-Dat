@@ -28,6 +28,7 @@ interface InvoiceItem {
   quantity: number
   unit_price: number
   total: number
+  unit?: string
 }
 
 interface CreateInvoiceModalProps {
@@ -56,7 +57,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
   })
 
   const [items, setItems] = useState<InvoiceItem[]>([
-    { description: '', quantity: 1, unit_price: 0, total: 0 }
+    { description: '', quantity: 1, unit_price: 0, total: 0, unit: '' }
   ])
 
   useEffect(() => {
@@ -98,7 +99,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
   }
 
   const addItem = () => {
-    setItems([...items, { description: '', quantity: 1, unit_price: 0, total: 0 }])
+    setItems([...items, { description: '', quantity: 1, unit_price: 0, total: 0, unit: '' }])
   }
 
   const removeItem = (index: number) => {
@@ -132,7 +133,8 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          total: item.total
+          total: item.total,
+          unit: item.unit || null
         })),
         tax_amount,
         total_amount,
@@ -276,6 +278,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
                   <tr>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Mô tả</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Số lượng</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Đơn vị</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Đơn giá</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Thành tiền</th>
                     <th className="px-4 py-2 text-center text-sm font-medium text-gray-700">Hành động</th>
@@ -301,6 +304,15 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
                           className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right"
                           min="0"
                           step="0.01"
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="text"
+                          value={item.unit || ''}
+                          onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                          placeholder="m, m2, cái..."
                         />
                       </td>
                       <td className="px-4 py-2">

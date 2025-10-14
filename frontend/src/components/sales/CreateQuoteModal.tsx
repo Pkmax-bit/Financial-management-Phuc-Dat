@@ -28,6 +28,7 @@ interface QuoteItem {
   quantity: number
   unit_price: number
   subtotal: number
+  unit?: string
 }
 
 interface CreateQuoteModalProps {
@@ -55,7 +56,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
   })
 
   const [items, setItems] = useState<QuoteItem[]>([
-    { description: '', quantity: 1, unit_price: 0, subtotal: 0 }
+    { description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '' }
   ])
 
   useEffect(() => {
@@ -97,7 +98,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
   }
 
   const addItem = () => {
-    setItems([...items, { description: '', quantity: 1, unit_price: 0, subtotal: 0 }])
+    setItems([...items, { description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '' }])
   }
 
   const removeItem = (index: number) => {
@@ -131,7 +132,8 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          subtotal: item.subtotal
+          subtotal: item.subtotal,
+          unit: item.unit || null
         })),
         tax_amount,
         total_amount,
@@ -169,7 +171,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
       notes: '',
       terms_and_conditions: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
     })
-    setItems([{ description: '', quantity: 1, unit_price: 0, subtotal: 0 }])
+    setItems([{ description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '' }])
   }
 
   const formatCurrency = (amount: number) => {
@@ -279,6 +281,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Mô tả</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Số lượng</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Đơn vị</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Đơn giá</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Thành tiền</th>
                     <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">Hành động</th>
@@ -296,7 +299,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                           placeholder="Mô tả sản phẩm/dịch vụ"
                         />
                       </td>
-                      <td className="px-4 py-2">
+                    <td className="px-4 py-2">
                         <input
                           type="number"
                           value={item.quantity}
@@ -306,6 +309,15 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                           step="0.01"
                         />
                       </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="text"
+                        value={item.unit || ''}
+                        onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
+                        placeholder="m, m2, cái..."
+                      />
+                    </td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
