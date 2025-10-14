@@ -25,6 +25,7 @@ import {
 import CreateProjectExpenseDialog from './CreateProjectExpenseDialog'
 import CreateExpenseObjectDialog from './CreateExpenseObjectDialog'
 import { supabase } from '@/lib/supabase'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface ProjectExpense {
   id: string
@@ -495,7 +496,7 @@ const handleApproveExpense = async (expenseId: string) => {
       setLoading(true)
       // Add auth header using Supabase session token
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`/api/project-expenses/quotes/${quoteId}/approve`, {
+      const res = await fetch(`${API_BASE_URL}/api/project-expenses/quotes/${quoteId}/approve`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -843,9 +844,9 @@ return (
                   </td>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.variance_percentage > 0 ? 'rejected' : 'approved')} ${getStatusColor(project.variance_percentage < 0 ? 'approved' : 'pending')}`}>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.variance_percentage > 0 ? 'rejected' : 'approved')}`}>
                       {project.variance_percentage > 0 ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                      <span className="ml-1">{project.variance_percentage > 0 ? 'Từ chối' : 'Đã duyệt'}</span>
+                      <span className="ml-1">{project.variance_percentage > 0 ? 'Vượt chi phí kế hoạch' : 'Đã duyệt'}</span>
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -862,15 +863,7 @@ return (
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      {project.variance_percentage > 0 && (
-                        <button
-                          onClick={() => handleApprove(project.project_id)}
-                          className="text-green-600 hover:text-green-900 p-1"
-                          title="Duyệt thành thực tế"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                        </button>
-                      )}
+                      {/* Approve action removed in aggregated view; approval is available on planned rows */}
                       <button 
                         className="text-red-600 hover:text-red-900 p-1"
                         title="Xóa"
@@ -979,7 +972,7 @@ return (
                             )}
                             {canApprove(expense) && (
                               <button 
-                                onClick={() => handleApproveExpense(expense.id)}
+                                onClick={() => handleApprove(expense.id)}
                                 className="text-green-600 hover:text-green-900 p-1"
                                 title="Duyệt thành chi phí thực tế"
                               >
