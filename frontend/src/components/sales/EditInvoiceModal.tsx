@@ -44,6 +44,7 @@ interface InvoiceItem {
   unit_price: number
   total_price: number
   name_product?: string
+  unit?: string
 }
 
 interface Invoice {
@@ -216,15 +217,16 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
               quantity: item.quantity || 1,
               unit_price: item.unit_price || 0,
               total_price: item.total_price || (item.quantity * item.unit_price),
-              name_product: item.name_product || ''
+              name_product: item.name_product || '',
+              unit: item.unit || ''
             })))
           } else {
-            setItems([{ description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '' }])
+            setItems([{ description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }])
           }
         }
       } catch (error) {
         console.error('❌ Error loading invoice items:', error)
-        setItems([{ description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '' }])
+        setItems([{ description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }])
       }
     }
   }
@@ -250,7 +252,7 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
   }
 
   const addItem = () => {
-    setItems([...items, { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '' }])
+    setItems([...items, { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }])
   }
 
   const removeItem = (index: number) => {
@@ -308,6 +310,7 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
           unit_price: item.unit_price,
           total_price: item.total_price,
           name_product: item.name_product,
+          unit: item.unit || null,
           created_at: new Date().toISOString()
         }))
 

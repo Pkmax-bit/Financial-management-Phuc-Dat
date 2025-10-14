@@ -37,6 +37,7 @@ interface QuoteItem {
   unit_price: number
   total_price: number
   name_product?: string
+  unit?: string
 }
 
 interface CreateQuoteSidebarProps {
@@ -77,7 +78,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
   })
 
   const [items, setItems] = useState<QuoteItem[]>([
-    { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '' }
+    { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }
   ])
 
   useEffect(() => {
@@ -191,7 +192,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
   }
 
   const addItem = () => {
-    setItems([...items, { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '' }])
+    setItems([...items, { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }])
   }
 
   const removeItem = (index: number) => {
@@ -312,7 +313,8 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: item.total_price,
-        name_product: item.name_product || item.description
+        name_product: item.name_product || item.description,
+        unit: item.unit || null
       }))
       
       const { data: itemsResult, error: itemsError } = await supabase
@@ -633,7 +635,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                                   />
                                 </div>
                                 
-                                <div className="grid grid-cols-4 gap-2">
+                                <div className="grid grid-cols-5 gap-2">
                                   <div>
                                     <label className="block text-xs font-semibold text-black mb-1">Số lượng</label>
                                     <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
@@ -662,6 +664,16 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                                         <PlusIcon className="w-3 h-3" />
                                       </button>
                                     </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-semibold text-black mb-1">Đơn vị</label>
+                                    <input
+                                      type="text"
+                                      value={item.unit || ''}
+                                      onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="m, m2, cái..."
+                                    />
                                   </div>
                                   <div>
                                     <label className="block text-xs font-semibold text-black mb-1">Đơn giá</label>
@@ -695,7 +707,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                                     </span>
                                   </div>
                                   <div className="text-xs text-black mt-0.5">
-                                    {item.quantity} × {formatCurrency(item.unit_price)} = {formatCurrency(item.quantity * item.unit_price)}
+                                    {item.quantity} {item.unit ? item.unit : ''} × {formatCurrency(item.unit_price)} = {formatCurrency(item.quantity * item.unit_price)}
                                   </div>
                                 </div>
                               </div>
