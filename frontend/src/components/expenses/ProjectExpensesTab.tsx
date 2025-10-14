@@ -117,10 +117,13 @@ const canApprove = (expense: ProjectExpense) => {
   return expense.category === 'planned' && expense.status === 'pending'
 }
 
+const [editExpense, setEditExpense] = useState<{ id: string; category: 'planned' | 'actual' } | null>(null)
+
 const handleEditExpense = (expense: ProjectExpense) => {
   if (!canEdit(expense)) return
-  // TODO: Open edit dialog logic here
-  alert('Chức năng sửa chi phí đang được phát triển\n\nExpense ID: ' + expense.id)
+  setEditExpense({ id: expense.id, category: expense.category })
+  setCreateExpenseCategory(expense.category)
+  setShowCreateModal(true)
 }
 
 const handleDeleteExpense = async (expenseId: string) => {
@@ -519,6 +522,7 @@ const handleApproveExpense = async (expenseId: string) => {
 
   const handleCloseModal = () => {
     setShowCreateModal(false)
+    setEditExpense(null)
   }
 
   const handleCreateSuccess = () => {
@@ -1040,6 +1044,8 @@ return (
         onClose={handleCloseModal}
         onSuccess={handleCreateSuccess}
         category={createExpenseCategory}
+        mode={editExpense ? 'edit' : 'create'}
+        editId={editExpense?.id}
       />
 
       {/* Create Expense Object Dialog */}

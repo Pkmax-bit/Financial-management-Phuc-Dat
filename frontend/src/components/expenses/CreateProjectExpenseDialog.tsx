@@ -43,10 +43,12 @@ interface CreateProjectExpenseDialogProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  category?: 'planned' | 'actual' // Add category prop to specify expense type
+  category?: 'planned' | 'actual'
+  mode?: 'create' | 'edit'
+  editId?: string
 }
 
-export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned' }: CreateProjectExpenseDialogProps) {
+export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId }: CreateProjectExpenseDialogProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [parentQuotes, setParentQuotes] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
@@ -115,6 +117,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   ])
   const [projectRevenueTotal, setProjectRevenueTotal] = useState<number>(0)
+  const isEdit = mode === 'edit'
 
   const updateRow = (rowIndex: number, updater: (row: InvoiceItemRow) => InvoiceItemRow) => {
     setInvoiceItems(prev => {
@@ -373,10 +376,68 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     if (isOpen) {
       fetchProjects()
       fetchEmployees()
-      resetForm()
+      if (!isEdit) {
+        resetForm()
+      }
       loadExpenseObjectsOptions()
     }
   }, [isOpen])
+
+  // Load existing expense when in edit mode
+  useEffect(() => {
+    const loadForEdit = async () => {
+      if (!isOpen || !isEdit || !editId) return
+      try {
+        const tableName = category === 'planned' ? 'project_expenses_quote' : 'project_expenses'
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('*')
+          .eq('id', editId)
+          .single()
+        if (error) throw error
+        if (!data) return
+        setFormData(prev => ({
+          ...prev,
+          project_id: data.project_id || '',
+          employee_id: data.employee_id || '',
+          category: category,
+          description: data.description || '',
+          expense_object_id: data.expense_object_id || '',
+          planned_amount: Number(data.amount) || 0,
+          actual_amount: category === 'actual' ? Number(data.amount) || 0 : 0,
+          expense_date: data.expense_date || new Date().toISOString().split('T')[0],
+          status: data.status || 'pending',
+          notes: data.notes || '',
+          receipt_url: data.receipt_url || '',
+          currency: data.currency || 'VND',
+          id_parent: data.id_parent || ''
+        }))
+        const columns: string[] = Array.isArray(data.expense_object_columns) ? data.expense_object_columns : []
+        setSelectedExpenseObjectIds(columns)
+        if (Array.isArray(data.invoice_items) && data.invoice_items.length > 0) {
+          const rows: InvoiceItemRow[] = data.invoice_items.map((it: any, idx: number) => ({
+            section: '',
+            index: idx + 1,
+            productCode: '',
+            productName: it.product_name || it.description || '',
+            unitPrice: Number(it.unit_price) || 0,
+            quantity: Number(it.quantity) || 0,
+            unit: it.unit || 'cái',
+            lineTotal: Number(it.line_total) || 0,
+            componentsPct: it.components_pct || {},
+            componentsAmt: {}
+          }))
+          setInvoiceItems(rows)
+        }
+        if (data.project_id) {
+          await loadInvoiceItemsForProject(data.project_id)
+        }
+      } catch (e) {
+        console.error('❌ Error loading expense for edit:', e)
+      }
+    }
+    loadForEdit()
+  }, [isOpen, isEdit, editId, category])
 
   // Load parent expenses based on category
   useEffect(() => {
@@ -541,9 +602,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           }))
         }
 
-        console.log('📤 Submitting project expense quote (planned):', expenseData)
-        const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
-        console.log('✅ Project expense quote created successfully:', result)
+        if (isEdit && editId) {
+          console.log('📤 Updating project expense quote (planned):', editId, expenseData)
+          const { error } = await supabase
+            .from('project_expenses_quote')
+            .update(expenseData)
+            .eq('id', editId)
+          if (error) throw error
+        } else {
+          console.log('📤 Submitting project expense quote (planned):', expenseData)
+          const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
+          console.log('✅ Project expense quote created successfully:', result)
+        }
         
         // After create, if has parent, update parent quote amount = sum(children)
         if (expenseData.id_parent) {
@@ -592,16 +662,26 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         if (formData.receipt_url) expenseData.receipt_url = formData.receipt_url
         if (formData.id_parent) expenseData.id_parent = formData.id_parent
         
-        console.log('📤 Submitting project expense (actual):', expenseData)
-        
-        const { data, error } = await supabase
-          .from('project_expenses')
-          .insert(expenseData)
-          .select()
-        
-        if (error) throw error
-        
-        console.log('✅ Project expense (actual) created successfully:', data)
+        if (isEdit && editId) {
+          // Do not override id/created_at when updating
+          const updateData = { ...expenseData }
+          delete (updateData as any).id
+          delete (updateData as any).created_at
+          console.log('📤 Updating project expense (actual):', editId, updateData)
+          const { error } = await supabase
+            .from('project_expenses')
+            .update(updateData)
+            .eq('id', editId)
+          if (error) throw error
+        } else {
+          console.log('📤 Submitting project expense (actual):', expenseData)
+          const { data, error } = await supabase
+            .from('project_expenses')
+            .insert(expenseData)
+            .select()
+          if (error) throw error
+          console.log('✅ Project expense (actual) created successfully:', data)
+        }
         
         // After create, if has parent, update parent expense amount = sum(children)
         if (expenseData.id_parent) {
@@ -622,7 +702,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         }
       }
         
-      alert(category === 'planned' ? 'Tạo chi phí kế hoạch thành công!' : 'Tạo chi phí thực tế thành công!')
+      alert(isEdit
+        ? (category === 'planned' ? 'Cập nhật chi phí kế hoạch thành công!' : 'Cập nhật chi phí thực tế thành công!')
+        : (category === 'planned' ? 'Tạo chi phí kế hoạch thành công!' : 'Tạo chi phí thực tế thành công!')
+      )
       onSuccess()
       onClose()
       resetForm()
