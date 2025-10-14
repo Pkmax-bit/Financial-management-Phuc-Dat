@@ -76,6 +76,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'workflow'
   },
   {
+    name: 'Đối tượng chi phí',
+    href: '/expense-objects',
+    icon: 'Target',
+    description: 'Quản lý các đối tượng chi phí trong dự án',
+    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
+    category: 'management'
+  },
+  {
     name: 'Báo cáo & Phân tích',
     href: '/reports',
     icon: 'BarChart3',

@@ -1,0 +1,31 @@
+"""
+Expense Object Models
+Models cho đối tượng chi phí
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+class ExpenseObjectBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255, description="Tên đối tượng chi phí")
+    description: Optional[str] = Field(None, description="Mô tả đối tượng chi phí")
+
+class ExpenseObjectCreate(ExpenseObjectBase):
+    pass
+
+class ExpenseObjectUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Tên đối tượng chi phí")
+    description: Optional[str] = Field(None, description="Mô tả đối tượng chi phí")
+    is_active: Optional[bool] = Field(None, description="Trạng thái hoạt động")
+
+class ExpenseObject(ExpenseObjectBase):
+    id: str = Field(..., description="ID đối tượng chi phí")
+    is_active: bool = Field(..., description="Trạng thái hoạt động")
+    created_at: datetime = Field(..., description="Thời gian tạo")
+    updated_at: datetime = Field(..., description="Thời gian cập nhật")
+    created_by: Optional[str] = Field(None, description="ID người tạo")
+    updated_by: Optional[str] = Field(None, description="ID người cập nhật")
+
+    class Config:
+        from_attributes = True

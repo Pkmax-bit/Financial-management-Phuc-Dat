@@ -50,7 +50,7 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal
+from routers import auth, employees, customers, sales, expenses, projects, reports, notifications, files, dashboard, auth_test, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -85,6 +85,7 @@ app.include_router(files.router, prefix="/api/files", tags=["Files"])
 app.include_router(customer_view.router, prefix="/api/customer-view", tags=["Customer View"])
 app.include_router(emotions_comments.router, tags=["Emotions & Comments"])
 app.include_router(journal.router, prefix="/api/accounting", tags=["Journal Entries"])
+app.include_router(expense_objects.router, prefix="/api/expense-objects", tags=["Expense Objects"])
 
 if __name__ == "__main__":
     uvicorn.run(

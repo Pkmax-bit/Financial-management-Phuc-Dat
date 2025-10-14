@@ -21,6 +21,8 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import ExpenseObjectSelector from '@/components/ExpenseObjectSelector'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Project {
   id: string
@@ -62,6 +64,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     employee_id: '',
     category: 'planned', // 'planned' or 'actual'
     description: '',
+    expense_object_id: '',
     planned_amount: 0,
     actual_amount: 0,
     expense_date: new Date().toISOString().split('T')[0],
@@ -75,11 +78,169 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Form validation
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  // Invoice-like table state (left side)
+  interface InvoiceItemRow {
+    section: string // Hạng mục
+    index: number // STT
+    productCode?: string // Mã sản phẩm
+    productName: string // Tên sản phẩm
+    unitPrice: number // Đơn giá
+    quantity: number // Số lượng
+    unit: string // Đơn vị
+    // Derived
+    lineTotal: number // Thành tiền
+    // Component percentages per row
+    componentsPct: Record<string, number> // key: expense_object_id, value: percent
+    componentsAmt: Record<string, number> // key: expense_object_id, value: amount (VND)
+  }
+
+  // Expense object columns
+  interface SimpleExpenseObject { id: string; name: string }
+  const [expenseObjectsOptions, setExpenseObjectsOptions] = useState<SimpleExpenseObject[]>([])
+  const [selectedExpenseObjectIds, setSelectedExpenseObjectIds] = useState<string[]>([])
+
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceItemRow[]>([
+    {
+      section: 'Tủ bếp',
+      index: 1,
+      productCode: '',
+      productName: 'Tủ bếp trên',
+      unitPrice: 0,
+      quantity: 0,
+      unit: 'cái',
+      lineTotal: 0,
+      componentsPct: {},
+      componentsAmt: {}
+    }
+  ])
+
+  const updateRow = (rowIndex: number, updater: (row: InvoiceItemRow) => InvoiceItemRow) => {
+    setInvoiceItems(prev => {
+      const next = [...prev]
+      const updated = updater(next[rowIndex])
+      // Recompute line total
+      updated.lineTotal = (Number(updated.unitPrice) || 0) * (Number(updated.quantity) || 0)
+      next[rowIndex] = updated
+      return next
+    })
+  }
+
+  const addRow = () => {
+    setInvoiceItems(prev => [
+      ...prev,
+      {
+        section: prev[prev.length - 1]?.section || '',
+        index: prev.length + 1,
+        productCode: '',
+        productName: '',
+        unitPrice: 0,
+        quantity: 0,
+        unit: 'cái',
+        lineTotal: 0,
+        componentsPct: {},
+        componentsAmt: {}
+      }
+    ])
+  }
+
+  const removeRow = (rowIndex: number) => {
+    setInvoiceItems(prev => prev.filter((_, i) => i !== rowIndex).map((r, i) => ({ ...r, index: i + 1 })))
+  }
+
+  const plannedAmountComputed = invoiceItems.reduce((sum, r) => sum + (Number(r.lineTotal) || 0), 0)
+
+  // Ensure each row has keys for all selected expense objects
+  useEffect(() => {
+    setInvoiceItems(prev => prev.map(row => {
+      const nextPct: Record<string, number> = { ...row.componentsPct }
+      const nextAmt: Record<string, number> = { ...row.componentsAmt }
+      selectedExpenseObjectIds.forEach(id => {
+        if (nextPct[id] === undefined) nextPct[id] = 0
+        if (nextAmt[id] === undefined) nextAmt[id] = 0
+      })
+      // Clean removed ids
+      Object.keys(nextPct).forEach(id => {
+        if (!selectedExpenseObjectIds.includes(id)) delete nextPct[id]
+      })
+      Object.keys(nextAmt).forEach(id => {
+        if (!selectedExpenseObjectIds.includes(id)) delete nextAmt[id]
+      })
+      return { ...row, componentsPct: nextPct, componentsAmt: nextAmt }
+    }))
+  }, [selectedExpenseObjectIds])
+
+  // Load expense objects to choose columns
+  const loadExpenseObjectsOptions = async () => {
+    try {
+      let data
+      try {
+        data = await apiGet(`${API_BASE_URL}/api/expense-objects/?active_only=true`)
+      } catch (err) {
+        // fallback public
+        data = await apiGet(`${API_BASE_URL}/api/expense-objects/public?active_only=true`)
+      }
+      const opts = Array.isArray(data) ? data.map((o: any) => ({ id: o.id, name: o.name })) : []
+      setExpenseObjectsOptions(opts)
+      if (opts.length > 0 && selectedExpenseObjectIds.length === 0) {
+        setSelectedExpenseObjectIds([opts[0].id])
+      }
+    } catch (e) {
+      console.error('❌ Error loading expense object options:', e)
+      setExpenseObjectsOptions([])
+    }
+  }
+
+  // Load invoice items from backend purchase orders API for selected project
+  const loadInvoiceItemsForProject = async (projectId: string) => {
+    try {
+      // Try purchase orders first (have structured line_items)
+      const params = new URLSearchParams()
+      params.append('project_id', projectId)
+      const url = `${API_BASE_URL}/api/expenses/purchase-orders?${params.toString()}`
+      const poList = await apiGet(url)
+
+      if (Array.isArray(poList) && poList.length > 0) {
+        const rows: InvoiceItemRow[] = []
+        poList.forEach((po: any, idx: number) => {
+            const sectionName = ''
+          const items = Array.isArray(po.line_items) ? po.line_items : []
+          items.forEach((li: any, liIdx: number) => {
+            const unitPrice = Number(li.unit_price) || 0
+            const quantity = Number(li.quantity) || 0
+            const lineTotal = Number(li.line_total) || (unitPrice * quantity)
+            rows.push({
+              section: sectionName,
+              index: rows.length + 1,
+              productCode: '',
+              productName: li.product_name || li.description || '',
+              unitPrice,
+              quantity,
+              unit: li.unit || 'cái',
+              lineTotal,
+              componentsPct: { design: 0, cogs: 0, labor: 0, transport: 0, pm: 0 }
+            })
+          })
+        })
+        setInvoiceItems(rows)
+        return
+      }
+
+      // Fallback: sales receipts by project if API available
+      // const srUrl = `${API_BASE_URL}/api/sales/receipts?project_id=${encodeURIComponent(projectId)}`
+      // const receipts = await apiGet(srUrl)
+      // Map similarly if needed
+    } catch (e) {
+      console.error('❌ Error loading invoice items for project:', e)
+      // Keep current invoiceItems if load fails
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
       fetchProjects()
       fetchEmployees()
       resetForm()
+      loadExpenseObjectsOptions()
     }
   }, [isOpen])
 
@@ -216,19 +377,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     setSubmitting(true)
     
     try {
+      // Choose primary expense object id: prefer selector, else first selected column
+      const primaryExpenseObjectId = formData.expense_object_id || selectedExpenseObjectIds[0] || null
+
       if (category === 'planned') {
         // Create planned expense (quote)
         const expenseData = {
           project_id: formData.project_id,
           employee_id: formData.employee_id || null,
           description: formData.description,
-          amount: parseFloat(formData.planned_amount.toString()) || 0,
+          expense_object_id: primaryExpenseObjectId,
+          amount: Number(plannedAmountComputed) || 0,
           currency: formData.currency,
           expense_date: formData.expense_date,
           status: 'pending',
           notes: formData.notes || null,
           receipt_url: formData.receipt_url || null,
           id_parent: formData.id_parent || null,
+          // Persist selected expense object columns & per-row percentages
+          expense_object_columns: selectedExpenseObjectIds,
+          invoice_items: invoiceItems.map(r => ({
+            product_name: r.productName,
+            unit_price: r.unitPrice,
+            quantity: r.quantity,
+            unit: r.unit,
+            line_total: r.lineTotal,
+            components_pct: r.componentsPct
+          }))
         }
 
         console.log('📤 Submitting project expense quote (planned):', expenseData)
@@ -258,12 +433,22 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           id: crypto.randomUUID(),
           project_id: formData.project_id,
           description: formData.description,
-          amount: parseFloat(formData.planned_amount.toString()) || 0,
+          expense_object_id: primaryExpenseObjectId,
+          amount: Number(plannedAmountComputed) || 0,
           currency: formData.currency,
           expense_date: formData.expense_date,
           status: 'approved', // Actual expenses are automatically approved
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          expense_object_columns: selectedExpenseObjectIds,
+          invoice_items: invoiceItems.map(r => ({
+            product_name: r.productName,
+            unit_price: r.unitPrice,
+            quantity: r.quantity,
+            unit: r.unit,
+            line_total: r.lineTotal,
+            components_pct: r.componentsPct
+          }))
         }
         
         // Add optional fields
@@ -354,8 +539,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   if (!isOpen) return null
 
   return (
-    <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
-      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right flex flex-col">
+    <div className="fixed inset-0 z-50">
+      <div className="bg-white shadow-2xl border border-gray-200 h-full w-full animate-slide-in-right flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center space-x-3">
@@ -382,8 +567,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 text-gray-900">
-          <div className="space-y-6">
+        <div className="flex-1 overflow-hidden p-6 text-gray-900 flex flex-col">
+          <div className="space-y-6 flex-none">
             {/* Basic Information Section */}
             <div className="bg-white border border-gray-200 rounded-lg">
               <button
@@ -419,7 +604,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       ) : (
                         <select
                           value={formData.project_id}
-                          onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                          onChange={async (e) => {
+                            const value = e.target.value
+                            setFormData({ ...formData, project_id: value })
+                            if (value) {
+                              await loadInvoiceItemsForProject(value)
+                            } else {
+                              setInvoiceItems([])
+                            }
+                          }}
                           className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
                             errors.project_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
                           }`}
@@ -524,6 +717,17 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Đối tượng chi phí
+                    </label>
+                    <ExpenseObjectSelector
+                      value={formData.expense_object_id}
+                      onChange={(value) => setFormData({ ...formData, expense_object_id: value })}
+                      placeholder="Chọn đối tượng chi phí (tùy chọn)"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
                       Mô tả <span className="text-red-500">*</span>
                     </label>
                     <textarea
@@ -546,56 +750,162 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               )}
             </div>
 
-            {/* Amount Section - planned only */}
-            <div className="bg-white border border-gray-200 rounded-lg">
-              <button
-                onClick={() => toggleSection('amounts')}
-                className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-              >
-                <div className="flex items-center space-x-2">
-                  <DollarSign className={`h-4 w-4 ${category === 'actual' ? 'text-green-600' : 'text-blue-600'}`} />
-                  <span className="font-medium text-gray-900">
-                    {category === 'actual' ? 'Số tiền thực tế' : 'Số tiền kế hoạch'}
-                  </span>
                 </div>
-                {expandedSections.amounts ? (
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                )}
-              </button>
-              
-              {expandedSections.amounts && (
-                <div className="px-4 pb-4 space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      {category === 'actual' ? 'Số tiền thực tế (VND)' : 'Số tiền kế hoạch (VND)'}
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.planned_amount}
-                      onChange={(e) => setFormData({ ...formData, planned_amount: parseFloat(e.target.value) || 0 })}
-                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                        category === 'actual' ? 'focus:ring-green-500' : 'focus:ring-blue-500'
-                      } text-gray-900 ${
-                        errors.planned_amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                      }`}
-                      min="0"
-                      step="0.01"
-                      placeholder="0"
-                    />
-                    {errors.planned_amount && (
-                      <p className="text-red-500 text-xs mt-1 flex items-center">
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        {errors.planned_amount}
-                      </p>
-                    )}
+
+          {/* Split area: Left invoice details, Right amount/additional sections */}
+          <div className="flex-1 overflow-hidden mt-6">
+            <div className="grid grid-cols-1 gap-6 h-full">
+              {/* Invoice-like details full width */}
+              <div className="h-full overflow-auto bg-white border border-gray-200 rounded-lg">
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">Chi tiết hóa đơn</h3>
+                    <div className="text-sm text-gray-600">100% Đối tượng chi phí</div>
                   </div>
                 </div>
-              )}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm text-gray-900">
+                    <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                      <tr>
+                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold">STT</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold">Tên sản phẩm</th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Đơn giá</th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Số lượng</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold">Đơn vị</th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Thành tiền</th>
+                        {selectedExpenseObjectIds.map((id) => (
+                          <th key={`${id}-group`} colSpan={2} className="px-3 py-2 text-center font-semibold">
+                            {(expenseObjectsOptions.find(o => o.id === id)?.name) || 'Đối tượng'}
+                          </th>
+                        ))}
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold"></th>
+                      </tr>
+                      <tr>
+                        {selectedExpenseObjectIds.map((id) => (
+                          <>
+                            <th key={`${id}-pct-h`} className="px-3 py-2 text-right font-semibold">%</th>
+                            <th key={`${id}-amt-h`} className="px-3 py-2 text-right font-semibold">VND</th>
+                          </>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoiceItems.map((row, i) => (
+                        <tr key={i} className={`border-b border-gray-100 ${i % 2 === 1 ? 'bg-gray-50' : ''}`}>
+                          <td className="px-3 py-2">
+                            {row.index}
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500"
+                              value={row.productName}
+                              onChange={(e) => updateRow(i, r => ({ ...r, productName: e.target.value }))}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                              className="w-32 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                              value={row.unitPrice}
+                              onChange={(e) => updateRow(i, r => ({ ...r, unitPrice: parseFloat(e.target.value) || 0 }))}
+                              step="1000"
+                              min="0"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number"
+                              className="w-24 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                              value={row.quantity}
+                              onChange={(e) => updateRow(i, r => ({ ...r, quantity: parseFloat(e.target.value) || 0 }))}
+                              step="1"
+                              min="0"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              className="w-24 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500"
+                              value={row.unit}
+                              onChange={(e) => updateRow(i, r => ({ ...r, unit: e.target.value }))}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {new Intl.NumberFormat('vi-VN').format(row.lineTotal)}
+                          </td>
+                          {selectedExpenseObjectIds.map((id) => (
+                            <>
+                              <td key={`${id}-pct`} className="px-3 py-2 text-right">
+                              <input
+                                type="number"
+                                className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                                  value={row.componentsPct[id] ?? 0}
+                                  onChange={(e) => {
+                                    const pct = parseFloat(e.target.value) || 0
+                                    updateRow(i, r => {
+                                      const next = { ...r }
+                                      next.componentsPct[id] = pct
+                                      next.componentsAmt[id] = Math.round(((next.lineTotal || 0) * pct) / 100)
+                                      return next
+                                    })
+                                  }}
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                />
+                              </td>
+                              <td key={`${id}-amt`} className="px-3 py-2 text-right">
+                                <input
+                                  type="number"
+                                className="w-32 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                                  value={row.componentsAmt[id] ?? 0}
+                                  onChange={(e) => {
+                                    const amt = parseFloat(e.target.value) || 0
+                                    updateRow(i, r => {
+                                      const next = { ...r }
+                                      next.componentsAmt[id] = amt
+                                      next.componentsPct[id] = (next.lineTotal || 0) > 0 ? (amt * 100) / (next.lineTotal || 1) : 0
+                                      return next
+                                    })
+                                  }}
+                                step="1000"
+                                min="0"
+                                />
+                              </td>
+                            </>
+                          ))}
+                          <td className="px-3 py-2 text-right">
+                            <button onClick={() => removeRow(i)} className="text-red-600 hover:underline text-xs">Xóa</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </div>
+                <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+                  <button onClick={addRow} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Thêm dòng</button>
+                  <div className="text-sm text-gray-700">
+                    Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
+                </div>
+                </div>
             </div>
 
-            {/* Additional Information Section */}
+              {/* Right panel removed for full-width invoice table */}
+                  </div>
+                </div>
+            </div>
+
+        {/* Footer */}
+        <div className="border-t border-gray-200 bg-gray-50 p-6 space-y-6">
+          {/* Planned amount summary moved to bottom */}
+          <div className="bg-white border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-gray-900">Số tiền kế hoạch</div>
+              <div className="text-lg font-bold text-blue-700">
+                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}
+              </div>
+            </div>
+          </div>
+          {/* Additional Information Section moved to bottom */}
             <div className="bg-white border border-gray-200 rounded-lg">
               <button
                 onClick={() => toggleSection('additional')}
@@ -669,12 +979,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   </div>
                 </div>
               )}
-            </div>
-          </div>
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-gray-200 bg-gray-50 p-6">
           <div className="flex justify-end space-x-3">
             <button
               onClick={onClose}

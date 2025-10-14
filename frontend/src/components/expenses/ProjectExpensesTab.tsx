@@ -23,6 +23,7 @@ import {
   FileText
 } from 'lucide-react'
 import CreateProjectExpenseDialog from './CreateProjectExpenseDialog'
+import CreateExpenseObjectDialog from './CreateExpenseObjectDialog'
 import { supabase } from '@/lib/supabase'
 
 interface ProjectExpense {
@@ -242,6 +243,7 @@ const handleApproveExpense = async (expenseId: string) => {
 }
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createExpenseCategory, setCreateExpenseCategory] = useState<'planned' | 'actual'>('planned')
+  const [showExpenseObjectModal, setShowExpenseObjectModal] = useState(false)
 
   // Define projectsMap at the top of the component after fetching data
   const [projectsMap, setProjectsMap] = useState(new Map())
@@ -569,6 +571,13 @@ return (
   <div className="space-y-6">
     {/* Action Buttons */}
     <div className="flex justify-end space-x-2">
+      <button
+        onClick={() => setShowExpenseObjectModal(true)}
+        className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+      >
+        <Target className="h-4 w-4 mr-2" />
+        Tạo đối tượng chi phí
+      </button>
       <button
         onClick={() => {
           setCreateExpenseCategory('planned')
@@ -1031,6 +1040,16 @@ return (
         onClose={handleCloseModal}
         onSuccess={handleCreateSuccess}
         category={createExpenseCategory}
+      />
+
+      {/* Create Expense Object Dialog */}
+      <CreateExpenseObjectDialog
+        isOpen={showExpenseObjectModal}
+        onClose={() => setShowExpenseObjectModal(false)}
+        onSuccess={() => {
+          setShowExpenseObjectModal(false)
+          // Có thể thêm logic refresh danh sách đối tượng chi phí nếu cần
+        }}
       />
     </div>
   )
