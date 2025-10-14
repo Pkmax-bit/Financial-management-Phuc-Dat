@@ -182,3 +182,4 @@ focus:border-blue-500 /* ✅ Consistent focus color */
 - ✅ **Modern** - Hiện đại
 
 **Bây giờ chữ trong ô nhập tên đã đen và rõ ràng!** 🎨✨
+

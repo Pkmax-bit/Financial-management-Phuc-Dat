@@ -230,3 +230,4 @@ Giao diện mới đã được cải thiện với:
 - ✅ **Smooth Interactions** - Tương tác mượt mà
 
 **Giao diện full screen và compact comments đã sẵn sàng để sử dụng!** 🚀
+

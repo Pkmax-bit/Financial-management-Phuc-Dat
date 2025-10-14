@@ -57,11 +57,19 @@ export const useCustomerCode = (initialCode: string = ''): UseCustomerCodeReturn
 
     try {
       const token = localStorage.getItem('access_token');
+      
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch('/api/customers/next-customer-code', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -83,10 +91,14 @@ export const useCustomerCode = (initialCode: string = ''): UseCustomerCodeReturn
         }));
       }
     } catch (err) {
+      const errorMessage = err.name === 'AbortError' 
+        ? 'Request timeout: Please try again'
+        : 'Network error: Unable to generate customer code';
+        
       setState(prev => ({
         ...prev,
         isGenerating: false,
-        error: 'Network error: Unable to generate customer code'
+        error: errorMessage
       }));
     }
   }, []);

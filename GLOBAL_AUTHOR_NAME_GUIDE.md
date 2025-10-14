@@ -276,3 +276,4 @@ const [authorName, setAuthorName] = useState('')
 - ✅ **Professional Feel** - Cảm giác chuyên nghiệp
 
 **Bây giờ chỉ cần 1 ô nhập tên duy nhất áp dụng cho tất cả bình luận trong timeline!** 🌍✨
+

@@ -224,3 +224,4 @@ Cập nhật validation trong API và component để hỗ trợ entity type m�
 ### Lỗi Encoding
 - Đảm bảo file được lưu với UTF-8 encoding
 - Kiểm tra emoji support trong database
+

@@ -234,15 +234,26 @@ export default function CustomersPage() {
     // Auto-fill customer code when opening modal
     try {
       const token = localStorage.getItem('access_token');
+      
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch('/api/customers/next-customer-code', {
         headers: { 'Authorization': `Bearer ${token}` },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         const data = await response.json();
         setAddForm(prev => ({ ...prev, customer_code: data.next_customer_code }));
       }
     } catch (error) {
       console.error('Error auto-filling customer code:', error);
+      // Set a fallback code if API fails
+      setAddForm(prev => ({ ...prev, customer_code: 'CUS001' }));
     }
   }
 
@@ -948,9 +959,18 @@ export default function CustomersPage() {
                         onClick={async () => {
                           try {
                             const token = localStorage.getItem('access_token');
+                            
+                            // Create AbortController for timeout
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                            
                             const response = await fetch('/api/customers/next-customer-code', {
                               headers: { 'Authorization': `Bearer ${token}` },
+                              signal: controller.signal
                             });
+                            
+                            clearTimeout(timeoutId);
+                            
                             if (response.ok) {
                               const data = await response.json();
                               setAddForm(prev => ({ ...prev, customer_code: data.next_customer_code }));

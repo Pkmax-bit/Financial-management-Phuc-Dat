@@ -184,3 +184,4 @@ rounded-full     /* Rounded input */
 - ✅ **Smooth transitions** - Animation mượt mà
 
 **Bây giờ ô nhập trả lời có màu sắc đẹp mắt với blue theme và gradient background!** 🚀
+

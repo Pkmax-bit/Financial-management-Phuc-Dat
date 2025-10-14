@@ -221,3 +221,4 @@ INSERT INTO emotion_types (name, emoji) VALUES
 - ✅ **Responsive design** - Hoạt động tốt trên mọi thiết bị
 
 **Bây giờ người dùng có thể chọn cảm xúc đa dạng và xem đầy đủ các câu trả lời bình luận một cách thông minh!** 🚀
+

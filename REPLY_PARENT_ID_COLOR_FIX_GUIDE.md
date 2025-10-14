@@ -180,3 +180,4 @@ className="w-full bg-transparent text-xs outline-none placeholder-gray-500 text-
 - ✅ Hierarchical comments hoạt động đúng
 
 **Bây giờ khi trả lời bình luận sẽ lưu ID bình luận trước đó và parent_id, đồng thời màu chữ đã được chỉnh cho rõ ràng và đen!** 🚀
+
