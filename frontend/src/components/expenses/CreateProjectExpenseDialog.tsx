@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { 
   X, 
   Save, 
@@ -22,6 +22,7 @@ import {
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ExpenseObjectSelector from '@/components/ExpenseObjectSelector'
+import ExpenseObjectMultiSelector from '@/components/ExpenseObjectMultiSelector'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Project {
@@ -113,6 +114,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       componentsAmt: {}
     }
   ])
+  const [projectRevenueTotal, setProjectRevenueTotal] = useState<number>(0)
 
   const updateRow = (rowIndex: number, updater: (row: InvoiceItemRow) => InvoiceItemRow) => {
     setInvoiceItems(prev => {
@@ -148,6 +150,40 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   }
 
   const plannedAmountComputed = invoiceItems.reduce((sum, r) => sum + (Number(r.lineTotal) || 0), 0)
+
+  // Tổng chi phí theo từng đối tượng chi phí được chọn
+  const expenseObjectTotals = useMemo(() => {
+    const totals: Record<string, number> = {}
+    selectedExpenseObjectIds.forEach(id => { totals[id] = 0 })
+    invoiceItems.forEach(row => {
+      selectedExpenseObjectIds.forEach(id => {
+        const pct = Number(row.componentsPct[id] ?? 0)
+        const amt = row.componentsAmt[id]
+        const value = amt !== undefined ? Number(amt) : Math.round(((row.lineTotal || 0) * pct) / 100)
+        totals[id] = (totals[id] || 0) + (value || 0)
+      })
+    })
+    return totals
+  }, [invoiceItems, selectedExpenseObjectIds])
+
+  // Tổng chi phí đã phân bổ (nếu không có phân bổ thì dùng tổng thành tiền dòng)
+  const grandAllocationTotal = useMemo(() => {
+    const totalAllocated = invoiceItems.reduce((grand, row) => {
+      const rowSum = selectedExpenseObjectIds.reduce((s, id) => {
+        const pct = Number(row.componentsPct[id] ?? 0)
+        const amt = row.componentsAmt[id]
+        const value = amt !== undefined ? Number(amt) : Math.round(((row.lineTotal || 0) * pct) / 100)
+        return s + (value || 0)
+      }, 0)
+      return grand + rowSum
+    }, 0)
+    // Nếu chưa chọn đối tượng hoặc chưa nhập phân bổ, fallback dùng tổng thành tiền dòng
+    return totalAllocated > 0 ? totalAllocated : plannedAmountComputed
+  }, [invoiceItems, selectedExpenseObjectIds, plannedAmountComputed])
+
+  const profitComputed = useMemo(() => {
+    return (Number(projectRevenueTotal) || 0) - (Number(grandAllocationTotal) || 0)
+  }, [projectRevenueTotal, grandAllocationTotal])
 
   // Ensure each row has keys for all selected expense objects
   useEffect(() => {
@@ -193,6 +229,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Load invoice items from backend purchase orders API for selected project
   const loadInvoiceItemsForProject = async (projectId: string) => {
     try {
+      // Load revenue (invoices) to compute profit
+      try {
+        const { data: invForRevenue } = await supabase
+          .from('invoices')
+          .select('id, total_amount, items')
+          .eq('project_id', projectId)
+        if (Array.isArray(invForRevenue)) {
+          const sumRevenue = invForRevenue.reduce((s: number, inv: any) => {
+            const totalAmt = Number(inv.total_amount)
+            if (!isNaN(totalAmt) && totalAmt > 0) return s + totalAmt
+            // fallback: sum items if total_amount missing
+            const items = Array.isArray(inv.items) ? inv.items : []
+            const itemsSum = items.reduce((ss: number, it: any) => {
+              const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
+              const qty = Number(it.quantity ?? it.qty) || 0
+              const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * qty)
+              return ss + (lineTotal || 0)
+            }, 0)
+            return s + itemsSum
+          }, 0)
+          setProjectRevenueTotal(sumRevenue)
+        } else {
+          setProjectRevenueTotal(0)
+        }
+      } catch (_re) {
+        setProjectRevenueTotal(0)
+      }
       // Try purchase orders first (have structured line_items)
       const params = new URLSearchParams()
       params.append('project_id', projectId)
@@ -217,7 +280,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               quantity,
               unit: li.unit || 'cái',
               lineTotal,
-              componentsPct: { design: 0, cogs: 0, labor: 0, transport: 0, pm: 0 }
+              componentsPct: {},
+              componentsAmt: {}
             })
           })
         })
@@ -225,10 +289,80 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         return
       }
 
-      // Fallback: sales receipts by project if API available
-      // const srUrl = `${API_BASE_URL}/api/sales/receipts?project_id=${encodeURIComponent(projectId)}`
-      // const receipts = await apiGet(srUrl)
-      // Map similarly if needed
+      // Fallback A: load invoices for this project directly from Supabase and map their embedded JSON items
+      const { data: invoices, error } = await supabase
+        .from('invoices')
+        .select('id, items, created_at')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+
+      if (!error && Array.isArray(invoices)) {
+        const rows: InvoiceItemRow[] = []
+        invoices.forEach((inv: any) => {
+          const items = Array.isArray(inv.items) ? inv.items : []
+          items.forEach((it: any) => {
+            const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
+            const quantity = Number(it.quantity ?? it.qty) || 0
+            const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * quantity)
+            rows.push({
+              section: '',
+              index: rows.length + 1,
+              productCode: it.product_code || it.code || '',
+              productName: it.product_name || it.name || it.description || '',
+              unitPrice,
+              quantity,
+              unit: it.unit || 'cái',
+              lineTotal,
+              componentsPct: {},
+              componentsAmt: {}
+            })
+          })
+        })
+        if (rows.length > 0) {
+          setInvoiceItems(rows)
+          return
+        }
+      }
+
+      // Fallback B: load invoice_items rows for all invoices of the project
+      const { data: invIdsData, error: invIdsErr } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('project_id', projectId)
+
+      if (!invIdsErr && Array.isArray(invIdsData) && invIdsData.length > 0) {
+        const invoiceIds = invIdsData.map((r: any) => r.id)
+        const { data: itemRows, error: itemsErr } = await supabase
+          .from('invoice_items')
+          .select('*')
+          .in('invoice_id', invoiceIds)
+          .order('created_at', { ascending: true })
+
+        if (!itemsErr && Array.isArray(itemRows) && itemRows.length > 0) {
+          const rows: InvoiceItemRow[] = []
+          itemRows.forEach((it: any) => {
+            const unitPrice = Number(it.unit_price ?? it.price) || 0
+            const quantity = Number(it.quantity ?? it.qty) || 0
+            const lineTotal = Number(it.total_price ?? it.subtotal ?? it.total) || (unitPrice * quantity)
+            rows.push({
+              section: '',
+              index: rows.length + 1,
+              productCode: it.product_code || it.code || '',
+              productName: it.name_product || it.description || '',
+              unitPrice,
+              quantity,
+              unit: it.unit || 'cái',
+              lineTotal,
+              componentsPct: {},
+              componentsAmt: {}
+            })
+          })
+          if (rows.length > 0) {
+            setInvoiceItems(rows)
+            return
+          }
+        }
+      }
     } catch (e) {
       console.error('❌ Error loading invoice items for project:', e)
       // Keep current invoiceItems if load fails
@@ -382,12 +516,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
       if (category === 'planned') {
         // Create planned expense (quote)
-        const expenseData = {
+          const expenseData = {
           project_id: formData.project_id,
           employee_id: formData.employee_id || null,
           description: formData.description,
           expense_object_id: primaryExpenseObjectId,
-          amount: Number(plannedAmountComputed) || 0,
+            amount: Number(grandAllocationTotal) || 0,
           currency: formData.currency,
           expense_date: formData.expense_date,
           status: 'pending',
@@ -429,12 +563,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         }
       } else {
         // Create actual expense directly
-        const expenseData: any = {
+          const expenseData: any = {
           id: crypto.randomUUID(),
           project_id: formData.project_id,
           description: formData.description,
           expense_object_id: primaryExpenseObjectId,
-          amount: Number(plannedAmountComputed) || 0,
+            amount: Number(grandAllocationTotal) || 0,
           currency: formData.currency,
           expense_date: formData.expense_date,
           status: 'approved', // Actual expenses are automatically approved
@@ -539,8 +673,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="bg-white shadow-2xl border border-gray-200 h-full w-full animate-slide-in-right flex flex-col">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="bg-white shadow-2xl border border-gray-200 min-h-full w-full animate-slide-in-right flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center space-x-3">
@@ -717,13 +851,23 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Đối tượng chi phí
+                      Đối tượng chi phí (có thể chọn nhiều)
                     </label>
-                    <ExpenseObjectSelector
-                      value={formData.expense_object_id}
-                      onChange={(value) => setFormData({ ...formData, expense_object_id: value })}
-                      placeholder="Chọn đối tượng chi phí (tùy chọn)"
-                    />
+                    <div className="grid grid-cols-1 gap-2">
+                      <ExpenseObjectMultiSelector
+                        values={selectedExpenseObjectIds}
+                        onChange={setSelectedExpenseObjectIds}
+                        placeholder="Chọn nhiều đối tượng chi phí để phân bổ"
+                      />
+                      <div className="text-xs text-gray-500">
+                        Chọn 1 đối tượng làm chính (tuỳ chọn) để lưu vào trường chính.
+                      </div>
+                      <ExpenseObjectSelector
+                        value={formData.expense_object_id}
+                        onChange={(value) => setFormData({ ...formData, expense_object_id: value })}
+                        placeholder="Đối tượng chính (tuỳ chọn)"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -778,14 +922,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                             {(expenseObjectsOptions.find(o => o.id === id)?.name) || 'Đối tượng'}
                           </th>
                         ))}
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Tổng phân bổ</th>
                         <th rowSpan={2} className="px-3 py-2 text-right font-semibold"></th>
                       </tr>
                       <tr>
                         {selectedExpenseObjectIds.map((id) => (
-                          <>
-                            <th key={`${id}-pct-h`} className="px-3 py-2 text-right font-semibold">%</th>
-                            <th key={`${id}-amt-h`} className="px-3 py-2 text-right font-semibold">VND</th>
-                          </>
+                          <React.Fragment key={`${id}-header`}>
+                            <th className="px-3 py-2 text-right font-semibold">%</th>
+                            <th className="px-3 py-2 text-right font-semibold">VND</th>
+                          </React.Fragment>
                         ))}
                       </tr>
                     </thead>
@@ -833,8 +978,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                             {new Intl.NumberFormat('vi-VN').format(row.lineTotal)}
                           </td>
                           {selectedExpenseObjectIds.map((id) => (
-                            <>
-                              <td key={`${id}-pct`} className="px-3 py-2 text-right">
+                            <React.Fragment key={`${id}-row-${i}`}>
+                              <td className="px-3 py-2 text-right">
                               <input
                                 type="number"
                                 className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
@@ -853,7 +998,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                 max="100"
                                 />
                               </td>
-                              <td key={`${id}-amt`} className="px-3 py-2 text-right">
+                              <td className="px-3 py-2 text-right">
                                 <input
                                   type="number"
                                 className="w-32 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
@@ -871,14 +1016,48 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                 min="0"
                                 />
                               </td>
-                            </>
+                            </React.Fragment>
                           ))}
+                          {/* Tổng phân bổ theo dòng */}
+                          <td className="px-3 py-2 text-right font-medium">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                              selectedExpenseObjectIds.reduce((s, id) => {
+                                const pct = Number(row.componentsPct[id] ?? 0)
+                                const amt = row.componentsAmt[id]
+                                const value = amt !== undefined ? Number(amt) : Math.round(((row.lineTotal || 0) * pct) / 100)
+                                return s + (value || 0)
+                              }, 0)
+                            )}
+                          </td>
                           <td className="px-3 py-2 text-right">
                             <button onClick={() => removeRow(i)} className="text-red-600 hover:underline text-xs">Xóa</button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 border-t border-gray-200">
+                        <td className="px-3 py-2 text-left font-semibold" colSpan={6 + (selectedExpenseObjectIds.length * 2)}>Doanh thu</td>
+                        <td className="px-3 py-2 text-right font-semibold">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(projectRevenueTotal)}
+                        </td>
+                        <td className="px-3 py-2"></td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="px-3 py-2 text-left font-semibold" colSpan={6 + (selectedExpenseObjectIds.length * 2)}>Tổng chi phí</td>
+                        <td className="px-3 py-2 text-right font-semibold">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
+                        </td>
+                        <td className="px-3 py-2"></td>
+                      </tr>
+                      <tr className="bg-gray-100">
+                        <td className="px-3 py-2 text-left font-bold" colSpan={6 + (selectedExpenseObjectIds.length * 2)}>Lợi nhuận</td>
+                        <td className="px-3 py-2 text-right font-bold">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(profitComputed)}
+                        </td>
+                        <td className="px-3 py-2"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                   </div>
                 <div className="p-4 border-t border-gray-200 flex items-center justify-between">
@@ -901,7 +1080,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium text-gray-900">Số tiền kế hoạch</div>
               <div className="text-lg font-bold text-blue-700">
-                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}
+                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
               </div>
             </div>
           </div>
@@ -924,6 +1103,26 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               
               {expandedSections.additional && (
                 <div className="px-4 pb-4 space-y-4">
+                  {/* Tổng chi phí theo đối tượng chi phí */}
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900 mb-2">Tổng theo đối tượng</div>
+                    {selectedExpenseObjectIds.length === 0 ? (
+                      <div className="text-sm text-gray-600">Chưa chọn đối tượng chi phí</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {selectedExpenseObjectIds.map(id => (
+                          <div key={`obj-total-${id}`} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700">{(expenseObjectsOptions.find(o => o.id === id)?.name) || 'Đối tượng'}</span>
+                            <span className="font-medium text-gray-900">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expenseObjectTotals[id] || 0)}</span>
+                          </div>
+                        ))}
+                        <div className="pt-2 mt-1 border-t border-gray-200 flex items-center justify-between text-sm">
+                          <span className="text-gray-700">Tổng kế hoạch</span>
+                          <span className="font-semibold text-blue-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-900 mb-2">
