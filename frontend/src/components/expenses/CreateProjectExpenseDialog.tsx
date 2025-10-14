@@ -490,7 +490,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       newErrors.expense_date = 'Vui lòng chọn ngày chi phí'
     }
 
-    if (formData.planned_amount <= 0) {
+    // Validate planned amount based on computed allocation total
+    if ((Number(grandAllocationTotal) || 0) <= 0) {
       newErrors.planned_amount = 'Số tiền kế hoạch phải lớn hơn 0'
     }
 
