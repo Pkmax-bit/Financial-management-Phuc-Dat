@@ -12,6 +12,7 @@ import uuid
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
 from services.supabase_client import get_supabase_client
+from services.auto_snapshot_service import AutoSnapshotService
 
 router = APIRouter()
 @router.post("/project-expenses/quotes")
@@ -32,7 +33,21 @@ async def create_project_expense_quote(
 
         result = supabase.table("project_expenses_quote").insert(quote).execute()
         if result.data:
-            return result.data[0]
+            created_quote = result.data[0]
+            
+            # Auto-create snapshot if this is a child expense
+            if quote.get('id_parent'):
+                try:
+                    auto_snapshot_service = AutoSnapshotService()
+                    await auto_snapshot_service.create_auto_snapshot_for_child(
+                        created_quote, 
+                        'project_expenses_quote',
+                        current_user.id
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to create auto-snapshot: {e}")
+            
+            return created_quote
         raise HTTPException(status_code=400, detail="Create quote failed")
     except HTTPException:
         raise
@@ -176,7 +191,21 @@ async def create_project_expense(
 
         result = supabase.table("project_expenses").insert(expense).execute()
         if result.data:
-            return result.data[0]
+            created_expense = result.data[0]
+            
+            # Auto-create snapshot if this is a child expense
+            if expense.get('id_parent'):
+                try:
+                    auto_snapshot_service = AutoSnapshotService()
+                    await auto_snapshot_service.create_auto_snapshot_for_child(
+                        created_expense, 
+                        'project_expenses',
+                        current_user.id
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to create auto-snapshot: {e}")
+            
+            return created_expense
         raise HTTPException(status_code=400, detail="Create failed")
     except HTTPException:
         raise

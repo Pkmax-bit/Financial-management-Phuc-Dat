@@ -16,6 +16,7 @@ from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
 from services.supabase_client import get_supabase_client
 from services.project_validation_service import ProjectValidationService
+from services.auto_snapshot_service import AutoSnapshotService
 
 router = APIRouter()
 
@@ -196,7 +197,21 @@ async def create_expense(
         result = supabase.table("expenses").insert(expense_dict).execute()
         
         if result.data:
-            return Expense(**result.data[0])
+            created_expense = result.data[0]
+            
+            # Auto-create snapshot if this is a child expense
+            if expense_dict.get('id_parent'):
+                try:
+                    auto_snapshot_service = AutoSnapshotService()
+                    await auto_snapshot_service.create_auto_snapshot_for_child(
+                        created_expense, 
+                        'expenses',
+                        current_user.id
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to create auto-snapshot: {e}")
+            
+            return Expense(**created_expense)
         
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

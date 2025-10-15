@@ -23,6 +23,8 @@ import {
 import CreateExpenseSidebar from './CreateExpenseSidebar'
 import CreateExpenseDialog from './CreateExpenseDialog'
 import CreateExpenseCategoryDialog from './CreateExpenseCategoryDialog'
+import ExpenseRestoreButton from './ExpenseRestoreButton'
+import SnapshotStatusIndicator from './SnapshotStatusIndicator'
 import { supabase } from '@/lib/supabase'
 
 interface Expense {
@@ -311,6 +313,11 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     console.log('Edit expense:', expenseCode, 'Is leaf:', isLeaf)
   }
 
+  const handleRestoreSuccess = async () => {
+    // Reload data after successful restore
+    await fetchExpenses()
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved': return 'bg-green-100 text-green-800'
@@ -496,6 +503,16 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
                     <Check className="h-4 w-4" />
                   </button>
                 )}
+                {/* Snapshot Status Indicator for parent expenses only */}
+                {!exp.id_parent && (
+                  <SnapshotStatusIndicator
+                    parentId={exp.id}
+                    tableName="expenses"
+                    onRestore={handleRestoreSuccess}
+                    className="inline-flex"
+                  />
+                )}
+                
                 <button 
                   className="text-red-600 hover:text-red-900 p-1" 
                   title="Xóa"

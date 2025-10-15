@@ -24,6 +24,8 @@ import {
 } from 'lucide-react'
 import CreateProjectExpenseDialog from './CreateProjectExpenseDialog'
 import CreateExpenseObjectDialog from './CreateExpenseObjectDialog'
+import ExpenseRestoreButton from './ExpenseRestoreButton'
+import SnapshotStatusIndicator from './SnapshotStatusIndicator'
 import { supabase } from '@/lib/supabase'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -538,6 +540,11 @@ const handleApproveExpense = async (expenseId: string) => {
     onCreateExpense()
   }
 
+  const handleRestoreSuccess = async () => {
+    // Reload data after successful restore
+    await fetchProjectExpenses()
+  }
+
   const handleCloseModal = () => {
     setShowCreateModal(false)
     setEditExpense(null)
@@ -765,6 +772,7 @@ return (
       </div>
 
       {/* Expenses Table */}
+
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
@@ -894,7 +902,11 @@ return (
               ) : (
                 // Show individual expense items for 'planned' or 'actual' view
                 getFilteredExpenses().map((expense) => (
-                  <tr key={expense.id} className="hover:bg-gray-50">
+                  <tr key={expense.id} className={`hover:bg-gray-50 ${
+                    expense.level && expense.level > 0 
+                      ? 'bg-orange-50' // Child expenses - light orange background
+                      : 'bg-white'     // Parent expenses - white background
+                  }`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {projectsMap.get(expense.project_id)?.name || 'N/A'}
@@ -927,15 +939,19 @@ return (
                             <div className="w-6 mr-2" />
                           )}
                           
-                          {/* Icon for parent/child */}
+                          {/* Icon for parent/child with different colors */}
                           {expense.hasChildren ? (
                             <Folder className="h-4 w-4 text-blue-500 mr-2" />
                           ) : (
-                            <FileText className="h-4 w-4 text-gray-400 mr-2" />
+                            <FileText className={`h-4 w-4 mr-2 ${expense.level && expense.level > 0 ? 'text-orange-500' : 'text-gray-400'}`} />
                           )}
                           
                           <div className="flex-1">
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className={`text-sm font-medium ${
+                              expense.level && expense.level > 0 
+                                ? 'text-orange-700' // Child expenses - orange color
+                                : 'text-gray-900'  // Parent expenses - normal color
+                            }`}>
                               {expense.description}
                               {expense.hasChildren && expense.children && (
                                 <span className="ml-2 text-xs text-gray-500">
@@ -943,10 +959,18 @@ return (
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className={`text-xs mt-1 ${
+                              expense.level && expense.level > 0 
+                                ? 'text-orange-600' // Child expenses - orange color
+                                : 'text-gray-500'   // Parent expenses - normal color
+                            }`}>
                               Mã: {expense.id.substring(0, 8)}...
                             </div>
-                            <div className="text-xs text-gray-400">
+                            <div className={`text-xs ${
+                              expense.level && expense.level > 0 
+                                ? 'text-orange-400' // Child expenses - light orange
+                                : 'text-gray-400'   // Parent expenses - normal color
+                            }`}>
                               {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
                             </div>
                           </div>
@@ -955,13 +979,21 @@ return (
                     </td>
                     {/* Show only planned amount in 'planned' view */}
                     {viewMode === 'planned' && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                        expense.level && expense.level > 0 
+                          ? 'text-orange-600' // Child expenses - orange color
+                          : 'text-blue-600'   // Parent expenses - blue color
+                      }`}>
                         {formatCurrency(expense.planned_amount)}
                       </td>
                     )}
                     {/* Show only actual amount in 'actual' view */}
                     {viewMode === 'actual' && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                        expense.level && expense.level > 0 
+                          ? 'text-orange-600' // Child expenses - orange color
+                          : 'text-green-600'  // Parent expenses - green color
+                      }`}>
                         {formatCurrency(expense.actual_amount)}
                       </td>
                     )}
@@ -1031,6 +1063,18 @@ return (
                             )}
                           </>
                         )}
+                        
+    {/* Snapshot Status Indicator for parent expenses only */}
+    {console.log(`Expense ${expense.id}: level=${expense.level}, category=${expense.category}`)}
+    {(!expense.level || expense.level === 0) && (
+      <SnapshotStatusIndicator
+        parentId={expense.id}
+        tableName={expense.category === 'planned' ? 'project_expenses_quote' : 'project_expenses'}
+        projectId={expense.project_id}
+        onRestore={handleRestoreSuccess}
+        className="inline-flex"
+      />
+    )}
                         
                         <button 
                           className="text-gray-600 hover:text-gray-900 p-1"

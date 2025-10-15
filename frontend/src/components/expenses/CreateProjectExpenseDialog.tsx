@@ -23,6 +23,7 @@ import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ExpenseObjectSelector from '@/components/ExpenseObjectSelector'
 import ExpenseObjectMultiSelector from '@/components/ExpenseObjectMultiSelector'
+import ExpenseRestoreButton from './ExpenseRestoreButton'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Project {
@@ -941,6 +942,45 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         ? 'Chọn chi phí kế hoạch làm cha (từ project_expenses_quote)'
                         : 'Chọn chi phí thực tế làm cha (từ project_expenses)'}
                     </p>
+                    
+                    {/* Restore Button - Show when parent is selected */}
+                    {formData.id_parent && (
+                      <div className="mt-3">
+                        <ExpenseRestoreButton
+                          parentId={formData.id_parent}
+                          tableName={category === 'planned' ? 'project_expenses_quote' : 'project_expenses'}
+                          onRestore={() => {
+                            // Reload parent expenses after restore
+                            const loadParents = async () => {
+                              try {
+                                if (category === 'planned') {
+                                  const { data, error } = await supabase
+                                    .from('project_expenses_quote')
+                                    .select('id, expense_code, description, amount')
+                                    .eq('project_id', formData.project_id)
+                                    .order('created_at', { ascending: false })
+                                  if (error) throw error
+                                  setParentQuotes(data || [])
+                                } else {
+                                  const { data, error } = await supabase
+                                    .from('project_expenses')
+                                    .select('id, expense_code, description, amount')
+                                    .eq('project_id', formData.project_id)
+                                    .eq('status', 'approved')
+                                    .order('created_at', { ascending: false })
+                                  if (error) throw error
+                                  setParentExpenses(data || [])
+                                }
+                              } catch (e) {
+                                console.error('Error reloading parent expenses:', e)
+                              }
+                            }
+                            loadParents()
+                          }}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
