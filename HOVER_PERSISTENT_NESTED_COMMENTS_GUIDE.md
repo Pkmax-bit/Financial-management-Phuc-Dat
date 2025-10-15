@@ -224,3 +224,4 @@ SELECT * FROM comment_tree ORDER BY created_at ASC;
 
 **Bây giờ khi hover và di chuyển chuột lên khung icon vẫn còn mở, và hiển thị đầy đủ bình luận con của bình luận trả lời!** 🚀
 
+

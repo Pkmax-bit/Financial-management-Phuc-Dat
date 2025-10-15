@@ -222,3 +222,4 @@ INSERT INTO emotion_types (name, emoji) VALUES
 
 **Bây giờ người dùng có thể chọn cảm xúc đa dạng và xem đầy đủ các câu trả lời bình luận một cách thông minh!** 🚀
 
+
