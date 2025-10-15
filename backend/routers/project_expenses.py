@@ -54,12 +54,19 @@ async def approve_project_expense_quote(
         # Prepare record for actual expenses
         expense = {k: quote[k] for k in [
             "expense_code","description","amount","currency","expense_date","notes","receipt_url",
-            "project_id","customer_id","employee_id","department_id","id_parent"
+            "project_id","customer_id","employee_id","department_id","id_parent",
+            "expense_object_id","expense_object_columns","invoice_items"
         ] if k in quote}
         expense["id"] = str(uuid.uuid4())
         expense["status"] = "approved"
         expense["created_at"] = datetime.utcnow().isoformat()
         expense["updated_at"] = datetime.utcnow().isoformat()
+
+        # Log copied fields for debugging
+        print(f"✅ Approving quote {quote_id} to actual expense:")
+        print(f"  - expense_object_id: {expense.get('expense_object_id', 'None')}")
+        print(f"  - expense_object_columns: {len(expense.get('expense_object_columns', []))} columns")
+        print(f"  - invoice_items: {len(expense.get('invoice_items', []))} items")
 
         ins = supabase.table("project_expenses").insert(expense).execute()
         if not ins.data:

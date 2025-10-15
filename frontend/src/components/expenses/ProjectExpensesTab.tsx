@@ -203,6 +203,23 @@ const handleApproveExpense = async (expenseId: string) => {
       if (quoteData.employee_id) newExpense.employee_id = quoteData.employee_id
       if (quoteData.department_id) newExpense.department_id = quoteData.department_id
       if (quoteData.customer_id) newExpense.customer_id = quoteData.customer_id
+      if (quoteData.id_parent) newExpense.id_parent = quoteData.id_parent
+      
+      // Copy expense object related fields from quote to actual expense
+      if (quoteData.expense_object_id) {
+        newExpense.expense_object_id = quoteData.expense_object_id
+        console.log('✅ Copied expense_object_id:', quoteData.expense_object_id)
+      }
+      
+      if (Array.isArray(quoteData.expense_object_columns) && quoteData.expense_object_columns.length > 0) {
+        newExpense.expense_object_columns = quoteData.expense_object_columns
+        console.log('✅ Copied expense_object_columns:', quoteData.expense_object_columns.length, 'columns')
+      }
+      
+      if (Array.isArray(quoteData.invoice_items) && quoteData.invoice_items.length > 0) {
+        newExpense.invoice_items = quoteData.invoice_items
+        console.log('✅ Copied invoice_items:', quoteData.invoice_items.length, 'items')
+      }
       
       console.log('Creating actual expense:', newExpense)
       

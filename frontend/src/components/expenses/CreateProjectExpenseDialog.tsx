@@ -224,8 +224,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       }
       const opts = Array.isArray(data) ? data.map((o: any) => ({ id: o.id, name: o.name })) : []
       setExpenseObjectsOptions(opts)
+      // Auto-select all expense objects by default (only if no current selection)
       if (opts.length > 0 && selectedExpenseObjectIds.length === 0) {
-        setSelectedExpenseObjectIds([opts[0].id])
+        const allIds = opts.map(o => o.id)
+        setSelectedExpenseObjectIds(allIds)
+        console.log('✅ Auto-selected all expense objects:', allIds.length, 'objects')
+      } else if (opts.length > 0 && selectedExpenseObjectIds.length > 0) {
+        console.log('📝 Keeping existing expense object selection:', selectedExpenseObjectIds.length, 'objects')
       }
     } catch (e) {
       console.error('❌ Error loading expense object options:', e)
@@ -387,6 +392,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }, [isOpen])
 
+  // Auto-select all expense objects when options are loaded (for create mode)
+  useEffect(() => {
+    if (expenseObjectsOptions.length > 0 && !isEdit && selectedExpenseObjectIds.length === 0) {
+      const allIds = expenseObjectsOptions.map(o => o.id)
+      setSelectedExpenseObjectIds(allIds)
+      console.log('✅ Auto-selected all expense objects for create mode:', allIds.length, 'objects')
+    }
+  }, [expenseObjectsOptions, isEdit, selectedExpenseObjectIds.length])
+
   // Load existing expense when in edit mode
   useEffect(() => {
     const loadForEdit = async () => {
@@ -417,8 +431,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           id_parent: data.id_parent || ''
         }))
         const columns: string[] = Array.isArray(data.expense_object_columns) ? data.expense_object_columns : []
-        setSelectedExpenseObjectIds(columns)
-        console.log('✅ Loaded expense object columns for edit:', columns)
+        // Only set columns if we have saved data, otherwise keep current selection
+        if (columns.length > 0) {
+          setSelectedExpenseObjectIds(columns)
+          console.log('✅ Loaded expense object columns for edit:', columns)
+        } else {
+          console.log('📝 No saved expense object columns, keeping current selection or will auto-select all')
+        }
         if (Array.isArray(data.invoice_items) && data.invoice_items.length > 0) {
           const rows: InvoiceItemRow[] = data.invoice_items.map((it: any, idx: number) => {
             const componentsPct = it.components_pct || {}
@@ -759,6 +778,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       id_parent: ''
     })
     setErrors({})
+    // Clear expense object selection to trigger auto-select all
+    setSelectedExpenseObjectIds([])
+    console.log('🔄 Reset form - cleared expense object selection')
   }
 
   const formatCurrency = (amount: number) => {
