@@ -213,10 +213,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     try {
       let data
       try {
+        console.log('🔍 Trying authenticated endpoint for expense objects options...')
         data = await apiGet(`${API_BASE_URL}/api/expense-objects/?active_only=true`)
+        console.log('✅ Authenticated endpoint succeeded for options')
       } catch (err) {
+        console.log('⚠️ Authenticated endpoint failed for options, trying public endpoint:', err)
         // fallback public
         data = await apiGet(`${API_BASE_URL}/api/expense-objects/public?active_only=true`)
+        console.log('✅ Public endpoint succeeded for options')
       }
       const opts = Array.isArray(data) ? data.map((o: any) => ({ id: o.id, name: o.name })) : []
       setExpenseObjectsOptions(opts)
@@ -414,23 +418,45 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         }))
         const columns: string[] = Array.isArray(data.expense_object_columns) ? data.expense_object_columns : []
         setSelectedExpenseObjectIds(columns)
+        console.log('✅ Loaded expense object columns for edit:', columns)
         if (Array.isArray(data.invoice_items) && data.invoice_items.length > 0) {
-          const rows: InvoiceItemRow[] = data.invoice_items.map((it: any, idx: number) => ({
-            section: '',
-            index: idx + 1,
-            productCode: '',
-            productName: it.product_name || it.description || '',
-            unitPrice: Number(it.unit_price) || 0,
-            quantity: Number(it.quantity) || 0,
-            unit: it.unit || 'cái',
-            lineTotal: Number(it.line_total) || 0,
-            componentsPct: it.components_pct || {},
-            componentsAmt: {}
-          }))
+          const rows: InvoiceItemRow[] = data.invoice_items.map((it: any, idx: number) => {
+            const componentsPct = it.components_pct || {}
+            const componentsAmt: Record<string, number> = {}
+            
+            // Calculate componentsAmt from componentsPct and lineTotal
+            Object.keys(componentsPct).forEach(id => {
+              const pct = Number(componentsPct[id]) || 0
+              const lineTotal = Number(it.line_total) || 0
+              componentsAmt[id] = Math.round((lineTotal * pct) / 100)
+            })
+            
+            return {
+              section: '',
+              index: idx + 1,
+              productCode: '',
+              productName: it.product_name || it.description || '',
+              unitPrice: Number(it.unit_price) || 0,
+              quantity: Number(it.quantity) || 0,
+              unit: it.unit || 'cái',
+              lineTotal: Number(it.line_total) || 0,
+              componentsPct,
+              componentsAmt
+            }
+          })
           setInvoiceItems(rows)
+          console.log('✅ Loaded invoice items for edit:', rows.length, 'rows with components:', rows.map(r => ({ 
+            productName: r.productName, 
+            componentsPct: r.componentsPct, 
+            componentsAmt: r.componentsAmt 
+          })))
         }
-        if (data.project_id) {
+        // Only load project invoice items if we don't have existing invoice_items data
+        if (data.project_id && (!Array.isArray(data.invoice_items) || data.invoice_items.length === 0)) {
+          console.log('📋 No existing invoice items, loading from project...')
           await loadInvoiceItemsForProject(data.project_id)
+        } else {
+          console.log('✅ Using existing invoice items from database')
         }
       } catch (e) {
         console.error('❌ Error loading expense for edit:', e)

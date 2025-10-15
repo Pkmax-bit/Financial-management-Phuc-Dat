@@ -38,14 +38,19 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
       setLoading(true)
       let data
       try {
+        console.log('🔍 Trying authenticated endpoint for expense objects...')
         data = await apiGet(`${API_BASE_URL}/api/expense-objects/?active_only=true`)
+        console.log('✅ Authenticated endpoint succeeded')
       } catch (authErr) {
+        console.log('⚠️ Authenticated endpoint failed, trying public endpoint:', authErr)
         // Fallback to public endpoint on 401/403
         data = await apiGet(`${API_BASE_URL}/api/expense-objects/public?active_only=true`)
+        console.log('✅ Public endpoint succeeded')
       }
       setExpenseObjects(data || [])
     } catch (err) {
-      console.error('Error loading expense objects:', err)
+      console.error('❌ Error loading expense objects:', err)
+      setExpenseObjects([])
     } finally {
       setLoading(false)
     }
