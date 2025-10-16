@@ -66,6 +66,23 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const [showCostDetailModal, setShowCostDetailModal] = useState(false)
   const [selectedExpenseObjectId, setSelectedExpenseObjectId] = useState<string>('')
   
+  // State for direct cost input
+  const [directProductCosts, setDirectProductCosts] = useState<Record<number, number>>({})
+  const [directObjectCosts, setDirectObjectCosts] = useState<Record<string, number>>({})
+  const [inputMode, setInputMode] = useState<'detailed' | 'product-total' | 'object-total'>('detailed')
+  
+  // State for formatted unit price display
+  const [formattedUnitPrices, setFormattedUnitPrices] = useState<Record<number, string>>({})
+  
+  // State for formatted object amounts
+  const [formattedObjectAmounts, setFormattedObjectAmounts] = useState<Record<string, Record<number, string>>>({})
+  
+  // State for direct total inputs
+  const [directObjectTotals, setDirectObjectTotals] = useState<Record<string, number>>({})
+  
+  // State for toggle visibility
+  const [showObjectTotalInputs, setShowObjectTotalInputs] = useState<boolean>(false)
+  
 
   // Form data
   const [formData, setFormData] = useState({
@@ -634,7 +651,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           employee_id: formData.employee_id || null,
           description: formData.description,
           expense_object_id: primaryExpenseObjectId,
-            amount: Number(grandAllocationTotal) || 0,
+            amount: (() => {
+              const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+              return hasDirectObjectInputs 
+                ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                : (Number(grandAllocationTotal) || 0)
+            })(),
           currency: formData.currency,
           expense_date: formData.expense_date,
           status: 'pending',
@@ -643,14 +665,42 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           id_parent: formData.id_parent || null,
           // Persist selected expense object columns & per-row percentages
           expense_object_columns: selectedExpenseObjectIds,
-          invoice_items: invoiceItems.map(r => ({
-            product_name: r.productName,
-            unit_price: r.unitPrice,
-            quantity: r.quantity,
-            unit: r.unit,
-            line_total: r.lineTotal,
-            components_pct: r.componentsPct
-          }))
+          // Save object totals if only object totals are provided
+          expense_object_totals: (() => {
+            const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+            const hasProductDetails = invoiceItems.some(row => 
+              row.productName.trim() !== '' || row.unitPrice > 0 || row.quantity > 0
+            )
+            
+            // If only object totals are provided, save them
+            if (hasDirectObjectInputs && !hasProductDetails) {
+              return directObjectTotals
+            }
+            
+            return null
+          })(),
+          // Only save invoice items if there are actual product details, not just object totals
+          invoice_items: (() => {
+            const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+            const hasProductDetails = invoiceItems.some(row => 
+              row.productName.trim() !== '' || row.unitPrice > 0 || row.quantity > 0
+            )
+            
+            // If only object totals are provided, don't save invoice items
+            if (hasDirectObjectInputs && !hasProductDetails) {
+              return []
+            }
+            
+            // Otherwise, save invoice items as usual
+            return invoiceItems.map(r => ({
+              product_name: r.productName,
+              unit_price: r.unitPrice,
+              quantity: r.quantity,
+              unit: r.unit,
+              line_total: r.lineTotal,
+              components_pct: r.componentsPct
+            }))
+          })()
         }
 
         if (isEdit && editId) {
@@ -665,6 +715,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
           console.log('✅ Project expense quote created successfully:', result)
         }
+        
+        // Reset direct object totals after successful creation
+        setDirectObjectTotals({})
         
         // After create, if has parent, update parent quote amount = sum(children)
         if (expenseData.id_parent) {
@@ -690,21 +743,54 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           project_id: formData.project_id,
           description: formData.description,
           expense_object_id: primaryExpenseObjectId,
-            amount: Number(grandAllocationTotal) || 0,
+            amount: (() => {
+              const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+              return hasDirectObjectInputs 
+                ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                : (Number(grandAllocationTotal) || 0)
+            })(),
           currency: formData.currency,
           expense_date: formData.expense_date,
           status: 'approved', // Actual expenses are automatically approved
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           expense_object_columns: selectedExpenseObjectIds,
-          invoice_items: invoiceItems.map(r => ({
-            product_name: r.productName,
-            unit_price: r.unitPrice,
-            quantity: r.quantity,
-            unit: r.unit,
-            line_total: r.lineTotal,
-            components_pct: r.componentsPct
-          }))
+          // Save object totals if only object totals are provided
+          expense_object_totals: (() => {
+            const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+            const hasProductDetails = invoiceItems.some(row => 
+              row.productName.trim() !== '' || row.unitPrice > 0 || row.quantity > 0
+            )
+            
+            // If only object totals are provided, save them
+            if (hasDirectObjectInputs && !hasProductDetails) {
+              return directObjectTotals
+            }
+            
+            return null
+          })(),
+          // Only save invoice items if there are actual product details, not just object totals
+          invoice_items: (() => {
+            const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+            const hasProductDetails = invoiceItems.some(row => 
+              row.productName.trim() !== '' || row.unitPrice > 0 || row.quantity > 0
+            )
+            
+            // If only object totals are provided, don't save invoice items
+            if (hasDirectObjectInputs && !hasProductDetails) {
+              return []
+            }
+            
+            // Otherwise, save invoice items as usual
+            return invoiceItems.map(r => ({
+              product_name: r.productName,
+              unit_price: r.unitPrice,
+              quantity: r.quantity,
+              unit: r.unit,
+              line_total: r.lineTotal,
+              components_pct: r.componentsPct
+            }))
+          })()
         }
         
         // Add optional fields
@@ -733,6 +819,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           if (error) throw error
           console.log('✅ Project expense (actual) created successfully:', data)
         }
+        
+        // Reset direct object totals after successful creation
+        setDirectObjectTotals({})
         
         // After create, if has parent, update parent expense amount = sum(children)
         if (expenseData.id_parent) {
@@ -841,6 +930,144 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       breakdown
     }
   }
+
+  // Handle direct product cost input
+  const handleDirectProductCostChange = (rowIndex: number, value: number) => {
+    setDirectProductCosts(prev => ({
+      ...prev,
+      [rowIndex]: value
+    }))
+    
+    // Update the invoice item's line total
+    updateRow(rowIndex, (row) => ({
+      ...row,
+      lineTotal: value
+    }))
+  }
+
+  // Handle direct object cost input
+  const handleDirectObjectCostChange = (objectId: string, value: number) => {
+    setDirectObjectCosts(prev => ({
+      ...prev,
+      [objectId]: value
+    }))
+    
+    // Auto-calculate breakdown for all products
+    const totalObjectCost = value
+    const totalProductCost = invoiceItems.reduce((sum, row) => sum + row.lineTotal, 0)
+    
+    if (totalProductCost > 0) {
+      invoiceItems.forEach((row, index) => {
+        const productPercentage = (row.lineTotal / totalProductCost) * 100
+        const objectAmount = (totalObjectCost * productPercentage) / 100
+        
+        updateRow(index, (updatedRow) => ({
+          ...updatedRow,
+          componentsPct: {
+            ...updatedRow.componentsPct,
+            [objectId]: productPercentage
+          },
+          componentsAmt: {
+            ...updatedRow.componentsAmt,
+            [objectId]: objectAmount
+          }
+        }))
+      })
+    }
+  }
+
+  // Switch input mode
+  const switchInputMode = (mode: 'detailed' | 'product-total' | 'object-total') => {
+    setInputMode(mode)
+    
+    if (mode === 'product-total') {
+      // Clear object costs when switching to product mode
+      setDirectObjectCosts({})
+    } else if (mode === 'object-total') {
+      // Clear product costs when switching to object mode
+      setDirectProductCosts({})
+    }
+  }
+
+
+  // Format number with commas (no currency symbol)
+  const formatNumber = (value: number): string => {
+    return new Intl.NumberFormat('vi-VN').format(value)
+  }
+
+  // Parse currency from formatted string
+  const parseCurrency = (formattedValue: string): number => {
+    // Remove all non-numeric characters except decimal point
+    const cleanValue = formattedValue.replace(/[^\d.]/g, '')
+    return parseFloat(cleanValue) || 0
+  }
+
+  // Handle unit price change with formatting
+  const handleUnitPriceChange = (rowIndex: number, inputValue: string) => {
+    const numericValue = parseCurrency(inputValue)
+    
+    // Update the actual value
+    updateRow(rowIndex, (row) => ({
+      ...row,
+      unitPrice: numericValue
+    }))
+    
+    // Format the display value if it's a valid number
+    const formattedValue = numericValue > 0 ? formatNumber(numericValue) : inputValue
+    
+    // Update formatted display value
+    setFormattedUnitPrices(prev => ({
+      ...prev,
+      [rowIndex]: formattedValue
+    }))
+  }
+
+  // Handle object amount change with formatting
+  const handleObjectAmountChange = (objectId: string, rowIndex: number, inputValue: string) => {
+    const numericValue = parseCurrency(inputValue)
+    
+    // Update the actual value
+    updateRow(rowIndex, (row) => {
+      const next = { ...row }
+      next.componentsAmt[objectId] = numericValue
+      next.componentsPct[objectId] = (next.lineTotal || 0) > 0 ? (numericValue * 100) / (next.lineTotal || 1) : 0
+      return next
+    })
+    
+    // Format the display value if it's a valid number
+    const formattedValue = numericValue > 0 ? formatNumber(numericValue) : inputValue
+    
+    // Update formatted display value
+    setFormattedObjectAmounts(prev => ({
+      ...prev,
+      [objectId]: {
+        ...prev[objectId],
+        [rowIndex]: formattedValue
+      }
+    }))
+  }
+
+  // Initialize formatted prices when component mounts or invoiceItems change
+  React.useEffect(() => {
+    const newFormattedPrices: Record<number, string> = {}
+    invoiceItems.forEach((row, index) => {
+      newFormattedPrices[index] = formatNumber(row.unitPrice)
+    })
+    setFormattedUnitPrices(newFormattedPrices)
+  }, [invoiceItems])
+
+
+  // Handle direct object total input - just store the total, don't calculate details
+  const handleDirectObjectTotalChange = (objectId: string, value: number) => {
+    setDirectObjectTotals(prev => ({
+      ...prev,
+      [objectId]: value
+    }))
+    
+    // Only store the total, don't calculate breakdown
+    // The total will be used directly in the summary display
+  }
+
 
   if (!isOpen) return null
 
@@ -1113,34 +1340,36 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               {/* Invoice-like details full width */}
               <div className="h-full overflow-auto bg-white border border-gray-200 rounded-lg">
                 <div className="p-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Chi tiết hóa đơn</h3>
                     <div className="text-sm text-gray-600">100% Đối tượng chi phí</div>
                   </div>
+                  
+                  
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm text-gray-900">
                     <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                       <tr>
-                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold">STT</th>
-                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold">Tên sản phẩm</th>
-                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Đơn giá</th>
-                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Số lượng</th>
-                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold">Đơn vị</th>
-                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Thành tiền</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold w-16">STT</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold w-64">Tên sản phẩm</th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold w-24">Đơn giá</th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold w-12">Số lượng</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left font-semibold w-16">Đơn vị</th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold w-28">Thành tiền</th>
                         {selectedExpenseObjectIds.map((id) => (
-                          <th key={`${id}-group`} colSpan={2} className="px-3 py-2 text-center font-semibold">
+                          <th key={`${id}-group`} colSpan={2} className="px-3 py-2 text-center font-semibold w-32">
                             {(expenseObjectsOptions.find(o => o.id === id)?.name) || 'Đối tượng'}
                           </th>
                         ))}
-                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold">Tổng phân bổ</th>
-                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold"></th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold w-28">Tổng phân bổ</th>
+                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold w-16"></th>
                       </tr>
                       <tr>
                         {selectedExpenseObjectIds.map((id) => (
                           <React.Fragment key={`${id}-header`}>
-                            <th className="px-3 py-2 text-right font-semibold">%</th>
-                            <th className="px-3 py-2 text-right font-semibold">VND</th>
+                            <th className="px-3 py-2 text-right font-semibold w-16">%</th>
+                            <th className="px-3 py-2 text-right font-semibold w-20">VND</th>
                           </React.Fragment>
                         ))}
                       </tr>
@@ -1153,36 +1382,39 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           </td>
                           <td className="px-3 py-2">
                             <input
-                              className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500"
+                              className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-gray-100 cursor-not-allowed"
                               value={row.productName}
                               onChange={(e) => updateRow(i, r => ({ ...r, productName: e.target.value }))}
+                              disabled
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
-                              className="w-32 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
-                              value={row.unitPrice}
-                              onChange={(e) => updateRow(i, r => ({ ...r, unitPrice: parseFloat(e.target.value) || 0 }))}
-                              step="1000"
-                              min="0"
+                            <input
+                              type="text"
+                              className="w-full border-2 border-gray-400 rounded px-2 py-1 text-sm text-right text-black font-medium bg-gray-100 cursor-not-allowed"
+                              value={formattedUnitPrices[i] || formatNumber(row.unitPrice)}
+                              onChange={(e) => handleUnitPriceChange(i, e.target.value)}
+                              placeholder="0"
+                              disabled
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
                             <input
                               type="number"
-                              className="w-24 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                              className="w-full border-2 border-gray-400 rounded px-2 py-1 text-sm text-right text-black font-medium bg-gray-100 cursor-not-allowed"
                               value={row.quantity}
                               onChange={(e) => updateRow(i, r => ({ ...r, quantity: parseFloat(e.target.value) || 0 }))}
                               step="1"
                               min="0"
+                              disabled
                             />
                           </td>
                           <td className="px-3 py-2">
                             <input
-                              className="w-24 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500"
+                              className="w-full border-2 border-gray-400 rounded px-2 py-1 text-sm text-black font-medium bg-gray-100 cursor-not-allowed"
                               value={row.unit}
                               onChange={(e) => updateRow(i, r => ({ ...r, unit: e.target.value }))}
+                              disabled
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -1193,7 +1425,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               <td className="px-3 py-2 text-right">
                               <input
                                 type="number"
-                                className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                                className="w-full border-2 border-gray-400 rounded px-1 py-1 text-xs text-right text-black font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                   value={row.componentsPct[id] ?? 0}
                                   onChange={(e) => {
                                     const pct = parseFloat(e.target.value) || 0
@@ -1204,27 +1436,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                       return next
                                     })
                                   }}
-                                step="0.01"
+                                step="0.5"
                                 min="0"
                                 max="100"
                                 />
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <input
-                                  type="number"
-                                className="w-32 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
-                                  value={row.componentsAmt[id] ?? 0}
-                                  onChange={(e) => {
-                                    const amt = parseFloat(e.target.value) || 0
-                                    updateRow(i, r => {
-                                      const next = { ...r }
-                                      next.componentsAmt[id] = amt
-                                      next.componentsPct[id] = (next.lineTotal || 0) > 0 ? (amt * 100) / (next.lineTotal || 1) : 0
-                                      return next
-                                    })
-                                  }}
-                                step="1000"
-                                min="0"
+                                  type="text"
+                                className="w-full border-2 border-gray-400 rounded px-1 py-1 text-xs text-right text-black font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  value={formattedObjectAmounts[id]?.[i] || formatNumber(row.componentsAmt[id] ?? 0)}
+                                  onChange={(e) => handleObjectAmountChange(id, i, e.target.value)}
+                                  placeholder="0"
                                 />
                               </td>
                             </React.Fragment>
@@ -1287,26 +1510,80 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             {/* Total Cost Breakdown Section - Always visible */}
             {selectedExpenseObjectIds.length > 0 && (
               <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center space-x-2 mb-2">
+                <div className="flex items-center space-x-2 mb-3">
                   <BarChart3 className="h-4 w-4 text-gray-600" />
                   <span className="text-sm font-medium text-gray-700">Tổng chi phí theo đối tượng</span>
                 </div>
 
+                {/* Direct Input Section */}
+                <div className="mb-4 space-y-3">
+                  {/* Toggle Buttons */}
+                  <div className="flex space-x-2 mb-3">
+                    <button
+                      onClick={() => setShowObjectTotalInputs(!showObjectTotalInputs)}
+                      className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                        showObjectTotalInputs
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      {showObjectTotalInputs ? 'Ẩn' : 'Hiện'} Tổng chi phí đối tượng
+                    </button>
+                  </div>
+
+
+                  {/* Direct Object Totals Input */}
+                  {showObjectTotalInputs && (
+                    <div className="space-y-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <span className="text-black font-semibold text-sm">Tổng chi phí từng đối tượng:</span>
+                      {selectedExpenseObjectIds.map((id) => {
+                        const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
+                        return (
+                          <div key={id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-800 text-sm">{expenseObject?.name || 'Đối tượng'}:</span>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="number"
+                                value={directObjectTotals[id] || 0}
+                                onChange={(e) => handleDirectObjectTotalChange(id, parseFloat(e.target.value) || 0)}
+                                className="w-32 border-2 border-gray-400 rounded px-2 py-1 text-sm text-right text-black font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                placeholder="0"
+                                step="1000"
+                                min="0"
+                              />
+                              <span className="text-xs text-gray-600">VND</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Current Breakdown Display */}
                 <div className="space-y-1">
                   {selectedExpenseObjectIds.map((id) => {
                     const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
-                    const totalAmount = expenseObjectTotals[id] || 0
-                    const percentage = grandAllocationTotal > 0 ? (totalAmount / grandAllocationTotal * 100) : 0
+                    // Use direct input value if available, otherwise use calculated total
+                    const totalAmount = directObjectTotals[id] || expenseObjectTotals[id] || 0
+                    
+                    // Calculate total allocation: sum of all direct object totals or use grandAllocationTotal
+                    const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                    const totalAllocation = hasDirectObjectInputs 
+                      ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                      : grandAllocationTotal
+                    
+                    const percentage = totalAllocation > 0 ? (totalAmount / totalAllocation * 100) : 0
                     
                     return (
                       <div key={id} className="flex items-center justify-between text-sm py-1">
                         <div className="flex items-center space-x-2">
                           <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                          <span className="text-gray-700">{expenseObject?.name || 'Đối tượng'}</span>
+                          <span className="text-black font-medium">{expenseObject?.name || 'Đối tượng'}</span>
                         </div>
                         <div className="flex items-center space-x-3">
-                          <span className="text-gray-600">{percentage.toFixed(1)}%</span>
-                          <span className="font-medium text-blue-700">
+                          <span className="text-gray-800 font-medium">{percentage.toFixed(1)}%</span>
+                          <span className="font-semibold text-blue-800">
                             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}
                           </span>
                         </div>
@@ -1316,19 +1593,86 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   
                   {/* Total Summary */}
                   <div className="border-t border-gray-300 pt-1 mt-2">
-                    <div className="flex items-center justify-between text-sm font-semibold">
+                    <div className="flex items-center justify-between text-sm font-bold">
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span className="text-green-800">Tổng cộng</span>
+                        <span className="text-black">Tổng cộng</span>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <span className="text-green-600">100.0%</span>
-                        <span className="font-bold text-green-700">
-                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
+                        <span className="text-black font-bold">100.0%</span>
+                        <span className="font-bold text-green-800">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                            (() => {
+                              const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                              return hasDirectObjectInputs 
+                                ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                                : grandAllocationTotal
+                            })()
+                          )}
                         </span>
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Direct Cost Input Sections */}
+            {inputMode === 'product-total' && (
+              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Target className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-700">Nhập tổng chi phí cho từng sản phẩm</span>
+                </div>
+                <div className="space-y-2">
+                  {invoiceItems.map((row, index) => (
+                    <div key={index} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700">{row.productName || `Sản phẩm ${index + 1}`}</span>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          value={directProductCosts[index] || row.lineTotal}
+                          onChange={(e) => handleDirectProductCostChange(index, parseFloat(e.target.value) || 0)}
+                          className="w-32 border border-blue-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                          placeholder="0"
+                          step="1000"
+                          min="0"
+                        />
+                        <span className="text-xs text-gray-500">VND</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {inputMode === 'object-total' && (
+              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center space-x-2 mb-3">
+                  <BarChart3 className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">Nhập tổng chi phí cho từng đối tượng</span>
+                </div>
+                <div className="space-y-2">
+                  {selectedExpenseObjectIds.map((id) => {
+                    const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
+                    return (
+                      <div key={id} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700">{expenseObject?.name || 'Đối tượng'}</span>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="number"
+                            value={directObjectCosts[id] || 0}
+                            onChange={(e) => handleDirectObjectCostChange(id, parseFloat(e.target.value) || 0)}
+                            className="w-32 border border-green-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-green-500"
+                            placeholder="0"
+                            step="1000"
+                            min="0"
+                          />
+                          <span className="text-xs text-gray-500">VND</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
