@@ -216,6 +216,27 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
     setItems(updatedItems)
   }
 
+  const fillItemFromProduct = (index: number, p: { id: string; name: string; price: number; unit: string; description?: string | null }) => {
+    setItems(prev => {
+      const next = [...prev]
+      const current = next[index] || { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }
+      const quantity = current.quantity && current.quantity > 0 ? current.quantity : 1
+      const unit_price = Number(p.price) || 0
+      const total_price = quantity * unit_price
+      next[index] = {
+        ...current,
+        product_service_id: p.id,
+        name_product: p.name,
+        unit: p.unit || current.unit,
+        description: (p.description ?? '') || current.description,
+        unit_price,
+        quantity,
+        total_price
+      }
+      return next
+    })
+  }
+
   const incrementQuantity = (index: number) => {
     const updatedItems = [...items]
     updatedItems[index].quantity += 1
@@ -847,10 +868,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
           onClose={() => setShowProductPickerFor(null)}
           onSelect={(p) => {
             if (showProductPickerFor === null) return
-            updateItem(showProductPickerFor, 'name_product', p.name)
-            updateItem(showProductPickerFor, 'unit_price', Number(p.price) || 0)
-            updateItem(showProductPickerFor, 'description', p.description || '')
-            updateItem(showProductPickerFor, 'unit', p.unit || '')
+            fillItemFromProduct(showProductPickerFor, p as any)
             setShowProductPickerFor(null)
           }}
         />
