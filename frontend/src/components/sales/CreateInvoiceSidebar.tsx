@@ -17,6 +17,7 @@ import {
   Plus as PlusIcon
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
+import ProductPickerModal from './ProductPickerModal'
 import { supabase } from '@/lib/supabase'
 
 interface Customer {
@@ -82,6 +83,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
   const [items, setItems] = useState<InvoiceItem[]>([
     { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }
   ])
+  const [showProductPickerFor, setShowProductPickerFor] = useState<number | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -632,6 +634,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                               className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
                               placeholder="Tên sản phẩm"
                             />
+                            <button type="button" onClick={() => setShowProductPickerFor(index)} className="mt-1 text-xs text-blue-600 hover:underline">Chọn sản phẩm</button>
                           </div>
                         </div>
 
@@ -651,6 +654,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                   ))}
                 </div>
               </div>
+
             )}
           </div>
 
@@ -805,6 +809,20 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
             )}
           </div>
         </div>
+
+      {/* Product Picker Modal */}
+      <ProductPickerModal
+        isOpen={showProductPickerFor !== null}
+        onClose={() => setShowProductPickerFor(null)}
+        onSelect={(p) => {
+          if (showProductPickerFor === null) return
+          updateItem(showProductPickerFor, 'name_product', p.name)
+          updateItem(showProductPickerFor, 'unit_price', Number(p.price) || 0)
+          updateItem(showProductPickerFor, 'description', p.description || '')
+          updateItem(showProductPickerFor, 'unit', p.unit || '')
+          setShowProductPickerFor(null)
+        }}
+      />
 
         {/* Footer */}
         <div className="flex flex-col gap-3 pt-4 border-t border-gray-200 p-6">

@@ -24,6 +24,9 @@ import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
 import OverviewTab from '@/components/sales/OverviewTab'
+import ProductCatalog from '@/components/sales/ProductCatalog'
+import ProductCategoriesTab from '@/components/sales/ProductCategoriesTab'
+import ProductCreateModal from '@/components/sales/ProductCreateModal'
 import AllSalesTab from '@/components/sales/AllSalesTab'
 import QuotesTab from '@/components/sales/QuotesTab'
 import InvoicesTab from '@/components/sales/InvoicesTab'
@@ -49,6 +52,7 @@ function SalesPageContent() {
   const [salesStats, setSalesStats] = useState<unknown>({})
   const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
   const [showCreateReceiptModal, setShowCreateReceiptModal] = useState(false)
+  const [showCreateProductModal, setShowCreateProductModal] = useState(false)
   const [showQuickGuide, setShowQuickGuide] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -303,7 +307,7 @@ function SalesPageContent() {
                   )}
                   {activeTab === 'products' && (
                     <button 
-                      onClick={() => console.log('Create product')}
+                      onClick={() => setShowCreateProductModal(true)}
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -493,6 +497,26 @@ function SalesPageContent() {
                 >
                   Chênh lệch trước hóa đơn
                 </button>
+                <button
+                  onClick={() => setActiveTab('products')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'products'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Sản phẩm
+                </button>
+                <button
+                  onClick={() => setActiveTab('product-categories')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'product-categories'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Loại sản phẩm
+                </button>
               </nav>
             </div>
 
@@ -566,6 +590,24 @@ function SalesPageContent() {
                   searchTerm={searchTerm}
                 />
               )}
+              {activeTab === 'products' && (
+                <div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Danh mục sản phẩm</h3>
+                    <p className="text-sm text-black">Bảng chứa sản phẩm, phân theo loại sản phẩm (Loại, Tên, Đơn giá, Đơn vị, Mô tả)</p>
+                  </div>
+                  <ProductCatalog />
+                </div>
+              )}
+              {activeTab === 'product-categories' && (
+                <div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Loại sản phẩm</h3>
+                    <p className="text-sm text-black">Tạo và quản lý loại sản phẩm</p>
+                  </div>
+                  <ProductCategoriesTab />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -585,6 +627,15 @@ function SalesPageContent() {
       <QuickGuideModal
         isOpen={showQuickGuide}
         onClose={() => setShowQuickGuide(false)}
+      />
+
+      {/* Create Product Modal */}
+      <ProductCreateModal
+        isOpen={showCreateProductModal}
+        onClose={() => setShowCreateProductModal(false)}
+        onSuccess={() => {
+          setShowCreateProductModal(false)
+        }}
       />
     </LayoutWithSidebar>
   )

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import ProductPickerModal from './ProductPickerModal'
 
 interface Customer {
   id: string
@@ -80,6 +81,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
   const [items, setItems] = useState<QuoteItem[]>([
     { description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '', unit: '' }
   ])
+  const [showProductPickerFor, setShowProductPickerFor] = useState<number | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -696,6 +698,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                                       className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                       placeholder="Tên sản phẩm"
                                     />
+                                    <button type="button" onClick={() => setShowProductPickerFor(index)} className="mt-1 text-xs text-blue-600 hover:underline">Chọn sản phẩm</button>
                                   </div>
                                 </div>
 
@@ -838,6 +841,19 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
             )}
           </div>
         </div>
+
+        <ProductPickerModal
+          isOpen={showProductPickerFor !== null}
+          onClose={() => setShowProductPickerFor(null)}
+          onSelect={(p) => {
+            if (showProductPickerFor === null) return
+            updateItem(showProductPickerFor, 'name_product', p.name)
+            updateItem(showProductPickerFor, 'unit_price', Number(p.price) || 0)
+            updateItem(showProductPickerFor, 'description', p.description || '')
+            updateItem(showProductPickerFor, 'unit', p.unit || '')
+            setShowProductPickerFor(null)
+          }}
+        />
 
         {/* Footer Actions */}
         <div className="border-t border-gray-200 p-6 bg-gray-50">
