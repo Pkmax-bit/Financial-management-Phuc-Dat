@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Save, AlertCircle, Target, Edit, Trash2, Search } from 'lucide-react'
-import { apiGet, apiPost } from '@/lib/api'
+import { apiGet, apiPost, apiDelete } from '@/lib/api'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -31,6 +31,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   const [expenseObjects, setExpenseObjects] = useState<ExpenseObject[]>([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Load expense objects
   const loadExpenseObjects = async () => {
@@ -96,6 +97,24 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
       setErrors({ submit: 'Lỗi xác thực hoặc kết nối: Không thể tạo đối tượng chi phí' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async (objectId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa đối tượng chi phí này?')) {
+      return
+    }
+
+    try {
+      setDeletingId(objectId)
+      await apiDelete(`${API_BASE_URL}/api/expense-objects/${objectId}`)
+      alert('Xóa đối tượng chi phí thành công!')
+      await loadExpenseObjects() // Reload the list
+    } catch (err) {
+      console.error('Error deleting expense object:', err)
+      alert('Lỗi khi xóa đối tượng chi phí. Vui lòng thử lại.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -180,6 +199,20 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
                               {obj.is_active ? 'Hoạt động' : 'Không hoạt động'}
                             </span>
                           </div>
+                        </div>
+                        <div className="flex items-center space-x-2 ml-3">
+                          <button
+                            onClick={() => handleDelete(obj.id)}
+                            disabled={deletingId === obj.id}
+                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Xóa đối tượng chi phí"
+                          >
+                            {deletingId === obj.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
                         </div>
                       </div>
                     </div>

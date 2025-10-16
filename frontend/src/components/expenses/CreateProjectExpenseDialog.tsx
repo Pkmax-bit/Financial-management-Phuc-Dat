@@ -62,6 +62,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     additional: false
   })
 
+  // State for cost detail modal
+  const [showCostDetailModal, setShowCostDetailModal] = useState(false)
+  const [selectedExpenseObjectId, setSelectedExpenseObjectId] = useState<string>('')
+  
+
   // Form data
   const [formData, setFormData] = useState({
     project_id: '',
@@ -803,6 +808,40 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     return <CheckCircle className="h-4 w-4" />
   }
 
+  // Handle click on expense object total cost
+  const handleExpenseObjectTotalClick = (expenseObjectId: string) => {
+    setSelectedExpenseObjectId(expenseObjectId)
+    setShowCostDetailModal(true)
+  }
+
+
+  // Get detailed breakdown for selected expense object
+  const getExpenseObjectDetail = (expenseObjectId: string) => {
+    const expenseObject = expenseObjectsOptions.find(obj => obj.id === expenseObjectId)
+    const totalAmount = expenseObjectTotals[expenseObjectId] || 0
+    
+    const breakdown = invoiceItems.map((row, index) => {
+      const percentage = Number(row.componentsPct[expenseObjectId] ?? 0)
+      const amount = row.componentsAmt[expenseObjectId]
+      const calculatedAmount = amount !== undefined ? Number(amount) : Math.round(((row.lineTotal || 0) * percentage) / 100)
+      
+      return {
+        rowIndex: index + 1,
+        section: row.section,
+        productName: row.productName,
+        lineTotal: row.lineTotal,
+        percentage: percentage,
+        amount: calculatedAmount
+      }
+    }).filter(item => item.amount > 0)
+
+    return {
+      expenseObject,
+      totalAmount,
+      breakdown
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -1245,6 +1284,55 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 </div>
             </div>
 
+            {/* Total Cost Breakdown Section - Always visible */}
+            {selectedExpenseObjectIds.length > 0 && (
+              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center space-x-2 mb-2">
+                  <BarChart3 className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Tổng chi phí theo đối tượng</span>
+                </div>
+
+                <div className="space-y-1">
+                  {selectedExpenseObjectIds.map((id) => {
+                    const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
+                    const totalAmount = expenseObjectTotals[id] || 0
+                    const percentage = grandAllocationTotal > 0 ? (totalAmount / grandAllocationTotal * 100) : 0
+                    
+                    return (
+                      <div key={id} className="flex items-center justify-between text-sm py-1">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                          <span className="text-gray-700">{expenseObject?.name || 'Đối tượng'}</span>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <span className="text-gray-600">{percentage.toFixed(1)}%</span>
+                          <span className="font-medium text-blue-700">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Total Summary */}
+                  <div className="border-t border-gray-300 pt-1 mt-2">
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span className="text-green-800">Tổng cộng</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-green-600">100.0%</span>
+                        <span className="font-bold text-green-700">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
         {/* Footer */}
         <div className="border-t border-gray-200 bg-gray-50 p-6 space-y-6">
           {/* Planned amount summary moved to bottom */}
@@ -1285,7 +1373,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         {selectedExpenseObjectIds.map(id => (
                           <div key={`obj-total-${id}`} className="flex items-center justify-between text-sm">
                             <span className="text-gray-700">{(expenseObjectsOptions.find(o => o.id === id)?.name) || 'Đối tượng'}</span>
-                            <span className="font-medium text-gray-900">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expenseObjectTotals[id] || 0)}</span>
+                            <button
+                              onClick={() => handleExpenseObjectTotalClick(id)}
+                              className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                              title="Nhấp để xem chi tiết"
+                            >
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expenseObjectTotals[id] || 0)}
+                            </button>
                           </div>
                         ))}
                         <div className="pt-2 mt-1 border-t border-gray-200 flex items-center justify-between text-sm">
@@ -1379,6 +1473,115 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           </div>
         </div>
       </div>
+
+      {/* Cost Detail Modal */}
+      {showCostDetailModal && (
+        <div className="fixed inset-0 z-60 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={() => setShowCostDetailModal(false)}></div>
+            
+            <div className="inline-block w-full max-w-4xl px-4 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 rounded-lg bg-blue-100">
+                    <DollarSign className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Chi tiết tổng chi phí
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {getExpenseObjectDetail(selectedExpenseObjectId).expenseObject?.name || 'Đối tượng chi phí'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCostDetailModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Total Summary */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-900">Tổng chi phí</span>
+                    <span className="text-xl font-bold text-blue-700">
+                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getExpenseObjectDetail(selectedExpenseObjectId).totalAmount)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Breakdown Table */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-900">Chi tiết phân bổ</h4>
+                  </div>
+                  
+                  {getExpenseObjectDetail(selectedExpenseObjectId).breakdown.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      Không có chi phí được phân bổ cho đối tượng này
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STT</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hạng mục</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sản phẩm</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thành tiền</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tỷ lệ %</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Số tiền</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {getExpenseObjectDetail(selectedExpenseObjectId).breakdown.map((item, index) => (
+                            <tr key={index} className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">{item.rowIndex}</td>
+                              <td className="px-4 py-2 text-sm text-gray-900">{item.section}</td>
+                              <td className="px-4 py-2 text-sm text-gray-900">{item.productName}</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.lineTotal)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                {item.percentage.toFixed(1)}%
+                              </td>
+                              <td className="px-4 py-2 text-sm font-medium text-blue-700 text-right">
+                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.amount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50">
+                          <tr>
+                            <td colSpan={5} className="px-4 py-2 text-right text-sm font-semibold text-gray-900">Tổng cộng</td>
+                            <td className="px-4 py-2 text-right text-sm font-bold text-blue-700">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getExpenseObjectDetail(selectedExpenseObjectId).totalAmount)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowCostDetailModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
