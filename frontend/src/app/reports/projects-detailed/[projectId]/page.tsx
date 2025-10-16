@@ -113,6 +113,7 @@ export default function ProjectDetailedReportDetailPage() {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
   const [expenseQuotes, setExpenseQuotes] = useState<any[]>([])
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
+  const [expenseObjectNames, setExpenseObjectNames] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     checkUser()
@@ -213,6 +214,19 @@ export default function ProjectDetailedReportDetailPage() {
         .order('expense_date', { ascending: false })
 
       setExpenseQuotes(projectExpenseQuotesData || [])
+
+      // Fetch expense objects for name mapping
+      const { data: expenseObjectsRows } = await supabase
+        .from('expense_objects')
+        .select('id, name')
+
+      if (Array.isArray(expenseObjectsRows)) {
+        const map = new Map<string, string>()
+        expenseObjectsRows.forEach((r: any) => {
+          if (r?.id) map.set(r.id, r.name || '')
+        })
+        setExpenseObjectNames(map)
+      }
 
       // Resolve employee full names via employees.user_id -> users.full_name
       const employeeIds = Array.from(new Set([
@@ -387,6 +401,61 @@ export default function ProjectDetailedReportDetailPage() {
   const actualProfit = totalInvoices - totalExpenses  // Lợi nhuận = Hóa đơn - Chi phí dự án
   
   const profitVariance = actualProfit - plannedProfit
+
+  // Efficiency and management cost adjustment
+  const normalizeLower = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  // Detect management expense object ids by name contains 'quản lý'
+  const managementObjectIds = useMemo(() => {
+    const ids: string[] = []
+    expenseObjectNames.forEach((name, id) => {
+      const n = normalizeLower(name || '')
+      if (n.includes('quan ly')) ids.push(id)
+    })
+    return ids
+  }, [expenseObjectNames])
+
+  // Planned management cost from project_expenses_quote (approved):
+  // Prefer expense_object_totals for management ids, else components_pct per invoice item, else fallback expense_object_id match
+  const approvedPlannedManagementCost = useMemo(() => {
+    if (!managementObjectIds || managementObjectIds.length === 0) return 0
+    let total = 0
+    ;((expenseQuotes || []) as any[])
+      .filter((eq: any) => eq.status === 'approved')
+      .forEach((eq: any) => {
+        let added = false
+        // 1) Direct totals per object
+        if (eq.expense_object_totals && typeof eq.expense_object_totals === 'object') {
+          managementObjectIds.forEach((mId) => {
+            if (mId in eq.expense_object_totals) {
+              total += Number((eq.expense_object_totals as any)[mId]) || 0
+              added = true
+            }
+          })
+        }
+        // 2) Components % per line item
+        if (!added && Array.isArray(eq.invoice_items)) {
+          eq.invoice_items.forEach((it: any) => {
+            const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || ((Number(it.unit_price ?? it.price ?? it.unitPrice) || 0) * (Number(it.quantity ?? it.qty) || 0))
+            const componentsPct = it.components_pct || {}
+            if (componentsPct && typeof componentsPct === 'object') {
+              managementObjectIds.forEach((mId) => {
+                const pct = Number((componentsPct as any)[mId]) || 0
+                if (pct > 0) {
+                  total += Math.round(lineTotal * pct / 100)
+                  added = true
+                }
+              })
+            }
+          })
+        }
+        // 3) Fallback: entire eq.amount belongs to management if its expense_object_id is management
+        if (!added && eq.expense_object_id && managementObjectIds.includes(eq.expense_object_id)) {
+          total += Number(eq.amount) || 0
+        }
+      })
+    return total
+  }, [expenseQuotes, managementObjectIds])
+  const efficiencyRatio = plannedProfit > 0 ? (actualProfit / plannedProfit) : 0
 
   // SO SÁNH CHI PHÍ THEO DANH MỤC (Thực tế vs Kế hoạch)
   const expenseComparison: ExpenseComparison[] = useMemo(() => {
@@ -588,16 +657,88 @@ export default function ProjectDetailedReportDetailPage() {
     return acc
   }, {} as { [key: string]: number })
 
-  // Pie chart for expense breakdown by employee
-  const expenseByEmployee = useMemo(() => {
-    return expenses.reduce((acc, expense) => {
-      if (expense.employee_id) {
-        const employeeName = employees.get(expense.employee_id) || `Nhân viên ${expense.employee_id.slice(0, 8)}...`
-        acc[employeeName] = (acc[employeeName] || 0) + expense.amount
+  // Expense breakdown by expense object (actual): supports invoice_items.components_pct and expense_object_totals
+  const expenseByObject = useMemo(() => {
+    const totals: { [key: string]: number } = {}
+    ;(expenses || []).forEach((exp: any) => {
+      let allocated = false
+      // 1) Use explicit totals if provided
+      if (exp.expense_object_totals && typeof exp.expense_object_totals === 'object') {
+        Object.entries(exp.expense_object_totals as Record<string, number>).forEach(([objId, amt]) => {
+          const key = objId || 'khac'
+          totals[key] = (totals[key] || 0) + (Number(amt) || 0)
+        })
+        allocated = true
       }
-      return acc
-    }, {} as { [key: string]: number })
-  }, [expenses, employees])
+      // 2) Use per-item components_pct if present
+      if (!allocated && Array.isArray(exp.invoice_items)) {
+        exp.invoice_items.forEach((it: any) => {
+          const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || ((Number(it.unit_price ?? it.price ?? it.unitPrice) || 0) * (Number(it.quantity ?? it.qty) || 0))
+          const componentsPct = it.components_pct || {}
+          if (componentsPct && typeof componentsPct === 'object') {
+            Object.entries(componentsPct as Record<string, number>).forEach(([objId, pct]) => {
+              const allocation = Math.round(lineTotal * (Number(pct) || 0) / 100)
+              const key = objId || 'khac'
+              totals[key] = (totals[key] || 0) + allocation
+            })
+            allocated = true
+          }
+        })
+      }
+      // 3) Fallback: single expense_object_id amount
+      if (!allocated) {
+        const key = exp.expense_object_id || 'khac'
+        totals[key] = (totals[key] || 0) + (Number(exp.amount) || 0)
+      }
+    })
+    return totals
+  }, [expenses])
+
+  // Planned by expense object (from project_expenses_quote): supports invoice_items.components_pct and expense_object_totals
+  const plannedByObject = useMemo(() => {
+    const totals: { [key: string]: number } = {}
+    ;((expenseQuotes || []) as any[])
+      .filter((eq: any) => eq.status === 'approved')
+      .forEach((eq: any) => {
+        let allocated = false
+        if (eq.expense_object_totals && typeof eq.expense_object_totals === 'object') {
+          Object.entries(eq.expense_object_totals as Record<string, number>).forEach(([objId, amt]) => {
+            const key = objId || 'khac'
+            totals[key] = (totals[key] || 0) + (Number(amt) || 0)
+          })
+          allocated = true
+        }
+        if (!allocated && Array.isArray(eq.invoice_items)) {
+          eq.invoice_items.forEach((it: any) => {
+            const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || ((Number(it.unit_price ?? it.price ?? it.unitPrice) || 0) * (Number(it.quantity ?? it.qty) || 0))
+            const componentsPct = it.components_pct || {}
+            if (componentsPct && typeof componentsPct === 'object') {
+              Object.entries(componentsPct as Record<string, number>).forEach(([objId, pct]) => {
+                const allocation = Math.round(lineTotal * (Number(pct) || 0) / 100)
+                const key = objId || 'khac'
+                totals[key] = (totals[key] || 0) + allocation
+              })
+              allocated = true
+            }
+          })
+        }
+        if (!allocated) {
+          const key = eq.expense_object_id || 'khac'
+          totals[key] = (totals[key] || 0) + (Number(eq.amount) || 0)
+        }
+      })
+    return totals
+  }, [expenseQuotes])
+
+  // Combined list of object ids for table
+  const combinedObjectIds = useMemo(() => {
+    const ids = new Set<string>([
+      ...Object.keys(plannedByObject || {}),
+      ...Object.keys(expenseByObject || {}),
+      ...Array.from(expenseObjectNames.keys())
+    ])
+    return Array.from(ids)
+  }, [plannedByObject, expenseByObject, expenseObjectNames])
 
   const expensePieData = {
     labels: Object.keys(expenseCategories).map(key => {
@@ -630,38 +771,39 @@ export default function ProjectDetailedReportDetailPage() {
     }]
   }
 
-  // Pie chart data for employee breakdown
-  const employeePieData = {
-    labels: Object.keys(expenseByEmployee),
-    datasets: [{
-      data: Object.values(expenseByEmployee),
-      backgroundColor: [
-        'rgba(255, 99, 132, 0.6)',
-        'rgba(54, 162, 235, 0.6)',
-        'rgba(255, 206, 86, 0.6)',
-        'rgba(75, 192, 192, 0.6)',
-        'rgba(153, 102, 255, 0.6)',
-        'rgba(255, 159, 64, 0.6)',
-        'rgba(199, 199, 199, 0.6)',
-        'rgba(83, 102, 255, 0.6)',
-        'rgba(255, 99, 255, 0.6)',
-        'rgba(99, 255, 132, 0.6)'
-      ],
-      borderColor: [
-        'rgba(255, 99, 132, 1)',
-        'rgba(54, 162, 235, 1)',
-        'rgba(255, 206, 86, 1)',
-        'rgba(75, 192, 192, 1)',
-        'rgba(153, 102, 255, 1)',
-        'rgba(255, 159, 64, 1)',
-        'rgba(199, 199, 199, 1)',
-        'rgba(83, 102, 255, 1)',
-        'rgba(255, 99, 255, 1)',
-        'rgba(99, 255, 132, 1)'
-      ],
-      borderWidth: 1
-    }]
-  }
+  // Pie chart data for expense objects and profit (show all objects)
+  const expenseObjectsAndProfitPieData = useMemo(() => {
+    const allObjectIds = Array.from(expenseObjectNames.keys())
+    const labels = [...allObjectIds.map(id => expenseObjectNames.get(id) || 'Khác'), 'Lợi nhuận']
+    const values = [
+      ...allObjectIds.map(id => expenseByObject[id] || 0),
+      Math.max(0, actualProfit)
+    ]
+    const colorsBase = [
+      'rgba(255, 99, 132, 0.6)',
+      'rgba(54, 162, 235, 0.6)',
+      'rgba(255, 206, 86, 0.6)',
+      'rgba(75, 192, 192, 0.6)',
+      'rgba(153, 102, 255, 0.6)',
+      'rgba(255, 159, 64, 0.6)',
+      'rgba(199, 199, 199, 0.6)',
+      'rgba(83, 102, 255, 0.6)',
+      'rgba(255, 99, 255, 0.6)',
+      'rgba(99, 255, 132, 0.6)'
+    ]
+    const borderBase = colorsBase.map(c => c.replace('0.6', '1'))
+    const backgroundColor = labels.map((_, i) => colorsBase[i % colorsBase.length])
+    const borderColor = labels.map((_, i) => borderBase[i % borderBase.length])
+    return {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor,
+        borderColor,
+        borderWidth: 1
+      }]
+    }
+  }, [expenseObjectNames, expenseByObject, actualProfit])
 
   if (loading) {
     return (
@@ -1030,15 +1172,15 @@ export default function ProjectDetailedReportDetailPage() {
               )}
             </div>
 
-            {/* Expense Pie Chart (by employee) */}
+            {/* Expense Objects and Profit Pie Chart */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3 mb-4">
                 <PieChart className="h-6 w-6 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Phân bổ Chi phí theo Nhân viên</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Phân bổ theo Đối tượng chi phí và Lợi nhuận</h3>
               </div>
-              {Object.keys(expenseByEmployee).length > 0 ? (
+              {(expenseObjectsAndProfitPieData.labels.length > 0) ? (
                 <Pie 
-                  data={employeePieData}
+                  data={expenseObjectsAndProfitPieData}
                   options={{
                     responsive: true,
                     plugins: {
@@ -1050,10 +1192,7 @@ export default function ProjectDetailedReportDetailPage() {
                           label: function(context) {
                             const label = context.label || ''
                             const value = context.parsed || 0
-                            const formatted = new Intl.NumberFormat('vi-VN', {
-                              style: 'currency',
-                              currency: 'VND'
-                            }).format(value)
+                            const formatted = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
                             return `${label}: ${formatted}`
                           }
                         }
@@ -1063,7 +1202,7 @@ export default function ProjectDetailedReportDetailPage() {
                 />
               ) : (
                 <div className="flex items-center justify-center h-64 text-gray-500">
-                  Chưa có dữ liệu chi phí theo nhân viên
+                  Chưa có dữ liệu đối tượng chi phí
                 </div>
               )}
             </div>
@@ -1421,7 +1560,7 @@ export default function ProjectDetailedReportDetailPage() {
           {/* Summary Section */}
           <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl shadow-sm border border-teal-200 p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Tóm tắt Báo cáo</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="bg-white rounded-lg p-4">
                 <p className="text-sm text-gray-600 mb-1">Tổng Doanh thu</p>
                 <p className="text-xl font-bold text-blue-600">{formatCurrency(totalInvoices)}</p>
@@ -1441,6 +1580,24 @@ export default function ProjectDetailedReportDetailPage() {
                 </p>
                 <p className="text-xs text-gray-500">
                   Biên lợi nhuận: {totalInvoices > 0 ? ((actualProfit / totalInvoices) * 100).toFixed(1) : 0}%
+                </p>
+              </div>
+
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-sm text-gray-600 mb-1">Hiệu suất công trình</p>
+                <p className="text-xl font-bold text-purple-600">
+                  {plannedProfit > 0 ? (efficiencyRatio * 100).toFixed(2) : '0.00'}%
+                </p>
+                <p className="text-xs text-gray-500">= Lợi nhuận thực tế / Lợi nhuận kế hoạch</p>
+              </div>
+
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-sm text-gray-600 mb-1">Quản lý nhận được</p>
+                <p className="text-xl font-bold text-teal-600">
+                  {formatCurrency(Math.round(approvedPlannedManagementCost * efficiencyRatio))}
+                </p>
+                <p className="text-xs text-gray-500">
+                  = Chi phí QL kế hoạch × Hiệu suất
                 </p>
               </div>
             </div>
@@ -1466,7 +1623,118 @@ export default function ProjectDetailedReportDetailPage() {
                     {formatCurrency(profitVariance)}
                   </span>
                 </li>
+                <li>
+                  • Chi phí quản lý dự án (điều chỉnh theo hiệu suất):
+                  <span className="ml-2 font-semibold text-purple-700">
+                    {formatCurrency(Math.round(approvedPlannedManagementCost * efficiencyRatio))}
+                  </span>
+                  <span className="ml-2 text-xs text-gray-500">
+                    (Kế hoạch: {formatCurrency(approvedPlannedManagementCost)} × Hiệu suất {plannedProfit > 0 ? (efficiencyRatio * 100).toFixed(2) : '0.00'}%)
+                  </span>
+                </li>
               </ul>
+            </div>
+          </div>
+
+          {/* Raw Data and Formulas */}
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Dữ liệu và công thức (từ DB)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <div className="p-3 bg-gray-50 rounded">
+                  <div className="text-sm text-gray-600">Tổng báo giá (quotes)</div>
+                  <div className="text-lg font-semibold text-gray-900">{formatCurrency(totalQuotes)}</div>
+                  <div className="text-xs text-gray-500">status &lt;&gt; 'rejected'</div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded">
+                  <div className="text-sm text-gray-600">Tổng chi phí kế hoạch (project_expenses_quote)</div>
+                  <div className="text-lg font-semibold text-blue-700">{formatCurrency(totalExpenseQuotes)}</div>
+                  <div className="text-xs text-gray-500">status = 'approved'</div>
+                </div>
+                <div className="p-3 bg-blue-50 rounded">
+                  <div className="text-sm text-blue-800">Lợi nhuận kế hoạch</div>
+                  <div className="text-lg font-bold text-blue-700">{formatCurrency(plannedProfit)}</div>
+                  <div className="text-xs text-blue-700">= Tổng báo giá − Tổng chi phí kế hoạch</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="p-3 bg-gray-50 rounded">
+                  <div className="text-sm text-gray-600">Tổng hóa đơn (invoices)</div>
+                  <div className="text-lg font-semibold text-gray-900">{formatCurrency(totalInvoices)}</div>
+                  <div className="text-xs text-gray-500">status in ('sent','paid')</div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded">
+                  <div className="text-sm text-gray-600">Tổng chi phí thực tế (project_expenses)</div>
+                  <div className="text-lg font-semibold text-red-700">{formatCurrency(totalExpenses)}</div>
+                  <div className="text-xs text-gray-500">status = 'approved'</div>
+                </div>
+                <div className="p-3 bg-green-50 rounded">
+                  <div className="text-sm text-green-800">Lợi nhuận thực tế</div>
+                  <div className={`text-lg font-bold ${actualProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(actualProfit)}</div>
+                  <div className="text-xs text-green-700">= Tổng hóa đơn − Tổng chi phí thực tế</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-3 bg-purple-50 rounded">
+                <div className="text-sm text-purple-800">Hiệu suất công trình</div>
+                <div className="text-lg font-bold text-purple-700">{plannedProfit > 0 ? (efficiencyRatio * 100).toFixed(2) : '0.00'}%</div>
+                <div className="text-xs text-purple-700">= Lợi nhuận thực tế / Lợi nhuận kế hoạch</div>
+              </div>
+              <div className="p-3 bg-orange-50 rounded">
+                <div className="text-sm text-orange-800">Chi phí quản lý (kế hoạch)</div>
+                <div className="text-lg font-bold text-orange-700">{formatCurrency(approvedPlannedManagementCost)}</div>
+                <div className="text-xs text-orange-700">lọc mô tả: chứa "quản lý/ql/quản trị"</div>
+              </div>
+              <div className="p-3 bg-teal-50 rounded">
+                <div className="text-sm text-teal-800">Quản lý nhận được (điều chỉnh)</div>
+                <div className="text-lg font-bold text-teal-700">{formatCurrency(Math.round(approvedPlannedManagementCost * efficiencyRatio))}</div>
+                <div className="text-xs text-teal-700">= Chi phí QL kế hoạch × Hiệu suất</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Planned vs Actual by Expense Object */}
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900">Chi phí theo Đối tượng: Kế hoạch vs Thực tế</h3>
+              <p className="text-gray-600">Nhóm theo đối tượng chi phí, kèm chênh lệch</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Đối tượng</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Kế hoạch</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thực tế</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Chênh lệch</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">%</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {combinedObjectIds.map((id) => {
+                    const name = expenseObjectNames.get(id) || (id === 'khac' ? 'Khác' : id)
+                    const planned = plannedByObject[id] || 0
+                    const actual = expenseByObject[id] || 0
+                    const variance = actual - planned
+                    const variancePct = planned > 0 ? (variance / planned) * 100 : 0
+                    return (
+                      <tr key={id} className={`${variance > 0 ? 'bg-red-50' : variance < 0 ? 'bg-green-50' : 'bg-white'}`}>
+                        <td className="px-6 py-3 text-sm text-gray-900">{name}</td>
+                        <td className="px-6 py-3 text-right text-sm text-gray-900">{formatCurrency(planned)}</td>
+                        <td className="px-6 py-3 text-right text-sm font-semibold text-gray-900">{formatCurrency(actual)}</td>
+                        <td className={`px-6 py-3 text-right text-sm font-bold ${variance > 0 ? 'text-red-600' : variance < 0 ? 'text-green-600' : 'text-gray-600'}`}>{variance > 0 ? '+' : ''}{formatCurrency(variance)}</td>
+                        <td className="px-6 py-3 text-center text-sm">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variance > 0 ? 'bg-red-100 text-red-800' : variance < 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {variance > 0 ? '↑' : variance < 0 ? '↓' : '='} {Math.abs(variancePct).toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 

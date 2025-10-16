@@ -697,7 +697,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               return directObjectTotals
             }
             
-            return null
+            return undefined
           })(),
           // Only save invoice items if there are actual product details, not just object totals
           invoice_items: (() => {
@@ -787,7 +787,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               return directObjectTotals
             }
             
-            return null
+            return undefined
           })(),
           // Only save invoice items if there are actual product details, not just object totals
           invoice_items: (() => {
