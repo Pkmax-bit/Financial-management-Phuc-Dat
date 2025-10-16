@@ -245,11 +245,31 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         data = await apiGet(`${API_BASE_URL}/api/expense-objects/public?active_only=true`)
         console.log('✅ Public endpoint succeeded for options')
       }
+      // Map and sort options by preferred order
+      const normalizeLower = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+      const preferredOrder = [
+        'quan ly',       // quản lý
+        'thiet ke',      // thiết kế
+        'san xuat',      // sản xuất
+        'van chuyen',    // vận chuyển
+        'lap dat',       // lắp đặt
+        'nha dau tu'     // nhà đầu tư
+      ]
       const opts = Array.isArray(data) ? data.map((o: any) => ({ id: o.id, name: o.name })) : []
-      setExpenseObjectsOptions(opts)
+      const sortedOpts = [...opts].sort((a, b) => {
+        const na = normalizeLower(a.name)
+        const nb = normalizeLower(b.name)
+        const ia = preferredOrder.indexOf(na)
+        const ib = preferredOrder.indexOf(nb)
+        const ra = ia === -1 ? Number.MAX_SAFE_INTEGER : ia
+        const rb = ib === -1 ? Number.MAX_SAFE_INTEGER : ib
+        if (ra !== rb) return ra - rb
+        return a.name.localeCompare(b.name, 'vi')
+      })
+      setExpenseObjectsOptions(sortedOpts)
       // Auto-select all expense objects by default (only if no current selection)
-      if (opts.length > 0 && selectedExpenseObjectIds.length === 0) {
-        const allIds = opts.map(o => o.id)
+      if (sortedOpts.length > 0 && selectedExpenseObjectIds.length === 0) {
+        const allIds = sortedOpts.map(o => o.id)
         setSelectedExpenseObjectIds(allIds)
         console.log('✅ Auto-selected all expense objects:', allIds.length, 'objects')
       } else if (opts.length > 0 && selectedExpenseObjectIds.length > 0) {
@@ -863,6 +883,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       employee_id: '',
       category: 'planned',
       description: '',
+      expense_object_id: '',
       planned_amount: 0,
       actual_amount: 0,
       expense_date: new Date().toISOString().split('T')[0],
