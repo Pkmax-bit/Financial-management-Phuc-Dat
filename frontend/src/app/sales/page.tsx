@@ -44,8 +44,7 @@ interface User {
   email?: string
 }
 
-function SalesPageContent() {
-  const [activeTab, setActiveTab] = useState('overview')
+function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
@@ -56,19 +55,12 @@ function SalesPageContent() {
   const [showQuickGuide, setShowQuickGuide] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   useEffect(() => {
     checkUser()
   }, [])
 
-  // Handle tab parameter from URL
-  useEffect(() => {
-    const tab = searchParams.get('tab')
-    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'customers', 'variance'].includes(tab)) {
-      setActiveTab(tab)
-    }
-  }, [searchParams])
+  // Handle tab parameter from URL - removed to fix runtime error
 
   useEffect(() => {
     if (shouldOpenCreateModal && activeTab === 'quotes') {
@@ -641,10 +633,24 @@ function SalesPageContent() {
   )
 }
 
+function SalesPageWithParams() {
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState('overview')
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'customers', 'variance'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
+
+  return <SalesPageContent activeTab={activeTab} setActiveTab={setActiveTab} />
+}
+
 export default function SalesPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <SalesPageContent />
+      <SalesPageWithParams />
     </Suspense>
   )
 }

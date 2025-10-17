@@ -16,8 +16,9 @@ import {
   HelpCircle,
   X
 } from 'lucide-react'
-import CreateInvoiceSidebar from './CreateInvoiceSidebar'
+import CreateInvoiceSidebarFullscreen from './CreateInvoiceSidebarFullscreen'
 import EditInvoiceModal from './EditInvoiceModal'
+import PaymentModal from './PaymentModal'
 import { apiGet, apiPost, apiPut } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
@@ -75,6 +76,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null)
 
   useEffect(() => {
     fetchInvoices()
@@ -203,6 +206,21 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const handleEditSuccess = () => {
     fetchInvoices() // Refresh the invoices list
     closeEditModal()
+  }
+
+  const openPaymentModal = (invoice: Invoice) => {
+    setPaymentInvoice(invoice)
+    setShowPaymentModal(true)
+  }
+
+  const closePaymentModal = () => {
+    setShowPaymentModal(false)
+    setPaymentInvoice(null)
+  }
+
+  const handlePaymentSuccess = () => {
+    fetchInvoices() // Refresh the invoices list
+    closePaymentModal()
   }
 
   const formatCurrency = (amount: number) => {
@@ -592,7 +610,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     
                     {(invoice.payment_status === 'pending' || invoice.payment_status === 'partial') && (
                       <button 
-                        onClick={() => recordPayment(invoice.id, invoice.total_amount - invoice.paid_amount)}
+                        onClick={() => openPaymentModal(invoice)}
                         className="text-black hover:text-green-600" 
                         title="Ghi nhận thanh toán"
                       >
@@ -640,7 +658,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       </div>
 
       {/* Create Invoice Sidebar */}
-      <CreateInvoiceSidebar
+      <CreateInvoiceSidebarFullscreen
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => {
@@ -803,6 +821,15 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         onSuccess={handleEditSuccess}
         invoice={selectedInvoice}
       />
+
+      {paymentInvoice && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={closePaymentModal}
+          onSuccess={handlePaymentSuccess}
+          invoice={paymentInvoice}
+        />
+      )}
     </div>
   )
 }

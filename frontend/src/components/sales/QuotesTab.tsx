@@ -19,7 +19,7 @@ import {
   Package,
   CheckCircle2
 } from 'lucide-react'
-import CreateQuoteSidebar from './CreateQuoteSidebar'
+import CreateQuoteSidebarFullscreen from './CreateQuoteSidebarFullscreen'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
@@ -562,7 +562,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         )}
       </div>
 
-      <CreateQuoteSidebar
+      <CreateQuoteSidebarFullscreen
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => {
