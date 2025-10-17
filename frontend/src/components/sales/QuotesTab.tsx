@@ -620,6 +620,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     <button 
                       className="text-black hover:text-black" 
                       title="Xem chi tiết"
+                      onClick={() => window.open(`/sales/quotes/${quote.id}`, '_blank')}
                     >
                       <Eye className="h-4 w-4" />
                     </button>

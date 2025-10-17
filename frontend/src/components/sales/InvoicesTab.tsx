@@ -590,6 +590,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     <button 
                       className="text-black hover:text-black" 
                       title="Xem chi tiết"
+                      onClick={() => window.open(`/sales/invoices/${invoice.id}`, '_blank')}
                     >
                       <Eye className="h-4 w-4" />
                     </button>

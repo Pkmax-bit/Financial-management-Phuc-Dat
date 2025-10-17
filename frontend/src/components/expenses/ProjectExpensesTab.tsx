@@ -800,9 +800,7 @@ return (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Dự án
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {viewMode === 'all' ? 'Loại' : 'Chi tiết'}
-                </th>
+                {/* Loại - removed per request; keep detailed in other views if needed */}
                 {/* Kế hoạch - Show in 'all' and 'planned' */}
                 {(viewMode === 'all' || viewMode === 'planned') && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -842,9 +840,7 @@ return (
                       {projectsMap.get(project.project_id)?.project_code || 'N/A'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    Cộng dồn
-                  </td>
+                  {/* Loại column removed */}
                   {/* Kế hoạch - Show in 'all' and 'planned' */}
                   {(viewMode === 'all' || viewMode === 'planned') && (
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
