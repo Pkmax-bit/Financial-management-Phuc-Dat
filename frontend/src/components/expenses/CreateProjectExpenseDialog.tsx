@@ -267,11 +267,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         return a.name.localeCompare(b.name, 'vi')
       })
       setExpenseObjectsOptions(sortedOpts)
-      // Auto-select all expense objects by default (only if no current selection)
+      // Auto-select ONLY default expense objects by default (Management, Design, Transport, Supplier, Labor)
       if (sortedOpts.length > 0 && selectedExpenseObjectIds.length === 0) {
-        const allIds = sortedOpts.map(o => o.id)
-        setSelectedExpenseObjectIds(allIds)
-        console.log('✅ Auto-selected all expense objects:', allIds.length, 'objects')
+        const normalizeLowerNoDiacritics = (s: string) => (s || '').normalize('NFD').replace(/[^\w\s]/g, '').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+        const defaultNames = new Set([
+          'quan ly',        // Quản lý
+          'thiet ke',       // Thiết kế
+          'van chuyen',     // Vận chuyển
+          'nha cung cap',   // Nhà cung cấp
+          'nhan cong'       // Nhân công
+        ])
+        const defaultIds = sortedOpts
+          .filter(o => defaultNames.has(normalizeLowerNoDiacritics(o.name)))
+          .map(o => o.id)
+        setSelectedExpenseObjectIds(defaultIds)
+        console.log('✅ Auto-selected default expense objects:', defaultIds.length, 'objects')
       } else if (opts.length > 0 && selectedExpenseObjectIds.length > 0) {
         console.log('📝 Keeping existing expense object selection:', selectedExpenseObjectIds.length, 'objects')
       }
@@ -1318,14 +1328,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         onChange={setSelectedExpenseObjectIds}
                         placeholder="Chọn nhiều đối tượng chi phí để phân bổ"
                       />
-                      <div className="text-xs text-gray-500">
-                        Chọn 1 đối tượng làm chính (tuỳ chọn) để lưu vào trường chính.
-                      </div>
-                      <ExpenseObjectSelector
-                        value={formData.expense_object_id}
-                        onChange={(value) => setFormData({ ...formData, expense_object_id: value })}
-                        placeholder="Đối tượng chính (tuỳ chọn)"
-                      />
+                      {/* Removed primary object optional selection per request */}
                     </div>
                   </div>
 
