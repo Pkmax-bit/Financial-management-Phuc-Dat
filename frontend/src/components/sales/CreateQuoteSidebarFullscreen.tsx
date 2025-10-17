@@ -372,7 +372,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     setSelectedItemIndex(null)
   }
 
-  const handleSubmit = async (sendImmediately = false) => {
+  const handleSubmit = async () => {
     setSubmitting(true)
     
     try {
@@ -422,7 +422,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         tax_amount: formData.tax_amount,
         total_amount: formData.total_amount,
         currency: formData.currency,
-        status: sendImmediately ? 'sent' : formData.status,
+        status: formData.status,
         notes: formData.notes || null,
         terms: formData.terms || null,
         created_by
@@ -466,6 +466,39 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           // Don't throw error here, quote was created successfully
         }
       }
+
+      // Show success notification
+      const successMessage = document.createElement('div')
+      successMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #27ae60; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+        ">
+          ✅ Báo giá đã được tạo thành công!
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(successMessage)
+      
+      // Auto remove success message after 5 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage)
+        }
+      }, 5000)
 
       onSuccess()
       onClose()
@@ -827,18 +860,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               Hủy
             </button>
             <button
-              onClick={() => handleSubmit(false)}
-              disabled={submitting}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-medium hover:bg-gray-700 disabled:opacity-50"
-            >
-              {submitting ? 'Đang tạo...' : 'Tạo báo giá'}
-            </button>
-            <button
-              onClick={() => handleSubmit(true)}
+              onClick={() => handleSubmit()}
               disabled={submitting}
               className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
             >
-              {submitting ? 'Đang gửi...' : 'Gửi báo giá'}
+              {submitting ? 'Đang tạo...' : 'Tạo báo giá'}
             </button>
           </div>
         </div>

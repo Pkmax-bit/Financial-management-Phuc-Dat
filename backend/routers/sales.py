@@ -20,6 +20,7 @@ from utils.permissions import require_permission, Permission
 from services.supabase_client import get_supabase_client
 from services.journal_service import journal_service
 from services.project_validation_service import ProjectValidationService
+from services.email_service import email_service
 
 router = APIRouter()
 
@@ -337,19 +338,50 @@ async def send_quote_to_customer(
         # Update quote status to sent
         update_data = {
             "status": "sent",
-            "sent_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         }
         
         result = supabase.table("quotes").update(update_data).eq("id", quote_id).execute()
         
         if result.data:
-            # TODO: Add email sending functionality
-            # background_tasks.add_task(send_quote_email, quote_data, customer_email)
+            # Get customer information for email
+            customer_result = supabase.table("customers").select("name, email").eq("id", quote_result.data[0]["customer_id"]).execute()
+            
+            email_sent = False
+            email_error = None
+            
+            if customer_result.data:
+                customer = customer_result.data[0]
+                customer_name = customer.get("name", "Khách hàng")
+                customer_email = customer.get("email")
+                
+                if customer_email:
+                    try:
+                        # Send email in background
+                        background_tasks.add_task(
+                            email_service.send_quote_email,
+                            quote_result.data[0],
+                            customer_email,
+                            customer_name
+                        )
+                        email_sent = True
+                        print(f"📧 Quote email queued for {customer_email}")
+                    except Exception as e:
+                        email_error = str(e)
+                        print(f"❌ Failed to queue email: {e}")
+                else:
+                    email_error = "Customer email not found"
+                    print("⚠️ Customer email not found, skipping email send")
+            else:
+                email_error = "Customer not found"
+                print("⚠️ Customer not found, skipping email send")
             
             return {
                 "message": "Quote sent successfully",
-                "quote": result.data[0]
+                "quote": result.data[0],
+                "email_sent": email_sent,
+                "email_error": email_error,
+                "customer_email": customer_result.data[0].get("email") if customer_result.data else None
             }
         
         raise HTTPException(

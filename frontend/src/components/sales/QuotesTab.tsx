@@ -110,27 +110,121 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
   const sendQuote = async (quoteId: string) => {
     try {
-      console.log('🔍 Sending quote:', quoteId)
+      console.log('🔍 Sending quote email:', quoteId)
       
-      // Update quote status to 'sent' using Supabase
-      const { error } = await supabase
-        .from('quotes')
-        .update({ 
-          status: 'sent',
-          sent_at: new Date().toISOString()
-        })
-        .eq('id', quoteId)
+      // Show loading state
+      const loadingMessage = document.createElement('div')
+      loadingMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #3498db; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+          📧 Đang gửi email báo giá...
+        </div>
+      `
+      document.body.appendChild(loadingMessage)
       
-      if (error) {
-        console.error('❌ Supabase error sending quote:', error)
-        throw error
+      // Call API to send quote email
+      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        }
+      })
+      
+      // Remove loading message
+      document.body.removeChild(loadingMessage)
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to send quote email')
       }
       
-      console.log('🔍 Quote sent successfully')
+      const result = await response.json()
+      console.log('🔍 Quote email sent successfully:', result)
+      
+      // Show success notification with email details
+      const successMessage = document.createElement('div')
+      const emailStatus = result.email_sent ? 
+        `✅ Email báo giá đã được gửi thành công đến ${result.customer_email || 'khách hàng'}!` :
+        `⚠️ Báo giá đã được cập nhật nhưng không thể gửi email: ${result.email_error || 'Lỗi không xác định'}`
+      
+      successMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: ${result.email_sent ? '#27ae60' : '#f39c12'}; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+          max-width: 400px;
+        ">
+          ${emailStatus}
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(successMessage)
+      
+      // Auto remove success message after 7 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage)
+        }
+      }, 7000)
+      
       fetchQuotes() // Refresh list
-      // Show success message
     } catch (error) {
-      console.error('❌ Error sending quote:', error)
+      console.error('❌ Error sending quote email:', error)
+      
+      // Show error notification
+      const errorMessage = document.createElement('div')
+      errorMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #e74c3c; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+        ">
+          ❌ Lỗi gửi email: ${(error as Error).message}
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(errorMessage)
+      
+      // Auto remove error message after 8 seconds
+      setTimeout(() => {
+        if (document.body.contains(errorMessage)) {
+          document.body.removeChild(errorMessage)
+        }
+      }, 8000)
     }
   }
 
