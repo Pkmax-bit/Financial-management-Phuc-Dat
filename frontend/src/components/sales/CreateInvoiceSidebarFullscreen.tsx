@@ -50,6 +50,21 @@ interface CreateInvoiceSidebarProps {
   onSuccess: () => void
 }
 
+// Helper function to convert category names to Vietnamese with diacritics
+const getCategoryDisplayName = (categoryName: string | undefined) => {
+  if (!categoryName) return 'Khác'
+  
+  const categoryMap: Record<string, string> = {
+    'Thiet bi dien tu': 'Thiết bị điện tử',
+    'Noi that': 'Nội thất',
+    'Dich vu': 'Dịch vụ',
+    'Thiet bi van phong': 'Thiết bị văn phòng',
+    'Phan mem': 'Phần mềm'
+  }
+  
+  return categoryMap[categoryName] || categoryName
+}
+
 export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateInvoiceSidebarProps) {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -181,7 +196,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       // Use Supabase client directly to get products
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select(`
+          *,
+          product_categories:category_id(name)
+        `)
+        .eq('is_active', true)
         .order('name')
         .limit(50)
       
@@ -192,8 +211,20 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       
       console.log('🔍 Products data from database:', data)
       
-      // If no data from database, use sample data
-      if (!data || data.length === 0) {
+      if (data && data.length > 0) {
+        // Transform data to match the expected format
+        const transformedProducts = data.map(product => ({
+          id: product.id,
+          name: product.name,
+          description: product.description || '',
+          unit: product.unit || 'cái',
+          unit_price: product.price || 0,
+          category: getCategoryDisplayName(product.product_categories?.name) || 'Khác'
+        }))
+        setProducts(transformedProducts)
+        console.log('🔍 Using real products data:', transformedProducts)
+      } else {
+        // If no data from database, use sample data
         const sampleProducts = [
           {
             id: '1',
@@ -238,8 +269,6 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         ]
         setProducts(sampleProducts)
         console.log('🔍 Using sample products data:', sampleProducts)
-      } else {
-        setProducts(data)
       }
     } catch (error) {
       console.error('❌ Error fetching products:', error)
@@ -661,7 +690,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                             onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
                             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                             min="0"
-                            step="0.01"
+                            step="1"
                           />
                         </div>
                         <div className="col-span-1">

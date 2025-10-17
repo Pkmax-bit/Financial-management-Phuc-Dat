@@ -52,6 +52,21 @@ interface CreateQuoteSidebarProps {
   onSuccess: () => void
 }
 
+// Helper function to convert category names to Vietnamese with diacritics
+const getCategoryDisplayName = (categoryName: string | undefined) => {
+  if (!categoryName) return 'Khác'
+  
+  const categoryMap: Record<string, string> = {
+    'Thiet bi dien tu': 'Thiết bị điện tử',
+    'Noi that': 'Nội thất',
+    'Dich vu': 'Dịch vụ',
+    'Thiet bi van phong': 'Thiết bị văn phòng',
+    'Phan mem': 'Phần mềm'
+  }
+  
+  return categoryMap[categoryName] || categoryName
+}
+
 export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateQuoteSidebarProps) {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -176,10 +191,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setLoadingProducts(true)
       console.log('🔍 Fetching products from database...')
       
-      // Use Supabase client directly to get products
+      // Use Supabase client directly to get products with categories
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select(`
+          *,
+          product_categories:category_id(name)
+        `)
+        .eq('is_active', true)
         .order('name')
         .limit(50)
       
@@ -190,8 +209,20 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       
       console.log('🔍 Products data from database:', data)
       
-      // If no data from database, use sample data
-      if (!data || data.length === 0) {
+      if (data && data.length > 0) {
+        // Transform data to match the expected format
+        const transformedProducts = data.map(product => ({
+          id: product.id,
+          name: product.name,
+          description: product.description || '',
+          unit: product.unit || 'cái',
+          unit_price: product.price || 0,
+          category: getCategoryDisplayName(product.product_categories?.name) || 'Khác'
+        }))
+        setProducts(transformedProducts)
+        console.log('🔍 Using real products data:', transformedProducts)
+      } else {
+        // If no data from database, use sample data
         const sampleProducts = [
           {
             id: '1',
@@ -236,8 +267,6 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         ]
         setProducts(sampleProducts)
         console.log('🔍 Using sample products data:', sampleProducts)
-      } else {
-        setProducts(data)
       }
     } catch (error) {
       console.error('❌ Error fetching products:', error)
@@ -347,6 +376,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     setSubmitting(true)
     
     try {
+      // Validate required fields
+      if (!formData.quote_number.trim()) {
+        throw new Error('Vui lòng nhập số báo giá')
+      }
+      if (!formData.customer_id) {
+        throw new Error('Vui lòng chọn khách hàng')
+      }
+      if (!formData.valid_until) {
+        throw new Error('Vui lòng chọn ngày hết hạn')
+      }
+      if (items.length === 0 || items.every(item => !item.name_product.trim())) {
+        throw new Error('Vui lòng thêm ít nhất một sản phẩm')
+      }
       // Get current user for created_by
       const { data: { user } } = await supabase.auth.getUser()
       
@@ -363,11 +405,17 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         }
       }
       
+      // Ensure created_by is null if not found, not empty string
+      if (!created_by) {
+        created_by = null
+      }
+      
+      // Create quote directly in Supabase
       const quoteData = {
         quote_number: formData.quote_number,
-        customer_id: formData.customer_id,
+        customer_id: formData.customer_id || null,
         project_id: formData.project_id || null,
-        issue_date: formData.issue_date,
+        issue_date: formData.issue_date || null,
         valid_until: formData.valid_until,
         subtotal: formData.subtotal,
         tax_rate: formData.tax_rate,
@@ -375,10 +423,32 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         total_amount: formData.total_amount,
         currency: formData.currency,
         status: sendImmediately ? 'sent' : formData.status,
-        notes: formData.notes,
-        terms: formData.terms,
-        created_by,
-        items: items.map(item => ({
+        notes: formData.notes || null,
+        terms: formData.terms || null,
+        created_by
+      }
+
+      // Debug logging
+      console.log('Creating quote with data:', quoteData)
+      
+      // Insert quote
+      const { data: quote, error: quoteError } = await supabase
+        .from('quotes')
+        .insert(quoteData)
+        .select()
+        .single()
+
+      if (quoteError) {
+        console.error('Quote creation error:', quoteError)
+        throw new Error(`Lỗi tạo báo giá: ${quoteError.message}`)
+      }
+      
+      console.log('Quote created successfully:', quote)
+
+      // Insert quote items
+      if (items.length > 0) {
+        const quoteItems = items.map(item => ({
+          quote_id: quote.id,
           name_product: item.name_product,
           description: item.description,
           quantity: item.quantity,
@@ -386,13 +456,15 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           unit_price: item.unit_price,
           total_price: item.total_price
         }))
-      }
 
-      const result = await apiPost('/api/sales/quotes', quoteData)
-        
-      // If sending immediately, also send the quote
-      if (sendImmediately) {
-        await apiPost(`/api/sales/quotes/${result.id}/send`, {})
+        const { error: itemsError } = await supabase
+          .from('quote_items')
+          .insert(quoteItems)
+
+        if (itemsError) {
+          console.error('Error creating quote items:', itemsError)
+          // Don't throw error here, quote was created successfully
+        }
       }
 
       onSuccess()
@@ -638,7 +710,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
                             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                             min="0"
-                            step="0.01"
+                            step="1"
                           />
                         </div>
                         <div className="col-span-1">
@@ -759,7 +831,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               disabled={submitting}
               className="px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-medium hover:bg-gray-700 disabled:opacity-50"
             >
-              {submitting ? 'Đang lưu...' : 'Lưu nháp'}
+              {submitting ? 'Đang tạo...' : 'Tạo báo giá'}
             </button>
             <button
               onClick={() => handleSubmit(true)}

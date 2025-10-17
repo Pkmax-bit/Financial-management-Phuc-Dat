@@ -209,19 +209,46 @@ async def create_quote(
         tax_amount = quote_data.subtotal * (quote_data.tax_rate / 100)
         total_amount = quote_data.subtotal + tax_amount
         
+        # Get employee ID for created_by
+        employee_result = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
+        created_by = employee_result.data[0]["id"] if employee_result.data else None
+        
         # Create quote record
         quote_dict = quote_data.dict()
         quote_dict["id"] = str(uuid.uuid4())
         quote_dict["tax_amount"] = tax_amount
         quote_dict["total_amount"] = total_amount
-        quote_dict["created_by"] = current_user.id
+        quote_dict["created_by"] = created_by
         quote_dict["created_at"] = datetime.utcnow().isoformat()
         quote_dict["updated_at"] = datetime.utcnow().isoformat()
         
         result = supabase.table("quotes").insert(quote_dict).execute()
         
         if result.data:
-            return Quote(**result.data[0])
+            quote = result.data[0]
+            
+            # Handle quote items if provided
+            if quote_data.items:
+                quote_items = []
+                for item in quote_data.items:
+                    quote_item = {
+                        "id": str(uuid.uuid4()),
+                        "quote_id": quote["id"],
+                        "product_service_id": item.get("product_service_id"),
+                        "name_product": item.get("name_product", ""),
+                        "description": item.get("description", ""),
+                        "quantity": item.get("quantity", 0),
+                        "unit": item.get("unit", ""),
+                        "unit_price": item.get("unit_price", 0),
+                        "total_price": item.get("total_price", 0),
+                        "created_at": datetime.utcnow().isoformat()
+                    }
+                    quote_items.append(quote_item)
+                
+                if quote_items:
+                    supabase.table("quote_items").insert(quote_items).execute()
+            
+            return Quote(**quote)
         
         raise HTTPException(
             status_code=400,

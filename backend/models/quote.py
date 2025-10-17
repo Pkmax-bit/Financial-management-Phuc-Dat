@@ -49,14 +49,19 @@ class QuoteCreate(BaseModel):
     quote_number: str
     customer_id: str
     project_id: Optional[str] = None
-    issue_date: date
+    issue_date: Optional[date] = None
     valid_until: date
     subtotal: float
     tax_rate: float = 0.0
     tax_amount: float = 0.0
     total_amount: float
     currency: str = "VND"
+    status: str = "draft"
     notes: Optional[str] = None
+    terms: Optional[str] = None
+    discount_rate: float = 0.0
+    discount_amount: float = 0.0
+    items: Optional[List[dict]] = None
 
 class QuoteUpdate(BaseModel):
     """Quote update model"""
