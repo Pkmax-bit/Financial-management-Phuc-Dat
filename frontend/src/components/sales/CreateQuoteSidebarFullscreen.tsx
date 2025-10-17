@@ -26,6 +26,13 @@ interface Customer {
   phone?: string
 }
 
+interface Employee {
+  id: string
+  name: string
+  email?: string
+  user_id?: string
+}
+
 interface QuoteItem {
   id?: string
   product_service_id?: string
@@ -71,9 +78,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
@@ -83,6 +92,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     quote_number: '',
     customer_id: '',
     project_id: '',
+    created_by: '',
     issue_date: new Date().toISOString().split('T')[0],
     valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     subtotal: 0,
@@ -92,8 +102,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     currency: 'VND',
     status: 'draft',
     notes: '',
-    terms: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.',
-    created_by: ''
+    terms: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
   })
 
   const [items, setItems] = useState<QuoteItem[]>([
@@ -104,6 +113,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (isOpen) {
       fetchCustomers()
       fetchProducts()
+      fetchEmployees()
       generateQuoteNumber()
     }
   }, [isOpen])
@@ -304,6 +314,95 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   }
 
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmployees(true)
+      console.log('🔍 Fetching employees from database...')
+      
+      // Use Supabase client directly to get employees with user info
+      const { data, error } = await supabase
+        .from('employees')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          user_id,
+          users!employees_user_id_fkey(full_name)
+        `)
+        .eq('status', 'active')
+        .order('first_name')
+        .limit(50)
+      
+      if (error) {
+        console.error('❌ Supabase error fetching employees:', error)
+        throw error
+      }
+      
+      if (data && data.length > 0) {
+        const transformedEmployees = data.map(emp => ({
+          id: emp.id,
+          name: emp.users?.full_name || `${emp.first_name} ${emp.last_name}`.trim(),
+          email: emp.email,
+          user_id: emp.user_id
+        }))
+        setEmployees(transformedEmployees)
+        console.log('🔍 Employees data:', transformedEmployees)
+      } else {
+        console.log('🔍 No employees found, using sample data')
+        const sampleEmployees = [
+          {
+            id: '1',
+            name: 'Nguyễn Văn A',
+            email: 'nguyenvana@company.com',
+            user_id: 'user-1'
+          },
+          {
+            id: '2', 
+            name: 'Trần Thị B',
+            email: 'tranthib@company.com',
+            user_id: 'user-2'
+          },
+          {
+            id: '3',
+            name: 'Lê Văn C',
+            email: 'levanc@company.com', 
+            user_id: 'user-3'
+          }
+        ]
+        setEmployees(sampleEmployees)
+        console.log('🔍 Using sample employees data:', sampleEmployees)
+      }
+    } catch (error) {
+      console.error('❌ Error fetching employees:', error)
+      // Use sample data as fallback
+      const sampleEmployees = [
+        {
+          id: '1',
+          name: 'Nguyễn Văn A',
+          email: 'nguyenvana@company.com',
+          user_id: 'user-1'
+        },
+        {
+          id: '2',
+          name: 'Trần Thị B', 
+          email: 'tranthib@company.com',
+          user_id: 'user-2'
+        },
+        {
+          id: '3',
+          name: 'Lê Văn C',
+          email: 'levanc@company.com',
+          user_id: 'user-3'
+        }
+      ]
+      setEmployees(sampleEmployees)
+      console.log('🔍 Using fallback sample employees data:', sampleEmployees)
+    } finally {
+      setLoadingEmployees(false)
+    }
+  }
+
   const generateQuoteNumber = () => {
     const now = new Date()
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
@@ -389,26 +488,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       if (items.length === 0 || items.every(item => !item.name_product.trim())) {
         throw new Error('Vui lòng thêm ít nhất một sản phẩm')
       }
-      // Get current user for created_by
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      let created_by = null
-      if (user?.id) {
-        const { data: employee } = await supabase
-          .from('employees')
-          .select('id')
-          .eq('user_id', user.id)
-          .single()
-        
-        if (employee) {
-          created_by = employee.id
-        }
+      if (!formData.created_by) {
+        throw new Error('Vui lòng chọn nhân viên tạo báo giá')
       }
       
-      // Ensure created_by is null if not found, not empty string
-      if (!created_by) {
-        created_by = null
-      }
+      // Use created_by from form selection
+      const created_by = formData.created_by || null
       
       // Create quote directly in Supabase
       const quoteData = {
@@ -516,6 +601,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       quote_number: '',
       customer_id: '',
       project_id: '',
+      created_by: '',
       issue_date: new Date().toISOString().split('T')[0],
       valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       subtotal: 0,
@@ -525,8 +611,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       currency: 'VND',
       status: 'draft',
       notes: '',
-      terms: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.',
-      created_by: ''
+      terms: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
     })
     setItems([{ name_product: '', description: '', quantity: 1, unit: '', unit_price: 0, total_price: 0 }])
   }
@@ -636,6 +721,28 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-1">Nhân viên tạo báo giá</label>
+                  {loadingEmployees ? (
+                    <div className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
+                      <span className="text-sm text-black">Đang tải nhân viên...</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.created_by}
+                      onChange={(e) => setFormData({ ...formData, created_by: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">Chọn nhân viên</option>
+                      {employees.map((employee) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.name} {employee.email ? `(${employee.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 

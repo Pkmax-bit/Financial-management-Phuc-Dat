@@ -21,6 +21,7 @@ from services.supabase_client import get_supabase_client
 from services.journal_service import journal_service
 from services.project_validation_service import ProjectValidationService
 from services.email_service import email_service
+from services.notification_service import notification_service
 
 router = APIRouter()
 
@@ -189,6 +190,28 @@ async def get_quote(
             detail=f"Failed to fetch quote: {str(e)}"
         )
 
+@router.get("/quotes/{quote_id}/items")
+async def get_quote_items(
+    quote_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get quote items for a specific quote"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get quote items
+        items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+        
+        return {
+            "items": items_result.data if items_result.data else []
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get quote items: {str(e)}"
+        )
+
 @router.post("/quotes", response_model=Quote)
 async def create_quote(
     quote_data: QuoteCreate,
@@ -248,6 +271,10 @@ async def create_quote(
                 
                 if quote_items:
                     supabase.table("quote_items").insert(quote_items).execute()
+            
+            # Create notification for the employee who created the quote
+            if created_by:
+                await notification_service.create_quote_notification(quote, created_by)
             
             return Quote(**quote)
         
@@ -317,6 +344,150 @@ async def update_quote(
             detail=f"Failed to update quote: {str(e)}"
         )
 
+@router.get("/notifications")
+async def get_notifications(
+    current_user: User = Depends(get_current_user),
+    limit: int = Query(50, ge=1, le=100)
+):
+    """Get notifications for current user"""
+    try:
+        # Get user ID from current user
+        user_id = current_user.id
+        
+        # Get notifications
+        notifications = await notification_service.get_employee_notifications(user_id, limit)
+        
+        return {
+            "notifications": notifications,
+            "total": len(notifications)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get notifications: {str(e)}"
+        )
+
+@router.put("/notifications/{notification_id}/read")
+async def mark_notification_as_read(
+    notification_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Mark notification as read"""
+    try:
+        success = await notification_service.mark_notification_as_read(notification_id)
+        
+        if success:
+            return {"message": "Notification marked as read"}
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to mark notification as read"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to mark notification as read: {str(e)}"
+        )
+
+@router.post("/quotes/{quote_id}/approve")
+async def approve_quote(
+    quote_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Approve quote and create notification for manager"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get quote details
+        quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        if not quote_result.data:
+            raise HTTPException(status_code=404, detail="Quote not found")
+        
+        quote = quote_result.data[0]
+        
+        # Update quote status to approved
+        update_data = {
+            "status": "approved",
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        result = supabase.table("quotes").update(update_data).eq("id", quote_id).execute()
+        
+        if result.data:
+            # Get the employee who created the quote
+            created_by = quote.get("created_by")
+            if created_by:
+                # Get employee details
+                employee_result = supabase.table("employees").select("user_id, first_name, last_name, email").eq("id", created_by).execute()
+                if employee_result.data:
+                    employee = employee_result.data[0]
+                    employee_user_id = employee.get("user_id")
+                    first_name = employee.get("first_name", "")
+                    last_name = employee.get("last_name", "")
+                    employee_name = f"{first_name} {last_name}".strip() or "Nhân viên"
+                    
+                    # Create notification for the employee who created the quote
+                    await notification_service.create_quote_approved_notification(
+                        quote, 
+                        employee_user_id,
+                        employee_name
+                    )
+                    
+                    # Send email notification to employee
+                    try:
+                        # Get quote items for email
+                        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+                        quote_items = quote_items_result.data if quote_items_result.data else []
+                        
+                        # Send email to employee
+                        await email_service.send_quote_approved_notification_email(
+                            quote,
+                            employee.get("email", ""),
+                            employee_name,
+                            quote_items
+                        )
+                        print(f"Quote approved notification email sent to employee {employee_name}")
+                    except Exception as email_error:
+                        print(f"Failed to send quote approved notification email: {email_error}")
+                        # Don't fail the approval if email fails
+            
+            # Get all managers to notify them
+            managers_result = supabase.table("employees").select("user_id, first_name, last_name").eq("user_role", "manager").execute()
+            if managers_result.data:
+                for manager in managers_result.data:
+                    manager_user_id = manager.get("user_id")
+                    first_name = manager.get("first_name", "")
+                    last_name = manager.get("last_name", "")
+                    manager_name = f"{first_name} {last_name}".strip() or "Quản lý"
+                    
+                    # Create notification for managers
+                    await notification_service.create_quote_approved_manager_notification(
+                        quote,
+                        manager_user_id,
+                        manager_name,
+                        employee_name if employee_result.data else "Nhân viên"
+                    )
+            
+            return {
+                "message": "Quote approved successfully",
+                "quote": result.data[0],
+                "notifications_sent": True
+            }
+        
+        raise HTTPException(status_code=400, detail="Failed to approve quote")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to approve quote: {str(e)}"
+        )
+
 @router.post("/quotes/{quote_id}/send")
 async def send_quote_to_customer(
     quote_id: str,
@@ -355,26 +526,49 @@ async def send_quote_to_customer(
                 customer_name = customer.get("name", "Khách hàng")
                 customer_email = customer.get("email")
                 
+                # Fetch project name if available
+                project_name = None
+                try:
+                    project_id = quote_result.data[0].get("project_id")
+                    if project_id:
+                        project_res = supabase.table("projects").select("name").eq("id", project_id).single().execute()
+                        if project_res.data:
+                            project_name = project_res.data.get("name")
+                except Exception as _:
+                    project_name = None
+                
                 if customer_email:
                     try:
+                        # Get quote items for email
+                        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+                        quote_items = quote_items_result.data if quote_items_result.data else []
+                        
                         # Send email in background
                         background_tasks.add_task(
                             email_service.send_quote_email,
-                            quote_result.data[0],
+                            { **quote_result.data[0], **({"project_name": project_name} if project_name else {}) },
                             customer_email,
-                            customer_name
+                            customer_name,
+                            quote_items
                         )
                         email_sent = True
-                        print(f"📧 Quote email queued for {customer_email}")
+                        print(f"Quote email queued for {customer_email}")
                     except Exception as e:
                         email_error = str(e)
-                        print(f"❌ Failed to queue email: {e}")
+                        print(f"Failed to queue email: {e}")
                 else:
                     email_error = "Customer email not found"
-                    print("⚠️ Customer email not found, skipping email send")
+                    print("Customer email not found, skipping email send")
             else:
                 email_error = "Customer not found"
-                print("⚠️ Customer not found, skipping email send")
+                print("Customer not found, skipping email send")
+            
+            # Create notification for quote sent
+            if result.data:
+                quote = result.data[0]
+                created_by = quote.get("created_by")
+                if created_by:
+                    await notification_service.create_quote_sent_notification(quote, created_by)
             
             return {
                 "message": "Quote sent successfully",
