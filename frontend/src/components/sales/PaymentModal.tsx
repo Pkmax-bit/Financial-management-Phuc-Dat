@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, DollarSign, Calculator, CreditCard } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 interface PaymentModalProps {
   isOpen: boolean
@@ -63,22 +64,43 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
     try {
       setSubmitting(true)
 
-      const response = await fetch(`http://localhost:8000/api/sales/invoices/${invoice.id}/payment`, {
+      // Include Supabase access token for backend authorization
+      const { data: { session } } = await supabase.auth.getSession()
+
+      // Backend expects query params (FastAPI query), not JSON body
+      const params = new URLSearchParams()
+      params.set('payment_amount', String(paymentAmount))
+      params.set('payment_method', paymentMethod)
+      if (paymentReference) params.set('payment_reference', paymentReference)
+      params.set('payment_date', new Date().toISOString().split('T')[0])
+
+      const response = await fetch(`http://localhost:8000/api/sales/invoices/${invoice.id}/payment?${params.toString()}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          payment_amount: paymentAmount,
-          payment_method: paymentMethod,
-          payment_reference: paymentReference || undefined,
-          payment_date: new Date().toISOString().split('T')[0]
-        })
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        }
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Có lỗi xảy ra khi ghi nhận thanh toán')
+        // Parse error safely to avoid [object Object]
+        let errorMessage = `HTTP ${response.status}`
+        try {
+          const raw = await response.text()
+          if (raw) {
+            try {
+              const json = JSON.parse(raw)
+              const inner = json.detail || json.message || json.error || json
+              errorMessage = typeof inner === 'string' ? inner : JSON.stringify(inner)
+            } catch {
+              // Not JSON, use raw text
+              errorMessage = raw
+            }
+          }
+        } catch {
+          // ignore parse failures
+        }
+        console.error('❌ Payment API error:', errorMessage)
+        throw new Error(errorMessage || 'Có lỗi xảy ra khi ghi nhận thanh toán')
       }
 
       const result = await response.json()
@@ -109,8 +131,17 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+    <>
+      {/* Invisible backdrop for click detection - no visual blocking */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Right-side sidebar panel - does not cover the invoice list */}
+      <div className={`fixed top-0 right-0 h-full w-[560px] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center space-x-2">
@@ -129,7 +160,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
 
         {/* Invoice Info */}
         <div className="p-6 border-b bg-gray-50">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-black">
             <p><strong>Hóa đơn:</strong> {invoice.invoice_number}</p>
             {invoice.customer_name && (
               <p><strong>Khách hàng:</strong> {invoice.customer_name}</p>
@@ -146,14 +177,14 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
         <form onSubmit={handleSubmit} className="p-6">
           {/* Payment Type Buttons */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-sm font-medium text-black mb-3">
               Chọn loại thanh toán
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => handlePaymentType('full')}
-                className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <Calculator className="h-4 w-4 mr-1" />
                 Toàn bộ
@@ -161,7 +192,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
               <button
                 type="button"
                 onClick={() => handlePaymentType('half')}
-                className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <Calculator className="h-4 w-4 mr-1" />
                 Một nửa
@@ -169,7 +200,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
               <button
                 type="button"
                 onClick={() => handlePaymentType('custom')}
-                className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <Calculator className="h-4 w-4 mr-1" />
                 Tùy chỉnh
@@ -179,7 +210,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
 
           {/* Payment Amount */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-black mb-2">
               Số tiền thanh toán
             </label>
             <div className="relative">
@@ -187,30 +218,30 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
                 type="number"
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400"
                 placeholder="Nhập số tiền"
                 min="0"
                 max={remainingAmount}
                 step="1000"
               />
-              <div className="absolute right-3 top-2 text-sm text-gray-500">
+              <div className="absolute right-3 top-2 text-sm text-black">
                 VND
               </div>
             </div>
-            <div className="mt-1 text-sm text-gray-600">
+            <div className="mt-1 text-sm text-black">
               Tối đa: {formatCurrency(remainingAmount)}
             </div>
           </div>
 
           {/* Payment Method */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-black mb-2">
               Phương thức thanh toán
             </label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as any)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
             >
               <option value="cash">Tiền mặt</option>
               <option value="card">Thẻ</option>
@@ -223,34 +254,34 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
 
           {/* Payment Reference */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-black mb-2">
               Mã tham chiếu (tùy chọn)
             </label>
             <input
               type="text"
               value={paymentReference}
               onChange={(e) => setPaymentReference(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400"
               placeholder="VD: REF123456"
             />
           </div>
 
           {/* Notes */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-black mb-2">
               Ghi chú (tùy chọn)
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400"
               rows={3}
               placeholder="Ghi chú về thanh toán..."
             />
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-3">
+          <div className="flex justify-end space-x-3 p-6 pt-0">
             <button
               type="button"
               onClick={onClose}
@@ -278,6 +309,6 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
           </div>
         </form>
       </div>
-    </div>
+    </>
   )
 }
