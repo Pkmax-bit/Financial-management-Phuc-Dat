@@ -29,6 +29,8 @@ interface Quote {
   customer_id: string
   customer_name?: string
   project_id?: string
+  project_name?: string
+  project_code?: string
   issue_date: string
   valid_until: string
   subtotal: number
@@ -72,6 +74,24 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   useEffect(() => {
     fetchQuotes()
   }, [])
+  // Group quotes by project for display
+  const groupedByProject = (() => {
+    const groups: Record<string, { key: string; name: string; code?: string; quotes: Quote[] }> = {}
+    for (const q of quotes) {
+      const key = q.project_id || 'no_project'
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          name: q.project_name || 'Không có dự án',
+          code: q.project_code,
+          quotes: []
+        }
+      }
+      groups[key].quotes.push(q)
+    }
+    return Object.values(groups)
+  })()
+
 
   useEffect(() => {
     if (shouldOpenCreateModal) {
@@ -100,7 +120,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       }
       
       console.log('🔍 Quotes data from database:', quotes)
-      setQuotes(quotes || [])
+      // Transform to include customer_name and project fields
+      const transformed = (quotes || []).map((q: any) => ({
+        ...q,
+        customer_name: q.customers?.name,
+        project_name: q.projects?.name,
+        project_code: q.projects?.project_code
+      }))
+      setQuotes(transformed)
     } catch (error) {
       console.error('❌ Error fetching quotes:', error)
     } finally {
@@ -533,7 +560,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Số báo giá
+                Tên dự án
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Khách hàng
@@ -562,7 +589,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   <div className="flex items-center">
                     <FileText className="h-4 w-4 text-black mr-2" />
                     <span className="text-sm font-medium text-gray-900">
-                      {quote.quote_number}
+                      {quote.project_name ? (
+                        <>{quote.project_code ? `${quote.project_code} - ` : ''}{quote.project_name}</>
+                      ) : 'Không có dự án'}
                     </span>
                   </div>
                 </td>

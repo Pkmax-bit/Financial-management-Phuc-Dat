@@ -28,6 +28,8 @@ interface Invoice {
   customer_id: string
   customer_name?: string
   project_id?: string
+  project_name?: string
+  project_code?: string
   projects?: {
     name: string
     project_code: string
@@ -110,7 +112,13 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       }
       
       console.log('🔍 Invoices data from database:', invoices)
-      setInvoices(invoices || [])
+      const transformed = (invoices || []).map((inv: any) => ({
+        ...inv,
+        customer_name: inv.customers?.name,
+        project_name: inv.projects?.name,
+        project_code: inv.projects?.project_code
+      }))
+      setInvoices(transformed)
     } catch (error) {
       console.error('❌ Error fetching invoices:', error)
     } finally {
@@ -501,7 +509,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Số hóa đơn
+                Tên dự án
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Khách hàng
@@ -531,7 +539,9 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     <Receipt className="h-4 w-4 text-black mr-2" />
                     <div>
                       <span className="text-sm font-medium text-gray-900">
-                        {invoice.invoice_number}
+                        {invoice.project_name ? (
+                          <>{invoice.project_code ? `${invoice.project_code} - ` : ''}{invoice.project_name}</>
+                        ) : <span className="text-gray-400">Không có dự án</span>}
                       </span>
                       {invoice.is_recurring && (
                         <div className="text-xs text-purple-600">Định kỳ</div>
@@ -543,11 +553,6 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                   <div className="text-sm font-medium text-gray-900">
                   {invoice.customer_name || 'N/A'}
                   </div>
-                  {invoice.project_id && invoice.projects && (
-                    <div className="text-xs text-blue-600">
-                      📁 {invoice.projects.name}
-                    </div>
-                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">

@@ -291,6 +291,50 @@ async def create_quote(
             detail=f"Failed to create quote: {str(e)}"
         )
 
+@router.delete("/quotes/{quote_id}")
+async def delete_quote(
+    quote_id: str,
+    force: bool = Query(False, description="Force delete even if related records exist"),
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Delete a quote and its items. Prevent delete if linked invoices exist (unless force=true)."""
+    try:
+        supabase = get_supabase_client()
+
+        # Ensure quote exists
+        quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        if not quote_result.data:
+            raise HTTPException(status_code=404, detail="Quote not found")
+
+        # Check if there are invoices linked to this quote
+        invoices_result = supabase.table("invoices").select("id, invoice_number, status").eq("quote_id", quote_id).limit(1).execute()
+        if invoices_result.data and not force:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete quote because an invoice has been created from this quote. Set force=true to override."
+            )
+
+        # Delete quote_items first to avoid FK constraint errors
+        supabase.table("quote_items").delete().eq("quote_id", quote_id).execute()
+
+        # Delete the quote
+        delete_result = supabase.table("quotes").delete().eq("id", quote_id).execute()
+        if delete_result.data is None:
+            # Some Supabase clients return None on successful delete; verify by re-query
+            verify = supabase.table("quotes").select("id").eq("id", quote_id).execute()
+            if verify.data:
+                raise HTTPException(status_code=400, detail="Failed to delete quote")
+
+        return {"message": "Quote deleted successfully", "quote_id": quote_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete quote: {str(e)}"
+        )
+
 @router.put("/quotes/{quote_id}", response_model=Quote)
 async def update_quote(
     quote_id: str,
@@ -1014,6 +1058,58 @@ async def create_invoice(
             status_code=500,
             detail=f"Failed to create invoice: {str(e)}"
         )
+
+@router.delete("/invoices/{invoice_id}")
+async def delete_invoice(
+    invoice_id: str,
+    force: bool = Query(False, description="Force delete even if related payments/allocations exist"),
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Delete an invoice and its items. Prevent delete if payments/allocations exist (unless force=true)."""
+    try:
+        supabase = get_supabase_client()
+
+        # Ensure invoice exists
+        inv_res = supabase.table("invoices").select("*").eq("id", invoice_id).execute()
+        if not inv_res.data:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        # Check for related payments or allocations if such tables exist
+        has_blocking_refs = False
+        try:
+            payments_ref = supabase.table("payments").select("id").eq("invoice_id", invoice_id).limit(1).execute()
+            if payments_ref.data:
+                has_blocking_refs = True
+        except Exception:
+            # payments may be allocated via another table; ignore if table/column not present
+            pass
+
+        if has_blocking_refs and not force:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete invoice because payments/allocations reference it. Set force=true to override."
+            )
+
+        # Delete invoice_items first
+        try:
+            supabase.table("invoice_items").delete().eq("invoice_id", invoice_id).execute()
+        except Exception:
+            # Table may not exist in some setups; continue
+            pass
+
+        # Delete the invoice
+        del_res = supabase.table("invoices").delete().eq("id", invoice_id).execute()
+        if del_res.data is None:
+            verify = supabase.table("invoices").select("id").eq("id", invoice_id).execute()
+            if verify.data:
+                raise HTTPException(status_code=400, detail="Failed to delete invoice")
+
+        return {"message": "Invoice deleted successfully", "invoice_id": invoice_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete invoice: {str(e)}")
 
 @router.put("/invoices/{invoice_id}", response_model=Invoice)
 async def update_invoice(

@@ -86,6 +86,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [submitting, setSubmitting] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
 
   // Form data
   const [formData, setFormData] = useState({
@@ -115,6 +116,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       fetchProducts()
       fetchEmployees()
       generateQuoteNumber()
+    } else {
+      // Reset all fields when closing
+      setSelectedItemIndex(null)
+      setSelectedProductIds([])
+      resetForm()
     }
   }, [isOpen])
 
@@ -1020,12 +1026,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         </h4>
                         <div className="space-y-2">
                           {categoryProducts.map((product) => (
-                            <div
+                            <label
                               key={product.id}
-                              onClick={() => selectProduct(product)}
-                              className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md"
+                              className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-3"
                             >
-                              <div className="grid grid-cols-4 gap-4 items-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedProductIds.includes(product.id)}
+                                onChange={(e) => {
+                                  setSelectedProductIds(prev => e.target.checked ? [...prev, product.id] : prev.filter(id => id !== product.id))
+                                }}
+                                className="h-4 w-4"
+                              />
+                              <div className="grid grid-cols-4 gap-4 items-center w-full">
                                 <div className="col-span-1">
                                   <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
                                   <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
@@ -1058,7 +1071,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                   </span>
                                 </div>
                               </div>
-                            </div>
+                            </label>
                           ))}
                         </div>
                       </div>
@@ -1066,6 +1079,64 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   })()}
                 </div>
               )}
+            </div>
+            <div className="p-4 border-t bg-white flex justify-between items-center">
+              <button
+                onClick={() => { setSelectedProductIds([]); setShowProductModal(false) }}
+                className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  // Map selected products into quote items, starting at current/first empty row
+                  const map = new Map(products.map(p => [p.id, p]))
+                  const chosen = selectedProductIds.map(id => map.get(id)).filter(Boolean) as Product[]
+                  if (chosen.length > 0) {
+                    const newItems = [...items]
+                    // Determine starting index: selected row or first empty row
+                    const findEmptyFrom = (startIdx: number) => {
+                      for (let i = Math.max(0, startIdx); i < newItems.length; i++) {
+                        if (!newItems[i].name_product || newItems[i].name_product.trim() === '') return i
+                      }
+                      return -1
+                    }
+                    let insertIdx = selectedItemIndex !== null ? selectedItemIndex : findEmptyFrom(0)
+                    for (const p of chosen) {
+                      if (insertIdx !== -1) {
+                        // Fill existing empty row
+                        newItems[insertIdx] = {
+                          ...newItems[insertIdx],
+                          name_product: p.name,
+                          description: p.description || '',
+                          quantity: newItems[insertIdx].quantity || 1,
+                          unit: p.unit || '',
+                          unit_price: p.unit_price || 0,
+                          total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0)
+                        }
+                        insertIdx = findEmptyFrom(insertIdx + 1)
+                      } else {
+                        // Append new row
+                        newItems.push({
+                          name_product: p.name,
+                          description: p.description || '',
+                          quantity: 1,
+                          unit: p.unit || '',
+                          unit_price: p.unit_price || 0,
+                          total_price: (p.unit_price || 0)
+                        })
+                      }
+                    }
+                    setItems(newItems)
+                  }
+                  setSelectedItemIndex(null)
+                  setSelectedProductIds([])
+                  setShowProductModal(false)
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                Thêm sản phẩm đã chọn
+              </button>
             </div>
           </div>
         </div>

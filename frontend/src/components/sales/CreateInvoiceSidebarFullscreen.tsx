@@ -107,6 +107,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       fetchCustomers()
       fetchProducts()
       generateInvoiceNumber()
+    } else {
+      // Reset when closing sidebar
+      setSelectedItemIndex(null)
+      resetForm()
     }
   }, [isOpen])
 
