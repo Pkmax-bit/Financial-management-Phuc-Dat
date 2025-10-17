@@ -2,46 +2,18 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { 
-  ArrowLeft, 
-  FolderOpen, 
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  FileText,
-  Receipt,
-  Calendar,
-  Download,
-  BarChart3,
-  PieChart,
-  Package
-} from 'lucide-react'
+import { ArrowLeft, Calendar, FileSpreadsheet } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement
-} from 'chart.js'
-import { Bar, Pie } from 'react-chartjs-2'
-import { exportToExcel } from '@/utils/reportExport'
-import { FileSpreadsheet } from 'lucide-react'
+import { Pie } from 'react-chartjs-2'
+import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend as ChartLegend } from 'chart.js'
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement
-)
+ChartJS.register(ArcElement, ChartTooltip, ChartLegend)
+
+// Simplified: remove charts and exports for compact, non-flashy view
+
+// Charts removed
 
 interface ProjectDetail {
   id: string
@@ -114,6 +86,7 @@ export default function ProjectDetailedReportDetailPage() {
   const [expenseQuotes, setExpenseQuotes] = useState<any[]>([])
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [expenseObjectNames, setExpenseObjectNames] = useState<Map<string, string>>(new Map())
+  const [showExpenseObjectDetails, setShowExpenseObjectDetails] = useState<boolean>(true)
 
   useEffect(() => {
     checkUser()
@@ -344,7 +317,8 @@ export default function ProjectDetailedReportDetailPage() {
       }))
     }
     
-    exportToExcel(reportData)
+    // Export disabled for compact view
+    return
   }
 
   const getStatusColor = (status: string) => {
@@ -858,9 +832,7 @@ export default function ProjectDetailedReportDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                </div>
+                <div className="p-2 bg-blue-100 rounded-lg"></div>
                 <div>
                   <p className="text-sm text-gray-600">Tổng báo giá</p>
                   <p className="text-xl font-bold text-gray-900">{formatCurrency(totalQuotes)}</p>
@@ -871,9 +843,7 @@ export default function ProjectDetailedReportDetailPage() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Receipt className="h-5 w-5 text-green-600" />
-                </div>
+                <div className="p-2 bg-green-100 rounded-lg"></div>
                 <div>
                   <p className="text-sm text-gray-600">Tổng hóa đơn</p>
                   <p className="text-xl font-bold text-gray-900">{formatCurrency(totalInvoices)}</p>
@@ -889,9 +859,7 @@ export default function ProjectDetailedReportDetailPage() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-red-600" />
-                </div>
+                <div className="p-2 bg-red-100 rounded-lg"></div>
                 <div>
                   <p className="text-sm text-gray-600">Tổng chi phí dự án</p>
                   <p className="text-xl font-bold text-gray-900">{formatCurrency(totalExpenses)}</p>
@@ -902,9 +870,7 @@ export default function ProjectDetailedReportDetailPage() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${actualProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <TrendingUp className={`h-5 w-5 ${actualProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
-                </div>
+                <div className={`p-2 rounded-lg ${actualProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}></div>
                 <div>
                   <p className="text-sm text-gray-600">Lợi nhuận thực tế</p>
                   <p className={`text-xl font-bold ${actualProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -924,9 +890,7 @@ export default function ProjectDetailedReportDetailPage() {
             <div className="space-y-6">
               <div className="bg-blue-50 rounded-xl shadow-sm border-2 border-blue-200 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-blue-600 rounded-lg">
-                    <FileText className="h-6 w-6 text-white" />
-                  </div>
+                  <div className="p-2 bg-blue-600 rounded-lg"></div>
                   <div>
                     <h2 className="text-xl font-bold text-blue-900">KẾ HOẠCH</h2>
                     <p className="text-sm text-blue-700">Báo giá & Chi phí dự kiến</p>
@@ -1020,9 +984,7 @@ export default function ProjectDetailedReportDetailPage() {
             <div className="space-y-6">
               <div className="bg-green-50 rounded-xl shadow-sm border-2 border-green-200 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-green-600 rounded-lg">
-                    <Receipt className="h-6 w-6 text-white" />
-                  </div>
+                  <div className="p-2 bg-green-600 rounded-lg"></div>
                   <div>
                     <h2 className="text-xl font-bold text-green-900">THỰC TẾ</h2>
                     <p className="text-sm text-green-700">Hóa đơn & Chi phí phát sinh</p>
@@ -1132,84 +1094,6 @@ export default function ProjectDetailedReportDetailPage() {
             </div>
           </div>
 
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Revenue - Expense - Profit Pie Chart */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <PieChart className="h-6 w-6 text-indigo-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Phân bổ Doanh thu – Chi phí – Lợi nhuận</h3>
-              </div>
-              {(totalInvoices > 0 || totalExpenses > 0) ? (
-                <Pie 
-                  data={revenueExpenseProfitPieData}
-                  options={{
-                    responsive: true,
-                    plugins: {
-                      legend: {
-                        position: 'right' as const,
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function(context) {
-                            const label = context.label || ''
-                            const value = context.parsed || 0
-                            const formatted = new Intl.NumberFormat('vi-VN', {
-                              style: 'currency',
-                              currency: 'VND'
-                            }).format(value)
-                            return `${label}: ${formatted}`
-                          }
-                        }
-                      }
-                    }
-                  }}
-                />
-              ) : (
-                <div className="flex items-center justify-center h-64 text-gray-500">
-                  Chưa có dữ liệu doanh thu/chi phí/lợi nhuận
-                </div>
-              )}
-            </div>
-
-            {/* Expense Objects and Profit Pie Chart */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <PieChart className="h-6 w-6 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Phân bổ theo Đối tượng chi phí và Lợi nhuận</h3>
-              </div>
-              {(expenseObjectsAndProfitPieData.labels.length > 0) ? (
-                <Pie 
-                  data={expenseObjectsAndProfitPieData}
-                  options={{
-                    responsive: true,
-                    plugins: {
-                      legend: {
-                        position: 'right' as const,
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function(context) {
-                            const label = context.label || ''
-                            const value = context.parsed || 0
-                            const formatted = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
-                            return `${label}: ${formatted}`
-                          }
-                        }
-                      }
-                    }
-                  }}
-                />
-              ) : (
-                <div className="flex items-center justify-center h-64 text-gray-500">
-                  Chưa có dữ liệu đối tượng chi phí
-                </div>
-              )}
-            </div>
-
-            
-          </div>
-
           {/* Expense Comparison Analysis */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
             <div className="p-6 border-b border-gray-200">
@@ -1252,10 +1136,7 @@ export default function ProjectDetailedReportDetailPage() {
                         'bg-white'}
                     `}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Package className="h-5 w-5 text-gray-400 mr-2" />
-                          <span className="text-sm font-medium text-gray-900">{item.category}</span>
-                        </div>
+                        <div className="text-sm font-medium text-gray-900">{item.category}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
                         {formatCurrency(item.planned)}
@@ -1367,10 +1248,7 @@ export default function ProjectDetailedReportDetailPage() {
               {/* Planned Expenses (Approved) */}
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Chi phí Kế hoạch (Đã duyệt)
-                  </h4>
+                  <h4 className="text-lg font-semibold text-gray-900">Chi phí Kế hoạch (Đã duyệt)</h4>
                   <span className="text-sm font-medium text-blue-600">
                     {expenseQuotes.filter((eq: any) => eq.status === 'approved').length} khoản
                   </span>
@@ -1423,10 +1301,7 @@ export default function ProjectDetailedReportDetailPage() {
                         </div>
                       ))
                   ) : (
-                    <div className="text-center py-12 text-gray-500">
-                      <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Chưa có chi phí kế hoạch đã duyệt</p>
-                    </div>
+                    <div className="text-center py-12 text-gray-500">Chưa có chi phí kế hoạch đã duyệt</div>
                   )}
                 </div>
 
@@ -1443,10 +1318,7 @@ export default function ProjectDetailedReportDetailPage() {
               {/* Actual Expenses (Approved) */}
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-lg font-semibold text-green-900 flex items-center gap-2">
-                    <Receipt className="h-5 w-5" />
-                    Chi phí Thực tế (Đã phát sinh)
-                  </h4>
+                  <h4 className="text-lg font-semibold text-gray-900">Chi phí Thực tế (Đã phát sinh)</h4>
                   <span className="text-sm font-medium text-green-600">
                     {expenses.length} khoản
                   </span>
@@ -1497,10 +1369,7 @@ export default function ProjectDetailedReportDetailPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-12 text-gray-500">
-                      <Receipt className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Chưa có chi phí thực tế</p>
-                    </div>
+                    <div className="text-center py-12 text-gray-500">Chưa có chi phí thực tế</div>
                   )}
                 </div>
 
@@ -1557,6 +1426,63 @@ export default function ProjectDetailedReportDetailPage() {
             </div>
           </div>
 
+          {/* Charts - Doanh thu/Lợi nhuận/Chi phí & Đối tượng chi phí */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Doanh thu – Chi phí – Lợi nhuận</h3>
+              {(totalInvoices > 0 || totalExpenses > 0) ? (
+                <Pie
+                  data={revenueExpenseProfitPieData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: { position: 'bottom' },
+                      tooltip: {
+                        callbacks: {
+                          label: function(context) {
+                            const label = context.label || ''
+                            const value = (context.parsed as number) || 0
+                            const formatted = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
+                            return `${label}: ${formatted}`
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
+              ) : (
+                <div className="text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ.</div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Theo đối tượng chi phí</h3>
+              {(expenseObjectsAndProfitPieData?.labels?.length > 0) ? (
+                <Pie
+                  data={expenseObjectsAndProfitPieData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: { position: 'bottom' },
+                      tooltip: {
+                        callbacks: {
+                          label: function(context) {
+                            const label = context.label || ''
+                            const value = (context.parsed as number) || 0
+                            const formatted = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
+                            return `${label}: ${formatted}`
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
+              ) : (
+                <div className="text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ.</div>
+              )}
+            </div>
+          </div>
+
           {/* Summary Section */}
           <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl shadow-sm border border-teal-200 p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Tóm tắt Báo cáo</h3>
@@ -1582,125 +1508,38 @@ export default function ProjectDetailedReportDetailPage() {
                   Biên lợi nhuận: {totalInvoices > 0 ? ((actualProfit / totalInvoices) * 100).toFixed(1) : 0}%
                 </p>
               </div>
-
+              
               <div className="bg-white rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Hiệu suất công trình</p>
-                <p className="text-xl font-bold text-purple-600">
-                  {plannedProfit > 0 ? (efficiencyRatio * 100).toFixed(2) : '0.00'}%
-                </p>
-                <p className="text-xs text-gray-500">= Lợi nhuận thực tế / Lợi nhuận kế hoạch</p>
+                <p className="text-sm text-gray-600 mb-1">Tổng báo giá</p>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(totalQuotes)}</p>
+                <p className="text-xs text-gray-500">Từ {quotes.length} báo giá</p>
               </div>
-
+              
               <div className="bg-white rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Quản lý nhận được</p>
-                <p className="text-xl font-bold text-teal-600">
-                  {formatCurrency(Math.round(approvedPlannedManagementCost * efficiencyRatio))}
+                <p className="text-sm text-gray-600 mb-1">Chênh lệch (Doanh thu − Chi phí)</p>
+                <p className={`text-xl font-bold ${ (totalInvoices - totalExpenses) >= 0 ? 'text-green-600' : 'text-red-600' }`}>
+                  {formatCurrency(totalInvoices - totalExpenses)}
                 </p>
-                <p className="text-xs text-gray-500">
-                  = Chi phí QL kế hoạch × Hiệu suất
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 p-4 bg-white rounded-lg">
-              <p className="text-sm font-medium text-gray-900 mb-2">Nhận xét</p>
-              <ul className="space-y-1 text-sm text-gray-700">
-                <li>
-                  • Chênh lệch doanh thu: 
-                  <span className={`ml-2 font-semibold ${(totalInvoices - totalQuotes) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(totalInvoices - totalQuotes)}
-                  </span>
-                </li>
-                <li>
-                  • Chênh lệch chi phí: 
-                  <span className={`ml-2 font-semibold ${(totalExpenses - totalExpenseQuotes) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(totalExpenses - totalExpenseQuotes)}
-                  </span>
-                </li>
-                <li>
-                  • Chênh lệch lợi nhuận: 
-                  <span className={`ml-2 font-semibold ${profitVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(profitVariance)}
-                  </span>
-                </li>
-                <li>
-                  • Chi phí quản lý dự án (điều chỉnh theo hiệu suất):
-                  <span className="ml-2 font-semibold text-purple-700">
-                    {formatCurrency(Math.round(approvedPlannedManagementCost * efficiencyRatio))}
-                  </span>
-                  <span className="ml-2 text-xs text-gray-500">
-                    (Kế hoạch: {formatCurrency(approvedPlannedManagementCost)} × Hiệu suất {plannedProfit > 0 ? (efficiencyRatio * 100).toFixed(2) : '0.00'}%)
-                  </span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Raw Data and Formulas */}
-          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Dữ liệu và công thức (từ DB)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <div className="p-3 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-600">Tổng báo giá (quotes)</div>
-                  <div className="text-lg font-semibold text-gray-900">{formatCurrency(totalQuotes)}</div>
-                  <div className="text-xs text-gray-500">status &lt;&gt; 'rejected'</div>
-                </div>
-                <div className="p-3 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-600">Tổng chi phí kế hoạch (project_expenses_quote)</div>
-                  <div className="text-lg font-semibold text-blue-700">{formatCurrency(totalExpenseQuotes)}</div>
-                  <div className="text-xs text-gray-500">status = 'approved'</div>
-                </div>
-                <div className="p-3 bg-blue-50 rounded">
-                  <div className="text-sm text-blue-800">Lợi nhuận kế hoạch</div>
-                  <div className="text-lg font-bold text-blue-700">{formatCurrency(plannedProfit)}</div>
-                  <div className="text-xs text-blue-700">= Tổng báo giá − Tổng chi phí kế hoạch</div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="p-3 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-600">Tổng hóa đơn (invoices)</div>
-                  <div className="text-lg font-semibold text-gray-900">{formatCurrency(totalInvoices)}</div>
-                  <div className="text-xs text-gray-500">status in ('sent','paid')</div>
-                </div>
-                <div className="p-3 bg-gray-50 rounded">
-                  <div className="text-sm text-gray-600">Tổng chi phí thực tế (project_expenses)</div>
-                  <div className="text-lg font-semibold text-red-700">{formatCurrency(totalExpenses)}</div>
-                  <div className="text-xs text-gray-500">status = 'approved'</div>
-                </div>
-                <div className="p-3 bg-green-50 rounded">
-                  <div className="text-sm text-green-800">Lợi nhuận thực tế</div>
-                  <div className={`text-lg font-bold ${actualProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(actualProfit)}</div>
-                  <div className="text-xs text-green-700">= Tổng hóa đơn − Tổng chi phí thực tế</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-3 bg-purple-50 rounded">
-                <div className="text-sm text-purple-800">Hiệu suất công trình</div>
-                <div className="text-lg font-bold text-purple-700">{plannedProfit > 0 ? (efficiencyRatio * 100).toFixed(2) : '0.00'}%</div>
-                <div className="text-xs text-purple-700">= Lợi nhuận thực tế / Lợi nhuận kế hoạch</div>
-              </div>
-              <div className="p-3 bg-orange-50 rounded">
-                <div className="text-sm text-orange-800">Chi phí quản lý (kế hoạch)</div>
-                <div className="text-lg font-bold text-orange-700">{formatCurrency(approvedPlannedManagementCost)}</div>
-                <div className="text-xs text-orange-700">lọc mô tả: chứa "quản lý/ql/quản trị"</div>
-              </div>
-              <div className="p-3 bg-teal-50 rounded">
-                <div className="text-sm text-teal-800">Quản lý nhận được (điều chỉnh)</div>
-                <div className="text-lg font-bold text-teal-700">{formatCurrency(Math.round(approvedPlannedManagementCost * efficiencyRatio))}</div>
-                <div className="text-xs text-teal-700">= Chi phí QL kế hoạch × Hiệu suất</div>
+                <p className="text-xs text-gray-500">Tổng quan chênh lệch</p>
               </div>
             </div>
           </div>
 
           {/* Planned vs Actual by Expense Object */}
           <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">Chi phí theo Đối tượng: Kế hoạch vs Thực tế</h3>
-              <p className="text-gray-600">Nhóm theo đối tượng chi phí, kèm chênh lệch</p>
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Chi phí theo Đối tượng: Kế hoạch vs Thực tế</h3>
+                <p className="text-gray-600">Nhóm theo đối tượng chi phí, kèm chênh lệch</p>
+              </div>
+              <button
+                onClick={() => setShowExpenseObjectDetails(v => !v)}
+                className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              >
+                {showExpenseObjectDetails ? 'Ẩn' : 'Hiện'}
+              </button>
             </div>
+            {showExpenseObjectDetails && (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -1712,7 +1551,7 @@ export default function ProjectDetailedReportDetailPage() {
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">%</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-100">
                   {combinedObjectIds.map((id) => {
                     const name = expenseObjectNames.get(id) || (id === 'khac' ? 'Khác' : id)
                     const planned = plannedByObject[id] || 0
@@ -1736,6 +1575,7 @@ export default function ProjectDetailedReportDetailPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
 
           {/* Export Buttons */}
