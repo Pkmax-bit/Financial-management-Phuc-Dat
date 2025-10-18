@@ -105,12 +105,6 @@ export default function NavigationWithToggle({ user, onLogout }: NavigationWithT
       icon: Bell,
       description: 'Thông báo hệ thống và cập nhật'
     },
-    {
-      name: 'Files',
-      href: '/files',
-      icon: FileText,
-      description: 'Quản lý tài liệu và chứng từ'
-    },
   ]
 
   const handleNavigation = (href: string) => {

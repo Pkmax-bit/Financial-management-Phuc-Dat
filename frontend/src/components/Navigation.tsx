@@ -84,12 +84,6 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       icon: Bell,
       description: 'Thông báo hệ thống và cập nhật'
     },
-    {
-      name: 'Files',
-      href: '/files',
-      icon: FileSpreadsheet,
-      description: 'Quản lý tài liệu và chứng từ'
-    }
   ]
 
   const handleNavigation = (href: string) => {

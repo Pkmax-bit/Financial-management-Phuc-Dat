@@ -26,6 +26,7 @@ import {
   Eye
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
+import NotificationBell from './notifications/NotificationBell'
 import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
 
 interface LayoutWithSidebarProps {
@@ -183,15 +184,20 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                     </span>
                   </div>
                 </div>
-                {onLogout && (
-                  <button
-                    onClick={onLogout}
-                    className="flex items-center justify-center px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200"
-                    title="Đăng xuất"
-                  >
-                    <LogOut className="h-3 w-3" />
-                  </button>
-                )}
+                <div className="flex items-center space-x-2">
+                  <div className="relative">
+                    <NotificationBell />
+                  </div>
+                  {onLogout && (
+                    <button
+                      onClick={onLogout}
+                      className="flex items-center justify-center px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200"
+                      title="Đăng xuất"
+                    >
+                      <LogOut className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}

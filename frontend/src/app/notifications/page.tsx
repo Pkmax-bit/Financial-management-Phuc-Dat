@@ -28,9 +28,12 @@ interface Notification {
   title: string
   message: string
   type: 'info' | 'warning' | 'error' | 'success'
+  entity_type?: string
+  entity_id?: string
   read: boolean
+  read_at?: string
+  action_url?: string
   created_at: string
-  data?: unknown
 }
 
 export default function NotificationsPage() {
@@ -43,12 +46,13 @@ export default function NotificationsPage() {
   const [showSystemAlertModal, setShowSystemAlertModal] = useState(false)
   const [showCreateNotificationModal, setShowCreateNotificationModal] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [employees, setEmployees] = useState<Array<{ id: string, user_id?: string | null, first_name?: string, last_name?: string, email?: string }>>([])
+  const [employees, setEmployees] = useState<Array<{ id: string, user_id?: string | null, first_name?: string, last_name?: string, email?: string, role?: string }>>([])
   const [selectedEmployeeUserIds, setSelectedEmployeeUserIds] = useState<string[]>([])
   const [notifTitle, setNotifTitle] = useState('')
   const [notifMessage, setNotifMessage] = useState('')
   const [sendEmail, setSendEmail] = useState(false)
   const [user, setUser] = useState<unknown>(null)
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -105,10 +109,24 @@ export default function NotificationsPage() {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('id, user_id, first_name, last_name, email')
+        .select(`
+          id, 
+          user_id, 
+          first_name, 
+          last_name, 
+          email,
+          users!inner(role)
+        `)
         .order('first_name', { ascending: true })
       if (error) throw error
-      setEmployees(data || [])
+      
+      // Flatten the data to include role from users table
+      const flattenedData = (data || []).map(emp => ({
+        ...emp,
+        role: (emp as any).users?.role || 'employee'
+      }))
+      
+      setEmployees(flattenedData)
     } catch (error) {
       console.error('Error fetching employees:', error)
     }
@@ -638,18 +656,100 @@ export default function NotificationsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-black mb-1">Chọn nhân viên nhận</label>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <label className="block text-sm font-medium text-black">Chọn nhân viên nhận</label>
+                    <span className="text-xs text-gray-500">
+                      {selectedEmployeeUserIds.length} / {employees.filter(emp => emp.user_id).length} nhân viên được chọn
+                    </span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allUserIds = employees
+                          .filter(emp => emp.user_id)
+                          .map(emp => emp.user_id!)
+                        setSelectedEmployeeUserIds(allUserIds)
+                      }}
+                      className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEmployeeUserIds([])}
+                      className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 transition-colors"
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Select only employees with specific roles (admin, manager, etc.)
+                        const managerUserIds = employees
+                          .filter(emp => emp.user_id && (emp.role === 'admin' || emp.role === 'manager'))
+                          .map(emp => emp.user_id!)
+                        setSelectedEmployeeUserIds(managerUserIds)
+                      }}
+                      className="px-2 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors"
+                    >
+                      Chọn quản lý
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Select only visible employees (after filtering)
+                        const visibleUserIds = employees
+                          .filter(emp => {
+                            if (!employeeSearchTerm) return emp.user_id
+                            const searchLower = employeeSearchTerm.toLowerCase()
+                            const name = `${emp.first_name || ''} ${emp.last_name || ''}`.trim().toLowerCase()
+                            const email = (emp.email || '').toLowerCase()
+                            return emp.user_id && (name.includes(searchLower) || email.includes(searchLower))
+                          })
+                          .map(emp => emp.user_id!)
+                        setSelectedEmployeeUserIds(visibleUserIds)
+                      }}
+                      className="px-2 py-1 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors"
+                    >
+                      Chọn hiển thị
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Employee Search */}
+                <div className="mb-2">
+                  <input
+                    type="text"
+                    value={employeeSearchTerm}
+                    onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Tìm kiếm nhân viên..."
+                  />
+                </div>
+                
                 <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-md divide-y">
-                  {employees.map(emp => {
+                  {employees
+                    .filter(emp => {
+                      if (!employeeSearchTerm) return true
+                      const searchLower = employeeSearchTerm.toLowerCase()
+                      const name = `${emp.first_name || ''} ${emp.last_name || ''}`.trim().toLowerCase()
+                      const email = (emp.email || '').toLowerCase()
+                      return name.includes(searchLower) || email.includes(searchLower)
+                    })
+                    .map(emp => {
                     const label = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email || emp.id
                     const hasUser = Boolean(emp.user_id)
                     const checked = emp.user_id ? selectedEmployeeUserIds.includes(emp.user_id) : false
                     return (
-                      <label key={emp.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <label key={emp.id} className={`flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                        checked ? 'bg-blue-50 border-l-4 border-blue-500' : 'hover:bg-gray-50'
+                      } ${!hasUser ? 'opacity-50' : ''}`}>
                         <div className="flex items-center">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                             checked={checked}
                             disabled={!hasUser}
                             onChange={(e) => {
@@ -658,9 +758,11 @@ export default function NotificationsPage() {
                               else setSelectedEmployeeUserIds(prev => prev.filter(id => id !== emp.user_id))
                             }}
                           />
-                          <span className="ml-3 text-black">{label}</span>
+                          <span className={`ml-3 ${checked ? 'font-medium text-blue-900' : 'text-black'}`}>{label}</span>
                         </div>
-                        <span className="text-xs text-black">{emp.email}{!hasUser ? ' (chưa liên kết tài khoản)' : ''}</span>
+                        <span className={`text-xs ${checked ? 'text-blue-600' : 'text-black'}`}>
+                          {emp.email}{!hasUser ? ' (chưa liên kết tài khoản)' : ''}
+                        </span>
                       </label>
                     )
                   })}

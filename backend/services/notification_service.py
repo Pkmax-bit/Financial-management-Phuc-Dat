@@ -79,7 +79,19 @@ class NotificationService:
                 .limit(limit)\
                 .execute()
             
-            return result.data if result.data else []
+            if result.data:
+                # Map is_read to read for frontend compatibility
+                mapped_notifications = []
+                for notification in result.data:
+                    mapped_notification = notification.copy()
+                    mapped_notification['read'] = notification.get('is_read', False)
+                    # Remove the old is_read field to avoid confusion
+                    if 'is_read' in mapped_notification:
+                        del mapped_notification['is_read']
+                    mapped_notifications.append(mapped_notification)
+                return mapped_notifications
+            else:
+                return []
             
         except Exception as e:
             print(f"Error getting notifications: {e}")

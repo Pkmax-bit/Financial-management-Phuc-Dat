@@ -25,16 +25,21 @@ class Notification(BaseModel):
     title: str
     message: str
     type: str  # 'info', 'warning', 'error', 'success'
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
     read: bool
+    read_at: Optional[datetime] = None
+    action_url: Optional[str] = None
     created_at: datetime
-    data: Optional[Dict[str, Any]] = None
 
 class NotificationCreate(BaseModel):
     user_id: str
     title: str
     message: str
     type: str = 'info'
-    data: Optional[Dict[str, Any]] = None
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
+    action_url: Optional[str] = None
 
 class EmailNotification(BaseModel):
     to_email: str
@@ -90,11 +95,20 @@ async def get_notifications(
         query = supabase.table("notifications").select("*").eq("user_id", current_user.id)
         
         if unread_only:
-            query = query.eq("read", False)
+            query = query.eq("is_read", False)
         
         result = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
         
-        return [Notification(**notification) for notification in result.data]
+        # Map database fields to frontend format
+        mapped_notifications = []
+        for notification in result.data:
+            mapped_notification = notification.copy()
+            mapped_notification['read'] = notification.get('is_read', False)
+            if 'is_read' in mapped_notification:
+                del mapped_notification['is_read']
+            mapped_notifications.append(Notification(**mapped_notification))
+        
+        return mapped_notifications
         
     except Exception as e:
         raise HTTPException(
@@ -113,13 +127,25 @@ async def create_notification(
         
         notification_dict = notification_data.dict()
         notification_dict["id"] = str(uuid.uuid4())
-        notification_dict["read"] = False
+        notification_dict["is_read"] = False
         notification_dict["created_at"] = datetime.utcnow().isoformat()
+        
+        # Remove data field if it exists since the database doesn't have this column
+        if "data" in notification_dict:
+            del notification_dict["data"]
+        
+        # Debug: Print the data being sent to the database
+        print(f"Inserting notification data: {notification_dict}")
         
         result = supabase.table("notifications").insert(notification_dict).execute()
         
         if result.data:
-            return Notification(**result.data[0])
+            # Map database fields to frontend format
+            notification_data = result.data[0].copy()
+            notification_data['read'] = notification_data.get('is_read', False)
+            if 'is_read' in notification_data:
+                del notification_data['is_read']
+            return Notification(**notification_data)
         
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
