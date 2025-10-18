@@ -231,6 +231,136 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
     closePaymentModal()
   }
 
+  const deleteInvoice = async (invoiceId: string) => {
+    try {
+      console.log('🔍 Deleting invoice:', invoiceId)
+      
+      // Show confirmation dialog
+      const confirmed = window.confirm('Bạn có chắc chắn muốn xóa hóa đơn này? Hành động này không thể hoàn tác.')
+      if (!confirmed) {
+        return
+      }
+      
+      // Show loading state
+      const loadingMessage = document.createElement('div')
+      loadingMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #e74c3c; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+          🗑️ Đang xóa hóa đơn...
+        </div>
+      `
+      document.body.appendChild(loadingMessage)
+      
+      // Delete invoice items first
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', invoiceId)
+      
+      if (itemsError) {
+        console.error('❌ Error deleting invoice items:', itemsError)
+        throw new Error('Failed to delete invoice items')
+      }
+      
+      // Delete invoice
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', invoiceId)
+      
+      // Remove loading message
+      document.body.removeChild(loadingMessage)
+      
+      if (invoiceError) {
+        console.error('❌ Error deleting invoice:', invoiceError)
+        throw new Error(invoiceError.message || 'Failed to delete invoice')
+      }
+      
+      console.log('🔍 Invoice deleted successfully')
+      
+      // Show success notification
+      const successMessage = document.createElement('div')
+      successMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #27ae60; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+        ">
+          ✅ Hóa đơn đã được xóa thành công!
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(successMessage)
+      
+      // Remove success message after 3 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage)
+        }
+      }, 3000)
+      
+      // Refresh invoices list
+      await fetchInvoices()
+      
+    } catch (error) {
+      console.error('❌ Error deleting invoice:', error)
+      
+      // Show error notification
+      const errorMessage = document.createElement('div')
+      errorMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #e74c3c; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+        ">
+          ❌ Lỗi khi xóa hóa đơn: ${error instanceof Error ? error.message : 'Lỗi không xác định'}
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(errorMessage)
+      
+      // Remove error message after 5 seconds
+      setTimeout(() => {
+        if (document.body.contains(errorMessage)) {
+          document.body.removeChild(errorMessage)
+        }
+      }, 5000)
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
@@ -631,6 +761,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     )}
                     
                     <button 
+                      onClick={() => deleteInvoice(invoice.id)}
                       className="text-black hover:text-red-600" 
                       title="Xóa"
                     >
