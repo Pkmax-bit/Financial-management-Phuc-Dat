@@ -108,11 +108,27 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'management'
   },
   {
+    name: 'Góp ý nhân viên',
+    href: '/employees/feedback',
+    icon: 'Users',
+    description: 'Tạo và quản lý góp ý cho nhân viên',
+    roles: ['admin', 'accountant', 'employee'],
+    category: 'management'
+  },
+  {
     name: 'Thông báo',
     href: '/notifications',
     icon: 'Bell',
     description: 'Thông báo hệ thống và cập nhật',
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker', 'customer'],
+    category: 'system'
+  },
+  {
+    name: 'Góp ý hệ thống',
+    href: '/system/feedback',
+    icon: 'HelpCircle',
+    description: 'Gửi góp ý, báo lỗi, đề xuất ý tưởng',
+    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
     category: 'system'
   },
   {
