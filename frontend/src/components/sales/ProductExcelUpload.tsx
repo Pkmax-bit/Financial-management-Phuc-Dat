@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Upload, FileSpreadsheet, Download, AlertCircle, CheckCircle, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import ProductImportPreview from './ProductImportPreview'
 
 interface UploadResult {
   success: boolean
@@ -23,6 +24,8 @@ interface ProductImportData {
   length?: number
   depth?: number
   category_name?: string
+  status?: 'pending' | 'approved' | 'rejected'
+  errors?: string[]
 }
 
 export default function ProductExcelUpload({ onImportComplete }: { onImportComplete?: () => void }) {
@@ -30,6 +33,8 @@ export default function ProductExcelUpload({ onImportComplete }: { onImportCompl
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [isUploadVisible, setIsUploadVisible] = useState(false)
+  const [previewData, setPreviewData] = useState<ProductImportData[] | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (file: File) => {
@@ -60,7 +65,8 @@ export default function ProductExcelUpload({ onImportComplete }: { onImportCompl
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Not authenticated')
 
-      const response = await fetch('http://localhost:8000/api/sales/products/import-excel', {
+      // First, get preview data
+      const response = await fetch('http://localhost:8000/api/sales/products/preview-excel', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`
@@ -71,17 +77,23 @@ export default function ProductExcelUpload({ onImportComplete }: { onImportCompl
       const result = await response.json()
 
       if (response.ok) {
+        // Set preview data and show preview
+        const productsWithStatus = result.products.map((product: any) => ({
+          ...product,
+          status: 'pending' as const,
+          errors: product.errors || []
+        }))
+        
+        setPreviewData(productsWithStatus)
+        setShowPreview(true)
         setUploadResult({
           success: true,
-          message: result.message,
-          importedCount: result.imported_count,
-          totalCount: result.total_count
+          message: `Đã tải {result.products.length} sản phẩm để xem trước`
         })
-        onImportComplete?.()
       } else {
         setUploadResult({
           success: false,
-          message: result.detail || 'Có lỗi xảy ra khi import sản phẩm',
+          message: result.detail || 'Có lỗi xảy ra khi xử lý file',
           errors: result.errors
         })
       }
@@ -169,6 +181,86 @@ export default function ProductExcelUpload({ onImportComplete }: { onImportCompl
         message: `Lỗi tải template: ${error instanceof Error ? error.message : 'Unknown error'}`
       })
     }
+  }
+
+  const handleApproveProducts = async (approvedProducts: ProductImportData[]) => {
+    try {
+      setIsUploading(true)
+      
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      const response = await fetch('http://localhost:8000/api/sales/products/import-excel', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ products: approvedProducts })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setUploadResult({
+          success: true,
+          message: `Đã import thành công ${result.imported_count}/${result.total_count} sản phẩm`,
+          importedCount: result.imported_count,
+          totalCount: result.total_count
+        })
+        setShowPreview(false)
+        setPreviewData(null)
+        onImportComplete?.()
+      } else {
+        setUploadResult({
+          success: false,
+          message: result.detail || 'Có lỗi xảy ra khi import sản phẩm',
+          errors: result.errors
+        })
+      }
+    } catch (error) {
+      console.error('Import error:', error)
+      setUploadResult({
+        success: false,
+        message: 'Có lỗi xảy ra khi import sản phẩm'
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleRejectImport = () => {
+    setShowPreview(false)
+    setPreviewData(null)
+    setUploadResult({
+      success: false,
+      message: 'Đã hủy bỏ import sản phẩm'
+    })
+  }
+
+  const handleEditProduct = (index: number, updatedProduct: ProductImportData) => {
+    if (previewData) {
+      const newPreviewData = [...previewData]
+      newPreviewData[index] = {
+        ...updatedProduct,
+        status: 'pending' as const,
+        errors: []
+      }
+      setPreviewData(newPreviewData)
+    }
+  }
+
+  // Show preview if data is available
+  if (showPreview && previewData) {
+    return (
+      <ProductImportPreview
+        products={previewData}
+        onApprove={handleApproveProducts}
+        onReject={handleRejectImport}
+        onEdit={handleEditProduct}
+        isProcessing={isUploading}
+      />
+    )
   }
 
   return (

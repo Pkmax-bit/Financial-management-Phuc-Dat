@@ -37,12 +37,12 @@ class ProductImportResult:
             "success": self.success
         }
 
-@router.post("/import-excel")
-async def import_products_from_excel(
+@router.post("/preview-excel")
+async def preview_products_from_excel(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
 ):
-    """Import products from Excel file"""
+    """Preview products from Excel file without importing"""
     try:
         # Validate file type
         if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
@@ -69,8 +69,74 @@ async def import_products_from_excel(
                 detail=f"Thiếu các cột bắt buộc: {', '.join(missing_columns)}"
             )
 
+        products = []
+        errors = []
+        
+        # Get all categories for mapping
+        supabase = get_supabase_client()
+        categories_response = supabase.table("product_categories").select("id, name").execute()
+        categories = {cat["name"]: cat["id"] for cat in categories_response.data}
+        
+        # Process each row
+        for index, row in df.iterrows():
+            product_errors = []
+            
+            # Validate required fields
+            if pd.isna(row['name']) or str(row['name']).strip() == '':
+                product_errors.append("Tên sản phẩm không được để trống")
+            
+            if pd.isna(row['price']) or row['price'] <= 0:
+                product_errors.append("Giá sản phẩm phải lớn hơn 0")
+            
+            if pd.isna(row['unit']) or str(row['unit']).strip() == '':
+                product_errors.append("Đơn vị không được để trống")
+
+            # Prepare product data
+            product_data = {
+                "name": str(row['name']).strip() if not pd.isna(row['name']) else '',
+                "price": float(row['price']) if not pd.isna(row['price']) else 0,
+                "unit": str(row['unit']).strip() if not pd.isna(row['unit']) else '',
+                "description": str(row.get('description', '')).strip() if not pd.isna(row.get('description')) else None,
+                "area": float(row.get('area', 0)) if not pd.isna(row.get('area')) and row.get('area') > 0 else None,
+                "volume": float(row.get('volume', 0)) if not pd.isna(row.get('volume')) and row.get('volume') > 0 else None,
+                "height": float(row.get('height', 0)) if not pd.isna(row.get('height')) and row.get('height') > 0 else None,
+                "length": float(row.get('length', 0)) if not pd.isna(row.get('length')) and row.get('length') > 0 else None,
+                "depth": float(row.get('depth', 0)) if not pd.isna(row.get('depth')) and row.get('depth') > 0 else None,
+                "category_name": str(row.get('category_name', '')).strip() if not pd.isna(row.get('category_name')) else None,
+                "errors": product_errors
+            }
+
+            products.append(product_data)
+
+        return {
+            "products": products,
+            "total_count": len(products),
+            "valid_count": len([p for p in products if not p['errors']]),
+            "error_count": len([p for p in products if p['errors']])
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Lỗi xử lý file: {str(e)}"
+        )
+
+@router.post("/import-excel")
+async def import_products_from_excel(
+    request: dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Import products from approved list"""
+    try:
+        products = request.get('products', [])
+        if not products:
+            raise HTTPException(
+                status_code=400,
+                detail="Không có sản phẩm nào để import"
+            )
+
         result = ProductImportResult()
-        result.total_count = len(df)
+        result.total_count = len(products)
         
         supabase = get_supabase_client()
         
@@ -78,39 +144,35 @@ async def import_products_from_excel(
         categories_response = supabase.table("product_categories").select("id, name").execute()
         categories = {cat["name"]: cat["id"] for cat in categories_response.data}
         
-        # Process each row
-        for index, row in df.iterrows():
+        # Process each approved product
+        for index, product in enumerate(products):
             try:
-                # Validate required fields
-                if pd.isna(row['name']) or str(row['name']).strip() == '':
-                    result.add_error(index + 2, "Tên sản phẩm không được để trống")
+                # Skip if product has errors or is not approved
+                if product.get('errors') and len(product['errors']) > 0:
+                    result.add_error(index + 1, f"Sản phẩm có lỗi: {', '.join(product['errors'])}")
                     continue
                 
-                if pd.isna(row['price']) or row['price'] <= 0:
-                    result.add_error(index + 2, "Giá sản phẩm phải lớn hơn 0")
-                    continue
-                
-                if pd.isna(row['unit']) or str(row['unit']).strip() == '':
-                    result.add_error(index + 2, "Đơn vị không được để trống")
+                if product.get('status') != 'approved':
+                    result.add_error(index + 1, "Sản phẩm chưa được duyệt")
                     continue
 
                 # Prepare product data
                 product_data = {
-                    "name": str(row['name']).strip(),
-                    "price": float(row['price']),
-                    "unit": str(row['unit']).strip(),
-                    "description": str(row.get('description', '')).strip() if not pd.isna(row.get('description')) else None,
-                    "area": float(row.get('area', 0)) if not pd.isna(row.get('area')) and row.get('area') > 0 else None,
-                    "volume": float(row.get('volume', 0)) if not pd.isna(row.get('volume')) and row.get('volume') > 0 else None,
-                    "height": float(row.get('height', 0)) if not pd.isna(row.get('height')) and row.get('height') > 0 else None,
-                    "length": float(row.get('length', 0)) if not pd.isna(row.get('length')) and row.get('length') > 0 else None,
-                    "depth": float(row.get('depth', 0)) if not pd.isna(row.get('depth')) and row.get('depth') > 0 else None,
+                    "name": product['name'],
+                    "price": product['price'],
+                    "unit": product['unit'],
+                    "description": product.get('description'),
+                    "area": product.get('area'),
+                    "volume": product.get('volume'),
+                    "height": product.get('height'),
+                    "length": product.get('length'),
+                    "depth": product.get('depth'),
                     "is_active": True
                 }
 
                 # Handle category
-                if 'category_name' in row and not pd.isna(row['category_name']):
-                    category_name = str(row['category_name']).strip()
+                if product.get('category_name'):
+                    category_name = product['category_name']
                     if category_name in categories:
                         product_data["category_id"] = categories[category_name]
                     else:
@@ -131,10 +193,10 @@ async def import_products_from_excel(
                 if insert_result.data:
                     result.imported_count += 1
                 else:
-                    result.add_error(index + 2, "Không thể tạo sản phẩm")
+                    result.add_error(index + 1, "Không thể tạo sản phẩm")
                     
             except Exception as e:
-                result.add_error(index + 2, f"Lỗi xử lý dòng: {str(e)}")
+                result.add_error(index + 1, f"Lỗi xử lý sản phẩm: {str(e)}")
 
         return {
             "message": f"Import hoàn thành. Đã import {result.imported_count}/{result.total_count} sản phẩm",
