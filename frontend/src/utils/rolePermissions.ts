@@ -92,12 +92,20 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'workflow'
   },
   {
-    name: 'Timeline Khách hàng',
+    name: 'Tiến độ dự án (Khách hàng)',
     href: '/projects/timeline',
     icon: 'Eye',
     description: 'Bước 8: Khách hàng xem tiến độ dự án',
     roles: ['customer'],
-    category: 'customer'
+    category: 'system'
+  },
+  {
+    name: 'Tiến độ thi công',
+    href: '/projects/kanban',
+    icon: 'FolderOpen',
+    description: 'Theo dõi tiến độ thi công nội bộ',
+    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
+    category: 'system'
   },
   {
     name: 'Nhân viên',

@@ -20,7 +20,7 @@ import {
   EyeOff
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import Navigation from '@/components/Navigation'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 
 interface Notification {
   id: string
@@ -41,12 +41,20 @@ export default function NotificationsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [showSystemAlertModal, setShowSystemAlertModal] = useState(false)
+  const [showCreateNotificationModal, setShowCreateNotificationModal] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [employees, setEmployees] = useState<Array<{ id: string, user_id?: string | null, first_name?: string, last_name?: string, email?: string }>>([])
+  const [selectedEmployeeUserIds, setSelectedEmployeeUserIds] = useState<string[]>([])
+  const [notifTitle, setNotifTitle] = useState('')
+  const [notifMessage, setNotifMessage] = useState('')
+  const [sendEmail, setSendEmail] = useState(false)
   const [user, setUser] = useState<unknown>(null)
   const router = useRouter()
 
   useEffect(() => {
     checkUser()
     fetchNotifications()
+    fetchEmployees()
   }, [])
 
   const checkUser = async () => {
@@ -90,6 +98,87 @@ export default function NotificationsPage() {
       console.error('Error fetching notifications:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, user_id, first_name, last_name, email')
+        .order('first_name', { ascending: true })
+      if (error) throw error
+      setEmployees(data || [])
+    } catch (error) {
+      console.error('Error fetching employees:', error)
+    }
+  }
+
+  const handleCreateNotification = async () => {
+    if (!notifTitle.trim() || !notifMessage.trim() || selectedEmployeeUserIds.length === 0) return
+    try {
+      setCreating(true)
+      // Get session token for backend auth
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      // Create notifications for each selected employee
+      for (const uid of selectedEmployeeUserIds) {
+        const res = await fetch('http://localhost:8000/api/notifications/notifications', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            user_id: uid,
+            title: notifTitle,
+            message: notifMessage,
+            type: 'info'
+          })
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(`Create notification failed: ${res.status} ${text}`)
+        }
+      }
+
+      // Optionally send emails
+      if (sendEmail) {
+        for (const uid of selectedEmployeeUserIds) {
+          const emp = employees.find(e => e.user_id === uid)
+          if (emp?.email) {
+            const emailRes = await fetch('http://localhost:8000/api/notifications/notifications/email', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                to_email: emp.email,
+                subject: notifTitle,
+                body: `<p>${notifMessage}</p>`
+              })
+            })
+            if (!emailRes.ok) {
+              const text = await emailRes.text()
+              throw new Error(`Send email failed: ${emailRes.status} ${text}`)
+            }
+          }
+        }
+      }
+
+      // Reset and refresh
+      setShowCreateNotificationModal(false)
+      setNotifTitle('')
+      setNotifMessage('')
+      setSelectedEmployeeUserIds([])
+      setSendEmail(false)
+      fetchNotifications()
+    } catch (error) {
+      console.error('Error creating notifications:', error)
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -230,11 +319,8 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation user={user || undefined} onLogout={handleLogout} />
-
-      {/* Main content */}
-      <div className="pl-64">
+    <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
+      <div className="w-full">
         {/* Top navigation */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
           <div className="flex h-16 items-center justify-between px-6">
@@ -256,6 +342,13 @@ export default function NotificationsPage() {
                 </p>
               </div>
               <div className="flex space-x-3">
+                <button 
+                  onClick={() => setShowCreateNotificationModal(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <Bell className="h-4 w-4 mr-2" />
+                  Tạo thông báo
+                </button>
                 <button 
                   onClick={() => setShowEmailModal(true)}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -445,7 +538,7 @@ export default function NotificationsPage() {
           </div>
         </div>
       </div>
-
+      
       {/* Send Email Modal */}
       {showEmailModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -506,6 +599,107 @@ export default function NotificationsPage() {
         </div>
       )}
 
+      {/* Create Notification Drawer (Right side, translucent, non-blocking) */}
+      {showCreateNotificationModal && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div className="fixed right-0 top-0 h-full w-full max-w-md border-l border-gray-200 bg-white/90 backdrop-blur-sm shadow-2xl pointer-events-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Tạo thông báo</h3>
+              <button
+                onClick={() => setShowCreateNotificationModal(false)}
+                className="text-black hover:text-black"
+                title="Đóng"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto h-[calc(100%-56px)]">
+              <div>
+                <label className="block text-sm font-medium text-black">Tiêu đề</label>
+                <input
+                  type="text"
+                  value={notifTitle}
+                  onChange={(e) => setNotifTitle(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black placeholder-black"
+                  placeholder="Nhập tiêu đề thông báo"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black">Nội dung</label>
+                <textarea
+                  value={notifMessage}
+                  onChange={(e) => setNotifMessage(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black placeholder-black"
+                  rows={5}
+                  placeholder="Nhập nội dung thông báo"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black mb-1">Chọn nhân viên nhận</label>
+                <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-md divide-y">
+                  {employees.map(emp => {
+                    const label = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email || emp.id
+                    const hasUser = Boolean(emp.user_id)
+                    const checked = emp.user_id ? selectedEmployeeUserIds.includes(emp.user_id) : false
+                    return (
+                      <label key={emp.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                            checked={checked}
+                            disabled={!hasUser}
+                            onChange={(e) => {
+                              if (!emp.user_id) return
+                              if (e.target.checked) setSelectedEmployeeUserIds(prev => [...prev, emp.user_id!])
+                              else setSelectedEmployeeUserIds(prev => prev.filter(id => id !== emp.user_id))
+                            }}
+                          />
+                          <span className="ml-3 text-black">{label}</span>
+                        </div>
+                        <span className="text-xs text-black">{emp.email}{!hasUser ? ' (chưa liên kết tài khoản)' : ''}</span>
+                      </label>
+                    )
+                  })}
+                  {employees.length === 0 && (
+                    <div className="px-3 py-4 text-sm text-black">Không có nhân viên</div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    checked={sendEmail}
+                    onChange={(e) => setSendEmail(e.target.checked)}
+                  />
+                  <span className="ml-2 text-sm text-black">Gửi kèm email (dùng cùng tiêu đề và nội dung)</span>
+                </label>
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  onClick={() => setShowCreateNotificationModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-black bg-gray-100 rounded-md hover:bg-gray-200 border border-gray-200"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleCreateNotification}
+                  disabled={creating || !notifTitle.trim() || !notifMessage.trim() || selectedEmployeeUserIds.length === 0}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {creating ? 'Đang tạo...' : 'Tạo thông báo'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* System Alert Modal */}
       {showSystemAlertModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -566,6 +760,6 @@ export default function NotificationsPage() {
           </div>
         </div>
       )}
-    </div>
+    </LayoutWithSidebar>
   )
 }

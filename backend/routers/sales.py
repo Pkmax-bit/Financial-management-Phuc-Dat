@@ -265,6 +265,11 @@ async def create_quote(
                         "unit": item.get("unit", ""),
                         "unit_price": item.get("unit_price", 0),
                         "total_price": item.get("total_price", 0),
+                        "area": item.get("area"),
+                        "volume": item.get("volume"),
+                        "height": item.get("height"),
+                        "length": item.get("length"),
+                        "depth": item.get("depth"),
                         "created_at": datetime.utcnow().isoformat()
                     }
                     quote_items.append(quote_item)
@@ -800,6 +805,11 @@ async def convert_quote_to_invoice(
                 "name_product": item.get("name_product"),
                 "unit": item.get("unit"),
                 "discount_rate": item.get("discount_rate", 0.0),
+                "area": item.get("area"),
+                "volume": item.get("volume"),
+                "height": item.get("height"),
+                "length": item.get("length"),
+                "depth": item.get("depth"),
                 "created_at": datetime.utcnow().isoformat()
             }
             converted_items.append(invoice_item)

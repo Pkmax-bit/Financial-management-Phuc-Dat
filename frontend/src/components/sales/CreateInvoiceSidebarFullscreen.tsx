@@ -12,10 +12,12 @@ import {
   Save,
   Send,
   Package,
-  Search
+  Search,
+  Eye
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import ColumnVisibilityDialog from './ColumnVisibilityDialog'
 
 interface Customer {
   id: string
@@ -33,6 +35,11 @@ interface InvoiceItem {
   unit: string
   unit_price: number
   total_price: number
+  area?: number | null
+  volume?: number | null
+  height?: number | null
+  length?: number | null
+  depth?: number | null
 }
 
 interface Product {
@@ -42,6 +49,11 @@ interface Product {
   unit?: string
   unit_price?: number
   category?: string
+  area?: number | null
+  volume?: number | null
+  height?: number | null
+  length?: number | null
+  depth?: number | null
 }
 
 interface CreateInvoiceSidebarProps {
@@ -75,6 +87,20 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const [submitting, setSubmitting] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
+  const [showColumnDialog, setShowColumnDialog] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState({
+    name: true,
+    description: false,
+    quantity: true,
+    unit: true,
+    unit_price: true,
+    total_price: true,
+    area: true,
+    volume: true,
+    height: true,
+    length: true,
+    depth: true
+  })
 
   // Form data
   const [formData, setFormData] = useState({
@@ -99,7 +125,19 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   })
 
   const [items, setItems] = useState<InvoiceItem[]>([
-    { name_product: '', description: '', quantity: 1, unit: '', unit_price: 0, total_price: 0 }
+    { 
+      name_product: '', 
+      description: '', 
+      quantity: 1, 
+      unit: '', 
+      unit_price: 0, 
+      total_price: 0,
+      area: null,
+      volume: null,
+      height: null,
+      length: null,
+      depth: null
+    }
   ])
 
   useEffect(() => {
@@ -223,7 +261,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           description: product.description || '',
           unit: product.unit || 'cái',
           unit_price: product.price || 0,
-          category: getCategoryDisplayName(product.product_categories?.name) || 'Khác'
+          category: getCategoryDisplayName(product.product_categories?.name) || 'Khác',
+          area: product.area !== undefined ? product.area : null,
+          volume: product.volume !== undefined ? product.volume : null,
+          height: product.height !== undefined ? product.height : null,
+          length: product.length !== undefined ? product.length : null,
+          depth: product.depth !== undefined ? product.depth : null
         }))
         setProducts(transformedProducts)
         console.log('🔍 Using real products data:', transformedProducts)
@@ -236,7 +279,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             description: 'Laptop cao cấp với màn hình 13 inch, RAM 16GB, SSD 512GB',
             unit: 'cái',
             unit_price: 25000000,
-            category: 'Thiết bị điện tử'
+            category: 'Thiết bị điện tử',
+            area: 0.2,
+            volume: 0.005,
+            height: 2.5,
+            length: 35.0,
+            depth: 25.0
           },
           {
             id: '2',
@@ -244,7 +292,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             description: 'Bàn làm việc gỗ tự nhiên, kích thước 120x60cm',
             unit: 'cái',
             unit_price: 3500000,
-            category: 'Nội thất'
+            category: 'Nội thất',
+            area: 0.72,
+            volume: 0.18,
+            height: 75.0,
+            length: 120.0,
+            depth: 60.0
           },
           {
             id: '3',
@@ -252,7 +305,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             description: 'Dịch vụ tư vấn công nghệ thông tin cho doanh nghiệp',
             unit: 'giờ',
             unit_price: 500000,
-            category: 'Dịch vụ'
+            category: 'Dịch vụ',
+            area: null,
+            volume: null,
+            height: null,
+            length: null,
+            depth: null
           },
           {
             id: '4',
@@ -260,7 +318,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             description: 'Máy in laser đen trắng, tốc độ 20 trang/phút',
             unit: 'cái',
             unit_price: 4500000,
-            category: 'Thiết bị văn phòng'
+            category: 'Thiết bị văn phòng',
+            area: 0.3,
+            volume: 0.08,
+            height: 40.0,
+            length: 50.0,
+            depth: 40.0
           },
           {
             id: '5',
@@ -268,7 +331,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             description: 'Ghế văn phòng có thể điều chỉnh độ cao, màu đen',
             unit: 'cái',
             unit_price: 1200000,
-            category: 'Nội thất'
+            category: 'Nội thất',
+            area: 0.25,
+            volume: 0.05,
+            height: 100.0,
+            length: 50.0,
+            depth: 50.0
           }
         ]
         setProducts(sampleProducts)
@@ -334,7 +402,42 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   }
 
   const addItem = () => {
-    setItems([...items, { name_product: '', description: '', quantity: 1, unit: '', unit_price: 0, total_price: 0 }])
+    setItems([...items, { 
+      name_product: '', 
+      description: '', 
+      quantity: 1, 
+      unit: '', 
+      unit_price: 0, 
+      total_price: 0,
+      area: null,
+      volume: null,
+      height: null,
+      length: null,
+      depth: null
+    }])
+  }
+
+  const toggleColumn = (column: string) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }))
+  }
+
+  const resetColumns = () => {
+    setVisibleColumns({
+      name: true,
+      description: false,
+      quantity: true,
+      unit: true,
+      unit_price: true,
+      total_price: true,
+      area: true,
+      volume: true,
+      height: true,
+      length: true,
+      depth: true
+    })
   }
 
   const removeItem = (index: number) => {
@@ -362,16 +465,32 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   }
 
   const selectProduct = (product: Product) => {
+    console.log('🔍 selectProduct called with:', product)
+    console.log('🔍 Product dimensions:', {
+      area: product.area,
+      volume: product.volume,
+      height: product.height,
+      length: product.length,
+      depth: product.depth
+    })
+    
     if (selectedItemIndex !== null) {
       const updatedItems = [...items]
-      updatedItems[selectedItemIndex] = {
+      const newItem = {
         ...updatedItems[selectedItemIndex],
         name_product: product.name,
         description: product.description || '',
         unit: product.unit || '',
         unit_price: product.unit_price || 0,
-        total_price: updatedItems[selectedItemIndex].quantity * (product.unit_price || 0)
+        total_price: updatedItems[selectedItemIndex].quantity * (product.unit_price || 0),
+        area: product.area !== undefined ? product.area : null,
+        volume: product.volume !== undefined ? product.volume : null,
+        height: product.height !== undefined ? product.height : null,
+        length: product.length !== undefined ? product.length : null,
+        depth: product.depth !== undefined ? product.depth : null
       }
+      console.log('🔍 New item after selection:', newItem)
+      updatedItems[selectedItemIndex] = newItem
       setItems(updatedItems)
     }
     setShowProductModal(false)
@@ -466,7 +585,19 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       terms_and_conditions: 'Hóa đơn có hiệu lực từ ngày phát hành.',
       created_by: ''
     })
-    setItems([{ name_product: '', description: '', quantity: 1, unit: '', unit_price: 0, total_price: 0 }])
+    setItems([{ 
+      name_product: '', 
+      description: '', 
+      quantity: 1, 
+      unit: '', 
+      unit_price: 0, 
+      total_price: 0,
+      area: null,
+      volume: null,
+      height: null,
+      length: null,
+      depth: null
+    }])
   }
 
   const formatCurrency = (amount: number) => {
@@ -632,25 +763,60 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium text-black">Sản phẩm/Dịch vụ</h2>
-                <button
-                  onClick={addItem}
-                  className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Thêm sản phẩm
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setShowColumnDialog(true)}
+                    className="flex items-center px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Hiện/Ẩn cột
+                  </button>
+                  <button
+                    onClick={addItem}
+                    className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Thêm sản phẩm tự do
+                  </button>
+                  <button
+                    onClick={() => setShowProductModal(true)}
+                    className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                  >
+                    <Search className="h-4 w-4 mr-1" />
+                    Chọn từ danh sách
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white border border-gray-300 rounded-md overflow-hidden">
                 {/* Header */}
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-300">
-                  <div className="grid grid-cols-12 gap-4 text-sm font-medium text-black">
-                    <div className="col-span-3">Tên sản phẩm</div>
-                    <div className="col-span-3">Mô tả</div>
-                    <div className="col-span-1">Số lượng</div>
-                    <div className="col-span-1">Đơn vị</div>
-                    <div className="col-span-2">Đơn giá</div>
-                    <div className="col-span-2">Thành tiền</div>
+                  <div className="grid gap-4 text-sm font-medium text-black" style={{
+                    gridTemplateColumns: [
+                      visibleColumns.name && '2fr',
+                      visibleColumns.description && '2fr', 
+                      visibleColumns.quantity && '1fr',
+                      visibleColumns.unit && '1fr',
+                      visibleColumns.unit_price && '1.5fr',
+                      visibleColumns.total_price && '1.5fr',
+                      visibleColumns.area && '1fr',
+                      visibleColumns.volume && '1fr',
+                      visibleColumns.height && '1fr',
+                      visibleColumns.length && '1fr',
+                      visibleColumns.depth && '1fr'
+                    ].filter(Boolean).join(' ')
+                  }}>
+                    {visibleColumns.name && <div>Tên sản phẩm</div>}
+                    {visibleColumns.description && <div>Mô tả</div>}
+                    {visibleColumns.quantity && <div>Số lượng</div>}
+                    {visibleColumns.unit && <div>Đơn vị</div>}
+                    {visibleColumns.unit_price && <div>Đơn giá</div>}
+                    {visibleColumns.total_price && <div>Thành tiền</div>}
+                    {visibleColumns.area && <div>Diện tích</div>}
+                    {visibleColumns.volume && <div>Thể tích</div>}
+                    {visibleColumns.height && <div>Cao</div>}
+                    {visibleColumns.length && <div>Dài</div>}
+                    {visibleColumns.depth && <div>Sâu</div>}
                   </div>
                 </div>
 
@@ -658,77 +824,163 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 <div className="divide-y divide-gray-300">
                   {items.map((item, index) => (
                     <div key={index} className="px-4 py-3">
-                      <div className="grid grid-cols-12 gap-4 items-center">
-                        <div className="col-span-3">
-                          <div className="flex gap-2">
+                      <div className="grid gap-4 items-center" style={{
+                        gridTemplateColumns: [
+                          visibleColumns.name && '2fr',
+                          visibleColumns.description && '2fr', 
+                          visibleColumns.quantity && '1fr',
+                          visibleColumns.unit && '1fr',
+                          visibleColumns.unit_price && '1.5fr',
+                          visibleColumns.total_price && '1.5fr',
+                          visibleColumns.area && '1fr',
+                          visibleColumns.volume && '1fr',
+                          visibleColumns.height && '1fr',
+                          visibleColumns.length && '1fr',
+                          visibleColumns.depth && '1fr'
+                        ].filter(Boolean).join(' ')
+                      }}>
+                        {visibleColumns.name && (
+                          <div>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={item.name_product}
+                                onChange={(e) => updateItem(index, 'name_product', e.target.value)}
+                                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Tên sản phẩm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => openProductModal(index)}
+                                className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center"
+                                title="Chọn sản phẩm từ danh sách"
+                              >
+                                <Search className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {visibleColumns.description && (
+                          <div>
                             <input
                               type="text"
-                              value={item.name_product}
-                              onChange={(e) => updateItem(index, 'name_product', e.target.value)}
-                              className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Tên sản phẩm"
+                              value={item.description}
+                              onChange={(e) => updateItem(index, 'description', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Mô tả"
                             />
-                            <button
-                              type="button"
-                              onClick={() => openProductModal(index)}
-                              className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center"
-                              title="Chọn sản phẩm từ danh sách"
-                            >
-                              <Search className="h-4 w-4" />
-                            </button>
                           </div>
-                        </div>
-                        <div className="col-span-3">
-                          <input
-                            type="text"
-                            value={item.description}
-                            onChange={(e) => updateItem(index, 'description', e.target.value)}
-                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="Mô tả"
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            min="0"
-                            step="1"
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <input
-                            type="text"
-                            value={item.unit}
-                            onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="cái"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            value={item.unit_price}
-                            onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
-                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            min="0"
-                            step="1000"
-                          />
-                        </div>
-                        <div className="col-span-2 flex items-center justify-between">
-                          <span className="text-sm font-medium text-black">
-                            {formatCurrency(item.total_price)}
-                          </span>
-                          {items.length > 1 && (
-                            <button
-                              onClick={() => removeItem(index)}
-                              className="p-1 text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
+                        )}
+                        {visibleColumns.quantity && (
+                          <div>
+                            <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              step="1"
+                            />
+                          </div>
+                        )}
+                        {visibleColumns.unit && (
+                          <div>
+                            <input
+                              type="text"
+                              value={item.unit}
+                              onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="cái"
+                            />
+                          </div>
+                        )}
+                        {visibleColumns.unit_price && (
+                          <div>
+                            <input
+                              type="number"
+                              value={item.unit_price}
+                              onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              step="1000"
+                            />
+                          </div>
+                        )}
+                        {visibleColumns.total_price && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-black">
+                              {formatCurrency(item.total_price)}
+                            </span>
+                            {items.length > 1 && (
+                              <button
+                                onClick={() => removeItem(index)}
+                                className="p-1 text-red-600 hover:text-red-800"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {visibleColumns.area && (
+                          <div>
+                            <input
+                              type="number"
+                              value={item.area ?? ''}
+                              onChange={(e) => updateItem(index, 'area', e.target.value ? Number(e.target.value) : null)}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="m²"
+                              step="0.01"
+                            />
+                          </div>
+                        )}
+                        {visibleColumns.volume && (
+                          <div>
+                            <input
+                              type="number"
+                              value={item.volume ?? ''}
+                              onChange={(e) => updateItem(index, 'volume', e.target.value ? Number(e.target.value) : null)}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="m³"
+                              step="0.001"
+                            />
+                          </div>
+                        )}
+                        {visibleColumns.height && (
+                          <div>
+                            <input
+                              type="number"
+                              value={item.height ?? ''}
+                              onChange={(e) => updateItem(index, 'height', e.target.value ? Number(e.target.value) : null)}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="cm"
+                              step="0.1"
+                            />
+                          </div>
+                        )}
+                        {visibleColumns.length && (
+                          <div>
+                            <input
+                              type="number"
+                              value={item.length ?? ''}
+                              onChange={(e) => updateItem(index, 'length', e.target.value ? Number(e.target.value) : null)}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="cm"
+                              step="0.1"
+                            />
+                          </div>
+                        )}
+                        {visibleColumns.depth && (
+                          <div>
+                            <input
+                              type="number"
+                              value={item.depth ?? ''}
+                              onChange={(e) => updateItem(index, 'depth', e.target.value ? Number(e.target.value) : null)}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="cm"
+                              step="0.1"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -922,8 +1174,8 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                               onClick={() => selectProduct(product)}
                               className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md"
                             >
-                              <div className="grid grid-cols-4 gap-4 items-center">
-                                <div className="col-span-1">
+                              <div className="grid grid-cols-6 gap-3 items-center">
+                                <div className="col-span-2">
                                   <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
                                   <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
                                     {category}
@@ -950,6 +1202,21 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                 </div>
                                 <div className="col-span-1">
                                   <span className="text-sm text-gray-500">
+                                    <span className="font-medium">Kích thước:</span><br/>
+                                    <div className="text-xs space-y-1">
+                                      {product.area && <div>📐 Diện tích: {product.area} m²</div>}
+                                      {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
+                                      {product.height && <div>📏 Cao: {product.height} cm</div>}
+                                      {product.length && <div>📏 Dài: {product.length} cm</div>}
+                                      {product.depth && <div>📏 Sâu: {product.depth} cm</div>}
+                                      {!product.area && !product.volume && !product.height && !product.length && !product.depth && 
+                                        <div className="text-gray-400">Chưa có kích thước</div>
+                                      }
+                                    </div>
+                                  </span>
+                                </div>
+                                <div className="col-span-1">
+                                  <span className="text-sm text-gray-500">
                                     <span className="font-medium">Mô tả:</span><br/>
                                     {product.description || 'Không có mô tả'}
                                   </span>
@@ -967,6 +1234,15 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           </div>
         </div>
       )}
+
+      {/* Column Visibility Dialog */}
+      <ColumnVisibilityDialog
+        isOpen={showColumnDialog}
+        onClose={() => setShowColumnDialog(false)}
+        visibleColumns={visibleColumns}
+        onToggleColumn={toggleColumn}
+        onReset={resetColumns}
+      />
     </div>
   )
 }

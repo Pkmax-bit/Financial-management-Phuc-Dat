@@ -200,6 +200,54 @@ class EmailService:
             print(f"Failed to send quote email: {e}")
             return False
 
+    async def send_notification_email(self, employee_email: str, title: str, message: str, action_url: str | None = None) -> bool:
+        """Send a simple notification email to an employee"""
+        try:
+            if not self.smtp_username or not self.smtp_password:
+                print("Email credentials not configured, skipping notification email send")
+                return False
+
+            subject = title or "Thông báo"
+            html_body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="border: 1px solid #ddd;">
+                <div style="padding: 16px; border-bottom: 1px solid #ddd;">
+                  <h2 style="margin: 0; color: #333;">{subject}</h2>
+                </div>
+                <div style="padding: 16px;">
+                  <p style="margin: 0 0 12px 0; white-space: pre-line;">{message or ''}</p>
+                  {f'<div style="margin-top:16px"><a href="{action_url}" style="background:#0f172a;color:#fff;padding:10px 16px;text-decoration:none;border-radius:4px;">Xem chi tiết</a></div>' if action_url else ''}
+                </div>
+                <div style="padding: 12px; border-top: 1px solid #ddd; text-align: center; color:#666; font-size:12px;">
+                  Bộ phận Công ty Phúc Đạt
+                </div>
+              </div>
+            </body>
+            </html>
+            """
+
+            text_body = f"{title or 'Thông báo'}\n\n{message or ''}\n\n{('Xem chi tiết: ' + action_url) if action_url else ''}"
+
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = f"Bộ phận Công ty Phúc Đạt <{self.smtp_username}>"
+            msg['To'] = employee_email
+
+            msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
+            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+
+            print(f"Notification email sent successfully to {employee_email}")
+            return True
+        except Exception as e:
+            print(f"Failed to send notification email: {e}")
+            return False
+
     async def send_quote_approved_notification_email(self, quote_data: Dict[str, Any], employee_email: str, employee_name: str, quote_items: list = None) -> bool:
         """Send quote approved notification email to employee"""
         try:

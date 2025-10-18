@@ -31,7 +31,7 @@ export default function ProductCategoriesTab() {
       if (error) throw error
       setCategories((data || []) as unknown as Category[])
     } catch (e: any) {
-      setError(e.message || 'Không thể tải danh sách loại sản phẩm')
+      setError(e.message || 'Không thể tải danh sách hạng mục')
     } finally {
       setLoading(false)
     }
@@ -55,7 +55,7 @@ export default function ProductCategoriesTab() {
       setDescription('')
       await loadCategories()
     } catch (e: any) {
-      setError(e.message || 'Không thể tạo loại sản phẩm')
+      setError(e.message || 'Không thể tạo hạng mục')
     } finally {
       setSubmitting(false)
     }
@@ -77,10 +77,10 @@ export default function ProductCategoriesTab() {
   return (
     <div className="space-y-6">
       <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">Tạo loại sản phẩm</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">Tạo hạng mục</h3>
         <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-1">Tên loại sản phẩm <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-gray-900 mb-1">Tên hạng mục <span className="text-red-500">*</span></label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -94,7 +94,7 @@ export default function ProductCategoriesTab() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-              placeholder="Ghi chú mô tả cho loại sản phẩm"
+              placeholder="Ghi chú mô tả cho hạng mục"
             />
           </div>
           <div className="md:col-span-3">
@@ -103,7 +103,7 @@ export default function ProductCategoriesTab() {
               disabled={submitting || !name.trim()}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50"
             >
-              {submitting ? 'Đang tạo...' : 'Tạo loại'}
+              {submitting ? 'Đang tạo...' : 'Tạo hạng mục'}
             </button>
           </div>
         </form>
@@ -112,46 +112,44 @@ export default function ProductCategoriesTab() {
 
       <div className="bg-white border border-gray-200 rounded-lg">
         <div className="p-4 border-b border-gray-200">
-          <h4 className="text-sm font-semibold text-gray-900">Danh sách loại sản phẩm</h4>
+          <h4 className="text-lg font-semibold text-gray-900">Danh sách hạng mục</h4>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm text-gray-900">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold w-64">Tên loại</th>
-                <th className="px-3 py-2 text-left font-semibold">Mô tả</th>
-                <th className="px-3 py-2 text-left font-semibold w-24">Trạng thái</th>
-                <th className="px-3 py-2 text-right font-semibold w-24"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td className="px-3 py-3" colSpan={4}>Đang tải...</td></tr>
-              ) : categories.length === 0 ? (
-                <tr><td className="px-3 py-3" colSpan={4}>Chưa có loại sản phẩm</td></tr>
-              ) : (
-                categories.map((c) => (
-                  <tr key={c.id} className="border-b border-gray-100">
-                    <td className="px-3 py-2">{c.name}</td>
-                    <td className="px-3 py-2">{c.description || '-'}</td>
-                    <td className="px-3 py-2">
-                      <span className={`px-2 py-1 rounded text-xs ${c.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                        {c.is_active ? 'Đang dùng' : 'Ngưng'}
+        <div className="p-4">
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Đang tải...</div>
+          ) : categories.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">Chưa có hạng mục</div>
+          ) : (
+            <div className="space-y-3">
+              {categories.map((c) => (
+                <div key={c.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex-1">
+                    <h5 className="text-base font-medium text-gray-900 mb-1">{c.name}</h5>
+                    <div className="flex items-center space-x-4">
+                      <span className={`text-sm ${c.is_active ? 'text-green-600' : 'text-gray-500'}`}>
+                        {c.is_active ? 'Đang hoạt động' : 'Đã ngưng'}
                       </span>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        onClick={() => toggleActive(c.id, c.is_active)}
-                        className="text-blue-600 hover:underline text-xs"
-                      >
-                        {c.is_active ? 'Ngưng' : 'Kích hoạt'}
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      <span className="text-xs text-gray-400">
+                        Tạo: {new Date(c.created_at).toLocaleDateString('vi-VN')}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => toggleActive(c.id, c.is_active)}
+                      className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
+                        c.is_active 
+                          ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' 
+                          : 'bg-green-50 text-green-600 hover:bg-green-100 border border-green-200'
+                      }`}
+                    >
+                      {c.is_active ? 'Ngưng' : 'Kích hoạt'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

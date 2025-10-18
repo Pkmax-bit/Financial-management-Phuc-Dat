@@ -13,6 +13,11 @@ class InvoiceItem(BaseModel):
     quantity: float
     unit_price: float
     subtotal: float
+    area: Optional[float] = None
+    volume: Optional[float] = None
+    height: Optional[float] = None
+    length: Optional[float] = None
+    depth: Optional[float] = None
 
 class InvoiceItemCreate(BaseModel):
     """Invoice item creation model"""
@@ -20,9 +25,19 @@ class InvoiceItemCreate(BaseModel):
     description: str
     quantity: float
     unit_price: float
+    area: Optional[float] = None
+    volume: Optional[float] = None
+    height: Optional[float] = None
+    length: Optional[float] = None
+    depth: Optional[float] = None
 
 class InvoiceItemUpdate(BaseModel):
     """Invoice item update model"""
     description: Optional[str] = None
     quantity: Optional[float] = None
     unit_price: Optional[float] = None
+    area: Optional[float] = None
+    volume: Optional[float] = None
+    height: Optional[float] = None
+    length: Optional[float] = None
+    depth: Optional[float] = None

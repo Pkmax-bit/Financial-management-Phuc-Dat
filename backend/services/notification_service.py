@@ -3,7 +3,7 @@ Notification service for employee notifications
 """
 
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from supabase import create_client, Client
 
@@ -84,6 +84,49 @@ class NotificationService:
         except Exception as e:
             print(f"Error getting notifications: {e}")
             return []
+
+    async def create_notifications_bulk(self, title: str, message: str, user_ids: List[str], action_url: Optional[str] = None, send_email: bool = True) -> Dict[str, Any]:
+        """Create notifications for multiple users and optionally send email"""
+        results = {"created": 0, "emails_sent": 0, "errors": []}
+        try:
+            notifications_payload = []
+            for uid in user_ids:
+                notifications_payload.append({
+                    "user_id": uid,
+                    "title": title,
+                    "message": message,
+                    "type": "manual",
+                    "entity_type": None,
+                    "entity_id": None,
+                    "is_read": False,
+                    "action_url": action_url,
+                    "created_at": datetime.utcnow().isoformat()
+                })
+            if notifications_payload:
+                result = self.supabase.table("notifications").insert(notifications_payload).execute()
+                if result.data:
+                    results["created"] = len(result.data)
+                else:
+                    results["errors"].append("Insert returned no data")
+            # Optionally send emails
+            if send_email:
+                try:
+                    # Fetch user emails from users table
+                    ures = self.supabase.table("users").select("id,email,full_name").in_("id", user_ids).execute()
+                    from services.email_service import email_service
+                    if ures.data:
+                        for user in ures.data:
+                            email = user.get("email")
+                            full_name = user.get("full_name", "")
+                            if email:
+                                ok = await email_service.send_notification_email(email, title, message, action_url)
+                                if ok:
+                                    results["emails_sent"] += 1
+                except Exception as e:
+                    results["errors"].append(f"Email error: {e}")
+            return results
+        except Exception as e:
+            return {"created": 0, "emails_sent": 0, "errors": [str(e)]}
     
     async def mark_notification_as_read(self, notification_id: str) -> bool:
         """Mark notification as read"""
