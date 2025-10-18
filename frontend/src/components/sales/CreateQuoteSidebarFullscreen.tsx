@@ -280,109 +280,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         }))
         setProducts(transformedProducts)
         console.log('🔍 Using real products data:', transformedProducts)
-      } else {
-        // If no data from database, use sample data
-        const sampleProducts = [
-          {
-            id: '1',
-            name: 'Laptop Dell XPS 13',
-            description: 'Laptop cao cấp với màn hình 13 inch, RAM 16GB, SSD 512GB',
-            unit: 'cái',
-            unit_price: 25000000,
-            category: 'Thiết bị điện tử',
-            area: 0.2,
-            volume: 0.005,
-            height: 2.5,
-            length: 35.0,
-            depth: 25.0
-          },
-          {
-            id: '2',
-            name: 'Bàn làm việc gỗ',
-            description: 'Bàn làm việc gỗ tự nhiên, kích thước 120x60cm',
-            unit: 'cái',
-            unit_price: 3500000,
-            category: 'Nội thất',
-            area: 0.72,
-            volume: 0.18,
-            height: 75.0,
-            length: 120.0,
-            depth: 60.0
-          },
-          {
-            id: '3',
-            name: 'Dịch vụ tư vấn IT',
-            description: 'Dịch vụ tư vấn công nghệ thông tin cho doanh nghiệp',
-            unit: 'giờ',
-            unit_price: 500000,
-            category: 'Dịch vụ',
-            area: null,
-            volume: null,
-            height: null,
-            length: null,
-            depth: null
-          },
-          {
-            id: '4',
-            name: 'Máy in Canon',
-            description: 'Máy in laser đen trắng, tốc độ 20 trang/phút',
-            unit: 'cái',
-            unit_price: 4500000,
-            category: 'Thiết bị văn phòng',
-            area: 0.3,
-            volume: 0.08,
-            height: 40.0,
-            length: 50.0,
-            depth: 40.0
-          },
-          {
-            id: '5',
-            name: 'Ghế văn phòng',
-            description: 'Ghế văn phòng có thể điều chỉnh độ cao, màu đen',
-            unit: 'cái',
-            unit_price: 1200000,
-            category: 'Nội thất',
-            area: 0.25,
-            volume: 0.05,
-            height: 100.0,
-            length: 50.0,
-            depth: 50.0
-          }
-        ]
-        setProducts(sampleProducts)
-        console.log('🔍 Using sample products data:', sampleProducts)
-      }
+      } 
+      
     } catch (error) {
       console.error('❌ Error fetching products:', error)
-      // Use sample data as fallback
-      const sampleProducts = [
-        {
-          id: '1',
-          name: 'Laptop Dell XPS 13',
-          description: 'Laptop cao cấp với màn hình 13 inch, RAM 16GB, SSD 512GB',
-          unit: 'cái',
-          unit_price: 25000000,
-          category: 'Thiết bị điện tử'
-        },
-        {
-          id: '2',
-          name: 'Bàn làm việc gỗ',
-          description: 'Bàn làm việc gỗ tự nhiên, kích thước 120x60cm',
-          unit: 'cái',
-          unit_price: 3500000,
-          category: 'Nội thất'
-        },
-        {
-          id: '3',
-          name: 'Dịch vụ tư vấn IT',
-          description: 'Dịch vụ tư vấn công nghệ thông tin cho doanh nghiệp',
-          unit: 'giờ',
-          unit_price: 500000,
-          category: 'Dịch vụ'
-        }
-      ]
-      setProducts(sampleProducts)
-      console.log('🔍 Using fallback sample products data:', sampleProducts)
+      setProducts([])
     } finally {
       setLoadingProducts(false)
     }
@@ -423,55 +325,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         setEmployees(transformedEmployees)
         console.log('🔍 Employees data:', transformedEmployees)
       } else {
-        console.log('🔍 No employees found, using sample data')
-        const sampleEmployees = [
-          {
-            id: '1',
-            name: 'Nguyễn Văn A',
-            email: 'nguyenvana@company.com',
-            user_id: 'user-1'
-          },
-          {
-            id: '2', 
-            name: 'Trần Thị B',
-            email: 'tranthib@company.com',
-            user_id: 'user-2'
-          },
-          {
-            id: '3',
-            name: 'Lê Văn C',
-            email: 'levanc@company.com', 
-            user_id: 'user-3'
-          }
-        ]
-        setEmployees(sampleEmployees)
-        console.log('🔍 Using sample employees data:', sampleEmployees)
+        console.log('🔍 No employees found')
+        setEmployees([])
       }
     } catch (error) {
       console.error('❌ Error fetching employees:', error)
-      // Use sample data as fallback
-      const sampleEmployees = [
-        {
-          id: '1',
-          name: 'Nguyễn Văn A',
-          email: 'nguyenvana@company.com',
-          user_id: 'user-1'
-        },
-        {
-          id: '2',
-          name: 'Trần Thị B', 
-          email: 'tranthib@company.com',
-          user_id: 'user-2'
-        },
-        {
-          id: '3',
-          name: 'Lê Văn C',
-          email: 'levanc@company.com',
-          user_id: 'user-3'
-        }
-      ]
-      setEmployees(sampleEmployees)
-      console.log('🔍 Using fallback sample employees data:', sampleEmployees)
+      setEmployees([])
     } finally {
       setLoadingEmployees(false)
     }
@@ -664,7 +523,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           quantity: item.quantity,
           unit: item.unit,
           unit_price: item.unit_price,
-          total_price: item.total_price
+          total_price: item.total_price,
+          area: item.area,
+          volume: item.volume,
+          height: item.height,
+          length: item.length,
+          depth: item.depth
         }))
 
         const { error: itemsError } = await supabase
@@ -1296,6 +1160,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                   <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
                                     {category}
                                   </div>
+                                  <button
+                                    onClick={() => selectProduct(product)}
+                                    className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                                  >
+                                    Chọn sản phẩm này
+                                  </button>
                                 </div>
                                 <div className="col-span-1">
                                   <span className="text-sm text-gray-500">
@@ -1379,7 +1249,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           quantity: newItems[insertIdx].quantity || 1,
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
-                          total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0)
+                          total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0),
+                          area: p.area !== undefined ? p.area : null,
+                          volume: p.volume !== undefined ? p.volume : null,
+                          height: p.height !== undefined ? p.height : null,
+                          length: p.length !== undefined ? p.length : null,
+                          depth: p.depth !== undefined ? p.depth : null
                         }
                         insertIdx = findEmptyFrom(insertIdx + 1)
                       } else {
@@ -1390,7 +1265,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           quantity: 1,
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
-                          total_price: (p.unit_price || 0)
+                          total_price: (p.unit_price || 0),
+                          area: p.area !== undefined ? p.area : null,
+                          volume: p.volume !== undefined ? p.volume : null,
+                          height: p.height !== undefined ? p.height : null,
+                          length: p.length !== undefined ? p.length : null,
+                          depth: p.depth !== undefined ? p.depth : null
                         })
                       }
                     }

@@ -315,7 +315,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             unit_price: item.unit_price || 0,
             total_price: item.total_price || 0,
             name_product: item.name_product,
+            unit: item.unit,
             discount_rate: item.discount_rate || 0.0,
+            area: item.area,
+            volume: item.volume,
+            height: item.height,
+            length: item.length,
+            depth: item.depth,
             created_at: new Date().toISOString()
           }
           convertedItems.push(invoiceItem)
@@ -481,6 +487,136 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     )
+  }
+
+  const deleteQuote = async (quoteId: string) => {
+    try {
+      console.log('🔍 Deleting quote:', quoteId)
+      
+      // Show confirmation dialog
+      const confirmed = window.confirm('Bạn có chắc chắn muốn xóa báo giá này? Hành động này không thể hoàn tác.')
+      if (!confirmed) {
+        return
+      }
+      
+      // Show loading state
+      const loadingMessage = document.createElement('div')
+      loadingMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #e74c3c; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+          🗑️ Đang xóa báo giá...
+        </div>
+      `
+      document.body.appendChild(loadingMessage)
+      
+      // Delete quote items first
+      const { error: itemsError } = await supabase
+        .from('quote_items')
+        .delete()
+        .eq('quote_id', quoteId)
+      
+      if (itemsError) {
+        console.error('❌ Error deleting quote items:', itemsError)
+        throw new Error('Failed to delete quote items')
+      }
+      
+      // Delete quote
+      const { error: quoteError } = await supabase
+        .from('quotes')
+        .delete()
+        .eq('id', quoteId)
+      
+      // Remove loading message
+      document.body.removeChild(loadingMessage)
+      
+      if (quoteError) {
+        console.error('❌ Error deleting quote:', quoteError)
+        throw new Error(quoteError.message || 'Failed to delete quote')
+      }
+      
+      console.log('🔍 Quote deleted successfully')
+      
+      // Show success notification
+      const successMessage = document.createElement('div')
+      successMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #27ae60; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+        ">
+          ✅ Báo giá đã được xóa thành công!
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(successMessage)
+      
+      // Remove success message after 3 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage)
+        }
+      }, 3000)
+      
+      // Refresh quotes list
+      await fetchQuotes()
+      
+    } catch (error) {
+      console.error('❌ Error deleting quote:', error)
+      
+      // Show error notification
+      const errorMessage = document.createElement('div')
+      errorMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #e74c3c; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+        ">
+          ❌ Lỗi khi xóa báo giá: ${error instanceof Error ? error.message : 'Lỗi không xác định'}
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(errorMessage)
+      
+      // Remove error message after 5 seconds
+      setTimeout(() => {
+        if (document.body.contains(errorMessage)) {
+          document.body.removeChild(errorMessage)
+        }
+      }, 5000)
+    }
   }
 
   return (
@@ -654,6 +790,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     )}
                     
                     <button 
+                      onClick={() => deleteQuote(quote.id)}
                       className="text-black hover:text-red-600" 
                       title="Xóa"
                     >
