@@ -29,6 +29,8 @@ export default function KanbanBoard() {
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [draggedProject, setDraggedProject] = useState<ProjectItem | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<ProjectStatus | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -60,6 +62,56 @@ export default function KanbanBoard() {
 
     fetchProjects()
   }, [])
+
+  const handleDragStart = (project: ProjectItem) => {
+    setDraggedProject(project)
+  }
+
+  const handleDragOver = (e: React.DragEvent, status: ProjectStatus) => {
+    e.preventDefault()
+    setDragOverColumn(status)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverColumn(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, newStatus: ProjectStatus) => {
+    e.preventDefault()
+    
+    if (!draggedProject || draggedProject.status === newStatus) {
+      setDraggedProject(null)
+      setDragOverColumn(null)
+      return
+    }
+
+    try {
+      // Update project status in database
+      const { error } = await supabase
+        .from('projects')
+        .update({ status: newStatus })
+        .eq('id', draggedProject.id)
+
+      if (error) throw error
+
+      // Update local state
+      setProjects(prev => 
+        prev.map(project => 
+          project.id === draggedProject.id 
+            ? { ...project, status: newStatus }
+            : project
+        )
+      )
+
+      console.log(`Project ${draggedProject.name} moved to ${newStatus}`)
+    } catch (err) {
+      console.error('Error updating project status:', err)
+      setError('Không thể cập nhật trạng thái dự án')
+    } finally {
+      setDraggedProject(null)
+      setDragOverColumn(null)
+    }
+  }
 
   const grouped = useMemo(() => {
     const byStatus: Record<ProjectStatus, ProjectItem[]> = {
@@ -98,7 +150,12 @@ export default function KanbanBoard() {
           colorClass={statusMeta[status].colorClass}
           count={grouped[status].length}
           projects={grouped[status]}
-          onCardClick={(id) => router.push(`/projects/${id}`)}
+          onCardClick={(id) => router.push(`/projects/${id}/detail`)}
+          onDragStart={handleDragStart}
+          onDragOver={(e) => handleDragOver(e, status)}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, status)}
+          isDragOver={dragOverColumn === status}
         />
       ))}
     </div>

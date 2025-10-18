@@ -18,11 +18,34 @@ interface KanbanColumnProps {
   colorClass: string
   projects: ProjectItem[]
   onCardClick?: (id: string) => void
+  onDragStart?: (project: ProjectItem) => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDragLeave?: () => void
+  onDrop?: (e: React.DragEvent) => void
+  isDragOver?: boolean
 }
 
-export default function KanbanColumn({ title, count, colorClass, projects, onCardClick }: KanbanColumnProps) {
+export default function KanbanColumn({ 
+  title, 
+  count, 
+  colorClass, 
+  projects, 
+  onCardClick,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  isDragOver
+}: KanbanColumnProps) {
   return (
-    <div className="flex h-full min-h-[540px] flex-col rounded-lg border bg-gray-50">
+    <div 
+      className={`flex h-full min-h-[540px] flex-col rounded-lg border transition-colors ${
+        isDragOver ? 'bg-blue-50 border-blue-300' : 'bg-gray-50'
+      }`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <div className={`flex items-center justify-between rounded-t-lg px-4 py-3 text-sm font-semibold ${colorClass}`}>
         <span>{title}</span>
         <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs text-gray-700">{count}</span>
@@ -38,6 +61,7 @@ export default function KanbanColumn({ title, count, colorClass, projects, onCar
             progress={p.progress}
             priority={p.priority}
             onClick={() => onCardClick?.(p.id)}
+            onDragStart={onDragStart}
           />
         ))}
         {projects.length === 0 && (
