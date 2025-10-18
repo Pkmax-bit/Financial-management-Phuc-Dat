@@ -315,7 +315,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             unit_price: item.unit_price || 0,
             total_price: item.total_price || 0,
             name_product: item.name_product,
+            unit: item.unit,
             discount_rate: item.discount_rate || 0.0,
+            area: item.area,
+            volume: item.volume,
+            height: item.height,
+            length: item.length,
+            depth: item.depth,
             created_at: new Date().toISOString()
           }
           convertedItems.push(invoiceItem)
