@@ -27,6 +27,7 @@ import OverviewTab from '@/components/sales/OverviewTab'
 import ProductCatalog from '@/components/sales/ProductCatalog'
 import ProductCategoriesTab from '@/components/sales/ProductCategoriesTab'
 import ProductCreateModal from '@/components/sales/ProductCreateModal'
+import ProductExcelUpload from '@/components/sales/ProductExcelUpload'
 import AllSalesTab from '@/components/sales/AllSalesTab'
 import QuotesTab from '@/components/sales/QuotesTab'
 import InvoicesTab from '@/components/sales/InvoicesTab'
@@ -588,6 +589,15 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                     <h3 className="text-lg font-semibold text-gray-900">Danh mục sản phẩm</h3>
                     <p className="text-sm text-black">Bảng chứa sản phẩm, phân theo loại sản phẩm (Loại, Tên, Đơn giá, Đơn vị, Mô tả)</p>
                   </div>
+                  
+                  {/* Excel Upload Section */}
+                  <div className="mb-6">
+                    <ProductExcelUpload onImportComplete={() => {
+                      // Refresh product catalog after import
+                      window.location.reload()
+                    }} />
+                  </div>
+                  
                   <ProductCatalog />
                 </div>
               )}
