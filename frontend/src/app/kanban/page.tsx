@@ -1,7 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import KanbanBoard from '@/components/sales/KanbanBoard'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import StickyTopNav from '@/components/StickyTopNav'
+import SimpleKanbanBoard from '@/components/sales/SimpleKanbanBoard'
 
 interface Task {
   id: string
@@ -33,6 +37,9 @@ interface User {
 }
 
 export default function KanbanPage() {
+  const router = useRouter()
+  const [user, setUser] = useState<{ full_name?: string, role?: string, email?: string } | null>(null)
+  const [loading, setLoading] = useState(true)
   const [tasks, setTasks] = useState<Task[]>([
     {
       id: '1',
@@ -170,6 +177,10 @@ export default function KanbanPage() {
     setTasks(prev => prev.filter(task => task.id !== taskId))
   }
 
+  useEffect(() => {
+    checkUser()
+  }, [])
+
   // Simulate real-time updates
   useEffect(() => {
     const interval = setInterval(() => {
@@ -182,15 +193,72 @@ export default function KanbanPage() {
     return () => clearInterval(interval)
   }, [])
 
+  const checkUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (authUser) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authUser.id)
+          .single()
+        
+        if (userData) {
+          setUser(userData)
+        } else {
+          router.push('/login')
+        }
+      } else {
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Error checking user:', error)
+      router.push('/login')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex items-center space-x-2 text-gray-500">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+          <span>Đang tải...</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <KanbanBoard
-        tasks={tasks}
-        users={users}
-        onTaskUpdate={handleTaskUpdate}
-        onTaskCreate={handleTaskCreate}
-        onTaskDelete={handleTaskDelete}
-      />
-    </div>
+    <LayoutWithSidebar 
+      user={user}
+      onLogout={() => router.push('/login')}
+    >
+      <div className="w-full">
+        <StickyTopNav 
+          title="Kanban Board" 
+          subtitle="Quản lý dự án và theo dõi tiến độ"
+        >
+          <button
+            onClick={() => router.push('/projects')}
+            className="rounded-lg bg-gray-100 px-4 py-2 font-medium text-black transition-colors hover:bg-gray-200"
+          >
+            Quay lại dự án
+          </button>
+        </StickyTopNav>
+
+        <div className="px-2 py-6 sm:px-4 lg:px-6 xl:px-8">
+          <SimpleKanbanBoard
+            tasks={tasks}
+            users={users}
+            onTaskUpdate={handleTaskUpdate}
+            onTaskCreate={handleTaskCreate}
+            onTaskDelete={handleTaskDelete}
+          />
+        </div>
+      </div>
+    </LayoutWithSidebar>
   )
 }

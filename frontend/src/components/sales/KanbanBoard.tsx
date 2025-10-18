@@ -134,9 +134,9 @@ export default function KanbanBoard({
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-80' : 'w-16'} transition-all duration-300 bg-white border-r border-gray-200 flex flex-col`}>
+    <div className="bg-gray-50">
+      {/* Main Kanban Board */}
+      <div className="flex-1 p-6">
         {/* Sidebar Header */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">

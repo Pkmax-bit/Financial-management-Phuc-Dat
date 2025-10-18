@@ -100,14 +100,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'system'
   },
   {
-    name: 'Timeline dự án',
-    href: '/projects/timeline/employee',
-    icon: 'Calendar',
-    description: 'Quản lý timeline dự án cho nhân viên',
-    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
-    category: 'system'
-  },
-  {
     name: 'Nhân viên',
     href: '/employees',
     icon: 'Users',
@@ -130,14 +122,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     description: 'Gửi góp ý, báo lỗi, đề xuất ý tưởng',
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
     category: 'system'
-  },
-  {
-    name: 'Kanban Board',
-    href: '/kanban',
-    icon: 'Kanban',
-    description: 'Bảng Kanban với sidebar quản lý người dùng',
-    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
-    category: 'management'
   },
 ]
 
