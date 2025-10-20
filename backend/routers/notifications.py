@@ -56,17 +56,169 @@ class SystemAlert(BaseModel):
     target_users: Optional[List[str]] = None
     data: Optional[Dict[str, Any]] = None
 
+def create_notification_email_template(subject: str, message: str, notification_type: str = "info") -> str:
+    """Create beautiful HTML email template for notifications"""
+    from datetime import datetime
+    
+    # Color scheme based on notification type
+    color_schemes = {
+        'info': {'primary': '#3b82f6', 'secondary': '#dbeafe', 'accent': '#1d4ed8'},
+        'success': {'primary': '#10b981', 'secondary': '#d1fae5', 'accent': '#047857'},
+        'warning': {'primary': '#f59e0b', 'secondary': '#fef3c7', 'accent': '#d97706'},
+        'error': {'primary': '#ef4444', 'secondary': '#fee2e2', 'accent': '#dc2626'}
+    }
+    
+    colors = color_schemes.get(notification_type, color_schemes['info'])
+    
+    # Icon based on type
+    icons = {
+        'info': '📢',
+        'success': '✅',
+        'warning': '⚠️',
+        'error': '❌'
+    }
+    
+    icon = icons.get(notification_type, icons['info'])
+    
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{subject}</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #374151;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f9fafb;
+            }}
+            .email-container {{
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+            }}
+            .header {{
+                background: linear-gradient(135deg, {colors['primary']} 0%, {colors['accent']} 100%);
+                color: white;
+                padding: 24px;
+                text-align: center;
+            }}
+            .header h1 {{
+                margin: 0;
+                font-size: 24px;
+                font-weight: 600;
+            }}
+            .header .icon {{
+                font-size: 32px;
+                margin-bottom: 8px;
+            }}
+            .content {{
+                padding: 32px 24px;
+            }}
+            .notification-card {{
+                background: {colors['secondary']};
+                border-left: 4px solid {colors['primary']};
+                padding: 20px;
+                border-radius: 8px;
+                margin: 20px 0;
+            }}
+            .notification-title {{
+                font-size: 18px;
+                font-weight: 600;
+                color: {colors['accent']};
+                margin: 0 0 12px 0;
+            }}
+            .notification-message {{
+                font-size: 16px;
+                color: #4b5563;
+                margin: 0;
+                white-space: pre-wrap;
+            }}
+            .footer {{
+                background: #f8fafc;
+                padding: 20px 24px;
+                border-top: 1px solid #e5e7eb;
+                text-align: center;
+                color: #6b7280;
+                font-size: 14px;
+            }}
+            .timestamp {{
+                color: #9ca3af;
+                font-size: 14px;
+                margin-top: 16px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="header">
+                <div class="icon">{icon}</div>
+                <h1>Thông báo hệ thống</h1>
+            </div>
+            
+            <div class="content">
+                <div class="notification-card">
+                    <h2 class="notification-title">{subject}</h2>
+                    <p class="notification-message">{message}</p>
+                </div>
+                
+                <div class="timestamp">
+                    Thời gian: {datetime.now().strftime('%d/%m/%Y lúc %H:%M:%S')}
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>Hệ thống quản lý tài chính</p>
+                <p>Email này được gửi tự động từ hệ thống</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html_template
+
 async def send_email_notification(email_data: EmailNotification):
-    """Send email notification using SMTP"""
+    """Send email notification using SMTP with beautiful template"""
     try:
         # Create message
-        msg = MIMEMultipart()
-        msg['From'] = settings.SMTP_USER
+        msg = MIMEMultipart('alternative')
+        msg['From'] = f"Hệ thống quản lý tài chính <{settings.SMTP_USER}>"
         msg['To'] = email_data.to_email
         msg['Subject'] = email_data.subject
 
-        # Add body
-        msg.attach(MIMEText(email_data.body, 'html'))
+        # Create beautiful HTML template
+        html_body = create_notification_email_template(
+            email_data.subject, 
+            email_data.body.replace('<p>', '').replace('</p>', ''),  # Remove existing HTML tags
+            email_data.template or 'info'
+        )
+        
+        # Create plain text version
+        text_body = f"""
+        {email_data.subject}
+        
+        {email_data.body.replace('<p>', '').replace('</p>', '')}
+        
+        Thời gian: {datetime.now().strftime('%d/%m/%Y lúc %H:%M:%S')}
+        
+        ---
+        Hệ thống quản lý tài chính
+        Email này được gửi tự động từ hệ thống
+        """
+
+        # Add both versions
+        text_part = MIMEText(text_body, 'plain', 'utf-8')
+        html_part = MIMEText(html_body, 'html', 'utf-8')
+        
+        msg.attach(text_part)
+        msg.attach(html_part)
 
         # Send email
         server = smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT)

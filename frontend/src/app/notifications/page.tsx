@@ -175,7 +175,8 @@ export default function NotificationsPage() {
               body: JSON.stringify({
                 to_email: emp.email,
                 subject: notifTitle,
-                body: `<p>${notifMessage}</p>`
+                body: notifMessage, // Send plain text, template will handle formatting
+                template: 'info' // Use info template for notifications
               })
             })
             if (!emailRes.ok) {
@@ -559,59 +560,75 @@ export default function NotificationsPage() {
       
       {/* Send Email Modal */}
       {showEmailModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Gửi thông báo email</h3>
-                <button
-                  onClick={() => setShowEmailModal(false)}
-                  className="text-black hover:text-black"
-                >
-                  <span className="sr-only">Đóng</span>
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email người nhận</label>
-                  <input
-                    type="email"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="recipient@example.com"
-                  />
+        <div className="fixed inset-0 bg-black bg-opacity-30 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                  <Mail className="h-5 w-5 text-blue-600" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Tiêu đề</label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Tiêu đề email"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Nội dung</label>
-                  <textarea
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    rows={4}
-                    placeholder="Nội dung email"
-                  />
-                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Gửi email thông báo</h3>
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowEmailModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                >
-                  Hủy
-                </button>
-                <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
-                  <Send className="h-4 w-4 mr-2 inline" />
-                  Gửi email
-                </button>
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <span className="sr-only">Đóng</span>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Email người nhận
+                </label>
+                <input
+                  type="email"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500"
+                  placeholder="recipient@example.com"
+                />
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Tiêu đề email
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500"
+                  placeholder="Nhập tiêu đề email"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Nội dung
+                </label>
+                <textarea
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500 resize-none"
+                  rows={5}
+                  placeholder="Nhập nội dung email..."
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Hủy
+              </button>
+              <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                <Send className="h-4 w-4" />
+                <span>Gửi email</span>
+              </button>
             </div>
           </div>
         </div>
@@ -620,12 +637,17 @@ export default function NotificationsPage() {
       {/* Create Notification Drawer (Right side, translucent, non-blocking) */}
       {showCreateNotificationModal && (
         <div className="fixed inset-0 z-50 pointer-events-none">
-          <div className="fixed right-0 top-0 h-full w-full max-w-md border-l border-gray-200 bg-white/90 backdrop-blur-sm shadow-2xl pointer-events-auto">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-              <h3 className="text-base font-semibold text-gray-900">Tạo thông báo</h3>
+          <div className="fixed right-0 top-0 h-full w-full max-w-md border-l border-gray-200 bg-white/95 backdrop-blur-sm shadow-2xl pointer-events-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <Bell className="h-5 w-5 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Tạo thông báo hệ thống</h3>
+              </div>
               <button
                 onClick={() => setShowCreateNotificationModal(false)}
-                className="text-black hover:text-black"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
                 title="Đóng"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -634,31 +656,31 @@ export default function NotificationsPage() {
               </button>
             </div>
 
-            <div className="p-4 space-y-4 overflow-y-auto h-[calc(100%-56px)]">
+            <div className="p-6 space-y-5 overflow-y-auto h-[calc(100%-80px)]">
               <div>
-                <label className="block text-sm font-medium text-black">Tiêu đề</label>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Tiêu đề thông báo</label>
                 <input
                   type="text"
                   value={notifTitle}
                   onChange={(e) => setNotifTitle(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black placeholder-black"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900 placeholder-gray-500"
                   placeholder="Nhập tiêu đề thông báo"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-black">Nội dung</label>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Nội dung thông báo</label>
                 <textarea
                   value={notifMessage}
                   onChange={(e) => setNotifMessage(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black placeholder-black"
-                  rows={5}
-                  placeholder="Nhập nội dung thông báo"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900 placeholder-gray-500 resize-none"
+                  rows={4}
+                  placeholder="Nhập nội dung thông báo..."
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-3">
                   <div>
-                    <label className="block text-sm font-medium text-black">Chọn nhân viên nhận</label>
+                    <label className="block text-sm font-medium text-gray-900">Chọn nhân viên nhận</label>
                     <span className="text-xs text-gray-500">
                       {selectedEmployeeUserIds.length} / {employees.filter(emp => emp.user_id).length} nhân viên được chọn
                     </span>
@@ -719,17 +741,17 @@ export default function NotificationsPage() {
                 </div>
                 
                 {/* Employee Search */}
-                <div className="mb-2">
+                <div className="mb-3">
                   <input
                     type="text"
                     value={employeeSearchTerm}
                     onChange={(e) => setEmployeeSearchTerm(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900 font-medium placeholder-gray-500"
                     placeholder="Tìm kiếm nhân viên..."
                   />
                 </div>
                 
-                <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-md divide-y">
+                <div className="max-h-60 overflow-y-auto border-2 border-gray-200 rounded-lg divide-y">
                   {employees
                     .filter(emp => {
                       if (!employeeSearchTerm) return true
@@ -782,17 +804,17 @@ export default function NotificationsPage() {
                   <span className="ml-2 text-sm text-black">Gửi kèm email (dùng cùng tiêu đề và nội dung)</span>
                 </label>
               </div>
-              <div className="flex justify-end space-x-3 pt-2">
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   onClick={() => setShowCreateNotificationModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-black bg-gray-100 rounded-md hover:bg-gray-200 border border-gray-200"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   onClick={handleCreateNotification}
                   disabled={creating || !notifTitle.trim() || !notifMessage.trim() || selectedEmployeeUserIds.length === 0}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors"
                 >
                   {creating ? 'Đang tạo...' : 'Tạo thông báo'}
                 </button>
@@ -804,60 +826,63 @@ export default function NotificationsPage() {
       
       {/* System Alert Modal */}
       {showSystemAlertModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Tạo cảnh báo hệ thống</h3>
-                <button
-                  onClick={() => setShowSystemAlertModal(false)}
-                  className="text-black hover:text-black"
-                >
-                  <span className="sr-only">Đóng</span>
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Tiêu đề cảnh báo</label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Tiêu đề cảnh báo"
-                  />
+        <div className="fixed inset-0 bg-black bg-opacity-30 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-orange-50 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Mức độ</label>
-                  <select className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    <option value="low">Thấp</option>
-                    <option value="medium">Trung bình</option>
-                    <option value="high">Cao</option>
-                    <option value="critical">Nghiêm trọng</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Nội dung</label>
-                  <textarea
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    rows={4}
-                    placeholder="Nội dung cảnh báo"
-                  />
-                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Tạo cảnh báo hệ thống</h3>
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowSystemAlertModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                >
-                  Hủy
-                </button>
-                <button className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
-                  <AlertTriangle className="h-4 w-4 mr-2 inline" />
-                  Gửi cảnh báo
-                </button>
+              <button
+                onClick={() => setShowSystemAlertModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <span className="sr-only">Đóng</span>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Tiêu đề cảnh báo</label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900 placeholder-gray-500"
+                  placeholder="Nhập tiêu đề cảnh báo"
+                />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Mức độ cảnh báo</label>
+                <select className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900">
+                  <option value="low">Thấp</option>
+                  <option value="medium">Trung bình</option>
+                  <option value="high">Cao</option>
+                  <option value="critical">Nghiêm trọng</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Nội dung cảnh báo</label>
+                <textarea
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900 placeholder-gray-500 resize-none"
+                  rows={4}
+                  placeholder="Nhập nội dung cảnh báo..."
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => setShowSystemAlertModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Hủy
+              </button>
+              <button className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-2">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Gửi cảnh báo</span>
+              </button>
             </div>
           </div>
         </div>
