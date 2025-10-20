@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
-import SystemFeedbackWrapper from '@/components/system/SystemFeedbackWrapper'
+import FeedbackManagementTab from '@/components/system/FeedbackManagementTab'
 
 interface User {
   id: string
@@ -14,7 +14,7 @@ interface User {
   email?: string
 }
 
-export default function SystemFeedbackPage() {
+export default function FeedbackManagementPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -35,7 +35,12 @@ export default function SystemFeedbackPage() {
           .single()
         
         if (userData) {
-          setUser(userData)
+          // Check if user is admin or manager
+          if (userData.role === 'admin' || userData.role === 'manager') {
+            setUser(userData)
+          } else {
+            router.push('/system/feedback')
+          }
         } else {
           router.push('/login')
         }
@@ -70,15 +75,14 @@ export default function SystemFeedbackPage() {
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full">
-        <StickyTopNav title="Góp ý hệ thống" subtitle="Nhân viên gửi góp ý và theo dõi xử lý" />
+        <StickyTopNav 
+          title="Quản lý góp ý hệ thống" 
+          subtitle="Xác nhận và xử lý góp ý từ nhân viên" 
+        />
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
-          <SystemFeedbackWrapper />
+          <FeedbackManagementTab />
         </div>
       </div>
     </LayoutWithSidebar>
   )
 }
-
-
-
-

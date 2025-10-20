@@ -76,7 +76,9 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     Bell,
     Brain,
     Camera,
-    TestTube
+    TestTube,
+    Settings,
+    HelpCircle
   }
 
   const handleNavigation = (href: string) => {

@@ -10,7 +10,7 @@ type Feedback = {
   title: string
   content: string
   category: 'bug' | 'idea' | 'uiux' | 'performance' | 'other'
-  priority: 'low' | 'medium' | 'high' | 'critical'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
   status: 'open' | 'in_progress' | 'resolved' | 'closed'
   created_at: string
   updated_at: string
@@ -187,12 +187,12 @@ export default function SystemFeedbackTab() {
                          it.category === 'performance' ? 'Hiệu năng' : 'Khác'}
                       </span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        it.priority === 'critical' ? 'bg-red-100 text-red-800' :
+                        it.priority === 'urgent' ? 'bg-red-100 text-red-800' :
                         it.priority === 'high' ? 'bg-orange-100 text-orange-800' :
                         it.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-green-100 text-green-800'
                       }`}>
-                        {it.priority === 'critical' ? 'Nghiêm trọng' :
+                        {it.priority === 'urgent' ? 'Nghiêm trọng' :
                          it.priority === 'high' ? 'Cao' :
                          it.priority === 'medium' ? 'Trung bình' : 'Thấp'}
                       </span>

@@ -446,33 +446,33 @@ export default function NotificationsPage() {
                     placeholder="Tìm kiếm thông báo..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white text-black font-medium placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 
                 <select
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-black font-medium focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="all">Tất cả thông báo</option>
-                  <option value="unread">Chưa đọc</option>
-                  <option value="read">Đã đọc</option>
+                  <option value="all" className="text-black font-medium">Tất cả thông báo</option>
+                  <option value="unread" className="text-black font-medium">Chưa đọc</option>
+                  <option value="read" className="text-black font-medium">Đã đọc</option>
                 </select>
 
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-black font-medium focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="all">Tất cả loại</option>
-                  <option value="info">Thông tin</option>
-                  <option value="success">Thành công</option>
-                  <option value="warning">Cảnh báo</option>
-                  <option value="error">Lỗi</option>
+                  <option value="all" className="text-black font-medium">Tất cả loại</option>
+                  <option value="info" className="text-black font-medium">Thông tin</option>
+                  <option value="success" className="text-black font-medium">Thành công</option>
+                  <option value="warning" className="text-black font-medium">Cảnh báo</option>
+                  <option value="error" className="text-black font-medium">Lỗi</option>
                 </select>
 
-                <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-black bg-white hover:bg-gray-50">
                   <Filter className="h-4 w-4 mr-2" />
                   Bộ lọc khác
                 </button>

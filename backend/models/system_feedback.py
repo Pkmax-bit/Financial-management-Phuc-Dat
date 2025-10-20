@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 FeedbackCategory = Literal['bug','idea','uiux','performance','other']
-FeedbackPriority = Literal['low','medium','high','critical']
+FeedbackPriority = Literal['low','medium','high','urgent','critical']
 FeedbackStatus = Literal['open','in_progress','resolved','closed']
 
 

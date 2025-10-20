@@ -123,6 +123,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
     category: 'system'
   },
+  {
+    name: 'Quản lý góp ý',
+    href: '/system/feedback/management',
+    icon: 'Settings',
+    description: 'Quản lý và xử lý góp ý hệ thống (chỉ admin)',
+    roles: ['admin'],
+    category: 'management'
+  },
 ]
 
 // Get navigation items for a specific role

@@ -10,7 +10,7 @@ type Feedback = {
   title: string
   content: string
   category: 'bug' | 'idea' | 'uiux' | 'performance' | 'other'
-  priority: 'low' | 'medium' | 'high' | 'critical'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
   status: 'open' | 'in_progress' | 'resolved' | 'closed'
   created_at: string
   updated_at: string
@@ -163,6 +163,13 @@ export default function AdminSystemFeedback() {
               <span className="text-sm text-gray-500">Tổng góp ý:</span>
               <span className="ml-2 font-semibold text-purple-600">{stats.total}</span>
             </div>
+            <a
+              href="/system/feedback/management"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+              Quản lý chi tiết
+            </a>
           </div>
         </div>
       </div>
@@ -251,13 +258,13 @@ export default function AdminSystemFeedback() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-black font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="open">Mở</option>
-                <option value="in_progress">Đang xử lý</option>
-                <option value="resolved">Đã xử lý</option>
-                <option value="closed">Đóng</option>
+                <option value="all" className="text-black font-medium">Tất cả trạng thái</option>
+                <option value="open" className="text-black font-medium">Mở</option>
+                <option value="in_progress" className="text-black font-medium">Đang xử lý</option>
+                <option value="resolved" className="text-black font-medium">Đã xử lý</option>
+                <option value="closed" className="text-black font-medium">Đóng</option>
               </select>
             </div>
             
@@ -265,14 +272,14 @@ export default function AdminSystemFeedback() {
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-black font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               >
-                <option value="all">Tất cả loại</option>
-                <option value="bug">Báo lỗi</option>
-                <option value="idea">Ý tưởng</option>
-                <option value="uiux">Giao diện</option>
-                <option value="performance">Hiệu năng</option>
-                <option value="other">Khác</option>
+                <option value="all" className="text-black font-medium">Tất cả loại</option>
+                <option value="bug" className="text-black font-medium">Báo lỗi</option>
+                <option value="idea" className="text-black font-medium">Ý tưởng</option>
+                <option value="uiux" className="text-black font-medium">Giao diện</option>
+                <option value="performance" className="text-black font-medium">Hiệu năng</option>
+                <option value="other" className="text-black font-medium">Khác</option>
               </select>
             </div>
             
@@ -323,12 +330,12 @@ export default function AdminSystemFeedback() {
                         <span className="ml-1">{categoryLabels[it.category]}</span>
                       </span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        it.priority === 'critical' ? 'bg-red-100 text-red-800' :
+                        it.priority === 'urgent' ? 'bg-red-100 text-red-800' :
                         it.priority === 'high' ? 'bg-orange-100 text-orange-800' :
                         it.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-green-100 text-green-800'
                       }`}>
-                        {it.priority === 'critical' ? '🔴 Nghiêm trọng' :
+                        {it.priority === 'urgent' ? '🔴 Nghiêm trọng' :
                          it.priority === 'high' ? '🟠 Cao' :
                          it.priority === 'medium' ? '🟡 Trung bình' : '🟢 Thấp'}
                       </span>
@@ -379,9 +386,9 @@ export default function AdminSystemFeedback() {
       {/* Modal Form */}
       {showForm && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => setShowForm(false)} />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="flex min-h-screen items-end justify-end p-4">
+            <div className="fixed inset-0 transition-opacity" onClick={() => setShowForm(false)} />
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border-l-4 border-blue-500">
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div>

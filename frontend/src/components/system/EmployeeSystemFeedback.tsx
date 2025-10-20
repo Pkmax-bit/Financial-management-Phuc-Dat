@@ -10,7 +10,7 @@ type Feedback = {
   title: string
   content: string
   category: 'bug' | 'idea' | 'uiux' | 'performance' | 'other'
-  priority: 'low' | 'medium' | 'high' | 'critical'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
   status: 'open' | 'in_progress' | 'resolved' | 'closed'
   created_at: string
   updated_at: string
@@ -73,38 +73,77 @@ export default function EmployeeSystemFeedback() {
   const resetForm = () => setForm({ id: '', title: '', content: '', category: 'other', priority: 'medium' })
 
   const submit = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
-    }
-    if (form.id) {
-      const res = await fetch(`/api/feedback/system/${form.id}`, {
-        method: 'PUT', headers,
-        body: JSON.stringify({
-          title: form.title,
-          content: form.content,
-          category: form.category,
-          priority: form.priority,
-          status: 'open',
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        throw new Error('No authentication token found')
+      }
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      }
+      
+      if (form.id) {
+        const res = await fetch(`/api/feedback/system/${form.id}`, {
+          method: 'PUT', headers,
+          body: JSON.stringify({
+            title: form.title,
+            content: form.content,
+            category: form.category,
+            priority: form.priority,
+            status: 'open',
+          })
         })
-      })
-      if (!res.ok) throw new Error('Update failed')
-    } else {
-      const res = await fetch(`/api/feedback/system`, {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          title: form.title,
-          content: form.content,
-          category: form.category,
-          priority: form.priority,
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(`Update failed: ${res.status} ${errorData.detail || res.statusText}`)
+        }
+      } else {
+        const res = await fetch(`/api/feedback/system`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            title: form.title,
+            content: form.content,
+            category: form.category,
+            priority: form.priority,
+          })
         })
-      })
-      if (!res.ok) throw new Error('Create failed')
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(`Create failed: ${res.status} ${errorData.detail || res.statusText}`)
+        }
+      }
+      
+      await load()
+      setShowForm(false)
+      resetForm()
+      
+    } catch (error) {
+      console.error('Error submitting feedback:', error)
+      
+      // Show more specific error messages
+      let errorMessage = 'Lỗi không xác định'
+      
+      if (error.message.includes('No authentication token')) {
+        errorMessage = 'Bạn cần đăng nhập lại để thực hiện thao tác này'
+      } else if (error.message.includes('403')) {
+        errorMessage = 'Bạn không có quyền thực hiện thao tác này'
+      } else if (error.message.includes('404')) {
+        errorMessage = 'Không tìm thấy góp ý này'
+      } else if (error.message.includes('500')) {
+        errorMessage = 'Lỗi server, vui lòng thử lại sau'
+      } else if (error.message.includes('admin_notes')) {
+        errorMessage = 'Database schema chưa được cập nhật. Vui lòng liên hệ admin.'
+      } else {
+        errorMessage = `Lỗi khi tạo góp ý: ${error.message}`
+      }
+      
+      alert(errorMessage)
     }
-    await load()
-    setShowForm(false)
-    resetForm()
   }
 
   return (
@@ -129,12 +168,12 @@ export default function EmployeeSystemFeedback() {
       <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm border">
         <div className="relative w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm kiếm góp ý của bạn..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-          />
+           <input
+             value={search}
+             onChange={(e) => setSearch(e.target.value)}
+             placeholder="Tìm kiếm góp ý của bạn..."
+             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm text-black placeholder-gray-600 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+           />
         </div>
         <button 
           onClick={() => { setShowForm(true); resetForm(); }} 
@@ -159,8 +198,8 @@ export default function EmployeeSystemFeedback() {
             <div className="text-gray-400 mb-4">
               <MessageCircle className="mx-auto h-12 w-12" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có góp ý nào</h3>
-            <p className="text-gray-500 mb-4">Hãy chia sẻ ý kiến đầu tiên của bạn về hệ thống</p>
+             <h3 className="text-lg font-medium text-black mb-2">Chưa có góp ý nào</h3>
+             <p className="text-gray-800 mb-4">Hãy chia sẻ ý kiến đầu tiên của bạn về hệ thống</p>
             <button 
               onClick={() => { setShowForm(true); resetForm(); }}
               className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
@@ -188,12 +227,12 @@ export default function EmployeeSystemFeedback() {
                         <span className="ml-1">{categoryLabels[it.category]}</span>
                       </span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        it.priority === 'critical' ? 'bg-red-100 text-red-800' :
+                        it.priority === 'urgent' ? 'bg-red-100 text-red-800' :
                         it.priority === 'high' ? 'bg-orange-100 text-orange-800' :
                         it.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-green-100 text-green-800'
                       }`}>
-                        {it.priority === 'critical' ? '🔴 Nghiêm trọng' :
+                        {it.priority === 'urgent' ? '🔴 Nghiêm trọng' :
                          it.priority === 'high' ? '🟠 Cao' :
                          it.priority === 'medium' ? '🟡 Trung bình' : '🟢 Thấp'}
                       </span>
@@ -208,13 +247,13 @@ export default function EmployeeSystemFeedback() {
                          it.status === 'resolved' ? '🟢 Đã xử lý' : '⚫ Đóng'}
                       </span>
                     </div>
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{it.content}</p>
-                    <div className="flex items-center text-xs text-gray-500">
-                      <span>Tạo lúc: {new Date(it.created_at).toLocaleString('vi-VN')}</span>
-                      {it.updated_at !== it.created_at && (
-                        <span className="ml-4">Cập nhật: {new Date(it.updated_at).toLocaleString('vi-VN')}</span>
-                      )}
-                    </div>
+                     <p className="text-gray-800 text-sm mb-3 line-clamp-2">{it.content}</p>
+                     <div className="flex items-center text-xs text-black">
+                       <span className="font-medium">Tạo lúc: {new Date(it.created_at).toLocaleString('vi-VN')}</span>
+                       {it.updated_at !== it.created_at && (
+                         <span className="ml-4 font-medium">Cập nhật: {new Date(it.updated_at).toLocaleString('vi-VN')}</span>
+                       )}
+                     </div>
                   </div>
                   <div className="flex items-center space-x-2 ml-4">
                     <button 
@@ -235,9 +274,9 @@ export default function EmployeeSystemFeedback() {
       {/* Modal Form */}
       {showForm && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => setShowForm(false)} />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="flex min-h-screen items-end justify-end p-4">
+            <div className="fixed inset-0 transition-opacity" onClick={() => setShowForm(false)} />
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border-l-4 border-blue-500">
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div>
@@ -262,40 +301,40 @@ export default function EmployeeSystemFeedback() {
               <div className="p-6 space-y-6">
                 {/* Title */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-black mb-2">
                     Tiêu đề <span className="text-red-500">*</span>
                   </label>
-                  <input 
-                    value={form.title} 
-                    onChange={(e) => setForm({ ...form, title: e.target.value })} 
-                    placeholder="Nhập tiêu đề góp ý..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" 
-                  />
+                   <input 
+                     value={form.title} 
+                     onChange={(e) => setForm({ ...form, title: e.target.value })} 
+                     placeholder="Nhập tiêu đề góp ý..."
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-black placeholder-gray-600 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" 
+                   />
                 </div>
 
                 {/* Content */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-black mb-2">
                     Nội dung <span className="text-red-500">*</span>
                   </label>
-                  <textarea 
-                    value={form.content} 
-                    onChange={(e) => setForm({ ...form, content: e.target.value })} 
-                    rows={4} 
-                    placeholder="Mô tả chi tiết góp ý của bạn..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none" 
-                  />
+                   <textarea 
+                     value={form.content} 
+                     onChange={(e) => setForm({ ...form, content: e.target.value })} 
+                     rows={4} 
+                     placeholder="Mô tả chi tiết góp ý của bạn..."
+                     className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-black placeholder-gray-600 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none" 
+                   />
                 </div>
 
                 {/* Category and Priority */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Loại góp ý</label>
-                    <select 
-                      value={form.category} 
-                      onChange={(e) => setForm({ ...form, category: e.target.value as any })} 
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                    >
+                    <label className="block text-sm font-medium text-black mb-2">Loại góp ý</label>
+                     <select 
+                       value={form.category} 
+                       onChange={(e) => setForm({ ...form, category: e.target.value as any })} 
+                       className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                     >
                       <option value="bug">🐛 Báo lỗi</option>
                       <option value="idea">💡 Ý tưởng mới</option>
                       <option value="uiux">🎨 Giao diện/Trải nghiệm</option>
@@ -305,12 +344,12 @@ export default function EmployeeSystemFeedback() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Mức độ ưu tiên</label>
-                    <select 
-                      value={form.priority} 
-                      onChange={(e) => setForm({ ...form, priority: e.target.value as any })} 
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                    >
+                    <label className="block text-sm font-medium text-black mb-2">Mức độ ưu tiên</label>
+                     <select 
+                       value={form.priority} 
+                       onChange={(e) => setForm({ ...form, priority: e.target.value as any })} 
+                       className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                     >
                       <option value="low">🟢 Thấp</option>
                       <option value="medium">🟡 Trung bình</option>
                       <option value="high">🟠 Cao</option>
