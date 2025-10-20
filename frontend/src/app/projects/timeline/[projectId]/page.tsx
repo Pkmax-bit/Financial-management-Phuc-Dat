@@ -20,24 +20,51 @@ export default function CustomerProjectTimelinePage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!projectId) return
+    if (!projectId) {
+      setError('ID dự án không hợp lệ')
+      setLoading(false)
+      return
+    }
+    
+    // Validate projectId format (should be UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(projectId)) {
+      setError('ID dự án không đúng định dạng')
+      setLoading(false)
+      return
+    }
+    
     fetchProject()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
   const fetchProject = async () => {
     setLoading(true)
+    setError(null)
     try {
+      console.log('Fetching project with ID:', projectId)
+      
       const { data, error } = await supabase
         .from('projects')
         .select('id, name, description')
         .eq('id', projectId)
         .single()
-      if (error) throw error
+      
+      if (error) {
+        console.error('Supabase error:', error)
+        throw new Error(`Database error: ${error.message}`)
+      }
+      
+      if (!data) {
+        throw new Error('Project not found')
+      }
+      
+      console.log('Project data:', data)
       setProject(data)
     } catch (e) {
-      console.error(e)
-      setError('Không tìm thấy dự án')
+      console.error('Error fetching project:', e)
+      const errorMessage = e instanceof Error ? e.message : 'Không tìm thấy dự án'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -74,8 +101,24 @@ export default function CustomerProjectTimelinePage() {
             {/* Left/Center column: Feed */}
             <div className="lg:col-span-8 space-y-4">
               <div className="bg-white rounded-xl border shadow-sm p-4">
-                {loading && <div>Đang tải dự án...</div>}
-                {error && <div className="text-red-600">{error}</div>}
+                {loading && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Đang tải dự án...</span>
+                  </div>
+                )}
+                {error && (
+                  <div className="text-center py-8">
+                    <div className="text-red-600 text-lg font-medium mb-2">Lỗi tải dự án</div>
+                    <div className="text-gray-600 mb-4">{error}</div>
+                    <button 
+                      onClick={fetchProject}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Thử lại
+                    </button>
+                  </div>
+                )}
                 {!loading && !error && project && (
                   <CustomerProjectTimeline projectId={project.id} projectName={project.name} />
                 )}

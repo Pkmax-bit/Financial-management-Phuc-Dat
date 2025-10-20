@@ -142,29 +142,55 @@ export default function CustomerProjectTimeline({ projectId, projectName }: Cust
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Đang tải timeline...</span>
+      <div className="flex items-center justify-center py-16">
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="text-gray-600 font-medium">Đang tải timeline...</span>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Lỗi tải timeline</h3>
-        <p className="text-gray-600">{error}</p>
+      <div className="text-center py-16">
+        <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl p-8 max-w-md mx-auto">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="h-8 w-8 text-red-600" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Lỗi tải timeline</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button 
+            onClick={fetchTimelineEntries}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Thử lại
+          </button>
+        </div>
       </div>
     )
   }
 
   if (timelineEntries.length === 0) {
     return (
-      <div className="text-center py-12">
-        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có timeline</h3>
-        <p className="text-gray-600">Chưa có mục timeline nào cho dự án này.</p>
+      <div className="text-center py-16">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 max-w-md mx-auto">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Calendar className="h-8 w-8 text-blue-600" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Chưa có cập nhật tiến độ</h3>
+          <p className="text-gray-600 mb-4">
+            Dự án này chưa có cập nhật tiến độ nào. Nhân viên sẽ cập nhật tiến độ thi công tại đây.
+          </p>
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Clock className="h-4 w-4" />
+              <span>Tiến độ sẽ được cập nhật khi có hoạt động mới</span>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
