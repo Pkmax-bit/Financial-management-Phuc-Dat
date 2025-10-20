@@ -52,6 +52,7 @@ interface CreateProjectExpenseDialogProps {
 export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId }: CreateProjectExpenseDialogProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [userRole, setUserRole] = useState<string>('employee')
   const [parentQuotes, setParentQuotes] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
   const [parentExpenses, setParentExpenses] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
   const [loading, setLoading] = useState(false)
@@ -233,6 +234,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
   // Load expense objects to choose columns
   const loadExpenseObjectsOptions = async () => {
+    if (!userRole) {
+      console.log('⏳ Waiting for user role to load expense objects...')
+      return
+    }
+    
     try {
       let data
       try {
@@ -255,7 +261,37 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         'lap dat',       // lắp đặt
         'nha dau tu'     // nhà đầu tư
       ]
-      const opts = Array.isArray(data) ? data.map((o: any) => ({ id: o.id, name: o.name })) : []
+      let opts: SimpleExpenseObject[] = Array.isArray(data) ? data.map((o: any) => ({ id: o.id, name: o.name })) : []
+
+      // Role-based filtering of expense objects
+      const normalize = (s: string) => (s || '').toLowerCase()
+      if (userRole === 'workshop_employee') {
+        // Workshop employees see only workshop-related objects (materials and workshop labor)
+        opts = opts.filter(o => {
+          const n = normalize(o.name)
+          return n.includes('xưởng') || n.includes('xuong') || 
+                 n.includes('nguyên vật liệu') || n.includes('nguyen vat lieu') ||
+                 n.includes('vật liệu') || n.includes('vat lieu') ||
+                 n.includes('thép') || n.includes('thep') ||
+                 n.includes('xi măng') || n.includes('xi mang') ||
+                 n.includes('vít') || n.includes('vit') ||
+                 n.includes('ốc') || n.includes('oc') ||
+                 n.includes('keo') || n.includes('dán') || n.includes('dan') ||
+                 n.includes('nhân công xưởng') || n.includes('nhan cong xuong')
+        })
+        console.log('🔧 Workshop employee filtered objects:', opts.map(o => o.name))
+      } else if (userRole === 'worker') {
+        // Workers see only general labor-related objects (excluding workshop labor)
+        opts = opts.filter(o => {
+          const n = normalize(o.name)
+          return (n.includes('nhân công') || n.includes('nhan cong')) && 
+                 !(n.includes('xưởng') || n.includes('xuong') || n.includes('nhà cung cấp') || n.includes('nha cung cap'))
+        })
+        console.log('👷 Worker filtered objects:', opts.map(o => o.name))
+      } else {
+        // Admin/accountant/sales see all objects
+        console.log('👑 Admin/accountant/sales see all objects:', opts.map(o => o.name))
+      }
       const sortedOpts = [...opts].sort((a, b) => {
         const na = normalizeLower(a.name)
         const nb = normalizeLower(b.name)
@@ -267,24 +303,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         return a.name.localeCompare(b.name, 'vi')
       })
       setExpenseObjectsOptions(sortedOpts)
-      // Auto-select ONLY default expense objects by default (Management, Design, Transport, Supplier, Labor)
-      if (sortedOpts.length > 0 && selectedExpenseObjectIds.length === 0) {
-        const normalizeLowerNoDiacritics = (s: string) => (s || '').normalize('NFD').replace(/[^\w\s]/g, '').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-        const defaultNames = new Set([
-          'quan ly',        // Quản lý
-          'thiet ke',       // Thiết kế
-          'van chuyen',     // Vận chuyển
-          'nha cung cap',   // Nhà cung cấp
-          'nhan cong'       // Nhân công
-        ])
-        const defaultIds = sortedOpts
-          .filter(o => defaultNames.has(normalizeLowerNoDiacritics(o.name)))
-          .map(o => o.id)
-        setSelectedExpenseObjectIds(defaultIds)
-        console.log('✅ Auto-selected default expense objects:', defaultIds.length, 'objects')
-      } else if (opts.length > 0 && selectedExpenseObjectIds.length > 0) {
-        console.log('📝 Keeping existing expense object selection:', selectedExpenseObjectIds.length, 'objects')
-      }
+      // Note: Auto-selection is handled by separate useEffect based on role
     } catch (e) {
       console.error('❌ Error loading expense object options:', e)
       setExpenseObjectsOptions([])
@@ -441,18 +460,47 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       if (!isEdit) {
         resetForm()
       }
-      loadExpenseObjectsOptions()
     }
   }, [isOpen])
 
-  // Auto-select all expense objects when options are loaded (for create mode)
+  // Load user role and expense objects when dialog opens
   useEffect(() => {
-    if (expenseObjectsOptions.length > 0 && !isEdit && selectedExpenseObjectIds.length === 0) {
-      const allIds = expenseObjectsOptions.map(o => o.id)
-      setSelectedExpenseObjectIds(allIds)
-      console.log('✅ Auto-selected all expense objects for create mode:', allIds.length, 'objects')
+    if (isOpen) {
+      // Load user role first
+      ;(async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user?.id) {
+            const { data, error } = await supabase.from('users').select('role').eq('id', session.user.id).single()
+            if (!error && data?.role) {
+              setUserRole(data.role)
+              // Load expense objects after role is set
+              loadExpenseObjectsOptions()
+            }
+          }
+        } catch (err) {
+          console.error('Error loading user role:', err)
+        }
+      })()
     }
-  }, [expenseObjectsOptions, isEdit, selectedExpenseObjectIds.length])
+  }, [isOpen])
+
+  // Load expense objects when userRole changes
+  useEffect(() => {
+    if (userRole && isOpen) {
+      loadExpenseObjectsOptions()
+    }
+  }, [userRole, isOpen])
+
+  // Auto-select expense objects based on role when options are loaded (for create mode)
+  useEffect(() => {
+    if (expenseObjectsOptions.length > 0 && !isEdit && selectedExpenseObjectIds.length === 0 && userRole) {
+      // Auto-select all filtered objects (they are already filtered by role)
+      const roleBasedIds = expenseObjectsOptions.map(o => o.id)
+      setSelectedExpenseObjectIds(roleBasedIds)
+      console.log(`✅ Auto-selected ${roleBasedIds.length} expense objects for ${userRole}:`, expenseObjectsOptions.map(o => o.name))
+    }
+  }, [expenseObjectsOptions, isEdit, selectedExpenseObjectIds.length, userRole])
 
   // Load existing expense when in edit mode
   useEffect(() => {
@@ -622,6 +670,19 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       
       console.log('✅ Employees fetched successfully:', mapped.length)
       setEmployees(mapped)
+
+      // Auto-select current user's employee record for convenience
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user?.id && !isEdit) {
+          const current = (data || []).find((e: any) => e.user_id === session.user.id)
+          if (current) {
+            setFormData(prev => ({ ...prev, employee_id: current.id }))
+          }
+        }
+      } catch (_e) {
+        // ignore
+      }
     } catch (error) {
       console.error('❌ Error fetching employees:', error)
     }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { X, Save, AlertCircle, Target, Edit, Trash2, Search, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react'
 import { apiGet, apiPost, apiDelete } from '@/lib/api'
+import { getExpenseObjectsByRole } from '@/utils/expenseObjectPermissions'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -40,6 +41,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   const [searchTerm, setSearchTerm] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  const [userRole, setUserRole] = useState<string>('employee')
 
   // Load expense objects
   const loadExpenseObjects = async () => {
@@ -68,11 +70,14 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   useEffect(() => {
     if (isOpen) {
       loadExpenseObjects()
+      // Lấy role của user từ localStorage hoặc context
+      const role = localStorage.getItem('userRole') || 'employee'
+      setUserRole(role)
     }
   }, [isOpen])
 
-  // Filter expense objects
-  const filteredObjects = expenseObjects.filter(obj =>
+  // Filter expense objects by role and search term
+  const filteredObjects = getExpenseObjectsByRole(expenseObjects, userRole).filter(obj =>
     obj.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (obj.description && obj.description.toLowerCase().includes(searchTerm.toLowerCase()))
   )

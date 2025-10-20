@@ -15,6 +15,7 @@ import {
   Receipt
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { getExpenseObjectsByRole } from '@/utils/expenseObjectPermissions'
 
 interface Employee {
   id: string
@@ -36,6 +37,16 @@ interface ExpenseCategory {
   id: string
   name: string
   description?: string
+  is_active: boolean
+}
+
+interface ExpenseObject {
+  id: string
+  name: string
+  description?: string
+  parent_id?: string | null
+  hierarchy_level: number
+  is_parent: boolean
   is_active: boolean
 }
 
@@ -74,6 +85,8 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
   const [employees, setEmployees] = useState<Employee[]>([])
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [parentExpenses, setParentExpenses] = useState<ParentExpense[]>([])
+  const [expenseObjects, setExpenseObjects] = useState<ExpenseObject[]>([])
+  const [userRole, setUserRole] = useState<string>('employee')
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [generatingCode, setGeneratingCode] = useState(false)
@@ -90,7 +103,8 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
     status: 'pending',
     notes: '',
     id_parent: '',
-    category_id: ''
+    category_id: '',
+    expense_object_ids: [] as string[]
   })
 
   // Form validation
@@ -111,6 +125,8 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
           fetchEmployees(),
           fetchExpenseCategories(),
           fetchParentExpenses(),
+          fetchExpenseObjects(),
+          fetchUserRole(),
         ])
         
         // In edit mode, prefill from expense and skip generating code
@@ -126,7 +142,8 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
             status: expense.status || 'pending',
             notes: expense.notes || '',
             id_parent: expense.id_parent || '',
-            category_id: expense.category_id || ''
+            category_id: expense.category_id || '',
+            expense_object_ids: []
           })
         } else {
           // Create mode: generate code
@@ -136,6 +153,41 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
       initializeForm()
     }
   }, [isOpen, defaultParentId, mode, expense])
+
+  const fetchUserRole = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user?.id) {
+        const { data, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+        if (error) throw error
+        if (data?.role) setUserRole(data.role)
+      }
+    } catch (err) {
+      console.error('Error fetching user role:', err)
+      setUserRole('employee')
+    }
+  }
+
+  const fetchExpenseObjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('expense_objects')
+        .select('id, name, description, parent_id, hierarchy_level, is_parent, is_active')
+        .eq('is_active', true)
+        .order('hierarchy_level', { ascending: true })
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      setExpenseObjects(data as unknown as ExpenseObject[] || [])
+    } catch (err) {
+      console.error('Error fetching expense objects:', err)
+      setExpenseObjects([])
+    }
+  }
 
   const fetchEmployees = async () => {
     try {
@@ -148,10 +200,7 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
           first_name,
           last_name,
           email,
-          users!employees_user_id_fkey (
-            full_name,
-            email
-          )
+          users!employees_user_id_fkey (full_name, email)
         `)
       
       if (error) {
@@ -159,11 +208,33 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
         throw error
       }
       
-      const sorted = (data || []).sort((a: Employee, b: Employee) =>
+      const normalized: Employee[] = (data || []).map((row: any) => ({
+        id: row.id,
+        user_id: row.user_id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        email: row.email,
+        users: row.users ? { full_name: row.users.full_name, email: row.users.email } : undefined
+      }))
+
+      const sorted = normalized.sort((a: Employee, b: Employee) =>
         (a.users?.full_name || '').localeCompare(b.users?.full_name || '')
       )
       console.log('Employees fetched successfully:', sorted.length)
       setEmployees(sorted)
+      // Auto-select current user's employee record in create mode
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user?.id && mode === 'create') {
+          const currentUserEmployee = sorted.find(emp => emp.user_id === session.user.id)
+          if (currentUserEmployee) {
+            setFormData(prev => ({ ...prev, employee_id: currentUserEmployee.id }))
+            console.log('Auto-selected current user employee:', currentUserEmployee.id)
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
     } catch (error) {
       console.error('Error fetching employees:', error)
     } finally {
@@ -287,7 +358,8 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
         status: saveAsDraft ? 'pending' : 'pending',
         receipt_url: formData.receipt_url || null,
         id_parent: formData.id_parent || null,
-        category_id: formData.category_id || null
+        category_id: formData.category_id || null,
+        expense_object_ids: (formData.expense_object_ids || []).length ? formData.expense_object_ids : null
       }
       if (mode === 'edit' && expense?.id) {
         // Update existing expense
@@ -327,7 +399,8 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
       status: 'pending',
       notes: '',
       id_parent: '',
-      category_id: ''
+      category_id: '',
+      expense_object_ids: []
     })
     setErrors({})
   }
@@ -367,6 +440,29 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
         <div className="flex-1 overflow-y-auto p-6">
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Expense Object filtered by role */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-900">Đối tượng chi phí (có thể chọn nhiều) *</label>
+              <select
+                multiple
+                value={formData.expense_object_ids}
+                onChange={(e) => {
+                  const options = Array.from(e.target.selectedOptions).map(o => o.value)
+                  setFormData({ ...formData, expense_object_ids: options })
+                }}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-900 min-h-[120px]"
+                required
+              >
+                {getExpenseObjectsByRole(expenseObjects, userRole)
+                  .filter(obj => obj.parent_id) /* chỉ hiện đối tượng con */
+                  .map((obj) => (
+                    <option key={obj.id} value={obj.id}>
+                      {obj.name}
+                    </option>
+                  ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">Giữ Ctrl (Windows) hoặc Command (Mac) để chọn nhiều.</p>
+            </div>
             <div>
               <label className="block text-sm font-semibold text-gray-900">Mã chi phí</label>
               <div className="mt-1 flex rounded-md shadow-sm">
