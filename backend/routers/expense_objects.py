@@ -15,6 +15,37 @@ from services.supabase_client import get_supabase_client
 
 router = APIRouter()
 
+def recalc_parent_totals(supabase, parent_id: Optional[str]):
+    """Recalculate total_children_cost and is_parent flags upwards from given parent"""
+    try:
+        current_parent = parent_id
+        while current_parent:
+            # Count children (no amount column exists)
+            child_res = supabase.table("expense_objects") \
+                .select("id") \
+                .eq("parent_id", current_parent) \
+                .execute()
+
+            children = child_res.data or []
+            has_children = len(children) > 0
+
+            # Update parent flags
+            supabase.table("expense_objects") \
+                .update({
+                    "total_children_cost": 0.0,  # No amount tracking
+                    "is_parent": has_children,
+                    "cost_from_children": False  # No amount tracking
+                }) \
+                .eq("id", current_parent) \
+                .execute()
+
+            # Move up one level
+            parent_row = supabase.table("expense_objects").select("parent_id").eq("id", current_parent).single().execute()
+            current_parent = parent_row.data.get("parent_id") if parent_row.data else None
+    except Exception as _:
+        # Soft-fail; logging can be added if needed
+        pass
+
 @router.get("/public", response_model=List[ExpenseObject])
 async def get_expense_objects_public(active_only: bool = Query(True, description="Chỉ lấy đối tượng đang hoạt động")):
     """Public: Lấy danh sách đối tượng chi phí (không yêu cầu xác thực)"""
@@ -61,12 +92,13 @@ async def get_expense_objects(
             expense_objects.append(ExpenseObject(
                 id=str(row["id"]),
                 name=row["name"],
-                description=row["description"],
+                description=row.get("description"),
+                parent_id=row.get("parent_id"),
                 is_active=row["is_active"],
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
-                created_by=str(row["created_by"]) if row["created_by"] else None,
-                updated_by=str(row["updated_by"]) if row["updated_by"] else None
+                created_by=str(row.get("created_by")) if row.get("created_by") else None,
+                updated_by=str(row.get("updated_by")) if row.get("updated_by") else None
             ))
         
         return expense_objects
@@ -101,12 +133,13 @@ async def get_expense_object(
         return ExpenseObject(
             id=str(row["id"]),
             name=row["name"],
-            description=row["description"],
+            description=row.get("description"),
+            parent_id=row.get("parent_id"),
             is_active=row["is_active"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
-            created_by=str(row["created_by"]) if row["created_by"] else None,
-            updated_by=str(row["updated_by"]) if row["updated_by"] else None
+            created_by=str(row.get("created_by")) if row.get("created_by") else None,
+            updated_by=str(row.get("updated_by")) if row.get("updated_by") else None
         )
         
     except HTTPException:
@@ -130,6 +163,7 @@ async def create_expense_object(
             "id": str(uuid.uuid4()),
             "name": expense_object.name,
             "description": expense_object.description,
+            "parent_id": expense_object.parent_id,
             "is_active": True,
             "created_by": current_user.id,
             "updated_by": current_user.id
@@ -144,15 +178,20 @@ async def create_expense_object(
             )
         
         row = result.data[0]
+
+        # Recalculate parent totals if needed
+        if row.get("parent_id"):
+            recalc_parent_totals(supabase, row.get("parent_id"))
         return ExpenseObject(
             id=str(row["id"]),
             name=row["name"],
-            description=row["description"],
+            description=row.get("description"),
+            parent_id=row.get("parent_id"),
             is_active=row["is_active"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
-            created_by=str(row["created_by"]) if row["created_by"] else None,
-            updated_by=str(row["updated_by"]) if row["updated_by"] else None
+            created_by=str(row.get("created_by")) if row.get("created_by") else None,
+            updated_by=str(row.get("updated_by")) if row.get("updated_by") else None
         )
         
     except HTTPException:
@@ -195,6 +234,8 @@ async def update_expense_object(
             update_data["description"] = expense_object.description
         if expense_object.is_active is not None:
             update_data["is_active"] = expense_object.is_active
+        if expense_object.parent_id is not None:
+            update_data["parent_id"] = expense_object.parent_id
         
         result = supabase.table("expense_objects")\
             .update(update_data)\
@@ -208,15 +249,24 @@ async def update_expense_object(
             )
         
         row = result.data[0]
+
+        # Recalculate parent totals if parent_id changed or amount updated
+        try:
+            # Get current parent
+            parent_row = supabase.table("expense_objects").select("parent_id").eq("id", expense_object_id).single().execute()
+            recalc_parent_totals(supabase, parent_row.data.get("parent_id") if parent_row.data else None)
+        except Exception:
+            pass
         return ExpenseObject(
             id=str(row["id"]),
             name=row["name"],
-            description=row["description"],
+            description=row.get("description"),
+            parent_id=row.get("parent_id"),
             is_active=row["is_active"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
-            created_by=str(row["created_by"]) if row["created_by"] else None,
-            updated_by=str(row["updated_by"]) if row["updated_by"] else None
+            created_by=str(row.get("created_by")) if row.get("created_by") else None,
+            updated_by=str(row.get("updated_by")) if row.get("updated_by") else None
         )
         
     except HTTPException:

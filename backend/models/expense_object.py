@@ -10,6 +10,7 @@ from datetime import datetime
 class ExpenseObjectBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Tên đối tượng chi phí")
     description: Optional[str] = Field(None, description="Mô tả đối tượng chi phí")
+    parent_id: Optional[str] = Field(None, description="ID đối tượng cha")
 
 class ExpenseObjectCreate(ExpenseObjectBase):
     pass
@@ -18,6 +19,7 @@ class ExpenseObjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Tên đối tượng chi phí")
     description: Optional[str] = Field(None, description="Mô tả đối tượng chi phí")
     is_active: Optional[bool] = Field(None, description="Trạng thái hoạt động")
+    parent_id: Optional[str] = Field(None, description="ID đối tượng cha")
 
 class ExpenseObject(ExpenseObjectBase):
     id: str = Field(..., description="ID đối tượng chi phí")

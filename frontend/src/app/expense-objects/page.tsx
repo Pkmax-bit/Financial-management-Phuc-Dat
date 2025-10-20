@@ -1,23 +1,32 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, Search, Filter } from 'lucide-react'
+import { Plus, Edit, Trash2, Search, Filter, TreePine, List, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import ExpenseObjectTree from '@/components/expense-objects/ExpenseObjectTree'
 
 interface ExpenseObject {
   id: string
   name: string
   description?: string
+  amount?: number
+  parent_id?: string
+  hierarchy_level: number
+  is_parent: boolean
+  total_children_cost: number
+  cost_from_children: boolean
   is_active: boolean
   created_at: string
   updated_at: string
   created_by?: string
   updated_by?: string
+  children?: ExpenseObject[]
 }
 
 interface ExpenseObjectForm {
   name: string
   description: string
+  parent_id?: string
 }
 
 export default function ExpenseObjectsPage() {
@@ -28,9 +37,12 @@ export default function ExpenseObjectsPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedObject, setSelectedObject] = useState<ExpenseObject | null>(null)
+  const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree')
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
   const [form, setForm] = useState<ExpenseObjectForm>({
     name: '',
-    description: ''
+    description: '',
+    parent_id: undefined
   })
   const [saving, setSaving] = useState(false)
 
@@ -62,11 +74,37 @@ export default function ExpenseObjectsPage() {
     loadExpenseObjects()
   }, [])
 
+  // Build tree structure from flat list
+  const buildTree = (objects: ExpenseObject[]): ExpenseObject[] => {
+    const map = new Map<string, ExpenseObject & { children: ExpenseObject[] }>()
+    const roots: ExpenseObject[] = []
+
+    // Create map with children arrays
+    objects.forEach(obj => {
+      map.set(obj.id, { ...obj, children: [] })
+    })
+
+    // Build tree
+    objects.forEach(obj => {
+      const node = map.get(obj.id)!
+      if (obj.parent_id && map.has(obj.parent_id)) {
+        map.get(obj.parent_id)!.children.push(node)
+      } else {
+        roots.push(node)
+      }
+    })
+
+    return roots
+  }
+
   // Filter expense objects
   const filteredObjects = expenseObjects.filter(obj =>
     obj.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (obj.description && obj.description.toLowerCase().includes(searchTerm.toLowerCase()))
   )
+
+  // Get tree structure
+  const treeObjects = buildTree(filteredObjects)
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,7 +134,7 @@ export default function ExpenseObjectsPage() {
         await loadExpenseObjects()
         setShowAddModal(false)
         setShowEditModal(false)
-        setForm({ name: '', description: '' })
+        setForm({ name: '', description: '', parent_id: undefined })
         setSelectedObject(null)
       } else {
         const errorData = await response.json()
@@ -137,16 +175,152 @@ export default function ExpenseObjectsPage() {
     setSelectedObject(obj)
     setForm({
       name: obj.name,
-      description: obj.description || ''
+      description: obj.description || '',
+      parent_id: obj.parent_id
     })
     setShowEditModal(true)
   }
 
   // Open add modal
   const openAddModal = () => {
-    setForm({ name: '', description: '' })
+    setForm({ name: '', description: '', parent_id: undefined })
     setSelectedObject(null)
     setShowAddModal(true)
+  }
+
+  // Open add child modal
+  const openAddChildModal = (parentId: string) => {
+    setForm({ name: '', description: '', parent_id: parentId })
+    setSelectedObject(null)
+    setShowAddModal(true)
+  }
+
+  // Get available parents for dropdown
+  const getAvailableParents = (excludeId?: string) => {
+    return expenseObjects.filter(obj => 
+      obj.id !== excludeId && 
+      (!obj.parent_id || obj.hierarchy_level < 2) // Limit to 2 levels deep
+    )
+  }
+
+  // Toggle parent expansion
+  const toggleParentExpansion = (parentId: string) => {
+    const newExpanded = new Set(expandedParents)
+    if (newExpanded.has(parentId)) {
+      newExpanded.delete(parentId)
+    } else {
+      newExpanded.add(parentId)
+    }
+    setExpandedParents(newExpanded)
+  }
+
+  // Get children of a parent
+  const getChildren = (parentId: string) => {
+    return filteredObjects.filter(obj => obj.parent_id === parentId)
+  }
+
+  // Render hierarchical list
+  const renderHierarchicalList = () => {
+    const rootObjects = filteredObjects.filter(obj => !obj.parent_id)
+    
+    const renderObject = (obj: ExpenseObject, level: number = 0) => {
+      const children = getChildren(obj.id)
+      const isExpanded = expandedParents.has(obj.id)
+      const isParent = children.length > 0
+      
+      return (
+        <React.Fragment key={obj.id}>
+          <tr className={`hover:bg-gray-50 ${level > 0 ? 'bg-blue-50/30' : ''}`}>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 20}px` }}>
+                {isParent ? (
+                  <button
+                    onClick={() => toggleParentExpansion(obj.id)}
+                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-gray-600" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-gray-600" />
+                    )}
+                  </button>
+                ) : (
+                  <div className="w-6 h-6 flex-shrink-0"></div>
+                )}
+                
+                {isParent ? (
+                  <Folder className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                ) : (
+                  <FileText className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                )}
+                
+                <div className="flex items-center gap-2">
+                  <div className={`text-sm font-medium ${level > 0 ? 'text-blue-700' : 'text-gray-900'}`}>
+                    {obj.name}
+                  </div>
+                  {obj.is_parent && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      Parent
+                    </span>
+                  )}
+                  {obj.cost_from_children && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                      Calculated
+                    </span>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="px-6 py-4">
+              <div className="text-sm text-gray-500 max-w-xs truncate">
+                {obj.description || '-'}
+              </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="text-sm font-medium text-gray-900">
+                {obj.cost_from_children 
+                  ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(obj.total_children_cost)
+                  : '-'
+                }
+              </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="text-sm text-gray-500">
+                Cấp {obj.hierarchy_level}
+              </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                obj.is_active 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {obj.is_active ? 'Hoạt động' : 'Không hoạt động'}
+              </span>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openEditModal(obj)}
+                  className="text-blue-600 hover:text-blue-900"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(obj.id)}
+                  className="text-red-600 hover:text-red-900"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </td>
+          </tr>
+          {isExpanded && children.map(child => renderObject(child, level + 1))}
+        </React.Fragment>
+      )
+    }
+
+    return rootObjects.map(obj => renderObject(obj))
   }
 
   return (
@@ -156,15 +330,42 @@ export default function ExpenseObjectsPage() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Đối tượng chi phí</h1>
-            <p className="text-gray-600">Quản lý các đối tượng chi phí trong dự án</p>
+            <p className="text-gray-600">Quản lý các đối tượng chi phí với cấu trúc phân cấp</p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Thêm đối tượng
-          </button>
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('tree')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'tree' 
+                    ? 'bg-white text-blue-600 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <TreePine className="w-4 h-4" />
+                Cây
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'list' 
+                    ? 'bg-white text-blue-600 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                Danh sách
+              </button>
+            </div>
+            <button
+              onClick={openAddModal}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Thêm đối tượng
+            </button>
+          </div>
         </div>
 
         {/* Search and Filter */}
@@ -195,6 +396,14 @@ export default function ExpenseObjectsPage() {
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
+        ) : viewMode === 'tree' ? (
+          <ExpenseObjectTree
+            objects={treeObjects}
+            onEdit={openEditModal}
+            onDelete={handleDelete}
+            onAddChild={openAddChildModal}
+            onAddRoot={openAddModal}
+          />
         ) : (
           <div className="bg-white rounded-lg border">
             {filteredObjects.length === 0 ? (
@@ -221,6 +430,12 @@ export default function ExpenseObjectsPage() {
                         Mô tả
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Chi phí
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cấp độ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Trạng thái
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -229,43 +444,7 @@ export default function ExpenseObjectsPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredObjects.map((obj) => (
-                      <tr key={obj.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{obj.name}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-500 max-w-xs truncate">
-                            {obj.description || '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            obj.is_active 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {obj.is_active ? 'Hoạt động' : 'Không hoạt động'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => openEditModal(obj)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(obj.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {renderHierarchicalList()}
                   </tbody>
                 </table>
               </div>
@@ -277,7 +456,9 @@ export default function ExpenseObjectsPage() {
         {showAddModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h2 className="text-lg font-semibold mb-4">Thêm đối tượng chi phí</h2>
+              <h2 className="text-lg font-semibold mb-4">
+                {form.parent_id ? 'Thêm đối tượng con' : 'Thêm đối tượng chi phí'}
+              </h2>
               <form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -291,7 +472,7 @@ export default function ExpenseObjectsPage() {
                     required
                   />
                 </div>
-                <div className="mb-6">
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Mô tả
                   </label>
@@ -302,6 +483,25 @@ export default function ExpenseObjectsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+                {!form.parent_id && (
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Đối tượng cha (tùy chọn)
+                    </label>
+                    <select
+                      value={form.parent_id || ''}
+                      onChange={(e) => setForm({ ...form, parent_id: e.target.value || undefined })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">-- Chọn đối tượng cha --</option>
+                      {getAvailableParents().map(parent => (
+                        <option key={parent.id} value={parent.id}>
+                          {'  '.repeat(parent.hierarchy_level)} {parent.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex justify-end gap-3">
                   <button
                     type="button"
@@ -341,7 +541,7 @@ export default function ExpenseObjectsPage() {
                     required
                   />
                 </div>
-                <div className="mb-6">
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Mô tả
                   </label>
@@ -351,6 +551,23 @@ export default function ExpenseObjectsPage() {
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Đối tượng cha (tùy chọn)
+                  </label>
+                  <select
+                    value={form.parent_id || ''}
+                    onChange={(e) => setForm({ ...form, parent_id: e.target.value || undefined })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Chọn đối tượng cha --</option>
+                    {getAvailableParents(selectedObject?.id).map(parent => (
+                      <option key={parent.id} value={parent.id}>
+                        {'  '.repeat(parent.hierarchy_level)} {parent.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex justify-end gap-3">
                   <button

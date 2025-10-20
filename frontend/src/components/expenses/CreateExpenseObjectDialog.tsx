@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Save, AlertCircle, Target, Edit, Trash2, Search } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { X, Save, AlertCircle, Target, Edit, Trash2, Search, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react'
 import { apiGet, apiPost, apiDelete } from '@/lib/api'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -10,6 +10,12 @@ interface ExpenseObject {
   id: string
   name: string
   description?: string
+  parent_id?: string
+  amount?: number
+  hierarchy_level: number
+  is_parent: boolean
+  total_children_cost: number
+  cost_from_children: boolean
   is_active: boolean
   created_at: string
   updated_at: string
@@ -24,7 +30,8 @@ interface CreateExpenseObjectDialogProps {
 export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }: CreateExpenseObjectDialogProps) {
   const [formData, setFormData] = useState({
     name: '',
-    description: ''
+    description: '',
+    parent_id: ''
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -32,6 +39,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
 
   // Load expense objects
   const loadExpenseObjects = async () => {
@@ -69,6 +77,115 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
     (obj.description && obj.description.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
+  // Toggle parent expansion
+  const toggleParentExpansion = (parentId: string) => {
+    const newExpanded = new Set(expandedParents)
+    if (newExpanded.has(parentId)) {
+      newExpanded.delete(parentId)
+    } else {
+      newExpanded.add(parentId)
+    }
+    setExpandedParents(newExpanded)
+  }
+
+  // Get children of a parent
+  const getChildren = (parentId: string) => {
+    return filteredObjects.filter(obj => obj.parent_id === parentId)
+  }
+
+  // Render hierarchical list
+  const renderHierarchicalList = () => {
+    const rootObjects = filteredObjects.filter(obj => !obj.parent_id)
+    
+    const renderObject = (obj: ExpenseObject, level: number = 0) => {
+      const children = getChildren(obj.id)
+      const isExpanded = expandedParents.has(obj.id)
+      const isParent = children.length > 0
+      
+      return (
+        <React.Fragment key={obj.id}>
+          <div className={`p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${level > 0 ? 'bg-blue-50/30' : ''}`}>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center flex-1 min-w-0" style={{ paddingLeft: `${level * 20}px` }}>
+                {isParent ? (
+                  <button
+                    onClick={() => toggleParentExpansion(obj.id)}
+                    className="mr-1 p-1 rounded-full hover:bg-gray-200 transition-colors"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-gray-600" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-gray-600" />
+                    )}
+                  </button>
+                ) : (
+                  <div className="w-6 h-6 flex-shrink-0"></div>
+                )}
+                
+                {isParent ? (
+                  <Folder className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" />
+                ) : (
+                  <FileText className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0" />
+                )}
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-medium ${level > 0 ? 'text-blue-700' : 'text-gray-900'} truncate`}>
+                      {obj.name}
+                    </span>
+                    {obj.is_parent && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                        Parent
+                      </span>
+                    )}
+                    {obj.cost_from_children && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        Calculated
+                      </span>
+                    )}
+                  </div>
+                  {obj.description && (
+                    <p className="text-xs text-gray-500 truncate mt-1">{obj.description}</p>
+                  )}
+                  <div className="flex items-center mt-2 gap-2">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      obj.is_active 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {obj.is_active ? 'Hoạt động' : 'Không hoạt động'}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
+                      Cấp {obj.hierarchy_level}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+                <button
+                  onClick={() => handleDelete(obj.id)}
+                  disabled={deletingId === obj.id}
+                  className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Xóa đối tượng chi phí"
+                >
+                  {deletingId === obj.id ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          {isExpanded && children.map(child => renderObject(child, level + 1))}
+        </React.Fragment>
+      )
+    }
+
+    return rootObjects.map(obj => renderObject(obj))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -83,12 +200,17 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
 
     try {
       setSaving(true)
-      const response = await apiPost(`${API_BASE_URL}/api/expense-objects/`, formData)
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        parent_id: formData.parent_id || null
+      }
+      const response = await apiPost(`${API_BASE_URL}/api/expense-objects/`, payload)
 
       if (response) {
         alert('Tạo đối tượng chi phí thành công!')
         onSuccess()
-        setFormData({ name: '', description: '' })
+        setFormData({ name: '', description: '', parent_id: '' })
         setErrors({})
         await loadExpenseObjects() // Reload the list
         onClose()
@@ -119,7 +241,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   }
 
   const handleClose = () => {
-    setFormData({ name: '', description: '' })
+    setFormData({ name: '', description: '', parent_id: '' })
     setErrors({})
     onClose()
   }
@@ -182,41 +304,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {filteredObjects.map((obj) => (
-                    <div key={obj.id} className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">{obj.name}</h4>
-                          {obj.description && (
-                            <p className="text-sm text-gray-500 mt-1 line-clamp-2">{obj.description}</p>
-                          )}
-                          <div className="flex items-center mt-2">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              obj.is_active 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {obj.is_active ? 'Hoạt động' : 'Không hoạt động'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2 ml-3">
-                          <button
-                            onClick={() => handleDelete(obj.id)}
-                            disabled={deletingId === obj.id}
-                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Xóa đối tượng chi phí"
-                          >
-                            {deletingId === obj.id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {renderHierarchicalList()}
                 </div>
               )}
             </div>
@@ -268,6 +356,29 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
                   placeholder="Mô tả chi tiết về đối tượng chi phí này..."
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Đối tượng cha (tùy chọn)
+                </label>
+                <select
+                  value={formData.parent_id}
+                  onChange={(e) => setFormData({ ...formData, parent_id: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                >
+                  <option value="">-- Chọn đối tượng cha --</option>
+                  {expenseObjects.map(obj => (
+                    <option key={obj.id} value={obj.id}>
+                      {obj.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Chọn đối tượng cha để tạo đối tượng con. Để trống nếu là đối tượng gốc.
+                </p>
+              </div>
+
+              {/* Removed amount input by request */}
             </div>
 
             {/* Error message */}
