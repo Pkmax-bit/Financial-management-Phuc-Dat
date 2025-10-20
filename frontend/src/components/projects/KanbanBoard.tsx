@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import KanbanColumn from './KanbanColumn'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { CheckCircle, X, AlertTriangle } from 'lucide-react'
 
 type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled'
 
@@ -12,7 +13,7 @@ interface ProjectItem {
   name: string
   project_code: string
   customer_name?: string
-  progress?: number
+  progress: number
   priority?: 'low' | 'medium' | 'high' | 'urgent'
   status: ProjectStatus
 }
@@ -31,6 +32,8 @@ export default function KanbanBoard() {
   const [error, setError] = useState<string | null>(null)
   const [draggedProject, setDraggedProject] = useState<ProjectItem | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<ProjectStatus | null>(null)
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [pendingDrop, setPendingDrop] = useState<{project: ProjectItem, status: ProjectStatus} | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -85,32 +88,73 @@ export default function KanbanBoard() {
       return
     }
 
+    // Show confirmation dialog for completion
+    if (newStatus === 'completed') {
+      setPendingDrop({ project: draggedProject, status: newStatus })
+      setShowCompletionDialog(true)
+      setDraggedProject(null)
+      setDragOverColumn(null)
+      return
+    }
+
+    // For other statuses, proceed directly
+    await updateProjectStatus(draggedProject, newStatus)
+  }
+
+  const updateProjectStatus = async (project: ProjectItem, newStatus: ProjectStatus) => {
     try {
-      // Update project status in database
+      // Prepare update data
+      const updateData: any = { status: newStatus }
+      
+      // Auto-set progress to 100% when moving to completed
+      if (newStatus === 'completed') {
+        updateData.progress = 100
+      }
+      // Auto-set progress to 0% when moving back to planning
+      else if (newStatus === 'planning') {
+        updateData.progress = 0
+      }
+
+      // Update project status and progress in database
       const { error } = await supabase
         .from('projects')
-        .update({ status: newStatus })
-        .eq('id', draggedProject.id)
+        .update(updateData)
+        .eq('id', project.id)
 
       if (error) throw error
 
       // Update local state
       setProjects(prev => 
-        prev.map(project => 
-          project.id === draggedProject.id 
-            ? { ...project, status: newStatus }
-            : project
+        prev.map(p => 
+          p.id === project.id 
+            ? { 
+                ...p, 
+                status: newStatus,
+                progress: newStatus === 'completed' ? 100 : 
+                         newStatus === 'planning' ? 0 : p.progress
+              }
+            : p
         )
       )
 
-      console.log(`Project ${draggedProject.name} moved to ${newStatus}`)
+      console.log(`Project ${project.name} moved to ${newStatus}${newStatus === 'completed' ? ' with 100% progress' : ''}`)
     } catch (err) {
       console.error('Error updating project status:', err)
       setError('Không thể cập nhật trạng thái dự án')
-    } finally {
-      setDraggedProject(null)
-      setDragOverColumn(null)
     }
+  }
+
+  const handleConfirmCompletion = async () => {
+    if (pendingDrop) {
+      await updateProjectStatus(pendingDrop.project, pendingDrop.status)
+      setShowCompletionDialog(false)
+      setPendingDrop(null)
+    }
+  }
+
+  const handleCancelCompletion = () => {
+    setShowCompletionDialog(false)
+    setPendingDrop(null)
   }
 
   const grouped = useMemo(() => {
@@ -154,23 +198,78 @@ export default function KanbanBoard() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      {(Object.keys(statusMeta) as ProjectStatus[]).map((status) => (
-        <KanbanColumn
-          key={status}
-          title={statusMeta[status].title}
-          colorClass={statusMeta[status].colorClass}
-          count={grouped[status].length}
-          projects={grouped[status]}
-          onCardClick={(id) => router.push(`/projects/${id}/detail`)}
-          onDragStart={handleDragStart}
-          onDragOver={(e) => handleDragOver(e, status)}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, status)}
-          isDragOver={dragOverColumn === status}
-        />
-      ))}
-    </div>
+    <>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {(Object.keys(statusMeta) as ProjectStatus[]).map((status) => (
+          <KanbanColumn
+            key={status}
+            title={statusMeta[status].title}
+            colorClass={statusMeta[status].colorClass}
+            count={grouped[status].length}
+            projects={grouped[status]}
+            onCardClick={(id) => router.push(`/projects/${id}/detail`)}
+            onDragStart={handleDragStart}
+            onDragOver={(e) => handleDragOver(e, status)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, status)}
+            isDragOver={dragOverColumn === status}
+          />
+        ))}
+      </div>
+
+      {/* Completion Confirmation Dialog */}
+      {showCompletionDialog && pendingDrop && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-green-100 rounded-full">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Xác nhận hoàn thành dự án
+                </h3>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-gray-600 mb-2">
+                  Bạn có chắc chắn muốn hoàn thành dự án này không?
+                </p>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="font-medium text-gray-900">{pendingDrop.project.name}</p>
+                  <p className="text-sm text-gray-600">#{pendingDrop.project.project_code}</p>
+                </div>
+                <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-800">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      Dự án sẽ được đặt tiến độ 100% và chuyển sang trạng thái "Hoàn thành"
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelCompletion}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Hủy
+                </button>
+                <button
+                  onClick={handleConfirmCompletion}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Xác nhận hoàn thành
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
