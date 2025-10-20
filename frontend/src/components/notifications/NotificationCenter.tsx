@@ -71,19 +71,26 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
         throw new Error('Not authenticated')
       }
 
-      const response = await fetch('http://localhost:8000/api/sales/notifications', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      // Lấy dữ liệu trực tiếp từ bảng notifications trong database (giống trang thông báo)
+      const { data: notifications, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch notifications')
+      if (error) {
+        console.error('Error fetching notifications from database:', error)
+        throw new Error('Failed to fetch notifications from database')
       }
 
-      const data = await response.json()
-      setNotifications(data.notifications || [])
+      // Map database fields to frontend format
+      const mappedNotifications = notifications?.map(notification => ({
+        ...notification,
+        read: notification.is_read || false,
+        // Remove is_read field as we use 'read' in frontend
+        ...(notification.is_read !== undefined && { is_read: undefined })
+      })) || []
+
+      setNotifications(mappedNotifications)
     } catch (error) {
       console.error('Error fetching notifications:', error)
       setError('Không thể tải thông báo')
@@ -97,25 +104,31 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      const response = await fetch(`http://localhost:8000/api/sales/notifications/${notificationId}/read`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      // Cập nhật trực tiếp trong database (giống trang thông báo)
+      const { error } = await supabase
+        .from('notifications')
+        .update({ 
+          is_read: true, 
+          read_at: new Date().toISOString() 
+        })
+        .eq('id', notificationId)
 
-      if (response.ok) {
-        setNotifications(prev => 
-          prev.map(notif => 
-            notif.id === notificationId 
-              ? { ...notif, read: true, read_at: new Date().toISOString() }
-              : notif
-          )
-        )
-        // Call the callback to refresh the bell count
-        onNotificationRead?.()
+      if (error) {
+        console.error('Error marking notification as read:', error)
+        return
       }
+
+      // Cập nhật local state
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notificationId 
+            ? { ...notif, read: true, read_at: new Date().toISOString() }
+            : notif
+        )
+      )
+      
+      // Call the callback to refresh the bell count
+      onNotificationRead?.()
     } catch (error) {
       console.error('Error marking notification as read:', error)
     }

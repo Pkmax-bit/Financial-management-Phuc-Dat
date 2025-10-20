@@ -21,6 +21,7 @@ import {
   Camera
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
+import NotificationBell from './notifications/NotificationBell'
 
 interface NavigationProps {
   user?: {
@@ -175,13 +176,9 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
             <Settings className="w-4 h-4 mr-1" />
             Cài đặt
           </button>
-          <button
-            onClick={() => router.push('/notifications')}
-            className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-black bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
-          >
-            <Bell className="w-4 h-4 mr-1" />
-            Thông báo
-          </button>
+          <div className="flex-1 flex items-center justify-center">
+            <NotificationBell />
+          </div>
           <button
             onClick={onLogout}
             className="flex items-center justify-center px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors"

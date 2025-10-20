@@ -33,6 +33,8 @@ export default function KanbanBoard() {
   const [draggedProject, setDraggedProject] = useState<ProjectItem | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<ProjectStatus | null>(null)
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [showHoldDialog, setShowHoldDialog] = useState(false)
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [pendingDrop, setPendingDrop] = useState<{project: ProjectItem, status: ProjectStatus} | null>(null)
   const router = useRouter()
 
@@ -88,10 +90,26 @@ export default function KanbanBoard() {
       return
     }
 
-    // Show confirmation dialog for completion
+    // Show confirmation dialogs for critical status changes
     if (newStatus === 'completed') {
       setPendingDrop({ project: draggedProject, status: newStatus })
       setShowCompletionDialog(true)
+      setDraggedProject(null)
+      setDragOverColumn(null)
+      return
+    }
+
+    if (newStatus === 'on_hold') {
+      setPendingDrop({ project: draggedProject, status: newStatus })
+      setShowHoldDialog(true)
+      setDraggedProject(null)
+      setDragOverColumn(null)
+      return
+    }
+
+    if (newStatus === 'cancelled') {
+      setPendingDrop({ project: draggedProject, status: newStatus })
+      setShowCancelDialog(true)
       setDraggedProject(null)
       setDragOverColumn(null)
       return
@@ -154,6 +172,32 @@ export default function KanbanBoard() {
 
   const handleCancelCompletion = () => {
     setShowCompletionDialog(false)
+    setPendingDrop(null)
+  }
+
+  const handleConfirmHold = async () => {
+    if (pendingDrop) {
+      await updateProjectStatus(pendingDrop.project, pendingDrop.status)
+      setShowHoldDialog(false)
+      setPendingDrop(null)
+    }
+  }
+
+  const handleCancelHold = () => {
+    setShowHoldDialog(false)
+    setPendingDrop(null)
+  }
+
+  const handleConfirmCancel = async () => {
+    if (pendingDrop) {
+      await updateProjectStatus(pendingDrop.project, pendingDrop.status)
+      setShowCancelDialog(false)
+      setPendingDrop(null)
+    }
+  }
+
+  const handleCancelCancel = () => {
+    setShowCancelDialog(false)
     setPendingDrop(null)
   }
 
@@ -263,6 +307,112 @@ export default function KanbanBoard() {
                 >
                   <CheckCircle className="h-4 w-4" />
                   Xác nhận hoàn thành
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hold Confirmation Dialog */}
+      {showHoldDialog && pendingDrop && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-yellow-100 rounded-full">
+                  <AlertTriangle className="h-6 w-6 text-yellow-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Xác nhận tạm dừng dự án
+                </h3>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-gray-600 mb-2">
+                  Bạn có chắc chắn muốn tạm dừng dự án này không?
+                </p>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="font-medium text-gray-900">{pendingDrop.project.name}</p>
+                  <p className="text-sm text-gray-600">#{pendingDrop.project.project_code}</p>
+                </div>
+                <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-yellow-800">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      Dự án sẽ được chuyển sang trạng thái "Tạm dừng" và có thể tiếp tục sau
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelHold}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Hủy
+                </button>
+                <button
+                  onClick={handleConfirmHold}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Xác nhận tạm dừng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Dialog */}
+      {showCancelDialog && pendingDrop && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <X className="h-6 w-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Xác nhận hủy dự án
+                </h3>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-gray-600 mb-2">
+                  Bạn có chắc chắn muốn hủy dự án này không?
+                </p>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="font-medium text-gray-900">{pendingDrop.project.name}</p>
+                  <p className="text-sm text-gray-600">#{pendingDrop.project.project_code}</p>
+                </div>
+                <div className="mt-3 p-3 bg-red-50 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-800">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      Dự án sẽ được chuyển sang trạng thái "Hủy" và không thể hoàn thành
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelCancel}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Hủy
+                </button>
+                <button
+                  onClick={handleConfirmCancel}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Xác nhận hủy
                 </button>
               </div>
             </div>

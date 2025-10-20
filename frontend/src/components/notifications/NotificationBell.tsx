@@ -22,22 +22,19 @@ export default function NotificationBell() {
         return
       }
 
-      const response = await fetch('http://localhost:8000/api/sales/notifications', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      // Lấy dữ liệu trực tiếp từ bảng notifications trong database (giống trang thông báo)
+      const { data: notifications, error } = await supabase
+        .from('notifications')
+        .select('id, is_read')
+        .eq('is_read', false)
 
-      if (response.ok) {
-        const data = await response.json()
-        const notifications = data.notifications || []
-        const unread = notifications.filter((n: any) => !n.read) || []
-        setUnreadCount(unread.length)
-      } else {
+      if (error) {
+        console.error('Error fetching notifications from database:', error)
         setHasError(true)
-        console.error('Failed to fetch notifications:', response.status)
+        return
       }
+
+      setUnreadCount(notifications?.length || 0)
     } catch (error) {
       console.error('Error fetching unread count:', error)
       setHasError(true)
