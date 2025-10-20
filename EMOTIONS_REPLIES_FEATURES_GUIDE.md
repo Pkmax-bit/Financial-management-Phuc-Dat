@@ -224,3 +224,4 @@ INSERT INTO emotion_types (name, emoji) VALUES
 
 
 
+

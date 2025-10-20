@@ -122,7 +122,19 @@ export default function KanbanBoard() {
       cancelled: []
     }
     for (const p of projects) {
-      byStatus[p.status].push(p)
+      // Auto-change status based on progress
+      let displayStatus = p.status
+      
+      // If project has progress > 0 and status is planning, show as active
+      if (p.status === 'planning' && p.progress > 0) {
+        displayStatus = 'active'
+      }
+      // If project has progress = 100%, show as completed
+      else if (p.progress >= 100 && p.status !== 'cancelled') {
+        displayStatus = 'completed'
+      }
+      
+      byStatus[displayStatus].push(p)
     }
     return byStatus
   }, [projects])

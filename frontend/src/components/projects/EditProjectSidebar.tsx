@@ -181,12 +181,6 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
 
   return (
     <>
-      {/* Invisible backdrop for click outside */}
-      <div 
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-      />
-      
       {/* Sidebar */}
       <div className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out">
         {/* Header */}
@@ -200,16 +194,31 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
               <p className="text-sm text-black">Cập nhật thông tin dự án</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="h-5 w-5 text-black" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              form="edit-project-form"
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+            >
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Lưu</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="h-5 w-5 text-black" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+        <form id="edit-project-form" onSubmit={handleSubmit} className="flex flex-col h-full">
           <div className="flex-1 overflow-y-auto p-6">
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-md p-3">
@@ -460,17 +469,17 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm hover:shadow-md"
+                className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
               >
                 {loading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Đang cập nhật...</span>
+                    <span>Đang lưu...</span>
                   </>
                 ) : (
                   <>
-                    <Save className="h-4 w-4" />
-                    <span>Lưu thay đổi</span>
+                    <Save className="h-5 w-5" />
+                    <span>Lưu chỉnh sửa</span>
                   </>
                 )}
               </button>

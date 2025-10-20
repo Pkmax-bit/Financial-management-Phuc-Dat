@@ -26,6 +26,7 @@ import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import ProjectTeam from '@/components/projects/ProjectTeam'
 import ProjectTimeline from '@/components/projects/ProjectTimeline'
+import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 
 interface Project {
   id: string
@@ -105,6 +106,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents'>('overview')
+  const [showEditSidebar, setShowEditSidebar] = useState(false)
 
   useEffect(() => {
     checkUser()
@@ -179,6 +181,15 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const handleEditProject = () => {
+    setShowEditSidebar(true)
+  }
+
+  const handleEditSuccess = () => {
+    setShowEditSidebar(false)
+    fetchProject() // Refresh project data
+  }
+
   if (loading) {
     return (
       <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
@@ -251,7 +262,10 @@ export default function ProjectDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={handleEditProject}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 <Edit className="h-4 w-4" />
                 <span className="text-sm font-medium">Chỉnh sửa</span>
               </button>
@@ -565,7 +579,10 @@ export default function ProjectDetailPage() {
                     <h3 className="text-xl font-semibold text-gray-900">Hành động</h3>
                   </div>
                   <div className="space-y-3">
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-blue-50 rounded-lg transition-colors group">
+                    <button 
+                      onClick={handleEditProject}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-blue-50 rounded-lg transition-colors group"
+                    >
                       <Edit className="h-4 w-4 text-blue-600 group-hover:text-blue-700" />
                       <span className="font-medium text-gray-900">Chỉnh sửa dự án</span>
                     </button>
@@ -636,6 +653,16 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Project Sidebar */}
+      {project && (
+        <EditProjectSidebar
+          isOpen={showEditSidebar}
+          onClose={() => setShowEditSidebar(false)}
+          onSuccess={handleEditSuccess}
+          project={project}
+        />
+      )}
     </LayoutWithSidebar>
   )
 }

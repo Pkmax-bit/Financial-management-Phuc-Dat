@@ -370,8 +370,33 @@ async def update_project(
             )
         
         # Update project
-        update_data = project_update.model_dump(exclude_unset=True)
+        update_data = project_update.dict(exclude_unset=True)
         update_data["updated_at"] = datetime.utcnow().isoformat()
+        
+        # Convert date objects to strings for JSON serialization
+        if 'start_date' in update_data and isinstance(update_data['start_date'], date):
+            update_data['start_date'] = update_data['start_date'].isoformat()
+        if 'end_date' in update_data and isinstance(update_data['end_date'], date):
+            update_data['end_date'] = update_data['end_date'].isoformat()
+        
+        # Convert enum objects to strings for JSON serialization
+        if 'status' in update_data and hasattr(update_data['status'], 'value'):
+            update_data['status'] = update_data['status'].value
+        if 'priority' in update_data and hasattr(update_data['priority'], 'value'):
+            update_data['priority'] = update_data['priority'].value
+        
+        # Auto-update status based on progress
+        if 'progress' in update_data:
+            progress = update_data['progress']
+            # Get current project status
+            current_project = supabase.table("projects").select("status").eq("id", project_id).execute()
+            current_status = current_project.data[0]['status'] if current_project.data else 'planning'
+            
+            # Auto-change status based on progress
+            if progress > 0 and current_status == 'planning':
+                update_data['status'] = 'active'
+            elif progress >= 100 and current_status not in ['completed', 'cancelled']:
+                update_data['status'] = 'completed'
         
         result = supabase.table("projects").update(update_data).eq("id", project_id).execute()
         
