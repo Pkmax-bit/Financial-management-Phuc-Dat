@@ -52,9 +52,8 @@ export default function ProductPickerModal({ isOpen, onClose, onSelect }: { isOp
                 if (categoriesError) throw categoriesError
                 setCategories(categoriesData || [])
                 
-                // Auto-expand all categories by default
-                const allCategoryIds = new Set((categoriesData || []).map(c => c.id))
-                setExpandedCategories(allCategoryIds)
+                // Mặc định tất cả danh mục đóng (không auto-expand)
+                setExpandedCategories(new Set())
                 
             } finally {
                 setLoading(false)
@@ -108,39 +107,56 @@ export default function ProductPickerModal({ isOpen, onClose, onSelect }: { isOp
 
     if (!isOpen) return null
     return (
-        <div className="fixed inset-0 z-50">
-            {/* Transparent overlay - không che giao diện báo giá */}
-            <div className="fixed inset-0 bg-transparent" onClick={onClose} />
+        <div className="fixed inset-0 z-50 pointer-events-none">
+            {/* Transparent overlay - hoàn toàn trong suốt, không che giao diện */}
+            <div className="fixed inset-0 bg-transparent pointer-events-auto" onClick={onClose} />
             
-            {/* Modal positioned to not block the quote form */}
-            <div className="fixed top-20 right-4 w-full max-w-4xl bg-white/95 backdrop-blur-sm rounded-lg shadow-2xl border border-gray-200">
-                <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white/90">
+            {/* Modal positioned to not block the quote form - nền trong suốt hoàn toàn */}
+            <div className="fixed top-20 right-6 w-full max-w-5xl max-h-[80vh] bg-white/100 rounded-xl shadow-2xl border border-gray-200 pointer-events-auto overflow-hidden">
+                <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white">
                     <div className="flex items-center">
                         <Package className="h-5 w-5 text-blue-600 mr-2" />
                         <h3 className="text-lg font-semibold text-gray-900">Chọn sản phẩm</h3>
+                        <span className="ml-3 text-sm text-gray-500">
+                            ({products.length} sản phẩm có sẵn)
+                        </span>
                     </div>
                     <button 
                         onClick={onClose} 
-                        className="text-gray-500 hover:text-gray-700 p-1 hover:bg-gray-100 rounded"
+                        className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Đóng hộp thoại"
                     >
                         ✕
                     </button>
                 </div>
                 
-                {/* Search bar with icon */}
-                <div className="p-4 bg-white/90">
+                {/* Search bar với giao diện cải tiến */}
+                <div className="p-4 bg-white border-b border-gray-200">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-blue-500" />
                         <input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Tìm kiếm sản phẩm..."
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="🔍 Tìm kiếm sản phẩm theo tên hoặc mô tả..."
+                            className="w-full pl-12 pr-4 py-3 border-2 border-blue-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                         />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                ✕
+                            </button>
+                        )}
                     </div>
+                    {search && (
+                        <div className="mt-2 text-xs text-blue-600">
+                            Tìm thấy {filtered.length} sản phẩm phù hợp
+                        </div>
+                    )}
                 </div>
                 
-                <div className="max-h-96 overflow-auto bg-white/90">
+                <div className="flex-1 overflow-auto bg-white max-h-[60vh]">
                     {loading ? (
                         <div className="p-4 text-center text-gray-500">Đang tải...</div>
                     ) : Object.keys(productsByCategory).length === 0 ? (
@@ -154,23 +170,25 @@ export default function ProductPickerModal({ isOpen, onClose, onSelect }: { isOp
                                 
                                 return (
                                     <div key={categoryId} className="border-b border-gray-100 last:border-b-0">
-                                        {/* Category Header */}
+                                        {/* Category Header với mũi tên rõ ràng */}
                                         <div 
-                                            className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 cursor-pointer"
+                                            className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
                                             onClick={() => !isUncategorized && toggleCategory(categoryId)}
                                         >
                                             <div className="flex items-center">
                                                 {!isUncategorized && (
-                                                    isExpanded ? (
-                                                        <ChevronDown className="h-4 w-4 text-gray-500 mr-2" />
-                                                    ) : (
-                                                        <ChevronRight className="h-4 w-4 text-gray-500 mr-2" />
-                                                    )
+                                                    <div className="flex items-center">
+                                                        {isExpanded ? (
+                                                            <ChevronDown className="h-5 w-5 text-blue-600 mr-2 transition-transform" />
+                                                        ) : (
+                                                            <ChevronRight className="h-5 w-5 text-blue-600 mr-2 transition-transform" />
+                                                        )}
+                                                    </div>
                                                 )}
-                                                <span className="font-medium text-gray-900">
+                                                <span className="font-semibold text-gray-900">
                                                     {isUncategorized ? 'Không phân loại' : (category?.name || 'Không xác định')}
                                                 </span>
-                                                <span className="ml-2 text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                                                <span className="ml-3 text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full font-medium">
                                                     {categoryProducts.length} sản phẩm
                                                 </span>
                                             </div>

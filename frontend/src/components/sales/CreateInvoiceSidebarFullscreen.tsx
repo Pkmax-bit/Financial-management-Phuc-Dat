@@ -1128,7 +1128,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
       {/* Product Selection Modal */}
       {showProductModal && (
-        <div className="fixed inset-0 z-60 bg-gray-500 bg-opacity-20 flex items-end justify-center">
+        <div className="fixed inset-0 z-60 bg-transparent flex items-end justify-center">
           <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[75vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-700">Chọn sản phẩm</h3>
