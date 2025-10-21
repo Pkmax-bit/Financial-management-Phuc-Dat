@@ -127,7 +127,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     name: string; 
     description?: string;
     is_active: boolean;
-    parent_id?: string;
+    parent_id?: string; // Added parent_id
   }
   const [expenseObjectsOptions, setExpenseObjectsOptions] = useState<SimpleExpenseObject[]>([])
   const [selectedExpenseObjectIds, setSelectedExpenseObjectIds] = useState<string[]>([])
@@ -272,72 +272,44 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         name: o.name, 
         description: o.description,
         is_active: o.is_active ?? true,
-        parent_id: o.parent_id
+        parent_id: o.parent_id // Added parent_id
       })) : []
 
-      // Role-based filtering of expense objects with hierarchical support
+      // Role-based filtering of expense objects
       const normalize = (s: string) => (s || '').toLowerCase()
       
-      // Build hierarchy map for parent-child relationships
-      const hierarchyMap = new Map<string, SimpleExpenseObject[]>()
-      opts.forEach(obj => {
-        if (obj.parent_id) {
-          if (!hierarchyMap.has(obj.parent_id)) {
-            hierarchyMap.set(obj.parent_id, [])
-          }
-          hierarchyMap.get(obj.parent_id)!.push(obj)
-        }
-      })
+      // For planned expenses, only show parent objects (no children)
+      if (category === 'planned') {
+        opts = opts.filter(o => !o.parent_id) // Only show parent objects
+        console.log('📋 Planned expenses - showing only parent objects:', opts.map(o => o.name))
+      }
       
       if (userRole === 'workshop_employee') {
-        // Workshop employees see materials and workshop labor with their children
-        const filteredOpts: SimpleExpenseObject[] = []
-        
-        opts.forEach(obj => {
-          const n = normalize(obj.name)
-          const isMaterial = n.includes('nguyên vật liệu') || n.includes('nguyen vat lieu') ||
-                            n.includes('vật liệu') || n.includes('vat lieu') ||
-                            n.includes('thép') || n.includes('thep') ||
-                            n.includes('xi măng') || n.includes('xi mang') ||
-                            n.includes('vít') || n.includes('vit') ||
-                            n.includes('ốc') || n.includes('oc') ||
-                            n.includes('keo') || n.includes('dán') || n.includes('dan')
-          
-          const isWorkshopLabor = n.includes('nhân công xưởng') || n.includes('nhan cong xuong') ||
-                                 n.includes('xưởng') || n.includes('xuong')
-          
-          if (isMaterial || isWorkshopLabor) {
-            filteredOpts.push(obj)
-            // Add children if any
-            const children = hierarchyMap.get(obj.id) || []
-            filteredOpts.push(...children)
-          }
+        // Workshop employees see only workshop-related objects (materials and workshop labor)
+        opts = opts.filter(o => {
+          const n = normalize(o.name)
+          return n.includes('xưởng') || n.includes('xuong') || 
+                 n.includes('nguyên vật liệu') || n.includes('nguyen vat lieu') ||
+                 n.includes('vật liệu') || n.includes('vat lieu') ||
+                 n.includes('thép') || n.includes('thep') ||
+                 n.includes('xi măng') || n.includes('xi mang') ||
+                 n.includes('vít') || n.includes('vit') ||
+                 n.includes('ốc') || n.includes('oc') ||
+                 n.includes('keo') || n.includes('dán') || n.includes('dan') ||
+                 n.includes('nhân công xưởng') || n.includes('nhan cong xuong')
         })
-        
-        opts = filteredOpts
-        console.log('🔧 Workshop employee filtered objects with hierarchy:', opts.map(o => o.name))
+        console.log('🔧 Workshop employee filtered objects:', opts.map(o => o.name))
       } else if (userRole === 'worker') {
-        // Workers see general labor with their children
-        const filteredOpts: SimpleExpenseObject[] = []
-        
-        opts.forEach(obj => {
-          const n = normalize(obj.name)
-          const isGeneralLabor = (n.includes('nhân công') || n.includes('nhan cong')) && 
-                                !(n.includes('xưởng') || n.includes('xuong') || n.includes('nhà cung cấp') || n.includes('nha cung cap'))
-          
-          if (isGeneralLabor) {
-            filteredOpts.push(obj)
-            // Add children if any
-            const children = hierarchyMap.get(obj.id) || []
-            filteredOpts.push(...children)
-          }
+        // Workers see only general labor-related objects (excluding workshop labor)
+        opts = opts.filter(o => {
+          const n = normalize(o.name)
+          return (n.includes('nhân công') || n.includes('nhan cong')) && 
+                 !(n.includes('xưởng') || n.includes('xuong') || n.includes('nhà cung cấp') || n.includes('nha cung cap'))
         })
-        
-        opts = filteredOpts
-        console.log('👷 Worker filtered objects with hierarchy:', opts.map(o => o.name))
+        console.log('👷 Worker filtered objects:', opts.map(o => o.name))
       } else {
-        // Admin/accountant/sales see all objects with hierarchy
-        console.log('👑 Admin/accountant/sales see all objects with hierarchy:', opts.map(o => o.name))
+        // Admin/accountant/sales see all objects
+        console.log('👑 Admin/accountant/sales see all objects:', opts.map(o => o.name))
       }
       const sortedOpts = [...opts].sort((a, b) => {
         const na = normalizeLower(a.name)

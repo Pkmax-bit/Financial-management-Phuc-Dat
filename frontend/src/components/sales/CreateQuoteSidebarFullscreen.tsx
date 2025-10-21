@@ -100,6 +100,37 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [showColumnDialog, setShowColumnDialog] = useState(false)
+  const [productSearch, setProductSearch] = useState('')
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [selectedProject, setSelectedProject] = useState<any>(null)
+  
+  // Toggle category expansion
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(category)) {
+        newSet.delete(category)
+      } else {
+        newSet.add(category)
+      }
+      return newSet
+    })
+  }
+
+  // Filter products based on search
+  const filteredProducts = products.filter(product => {
+    const searchTerm = productSearch.toLowerCase()
+    return product.name.toLowerCase().includes(searchTerm) ||
+           (product.description || '').toLowerCase().includes(searchTerm) ||
+           (product.category || '').toLowerCase().includes(searchTerm)
+  })
+
+  // Calculate total amount and check budget - using state to avoid initialization issues
+  const [totalAmount, setTotalAmount] = useState(0)
+  const [isOverBudget, setIsOverBudget] = useState(false)
+  const [budgetDifference, setBudgetDifference] = useState(0)
+
+
   const [visibleColumns, setVisibleColumns] = useState({
     name: true,
     description: false,
@@ -175,6 +206,31 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setFormData(prev => ({ ...prev, project_id: '' }))
     }
   }, [formData.customer_id])
+
+  // Update selected project when project_id changes
+  useEffect(() => {
+    if (formData.project_id && projects.length > 0) {
+      const project = projects.find(p => p.id === formData.project_id)
+      setSelectedProject(project || null)
+    } else {
+      setSelectedProject(null)
+    }
+  }, [formData.project_id, projects])
+
+  // Calculate total amount and budget status
+  useEffect(() => {
+    const calculatedTotal = formData.subtotal + formData.tax_amount - formData.discount_amount
+    setTotalAmount(calculatedTotal)
+    
+    if (selectedProject && selectedProject.budget) {
+      const overBudget = calculatedTotal > selectedProject.budget
+      setIsOverBudget(overBudget)
+      setBudgetDifference(overBudget ? calculatedTotal - selectedProject.budget : 0)
+    } else {
+      setIsOverBudget(false)
+      setBudgetDifference(0)
+    }
+  }, [formData.subtotal, formData.tax_amount, formData.discount_amount, selectedProject])
 
   const fetchCustomers = async () => {
     try {
@@ -1042,8 +1098,56 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       </div>
                       <div className="flex justify-between items-center py-2">
                         <span className="text-base font-semibold text-black">Tổng cộng:</span>
-                        <span className="text-base font-semibold text-black">{formatCurrency(formData.total_amount)}</span>
+                        <span className={`text-base font-semibold ${
+                          isOverBudget ? 'text-red-600' : 'text-black'
+                        }`}>
+                          {formatCurrency(formData.total_amount)}
+                        </span>
                       </div>
+                      
+                      {/* Budget Warning */}
+                      {selectedProject && selectedProject.budget && (
+                        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                          <div className="flex items-start">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <h3 className="text-sm font-medium text-yellow-800">
+                                Thông báo ngân sách dự án
+                              </h3>
+                              <div className="mt-1 text-sm text-yellow-700">
+                                <p>
+                                  Ngân sách dự án <strong>{selectedProject.name}</strong>: 
+                                  <span className="font-semibold ml-1">
+                                    {formatCurrency(selectedProject.budget)}
+                                  </span>
+                                </p>
+                                <p className="mt-1">
+                                  Tổng báo giá hiện tại: 
+                                  <span className={`font-semibold ml-1 ${
+                                    isOverBudget ? 'text-red-600' : 'text-green-600'
+                                  }`}>
+                                    {formatCurrency(totalAmount)}
+                                  </span>
+                                </p>
+                                {isOverBudget && (
+                                  <p className="mt-1 text-red-600 font-medium">
+                                    ⚠️ Tổng báo giá vượt quá ngân sách dự án!
+                                  </p>
+                                )}
+                                {isOverBudget && (
+                                  <p className="mt-1 text-red-600 text-sm">
+                                    Chênh lệch: {formatCurrency(budgetDifference)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1113,20 +1217,36 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               </button>
             </div>
             
+            {/* Search Bar */}
+            <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Tìm kiếm sản phẩm theo tên, mô tả hoặc loại..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-black font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                />
+              </div>
+            </div>
+            
             <div className="flex-1 overflow-y-auto bg-gray-50">
               {loadingProducts ? (
                 <div className="text-center py-8">
                   <span className="text-gray-500">Đang tải sản phẩm...</span>
                 </div>
-              ) : products.length === 0 ? (
+              ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-8">
-                  <span className="text-gray-500">Không có sản phẩm nào</span>
+                  <span className="text-gray-500">
+                    {productSearch ? 'Không có sản phẩm phù hợp' : 'Không có sản phẩm nào'}
+                  </span>
                 </div>
               ) : (
                 <div className="p-4">
                   {(() => {
-                    // Group products by category
-                    const groupedProducts = products.reduce((acc, product) => {
+                    // Group filtered products by category
+                    const groupedProducts = filteredProducts.reduce((acc, product) => {
                       const category = product.category || 'Khác'
                       if (!acc[category]) {
                         acc[category] = []
@@ -1135,11 +1255,27 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       return acc
                     }, {} as Record<string, Product[]>)
 
-                    return Object.entries(groupedProducts).map(([category, categoryProducts]) => (
-                      <div key={category} className="mb-4">
-                        <h4 className="text-sm font-semibold text-gray-600 mb-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm">
-                          📁 {category}
-                        </h4>
+                    return Object.entries(groupedProducts).map(([category, categoryProducts]) => {
+                      const isExpanded = expandedCategories.has(category)
+                      
+                      return (
+                        <div key={category} className="mb-4">
+                          <div 
+                            className="text-sm font-semibold text-gray-600 mb-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm cursor-pointer hover:bg-gray-50 transition-colors flex items-center justify-between"
+                            onClick={() => toggleCategory(category)}
+                          >
+                            <div className="flex items-center">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-gray-500 mr-2" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-500 mr-2" />
+                              )}
+                              <span>📁 {category}</span>
+                              <span className="ml-2 text-xs text-gray-500">({categoryProducts.length} sản phẩm)</span>
+                            </div>
+                          </div>
+                          
+                          {isExpanded && (
                         <div className="space-y-2">
                           {categoryProducts.map((product) => (
                             <label
@@ -1211,8 +1347,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             </label>
                           ))}
                         </div>
-                      </div>
-                    ))
+                          )}
+                        </div>
+                      )
+                    })
                   })()}
                 </div>
               )}
