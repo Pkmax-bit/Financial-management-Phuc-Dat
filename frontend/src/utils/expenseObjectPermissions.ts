@@ -4,14 +4,15 @@
  * Nhân công chỉ thấy đối tượng chi phí nhân công
  */
 
-export const EXPENSE_OBJECT_ROLE_PERMISSIONS = {
-  workshop_employee: [], // Sẽ được cập nhật sau khi tạo đối tượng xưởng
-  worker: [], // Sẽ được cập nhật sau khi tạo đối tượng nhân công
+export const EXPENSE_OBJECT_ROLE_PERMISSIONS: Record<string, string[]> = {
   admin: [], // Admin thấy tất cả
   accountant: [], // Kế toán thấy tất cả
   sales: [], // Sales thấy tất cả
   transport: [], // Vận chuyển thấy tất cả
+  worker: [], // Sẽ được cập nhật sau khi tạo đối tượng nhân công
   employee: [], // Nhân viên chung thấy tất cả
+  Supplier: [], // Nhà cung cấp (xưởng) - sẽ được cập nhật sau khi tạo đối tượng xưởng
+  workshop_employee: [], // Role cũ - tương đương Supplier
   customer: [] // Khách hàng không thấy
 };
 
@@ -32,6 +33,10 @@ export const canAccessExpenseObject = (userRole: string, expenseObjectId: string
   }
   
   // Kiểm tra quyền cụ thể
+  if (!rolePermissions) {
+    console.warn(`⚠️ Unknown role: ${userRole}, allowing access as fallback`);
+    return true; // Fallback: allow access for unknown roles
+  }
   return rolePermissions.includes(expenseObjectId);
 };
 
@@ -48,6 +53,10 @@ export const filterExpenseObjectsByRole = (expenseObjects: any[], userRole: stri
   }
   
   const rolePermissions = EXPENSE_OBJECT_ROLE_PERMISSIONS[userRole as keyof typeof EXPENSE_OBJECT_ROLE_PERMISSIONS];
+  if (!rolePermissions) {
+    console.warn(`⚠️ Unknown role: ${userRole}, returning all objects as fallback`);
+    return expenseObjects; // Fallback: return all objects for unknown roles
+  }
   return expenseObjects.filter(obj => rolePermissions.includes(obj.id));
 };
 
@@ -63,8 +72,8 @@ export const filterExpenseObjectsByName = (expenseObjects: any[], userRole: stri
     return []; // Không thấy gì
   }
   
-  // WORKSHOP_EMPLOYEE: Chỉ thấy đối tượng xưởng
-  if (userRole === 'workshop_employee') {
+  // SUPPLIER: Chỉ thấy đối tượng xưởng (nhà cung cấp)
+  if (userRole === 'Supplier' || userRole === 'workshop_employee') {
     return expenseObjects.filter(obj => 
       obj.name.includes('Xưởng') || 
       obj.name.includes('Nguyên vật liệu') ||
@@ -110,11 +119,14 @@ export const updateExpenseObjectPermissions = (expenseObjects: any[]) => {
   );
   
   // Cập nhật phân quyền
-  EXPENSE_OBJECT_ROLE_PERMISSIONS.workshop_employee = workshopObjects.map(obj => obj.id);
+  EXPENSE_OBJECT_ROLE_PERMISSIONS.Supplier = workshopObjects.map(obj => obj.id);
   EXPENSE_OBJECT_ROLE_PERMISSIONS.worker = workerObjects.map(obj => obj.id);
   
+  // Cũng cập nhật cho role cũ workshop_employee
+  EXPENSE_OBJECT_ROLE_PERMISSIONS.workshop_employee = workshopObjects.map(obj => obj.id);
+  
   console.log('Updated expense object permissions:', {
-    workshop_employee: EXPENSE_OBJECT_ROLE_PERMISSIONS.workshop_employee,
+    Supplier: EXPENSE_OBJECT_ROLE_PERMISSIONS.Supplier,
     worker: EXPENSE_OBJECT_ROLE_PERMISSIONS.worker
   });
 };

@@ -13,13 +13,14 @@ class ExpenseObjectBase(BaseModel):
     parent_id: Optional[str] = Field(None, description="ID đối tượng cha")
 
 class ExpenseObjectCreate(ExpenseObjectBase):
-    pass
+    role: Optional[str] = Field(None, description="Role được chọn cho đối tượng chi phí")
 
 class ExpenseObjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Tên đối tượng chi phí")
     description: Optional[str] = Field(None, description="Mô tả đối tượng chi phí")
     is_active: Optional[bool] = Field(None, description="Trạng thái hoạt động")
     parent_id: Optional[str] = Field(None, description="ID đối tượng cha")
+    role: Optional[str] = Field(None, description="Role được chọn cho đối tượng chi phí")
 
 class ExpenseObject(ExpenseObjectBase):
     id: str = Field(..., description="ID đối tượng chi phí")
@@ -28,6 +29,7 @@ class ExpenseObject(ExpenseObjectBase):
     updated_at: datetime = Field(..., description="Thời gian cập nhật")
     created_by: Optional[str] = Field(None, description="ID người tạo")
     updated_by: Optional[str] = Field(None, description="ID người cập nhật")
+    role: Optional[str] = Field(None, description="Role của user tạo đối tượng chi phí")
 
     class Config:
         from_attributes = True

@@ -20,6 +20,7 @@ interface ExpenseObject {
   is_active: boolean
   created_at: string
   updated_at: string
+  role?: string
 }
 
 interface CreateExpenseObjectDialogProps {
@@ -32,7 +33,8 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    parent_id: ''
+    parent_id: '',
+    role: ''
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -208,14 +210,15 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
       const payload = {
         name: formData.name,
         description: formData.description,
-        parent_id: formData.parent_id || null
+        parent_id: formData.parent_id || null,
+        role: formData.role || null
       }
       const response = await apiPost(`${API_BASE_URL}/api/expense-objects/`, payload)
 
       if (response) {
         alert('Tạo đối tượng chi phí thành công!')
         onSuccess()
-        setFormData({ name: '', description: '', parent_id: '' })
+        setFormData({ name: '', description: '', parent_id: '', role: '' })
         setErrors({})
         await loadExpenseObjects() // Reload the list
         onClose()
@@ -246,7 +249,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   }
 
   const handleClose = () => {
-    setFormData({ name: '', description: '', parent_id: '' })
+    setFormData({ name: '', description: '', parent_id: '', role: '' })
     setErrors({})
     onClose()
   }
@@ -380,6 +383,30 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
                   Chọn đối tượng cha để tạo đối tượng con. Để trống nếu là đối tượng gốc.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Vai trò (tùy chọn)
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                >
+                  <option value="">-- Chọn vai trò --</option>
+                  <option value="admin">Quản trị viên</option>
+                  <option value="accountant">Kế toán</option>
+                  <option value="sales">Nhân viên bán hàng</option>
+                  <option value="employee">Nhân viên</option>
+                  <option value="Supplier">Nhà cung cấp</option>
+                  <option value="worker">Công nhân</option>
+                  <option value="transport">Nhân viên vận chuyển</option>
+                  <option value="customer">Khách hàng</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Chọn vai trò để phân quyền truy cập đối tượng chi phí này.
                 </p>
               </div>
 

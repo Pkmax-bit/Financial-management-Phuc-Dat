@@ -166,7 +166,8 @@ async def create_expense_object(
             "parent_id": expense_object.parent_id,
             "is_active": True,
             "created_by": current_user.id,
-            "updated_by": current_user.id
+            "updated_by": current_user.id,
+            "role": expense_object.role  # Lưu role được chọn trong dropdown
         }
         
         result = supabase.table("expense_objects").insert(expense_object_data).execute()
@@ -191,7 +192,8 @@ async def create_expense_object(
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             created_by=str(row.get("created_by")) if row.get("created_by") else None,
-            updated_by=str(row.get("updated_by")) if row.get("updated_by") else None
+            updated_by=str(row.get("updated_by")) if row.get("updated_by") else None,
+            role=row.get("role")  # Bao gồm role trong response
         )
         
     except HTTPException:
@@ -225,7 +227,8 @@ async def update_expense_object(
             )
         
         update_data = {
-            "updated_by": current_user.id
+            "updated_by": current_user.id,
+            "role": expense_object.role  # Lưu role được chọn trong dropdown
         }
         
         if expense_object.name is not None:
