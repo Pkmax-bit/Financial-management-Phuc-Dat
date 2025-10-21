@@ -13,6 +13,7 @@ import {
   Send
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
+import ProductPickerModal from './ProductPickerModal'
 
 interface Customer {
   id: string
@@ -58,6 +59,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
   const [items, setItems] = useState<QuoteItem[]>([
     { description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '' }
   ])
+  const [showProductPickerFor, setShowProductPickerFor] = useState<number | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -117,6 +119,19 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
     }
     
     setItems(updatedItems)
+  }
+
+  const fillItemFromProduct = (index: number, product: any) => {
+    const updatedItems = [...items]
+    updatedItems[index] = {
+      ...updatedItems[index],
+      description: product.name,
+      unit_price: product.price,
+      subtotal: updatedItems[index].quantity * product.price,
+      unit: product.unit
+    }
+    setItems(updatedItems)
+    setShowProductPickerFor(null)
   }
 
   const handleSubmit = async (sendImmediately = false) => {
@@ -291,13 +306,22 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                   {items.map((item, index) => (
                     <tr key={index} className="border-t">
                       <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={item.description}
-                          onChange={(e) => updateItem(index, 'description', e.target.value)}
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
-                          placeholder="Mô tả sản phẩm/dịch vụ"
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={item.description}
+                            onChange={(e) => updateItem(index, 'description', e.target.value)}
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
+                            placeholder="Mô tả sản phẩm/dịch vụ"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowProductPickerFor(index)}
+                            className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 transition-colors"
+                          >
+                            Chọn sản phẩm
+                          </button>
+                        </div>
                       </td>
                     <td className="px-4 py-2">
                         <input
@@ -465,6 +489,17 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
           </button>
         </div>
       </div>
+
+      {/* Product Picker Modal */}
+      <ProductPickerModal
+        isOpen={showProductPickerFor !== null}
+        onClose={() => setShowProductPickerFor(null)}
+        onSelect={(p) => {
+          if (showProductPickerFor !== null) {
+            fillItemFromProduct(showProductPickerFor, p)
+          }
+        }}
+      />
     </div>
   )
 }

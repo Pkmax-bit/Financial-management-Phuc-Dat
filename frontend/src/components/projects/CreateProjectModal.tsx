@@ -17,6 +17,7 @@ interface Employee {
   id: string
   name: string
   email: string
+  user_id?: string
 }
 
 interface CreateProjectModalProps {
@@ -141,17 +142,32 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         const employees = data?.map((emp: any) => ({
           id: emp.id,
           name: emp.full_name || `${emp.first_name} ${emp.last_name}`,
-          email: emp.email
+          email: emp.email,
+          user_id: emp.user_id // Add user_id for auto-selection
         })) || []
         
         setEmployees(employees)
         console.log('Employees set:', employees)
+        
+        // Auto-select current user's employee record
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user?.id) {
+            const currentEmployee = employees.find(emp => emp.user_id === session.user.id)
+            if (currentEmployee) {
+              setFormData(prev => ({ ...prev, manager_id: currentEmployee.id }))
+              console.log('Auto-selected current user as manager:', currentEmployee.name)
+            }
+          }
+        } catch (authError) {
+          console.log('Could not auto-select current user:', authError)
+        }
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
         
         const { data, error } = await supabase
           .from('employees')
-          .select('id, first_name, last_name, email')
+          .select('id, first_name, last_name, email, user_id')
           .order('first_name')
 
         if (error) throw error
@@ -159,11 +175,26 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         const employees = data?.map(emp => ({
           id: emp.id,
           name: `${emp.first_name} ${emp.last_name}`,
-          email: emp.email
+          email: emp.email,
+          user_id: emp.user_id
         })) || []
         
         setEmployees(employees)
         console.log('Supabase employees set:', employees)
+        
+        // Auto-select current user's employee record
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user?.id) {
+            const currentEmployee = employees.find(emp => emp.user_id === session.user.id)
+            if (currentEmployee) {
+              setFormData(prev => ({ ...prev, manager_id: currentEmployee.id }))
+              console.log('Auto-selected current user as manager:', currentEmployee.name)
+            }
+          }
+        } catch (authError) {
+          console.log('Could not auto-select current user:', authError)
+        }
       }
     } catch (error) {
       console.error('Error fetching employees:', error)
@@ -178,7 +209,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     try {
       const submitData = {
         ...formData,
-        budget: formData.budget ? parseFloat(formData.budget) : null,
+        budget: formData.budget ? parseFloat(formData.budget.replace(/[^\d.]/g, '')) : null,
         hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
         end_date: formData.end_date || null,
         progress: parseFloat(formData.progress.toString()) || 0,
@@ -253,12 +284,30 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     }
   }
 
+  const formatCurrency = (value: string) => {
+    if (!value) return ''
+    const numericValue = parseFloat(value)
+    if (isNaN(numericValue)) return value
+    return new Intl.NumberFormat('vi-VN').format(numericValue)
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    
+    // Special handling for budget field
+    if (name === 'budget') {
+      // Remove any non-numeric characters except decimal point
+      const numericValue = value.replace(/[^\d.]/g, '')
+      setFormData(prev => ({
+        ...prev,
+        [name]: numericValue
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }))
+    }
   }
 
   if (!isOpen) return null
@@ -436,6 +485,11 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                     </option>
                   ))}
                 </select>
+                {formData.manager_id && (
+                  <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                    ✅ Đã tự động chọn nhân viên đang đăng nhập
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -480,15 +534,19 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </label>
               <div className="relative">
                 <input
-                  type="number"
+                  type="text"
                   name="budget"
-                  value={formData.budget}
+                  value={formData.budget ? formatCurrency(formData.budget) : ''}
                   onChange={handleChange}
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                  placeholder="0.00"
+                  className="w-full px-3 py-2.5 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
+                  placeholder="100.000"
                 />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">
+                  VND
+                </div>
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                Nhập số tiền theo định dạng: 100.000 (bước nhảy 1.000)
               </div>
             </div>
 

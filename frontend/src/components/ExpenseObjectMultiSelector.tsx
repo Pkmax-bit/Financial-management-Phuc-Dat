@@ -16,6 +16,7 @@ interface ExpenseObjectMultiSelectorProps {
   placeholder?: string
   disabled?: boolean
   onAddNew?: () => void
+  expenseObjects?: ExpenseObject[]
 }
 
 export default function ExpenseObjectMultiSelector({
@@ -23,7 +24,8 @@ export default function ExpenseObjectMultiSelector({
   onChange,
   placeholder = 'Chọn nhiều đối tượng chi phí',
   disabled = false,
-  onAddNew
+  onAddNew,
+  expenseObjects: propExpenseObjects
 }: ExpenseObjectMultiSelectorProps) {
   const [expenseObjects, setExpenseObjects] = useState<ExpenseObject[]>([])
   const [loading, setLoading] = useState(false)
@@ -56,9 +58,15 @@ export default function ExpenseObjectMultiSelector({
     }
   }
 
+  // Use provided expense objects or load from API
   useEffect(() => {
-    loadExpenseObjects()
-  }, [])
+    if (propExpenseObjects) {
+      setExpenseObjects(propExpenseObjects)
+      setLoading(false)
+    } else {
+      loadExpenseObjects()
+    }
+  }, [propExpenseObjects])
 
   const filtered = useMemo(() => (
     expenseObjects.filter(obj =>
