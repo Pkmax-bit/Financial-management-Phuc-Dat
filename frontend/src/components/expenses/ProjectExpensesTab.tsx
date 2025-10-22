@@ -169,18 +169,59 @@ const handleDeleteExpense = async (expenseId: string) => {
   
   const isPlanned = expense.category === 'planned'
   const tableName = isPlanned ? 'project_expenses_quote' : 'project_expenses'
+  
+  // Check if this is a parent expense (has children)
+  const hasChildren = expenses.some(e => e.id_parent === expenseId)
+  
   const confirmMessage = isPlanned 
     ? 'Bạn có chắc chắn muốn xóa chi phí kế hoạch này?' 
-    : 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Hành động này không thể hoàn tác!'
+    : hasChildren 
+      ? 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Xóa cha sẽ xóa tất cả chi phí con. Hành động này không thể hoàn tác!'
+      : 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Hành động này không thể hoàn tác!'
   
   if (window.confirm(confirmMessage)) {
     try {
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', expenseId)
-      
-      if (error) throw error
+      if (isPlanned) {
+        // For planned expenses, just delete the single expense
+        const { error } = await supabase
+          .from(tableName)
+          .delete()
+          .eq('id', expenseId)
+        
+        if (error) throw error
+      } else {
+        // For actual expenses, implement cascade delete
+        console.log('🗑️ Deleting expense with cascade:', expenseId)
+        
+        // First, delete all child expenses
+        console.log('🔍 Step 1: Deleting child expenses...')
+        const { error: deleteChildrenError } = await supabase
+          .from(tableName)
+          .delete()
+          .eq('id_parent', expenseId)
+        
+        if (deleteChildrenError) {
+          console.error('❌ Error deleting child expenses:', deleteChildrenError)
+          throw deleteChildrenError
+        }
+        
+        console.log('✅ Child expenses deleted successfully')
+        
+        // Then, delete the parent expense
+        console.log('🔍 Step 2: Deleting parent expense...')
+        const { error: deleteParentError } = await supabase
+          .from(tableName)
+          .delete()
+          .eq('id', expenseId)
+        
+        if (deleteParentError) {
+          console.error('❌ Error deleting parent expense:', deleteParentError)
+          throw deleteParentError
+        }
+        
+        console.log('✅ Parent expense deleted successfully')
+        console.log('✅ Cascade delete completed: Xóa cha thì con cũng bị xóa')
+      }
       
       alert('Xóa chi phí thành công!')
       

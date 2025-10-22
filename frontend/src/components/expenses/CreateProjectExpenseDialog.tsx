@@ -184,6 +184,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const [showCostDetailModal, setShowCostDetailModal] = useState(false)
   const [selectedExpenseObjectId, setSelectedExpenseObjectId] = useState<string>('')
   
+  // State for expense selector
+  const [existingExpenses, setExistingExpenses] = useState<any[]>([])
+  const [selectedExpenseToUpdate, setSelectedExpenseToUpdate] = useState<any>(null)
+  const [showExpenseSelector, setShowExpenseSelector] = useState(false)
+  const [isReplaceParentMode, setIsReplaceParentMode] = useState(false)
+  
+  // State for expense dropdown
+  const [expenseDropdownOptions, setExpenseDropdownOptions] = useState<any[]>([])
+  const [selectedExpenseForUpdate, setSelectedExpenseForUpdate] = useState<string>('')
+  
   // State for direct cost input
   const [directProductCosts, setDirectProductCosts] = useState<Record<number, number>>({})
   const [directObjectCosts, setDirectObjectCosts] = useState<Record<string, number>>({})
@@ -204,6 +214,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // State for workshop employee confirmation dialog
   const [showUpdateCreateDialog, setShowUpdateCreateDialog] = useState(false)
   const [pendingExpenseData, setPendingExpenseData] = useState<any>(null)
+  
   const [workshopParentObject, setWorkshopParentObject] = useState<SimpleExpenseObject | null>(null)
   
   // Use expense object role filter hook
@@ -661,16 +672,87 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }, [isOpen])
 
+
+  // Validate parent-child logic: tổng con = cha
+  const validateParentChildLogic = (directObjectTotals: Record<string, number>, parentAmount: number) => {
+    const childrenTotal = Object.values(directObjectTotals).reduce((sum, amount) => sum + (amount || 0), 0)
+    const isValid = Math.abs(childrenTotal - parentAmount) < 0.01 // Allow small floating point differences
+    
+    console.log('🔍 Parent-Child Validation:')
+    console.log('📊 Children total (tổng con):', childrenTotal)
+    console.log('📊 Parent amount (cha):', parentAmount)
+    console.log('📊 Difference:', Math.abs(childrenTotal - parentAmount))
+    console.log('📊 Is valid (tổng con = cha):', isValid)
+    
+    if (!isValid) {
+      console.error('❌ Parent-Child Logic Violation: Tổng con ≠ cha')
+      console.error('📊 Children total:', childrenTotal)
+      console.error('📊 Parent amount:', parentAmount)
+      console.error('📊 Difference:', Math.abs(childrenTotal - parentAmount))
+    }
+    
+    return isValid
+  }
+
+
+  // Cascade delete: xóa cha thì con cũng bị xóa
+  const deleteExpenseWithCascade = async (expenseId: string) => {
+    try {
+      console.log('🗑️ Deleting expense with cascade:', expenseId)
+      
+      // First, delete all child expenses
+      console.log('🔍 Step 1: Deleting child expenses...')
+      const { error: deleteChildrenError } = await supabase
+        .from('project_expenses')
+        .delete()
+        .eq('id_parent', expenseId)
+      
+      if (deleteChildrenError) {
+        console.error('❌ Error deleting child expenses:', deleteChildrenError)
+        return false
+      }
+      
+      console.log('✅ Child expenses deleted successfully')
+      
+      // Then, delete the parent expense
+      console.log('🔍 Step 2: Deleting parent expense...')
+      const { error: deleteParentError } = await supabase
+        .from('project_expenses')
+        .delete()
+        .eq('id', expenseId)
+      
+      if (deleteParentError) {
+        console.error('❌ Error deleting parent expense:', deleteParentError)
+        return false
+      }
+      
+      console.log('✅ Parent expense deleted successfully')
+      console.log('✅ Cascade delete completed: Xóa cha thì con cũng bị xóa')
+      
+      return true
+      
+    } catch (error) {
+      console.error('❌ Error in cascade delete:', error)
+      return false
+    }
+  }
+
+
   // Load expense objects when userRole, category, or isOpen changes - CONSOLIDATED
   useEffect(() => {
     if (userRole && isOpen && category) {
       console.log(`🔄 Loading expense objects for role: ${userRole}, category: ${category}`)
-      // Clear current selection to trigger auto-selection with new category
+      // Only clear selection if not in update mode (not editing existing expense)
+      if (!selectedExpenseToUpdate) {
+        console.log('🔄 Clear current selection to trigger auto-selection with new category')
       setSelectedExpenseObjectIds([])
+      } else {
+        console.log('🔄 Preserving current selection for update mode')
+      }
       // Load expense objects
       loadExpenseObjectsOptions()
     }
-  }, [userRole, category, isOpen])
+  }, [userRole, category, isOpen, selectedExpenseToUpdate])
 
   // Auto-select expense objects based on role when options are loaded (for create mode)
   useEffect(() => {
@@ -902,6 +984,17 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
     loadParents()
   }, [formData.project_id, category])
+  
+  // Load expenses for dropdown when project changes
+  useEffect(() => {
+    if (category === 'actual' && formData.project_id) {
+      loadExpensesForDropdown(formData.project_id)
+    } else {
+      setExpenseDropdownOptions([])
+      setSelectedExpenseForUpdate('')
+      setSelectedExpenseToUpdate(null)
+    }
+  }, [formData.project_id, category])
 
   const fetchProjects = async () => {
     try {
@@ -968,6 +1061,580 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }
 
+  // Load existing expenses for update selection
+  const loadExistingExpenses = async () => {
+    try {
+      if (!formData.project_id) {
+        console.log('❌ No project selected')
+        return
+      }
+      
+      console.log('🔍 Loading existing actual expenses for project:', formData.project_id)
+      
+      const { data, error } = await supabase
+        .from('project_expenses')
+        .select('*')
+        .eq('project_id', formData.project_id)
+        .is('id_parent', null) // Only load parent expenses
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('❌ Error loading existing expenses:', error)
+        return
+      }
+      
+      console.log('✅ Loaded existing expenses:', data?.length || 0)
+      setExistingExpenses(data || [])
+      setShowExpenseSelector(true)
+    } catch (error) {
+      console.error('❌ Error in loadExistingExpenses:', error)
+    }
+  }
+  
+  // Load expenses for dropdown
+  const loadExpensesForDropdown = async (projectId: string) => {
+    try {
+      if (!projectId) {
+        setExpenseDropdownOptions([])
+        return
+      }
+      
+      console.log('🔍 Loading expenses for dropdown, project:', projectId)
+      
+      const { data, error } = await supabase
+        .from('project_expenses')
+        .select('*')
+        .eq('project_id', projectId)
+        .is('id_parent', null) // Only load parent expenses
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('❌ Error loading expenses for dropdown:', error)
+        return
+      }
+      
+      console.log('✅ Loaded expenses for dropdown:', data?.length || 0)
+      setExpenseDropdownOptions(data || [])
+    } catch (error) {
+      console.error('❌ Error in loadExpensesForDropdown:', error)
+    }
+  }
+  
+  // Handle expense selection from dropdown
+  const handleExpenseSelection = async (expenseId: string) => {
+    try {
+      if (!expenseId) {
+        setSelectedExpenseForUpdate('')
+        setSelectedExpenseToUpdate(null)
+        return
+      }
+      
+      console.log('🔍 Handling expense selection:', expenseId)
+      
+      const selectedExpense = expenseDropdownOptions.find(exp => exp.id === expenseId)
+      if (!selectedExpense) {
+        console.error('❌ Selected expense not found')
+        return
+      }
+      
+      console.log('✅ Selected expense:', selectedExpense)
+      
+      // Load expense data for update
+      await loadExpenseDataForUpdate(selectedExpense)
+      
+      setSelectedExpenseForUpdate(expenseId)
+    } catch (error) {
+      console.error('❌ Error in handleExpenseSelection:', error)
+    }
+  }
+  
+  // Load expense data for update
+  const loadExpenseDataForUpdate = async (expense: any) => {
+    try {
+      console.log('🔍 Loading expense data for update:', expense.id)
+      
+      // Load parent expense
+      const { data: parentData, error: parentError } = await supabase
+        .from('project_expenses')
+        .select('*')
+        .eq('id', expense.id)
+        .single()
+      
+      if (parentError) {
+        console.error('❌ Error loading parent expense:', parentError)
+        return
+      }
+      
+      // Load child expenses
+      const { data: childData, error: childError } = await supabase
+        .from('project_expenses')
+        .select('*')
+        .eq('id_parent', expense.id)
+      
+      if (childError) {
+        console.error('❌ Error loading child expenses:', childError)
+        return
+      }
+      
+      console.log('✅ Loaded parent expense:', parentData)
+      console.log('✅ Loaded child expenses:', childData?.length || 0)
+      
+      // Populate form with expense data
+      setFormData({
+        ...formData,
+        project_id: parentData.project_id || '',
+        employee_id: parentData.employee_id || '',
+        category: 'actual',
+        description: parentData.description || '',
+        expense_object_id: parentData.expense_object_id || '',
+        planned_amount: 0,
+        actual_amount: Number(parentData.amount) || 0,
+        expense_date: parentData.expense_date || new Date().toISOString().split('T')[0],
+        status: parentData.status || 'pending',
+        notes: parentData.notes || '',
+        receipt_url: parentData.receipt_url || '',
+        currency: parentData.currency || 'VND',
+        id_parent: parentData.id_parent || ''
+      })
+      
+      // Preserve current expense object selections based on user role
+      // Don't reset selectedExpenseObjectIds - let role-based filtering handle display
+      console.log('🔍 Preserving current expense object selections for role-based display')
+      console.log('📊 Current selectedExpenseObjectIds:', selectedExpenseObjectIds)
+      console.log('📊 User role:', userRole)
+      console.log('📊 Saved expense_object_columns:', parentData.expense_object_columns)
+      
+      // Trigger role-based filtering to update display without changing selections
+      if (expenseObjectsOptions.length > 0) {
+        console.log('🔄 Triggering role-based filtering for expense objects display')
+        // The role-based filtering will be handled by the existing useEffect
+        // that watches userRole, category, and isOpen
+      }
+      
+      // Populate invoice items
+      if (Array.isArray(parentData.invoice_items) && parentData.invoice_items.length > 0) {
+        const rows: InvoiceItemRow[] = parentData.invoice_items.map((it: any, idx: number) => {
+          const componentsPct = it.components_pct || {}
+          const componentsAmt: Record<string, number> = {}
+          
+          Object.keys(componentsPct).forEach((key: string) => {
+            const qty = it.quantity || 0
+            const price = it.unit_price || 0
+            componentsAmt[key] = (qty * price * (componentsPct[key] || 0)) / 100
+          })
+          
+          return {
+            index: idx + 1,
+            productId: it.product_id || '',
+            productName: it.product_name || '',
+            quantity: it.quantity || 0,
+            unit: it.unit || '',
+            unitPrice: it.unit_price || 0,
+            componentsPct,
+            componentsAmt
+          }
+        })
+        setInvoiceItems(rows)
+      }
+      
+      setSelectedExpenseToUpdate(expense)
+      setShowExpenseSelector(false)
+      
+      console.log('✅ Form populated with expense data')
+    } catch (error) {
+      console.error('❌ Error in loadExpenseDataForUpdate:', error)
+    }
+  }
+  
+  // Update selected expense directly (fallback when no matching parent found)
+  const updateSelectedExpenseDirectly = async (expenseData: any) => {
+    try {
+      console.log('🔍 Updating selected expense directly:', selectedExpenseToUpdate?.id)
+      
+      if (!selectedExpenseToUpdate) {
+        console.error('❌ No expense selected for direct update')
+        return false
+      }
+      
+      const dataToUse = expenseData || pendingExpenseData
+      
+      if (!dataToUse || !dataToUse.formData) {
+        console.error('❌ Missing required data in updateSelectedExpenseDirectly')
+        return false
+      }
+      
+      // Calculate total amount
+      const totalAmount = Object.values(dataToUse.directObjectTotals || {}).reduce((sum: number, amount: any) => sum + (Number(amount) || 0), 0)
+      
+      if (totalAmount <= 0) {
+        console.error('❌ Total amount must be greater than 0')
+        return false
+      }
+      
+      console.log('💰 Total amount to update:', totalAmount)
+      
+      // Load current parent to merge (avoid overwriting existing data)
+      const { data: currentParentArr, error: loadParentErr } = await supabase
+        .from('project_expenses')
+        .select('id, amount, invoice_items, expense_object_columns')
+        .eq('id', selectedExpenseToUpdate.id)
+        .limit(1)
+
+      if (loadParentErr) {
+        console.error('❌ Error loading current parent before update:', loadParentErr)
+        return false
+      }
+
+      const currentParent = currentParentArr?.[0] || {}
+      const oldItems = Array.isArray(currentParent?.invoice_items) ? currentParent.invoice_items : []
+      const newItems = Array.isArray(dataToUse.invoiceItems) ? dataToUse.invoiceItems : []
+      const mergedInvoiceItems = [...oldItems, ...newItems]
+
+      const oldColumns = Array.isArray(currentParent?.expense_object_columns) ? currentParent.expense_object_columns : []
+      const newColumns = Array.isArray(dataToUse.selectedExpenseObjectIds) ? dataToUse.selectedExpenseObjectIds : []
+      const mergedColumns = Array.from(new Set([...(oldColumns as any[]), ...(newColumns as any[])]))
+
+      const parentExpenseData = {
+        project_id: dataToUse.formData.project_id,
+        description: dataToUse.formData.description,
+        expense_object_id: dataToUse.workshopParentObject?.id,
+        amount: Number(currentParent?.amount || 0) + Number(totalAmount || 0),
+        expense_date: dataToUse.formData.expense_date,
+        status: 'pending',
+        employee_id: dataToUse.formData.employee_id,
+        expense_object_columns: mergedColumns,
+        invoice_items: mergedInvoiceItems,
+        updated_at: new Date().toISOString()
+      }
+      
+      console.log('🔄 Updating selected expense directly (additive):', selectedExpenseToUpdate.id)
+      
+      const { error: parentError } = await supabase
+        .from('project_expenses')
+        .update(parentExpenseData)
+        .eq('id', selectedExpenseToUpdate.id)
+      
+      if (parentError) {
+        console.error('❌ Error updating selected expense:', parentError)
+        return false
+      }
+      
+      console.log('✅ Selected expense updated successfully')
+      
+      // Kiểm tra có đối tượng bên trong chi phí được chọn không
+      const newParentObjectId = dataToUse.workshopParentObject?.id
+      
+      // Lấy danh sách children hiện tại của expense được chọn
+      const { data: existingChildren, error: fetchChildrenError } = await supabase
+        .from('project_expenses')
+        .select('*')
+        .eq('id_parent', selectedExpenseToUpdate.id)
+      
+      if (fetchChildrenError) {
+        console.error('❌ Error fetching existing children:', fetchChildrenError)
+        return false
+      }
+      
+      console.log('📊 Existing children count:', existingChildren?.length || 0)
+      
+      // Kiểm tra xem có children với đối tượng cha mới không
+      const hasExistingObject = existingChildren?.some(child => 
+        child.expense_object_id === newParentObjectId
+      ) || false
+      
+      console.log('🔍 Has existing object in children:', hasExistingObject)
+      console.log('🎯 New parent object ID:', newParentObjectId)
+      
+      if (hasExistingObject) {
+        // Trường hợp 2: Nếu có thì chỉ thêm vào (không xóa gì)
+        console.log('🔄 Case 2: Object exists, adding new children while keeping old ones')
+        
+        // Tạo children mới cho đối tượng cha này (không xóa children cũ)
+        const childExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
+          id: crypto.randomUUID(),
+          project_id: dataToUse.formData.project_id,
+          description: `${dataToUse.formData.description} - Child`,
+          expense_object_id: objectId,
+          amount: Number(amount),
+          expense_date: dataToUse.formData.expense_date,
+          status: 'pending',
+          employee_id: dataToUse.formData.employee_id,
+          id_parent: selectedExpenseToUpdate.id,
+          expense_object_columns: [objectId],
+          invoice_items: dataToUse.invoiceItems
+        }))
+        
+        if (childExpenses.length > 0) {
+          const { error: childError } = await supabase
+            .from('project_expenses')
+            .insert(childExpenses)
+          
+          if (childError) {
+            console.error('❌ Error creating new children for existing object:', childError)
+            return false
+          }
+          
+          console.log('✅ New children created for existing object successfully')
+        }
+      } else {
+        // Trường hợp 1: Nếu không có thì thêm vào và giữ nguyên các chi phí cũ
+        console.log('🔄 Case 1: Object does not exist, adding new children while keeping old ones')
+        
+        // Tạo children mới cho đối tượng cha mới (không xóa children cũ)
+        const childExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
+          id: crypto.randomUUID(),
+          project_id: dataToUse.formData.project_id,
+          description: `${dataToUse.formData.description} - Child`,
+          expense_object_id: objectId,
+          amount: Number(amount),
+          expense_date: dataToUse.formData.expense_date,
+          status: 'pending',
+          employee_id: dataToUse.formData.employee_id,
+          id_parent: selectedExpenseToUpdate.id,
+          expense_object_columns: [objectId],
+          invoice_items: dataToUse.invoiceItems
+        }))
+        
+        if (childExpenses.length > 0) {
+          const { error: childError } = await supabase
+            .from('project_expenses')
+            .insert(childExpenses)
+          
+          if (childError) {
+            console.error('❌ Error creating new children for new object:', childError)
+            return false
+          }
+          
+          console.log('✅ New children created for new object successfully')
+        }
+      }
+      
+      console.log('✅ Selected expense updated successfully - direct update')
+      return true
+    } catch (error) {
+      console.error('❌ Error in updateSelectedExpenseDirectly:', error)
+      return false
+    }
+  }
+
+  // Update existing expense
+  const updateExistingExpense = async (expenseData: any) => {
+    try {
+      console.log('🔍 Updating existing expense with new logic:', selectedExpenseToUpdate?.id)
+      
+      if (!selectedExpenseToUpdate) {
+        console.error('❌ No expense selected for update')
+        return false
+      }
+      
+      const dataToUse = expenseData || pendingExpenseData
+      
+      if (!dataToUse || !dataToUse.formData) {
+        console.error('❌ Missing required data in updateExistingExpense')
+        return false
+      }
+      
+      // Điều kiện 1: Đã chọn chi phí thực tế của dự án
+      if (!selectedExpenseToUpdate.id || !dataToUse.formData.project_id) {
+        console.error('❌ Missing selected expense or project ID')
+        return false
+      }
+      
+      console.log('✅ Điều kiện 1: Đã chọn chi phí thực tế của dự án')
+      
+      // Điều kiện 2: Trong dự án đó có chi phí đối tượng cha trùng với đối tượng cha cần cập nhật
+      const newParentObjectId = dataToUse.workshopParentObject?.id
+      if (!newParentObjectId) {
+        console.error('❌ Missing new parent object ID')
+        return false
+      }
+      
+      console.log('🔍 Checking for existing parent object in project:', newParentObjectId)
+      
+      // Tìm chi phí đối tượng cha trùng trong dự án
+      const { data: existingParentExpenses, error: searchError } = await supabase
+        .from('project_expenses')
+        .select('*')
+        .eq('project_id', dataToUse.formData.project_id)
+        .eq('expense_object_id', newParentObjectId)
+        .is('id_parent', null) // Chỉ tìm parent expenses
+        .neq('id', selectedExpenseToUpdate.id) // Loại trừ expense đang update
+      
+      if (searchError) {
+        console.error('❌ Error searching for existing parent expenses:', searchError)
+        return false
+      }
+      
+      console.log('📊 Found existing parent expenses:', existingParentExpenses?.length || 0)
+      
+      if (!existingParentExpenses || existingParentExpenses.length === 0) {
+        console.log('❌ Không tìm thấy chi phí đối tượng cha trùng trong dự án')
+        console.log('🔄 Cập nhật trực tiếp vào expense đã chọn thay vì tạo mới')
+        
+        // Fallback: Cập nhật trực tiếp vào expense đã chọn
+        return await updateSelectedExpenseDirectly(expenseData)
+      }
+      
+      console.log('✅ Điều kiện 2: Tìm thấy chi phí đối tượng cha trùng trong dự án')
+      
+      // Bước thực hiện: Thay thế chi phí đối tượng cha mới vào đối tượng cha cũ
+      const targetParentExpense = existingParentExpenses[0] // Lấy parent expense đầu tiên
+      console.log('🎯 Target parent expense for replacement:', targetParentExpense.id)
+      
+      // Calculate total amount
+      const totalAmount = Object.values(dataToUse.directObjectTotals || {}).reduce((sum: number, amount: any) => sum + (Number(amount) || 0), 0)
+      
+      if (totalAmount <= 0) {
+        console.error('❌ Total amount must be greater than 0')
+        return false
+      }
+      
+      console.log('💰 Total amount to update:', totalAmount)
+      
+      // Load current target parent to merge (avoid overwriting existing data)
+      const { data: currentTargetArr, error: loadTargetErr } = await supabase
+        .from('project_expenses')
+        .select('id, amount, invoice_items, expense_object_columns')
+        .eq('id', targetParentExpense.id)
+        .limit(1)
+
+      if (loadTargetErr) {
+        console.error('❌ Error loading current target parent before update:', loadTargetErr)
+        return false
+      }
+
+      const currentTarget = currentTargetArr?.[0] || {}
+      const oldTargetItems = Array.isArray(currentTarget?.invoice_items) ? currentTarget.invoice_items : []
+      const newTargetItems = Array.isArray(dataToUse.invoiceItems) ? dataToUse.invoiceItems : []
+      const mergedTargetInvoiceItems = [...oldTargetItems, ...newTargetItems]
+
+      const oldTargetColumns = Array.isArray(currentTarget?.expense_object_columns) ? currentTarget.expense_object_columns : []
+      const newTargetColumns = Array.isArray(dataToUse.selectedExpenseObjectIds) ? dataToUse.selectedExpenseObjectIds : []
+      const mergedTargetColumns = Array.from(new Set([...(oldTargetColumns as any[]), ...(newTargetColumns as any[])]))
+
+      const updatedParentData = {
+        description: dataToUse.formData.description,
+        amount: Number(currentTarget?.amount || 0) + Number(totalAmount || 0),
+        expense_date: dataToUse.formData.expense_date,
+        status: 'pending',
+        employee_id: dataToUse.formData.employee_id,
+        expense_object_columns: mergedTargetColumns,
+        invoice_items: mergedTargetInvoiceItems,
+        updated_at: new Date().toISOString()
+      }
+      
+      console.log('🔄 Updating target parent expense (additive):', targetParentExpense.id)
+      
+      const { error: updateParentError } = await supabase
+        .from('project_expenses')
+        .update(updatedParentData)
+        .eq('id', targetParentExpense.id)
+      
+      if (updateParentError) {
+        console.error('❌ Error updating target parent expense:', updateParentError)
+        return false
+      }
+      
+      console.log('✅ Target parent expense updated successfully')
+      
+      // Kiểm tra có đối tượng bên trong target parent không
+      const newTargetParentObjectId = dataToUse.workshopParentObject?.id
+      
+      // Lấy danh sách children hiện tại của target parent
+      const { data: existingTargetChildren, error: fetchTargetChildrenError } = await supabase
+        .from('project_expenses')
+        .select('*')
+        .eq('id_parent', targetParentExpense.id)
+      
+      if (fetchTargetChildrenError) {
+        console.error('❌ Error fetching existing target children:', fetchTargetChildrenError)
+        return false
+      }
+      
+      console.log('📊 Existing target children count:', existingTargetChildren?.length || 0)
+      
+      // Kiểm tra xem có children với đối tượng cha mới trong target parent không
+      const hasExistingTargetObject = existingTargetChildren?.some(child => 
+        child.expense_object_id === newTargetParentObjectId
+      ) || false
+      
+      console.log('🔍 Has existing object in target children:', hasExistingTargetObject)
+      console.log('🎯 New target parent object ID:', newTargetParentObjectId)
+      
+      if (hasExistingTargetObject) {
+        // Trường hợp 2: Nếu có thì chỉ thêm vào target parent (không xóa gì)
+        console.log('🔄 Case 2: Object exists in target, adding new children while keeping old ones')
+        
+        // Tạo children mới cho đối tượng cha này trong target parent (không xóa children cũ)
+        const newChildExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
+          id: crypto.randomUUID(),
+          project_id: dataToUse.formData.project_id,
+          description: `${dataToUse.formData.description} - Child`,
+          expense_object_id: objectId,
+          amount: Number(amount),
+          expense_date: dataToUse.formData.expense_date,
+          status: 'pending',
+          employee_id: dataToUse.formData.employee_id,
+          id_parent: targetParentExpense.id,
+          expense_object_columns: [objectId],
+          invoice_items: dataToUse.invoiceItems
+        }))
+        
+        if (newChildExpenses.length > 0) {
+          const { error: createNewChildrenError } = await supabase
+            .from('project_expenses')
+            .insert(newChildExpenses)
+          
+          if (createNewChildrenError) {
+            console.error('❌ Error creating new children for existing target object:', createNewChildrenError)
+            return false
+          }
+          
+          console.log('✅ New children created for existing target object successfully')
+        }
+      } else {
+        // Trường hợp 1: Nếu không có thì thêm vào target parent và giữ nguyên các chi phí cũ
+        console.log('🔄 Case 1: Object does not exist in target, adding new children while keeping old ones')
+        
+        // Tạo children mới cho đối tượng cha mới trong target parent (không xóa children cũ)
+        const newChildExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
+          id: crypto.randomUUID(),
+          project_id: dataToUse.formData.project_id,
+          description: `${dataToUse.formData.description} - Child`,
+          expense_object_id: objectId,
+          amount: Number(amount),
+          expense_date: dataToUse.formData.expense_date,
+          status: 'pending',
+          employee_id: dataToUse.formData.employee_id,
+          id_parent: targetParentExpense.id,
+          expense_object_columns: [objectId],
+          invoice_items: dataToUse.invoiceItems
+        }))
+        
+        if (newChildExpenses.length > 0) {
+          const { error: createNewChildrenError } = await supabase
+            .from('project_expenses')
+            .insert(newChildExpenses)
+          
+          if (createNewChildrenError) {
+            console.error('❌ Error creating new children for new target object:', createNewChildrenError)
+            return false
+          }
+          
+          console.log('✅ New children created for new target object successfully')
+        }
+      }
+      
+      // KHÔNG xóa expense đã chọn ban đầu (additive update giữ nguyên bản ghi cũ)
+      
+      console.log('✅ Expense updated successfully - replaced parent object')
+      return true
+    } catch (error) {
+      console.error('❌ Error in updateExistingExpense:', error)
+      return false
+    }
+  }
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
       ...prev,
@@ -1016,11 +1683,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       workshopParentObject: workshopParentObject?.name, 
       selectedExpenseObjectIds: selectedExpenseObjectIds.length,
       category,
-      userRole
+      userRole,
+      isUpdating: !!selectedExpenseToUpdate
     })
     
+    
     if (workshopParentObject && selectedExpenseObjectIds.length > 0 && category === 'actual') {
-      console.log('✅ Creating new expense directly')
+      console.log(selectedExpenseToUpdate ? '🔄 Updating existing expense' : '✅ Creating new expense directly')
       console.log('📊 Form data from inputs:', {
         project_id: formData.project_id,
         description: formData.description,
@@ -1060,14 +1729,29 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         selectedExpenseObjectIds,
         invoiceItems,
         directObjectTotals: calculatedDirectObjectTotals,
-        grandAllocationTotal
+        grandAllocationTotal,
+        workshopParentObject
       }
       
       console.log('📊 Setting pending expense data:', expenseData)
       setPendingExpenseData(expenseData)
       
-      // Wait for state to be updated or pass data directly
-      await createNewExpense(expenseData)
+      // Check if updating or creating
+      if (selectedExpenseToUpdate) {
+        const success = await updateExistingExpense(expenseData)
+        if (success) {
+          alert('Cập nhật chi phí thành công!')
+          onSuccess()
+          onClose()
+          // Reset state
+          setSelectedExpenseToUpdate(null)
+        } else {
+          alert('Lỗi khi cập nhật chi phí!')
+        }
+      } else {
+        // Wait for state to be updated or pass data directly
+        await createNewExpense(expenseData)
+      }
       return
     }
 
@@ -1110,7 +1794,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
       // ===== ROUTE TO APPROPRIATE FUNCTION =====
       console.log('🔍 Step 2: Routing to appropriate function...')
-      
+
       if (category === 'planned') {
         console.log('📋 Routing to planned expense creation')
         await createPlannedExpense()
@@ -1142,39 +1826,39 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     console.log('📊 Primary expense object ID:', primaryExpenseObjectId)
     console.log('📊 Total amount:', totalAmount)
     
-    const expenseData = {
-      project_id: formData.project_id,
-      employee_id: formData.employee_id || null,
-      description: formData.description,
-      expense_object_id: primaryExpenseObjectId,
+          const expenseData = {
+          project_id: formData.project_id,
+          employee_id: formData.employee_id || null,
+          description: formData.description,
+          expense_object_id: primaryExpenseObjectId,
       amount: totalAmount,
-      currency: formData.currency,
-      expense_date: formData.expense_date,
-      status: 'pending',
-      notes: formData.notes || null,
-      receipt_url: formData.receipt_url || null,
-      id_parent: formData.id_parent || null,
-      expense_object_columns: selectedExpenseObjectIds,
+          currency: formData.currency,
+          expense_date: formData.expense_date,
+          status: 'pending',
+          notes: formData.notes || null,
+          receipt_url: formData.receipt_url || null,
+          id_parent: formData.id_parent || null,
+          expense_object_columns: selectedExpenseObjectIds,
       expense_object_totals: Object.values(directObjectTotals).some(val => val > 0) ? directObjectTotals : undefined,
       invoice_items: getInvoiceItems()
     }
 
     console.log('📤 Expense data prepared:', expenseData)
 
-    if (isEdit && editId) {
+        if (isEdit && editId) {
       console.log('📤 Updating planned expense:', editId)
-      const { error } = await supabase
-        .from('project_expenses_quote')
-        .update(expenseData)
-        .eq('id', editId)
+          const { error } = await supabase
+            .from('project_expenses_quote')
+            .update(expenseData)
+            .eq('id', editId)
       if (error) {
         console.error('❌ Error updating planned expense:', error)
         throw error
       }
       console.log('✅ Planned expense updated successfully')
-    } else {
+        } else {
       console.log('📤 Creating new planned expense...')
-      const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
+          const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
       console.log('✅ Planned expense created:', result)
     }
     
@@ -1185,8 +1869,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
     
     // Reset form
-    setDirectObjectTotals({})
-    
+        setDirectObjectTotals({})
+        
     // Removed success notification
     onSuccess()
     onClose()
@@ -1199,9 +1883,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const createActualExpense = async () => {
     console.log('💰 ===== CREATING ACTUAL EXPENSE =====')
     
-    const createdExpenses = []
-    
-    for (const expenseObjectId of selectedExpenseObjectIds) {
+        const createdExpenses = []
+        
+        for (const expenseObjectId of selectedExpenseObjectIds) {
       console.log('🔄 Processing expense object:', expenseObjectId)
       
       const amount = Object.values(directObjectTotals).some(val => val > 0)
@@ -1215,64 +1899,64 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         continue
       }
       
-      const expenseData: any = {
-        id: crypto.randomUUID(),
-        project_id: formData.project_id,
-        description: formData.description,
-        expense_object_id: expenseObjectId,
-        role: selectedRole,
+          const expenseData: any = {
+            id: crypto.randomUUID(),
+            project_id: formData.project_id,
+            description: formData.description,
+            expense_object_id: expenseObjectId,
+            role: selectedRole,
         amount: amount,
-        currency: formData.currency,
-        expense_date: formData.expense_date,
+            currency: formData.currency,
+            expense_date: formData.expense_date,
         status: 'approved',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        expense_object_columns: selectedExpenseObjectIds,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            expense_object_columns: selectedExpenseObjectIds,
         expense_object_totals: Object.values(directObjectTotals).some(val => val > 0) ? directObjectTotals : undefined,
         invoice_items: getInvoiceItems()
-      }
-      
-      // Add optional fields
-      if (formData.employee_id) expenseData.employee_id = formData.employee_id
-      if (formData.notes) expenseData.notes = formData.notes
-      if (formData.receipt_url) expenseData.receipt_url = formData.receipt_url
-      if (formData.id_parent) expenseData.id_parent = formData.id_parent
+          }
+          
+          // Add optional fields
+          if (formData.employee_id) expenseData.employee_id = formData.employee_id
+          if (formData.notes) expenseData.notes = formData.notes
+          if (formData.receipt_url) expenseData.receipt_url = formData.receipt_url
+          if (formData.id_parent) expenseData.id_parent = formData.id_parent
       
       console.log('📤 Expense data for object:', expenseData)
-      
-      if (isEdit && editId) {
+          
+          if (isEdit && editId) {
         console.log('📤 Updating actual expense:', editId)
-        const updateData = { ...expenseData }
-        delete (updateData as any).id
-        delete (updateData as any).created_at
-        const { error } = await supabase
-          .from('project_expenses')
-          .update(updateData)
-          .eq('id', editId)
+            const updateData = { ...expenseData }
+            delete (updateData as any).id
+            delete (updateData as any).created_at
+            const { error } = await supabase
+              .from('project_expenses')
+              .update(updateData)
+              .eq('id', editId)
         if (error) {
           console.error('❌ Error updating actual expense:', error)
           throw error
         }
         console.log('✅ Actual expense updated successfully')
-      } else {
+          } else {
         console.log('📤 Creating actual expense for object:', expenseObjectId, 'amount:', amount)
-        const { data, error } = await supabase
-          .from('project_expenses')
-          .insert(expenseData)
-          .select()
+            const { data, error } = await supabase
+              .from('project_expenses')
+              .insert(expenseData)
+              .select()
         if (error) {
           console.error('❌ Error creating actual expense:', error)
           throw error
         }
         console.log('✅ Actual expense created:', data)
-        createdExpenses.push(data[0])
-      }
-    }
-    
+            createdExpenses.push(data[0])
+          }
+        }
+        
     console.log('📊 Total created expenses:', createdExpenses.length)
-    
+        
     // Update parent if exists
-    if (createdExpenses.length > 0 && createdExpenses[0].id_parent) {
+        if (createdExpenses.length > 0 && createdExpenses[0].id_parent) {
       console.log('🔄 Updating parent expense amount...')
       await updateParentExpenseAmount(createdExpenses[0].id_parent, 'project_expenses')
     }
@@ -1315,20 +1999,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const updateParentExpenseAmount = async (parentId: string, tableName: string) => {
     try {
       console.log('🔄 Updating parent expense amount:', parentId, 'in table:', tableName)
-      const { data: children } = await supabase
+            const { data: children } = await supabase
         .from(tableName)
-        .select('amount')
-        .eq('id_parent', parentId)
-      const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
-      await supabase
+              .select('amount')
+              .eq('id_parent', parentId)
+            const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
+            await supabase
         .from(tableName)
-        .update({ amount: total, updated_at: new Date().toISOString() })
-        .eq('id', parentId)
+              .update({ amount: total, updated_at: new Date().toISOString() })
+              .eq('id', parentId)
       console.log('✅ Parent expense amount updated:', total)
-    } catch (e) {
-      console.error('❌ Error updating parent expense amount:', e)
-    }
-  }
+          } catch (e) {
+            console.error('❌ Error updating parent expense amount:', e)
+          }
+        }
 
   // ========================================
   // FUNCTION CẬP NHẬT CHI PHÍ PARENT - VIẾT LẠI HOÀN TOÀN
@@ -1404,16 +2088,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       }
       
       const { error: updateError } = await supabase
-        .from('project_expenses')
-        .update({
-          amount: totalAmount,
+          .from('project_expenses')
+          .update({
+            amount: totalAmount,
           description: dataToUse.formData.description || existingParent.description,
-          updated_at: new Date().toISOString(),
-          role: selectedRole,
+            updated_at: new Date().toISOString(),
+            role: selectedRole,
           expense_object_breakdown: dataToUse.directObjectTotals
-        })
-        .eq('id', existingParent.id)
-      
+          })
+          .eq('id', existingParent.id)
+        
       if (updateError) {
         console.error('❌ Error updating parent expense:', updateError)
         return
@@ -1442,7 +2126,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       setSubmitting(false)
     }
   }
-  
+
   // Function cập nhật chi phí con
   const updateChildExpenses = async (parentId: string, directObjectTotals: Record<string, number>, expenseData?: any) => {
     try {
@@ -1516,8 +2200,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     console.log('📊 Invoice items from pendingExpenseData:', pendingExpenseData?.invoiceItems)
     console.log('📊 Direct object totals from pendingExpenseData:', pendingExpenseData?.directObjectTotals)
     
-    setSubmitting(true)
-    
+      setSubmitting(true)
+      
     try {
       // ===== VALIDATION =====
       console.log('🔍 Step 1: Validation...')
@@ -1543,8 +2227,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       console.log('📊 invoiceItems length:', dataToUse.invoiceItems?.length)
       console.log('📊 grandAllocationTotal:', dataToUse.grandAllocationTotal)
       
+      // Calculate total amount from direct object totals (tổng con = cha)
       let totalAmount = (Object.values(dataToUse.directObjectTotals || {}) as number[]).reduce((sum: number, val: number) => sum + (val || 0), 0)
-      console.log('💰 Total amount calculated from directObjectTotals:', totalAmount)
+      console.log('💰 Total amount calculated from directObjectTotals (tổng con = cha):', totalAmount)
+      console.log('📊 Parent-Child Logic: Tổng con = cha')
+      console.log('📊 Direct object totals (con):', dataToUse.directObjectTotals)
+      console.log('📊 Calculated total amount (cha):', totalAmount)
+      
+      // Validate parent-child logic
+      if (!validateParentChildLogic(dataToUse.directObjectTotals, totalAmount)) {
+        console.error('❌ Parent-Child Logic Violation: Cannot create expense')
+        return
+      }
       
       if (totalAmount <= 0) {
         console.error('❌ Total amount must be greater than 0')
@@ -1989,14 +2683,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   ? 'Tạo chi phí thực tế đã phát sinh cho dự án'
                   : 'Tạo chi phí dự kiến cho dự án'}
               </p>
+              
+              {/* Show selected expense info */}
+              {selectedExpenseToUpdate && (
+                <div className="mt-2 text-sm text-blue-600">
+                  Đang cập nhật: {selectedExpenseToUpdate.description}
             </div>
+              )}
           </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {/* Update existing expense button */}
+            {category === 'actual' && !selectedExpenseToUpdate && formData.project_id && (
+              <button
+                onClick={loadExistingExpenses}
+                className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-300 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                title="Chọn chi phí thực tế đã có để cập nhật"
+              >
+                🔄 Cập nhật chi phí đã có
+              </button>
+            )}
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -2156,6 +2869,47 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       </div>
                     )}
                   </div>
+
+                  {/* Chọn chi phí thực tế để cập nhật - chỉ hiển thị khi category = 'actual' */}
+                  {category === 'actual' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
+                        Chọn chi phí thực tế để cập nhật (tùy chọn)
+                      </label>
+                      <select
+                        value={selectedExpenseForUpdate}
+                        onChange={(e) => handleExpenseSelection(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900"
+                      >
+                        <option value="">Không chọn - Tạo chi phí mới</option>
+                        {expenseDropdownOptions.map((expense) => (
+                          <option key={expense.id} value={expense.id}>
+                            {expense.expense_code ? `${expense.expense_code} - ` : ''}{expense.description} - {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expense.amount || 0)} ({new Date(expense.expense_date).toLocaleDateString('vi-VN')})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Chọn chi phí thực tế đã có để cập nhật thông tin
+                      </p>
+                      
+                      {/* Hiển thị thông tin chi phí đã chọn */}
+                      {selectedExpenseToUpdate && (
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span className="text-sm font-medium text-blue-900">
+                              Đang cập nhật: {selectedExpenseToUpdate.description}
+                            </span>
+                          </div>
+                          <div className="mt-2 text-xs text-blue-700">
+                            Số tiền: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedExpenseToUpdate.amount || 0)} | 
+                            Ngày: {new Date(selectedExpenseToUpdate.expense_date).toLocaleDateString('vi-VN')} | 
+                            Trạng thái: {selectedExpenseToUpdate.status === 'approved' ? 'Đã duyệt' : selectedExpenseToUpdate.status === 'rejected' ? 'Từ chối' : 'Chờ duyệt'}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -2452,6 +3206,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   <div>
                     <span className="text-lg font-bold text-black">📊 Tổng kết chi phí đối tượng</span>
                     <div className="text-sm text-gray-700">Đối tượng cha = Tổng các đối tượng con</div>
+                    <div className="text-xs text-blue-600 mt-1">
+                      🔗 Logic: Tổng con = cha | Xóa cha → Xóa con
+                    </div>
                   </div>
                 </div>
                 
@@ -3006,6 +3763,100 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       )}
 
       {/* Update/Create Confirmation Dialog */}
+
+      {/* Expense Selector Modal */}
+      {showExpenseSelector && (
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity bg-black bg-opacity-50" onClick={() => setShowExpenseSelector(false)}></div>
+            
+            <div className="inline-block w-full max-w-4xl px-6 pt-6 pb-6 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-xl shadow-2xl sm:my-8 sm:align-middle">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 rounded-lg bg-blue-100">
+                    <DollarSign className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Chọn chi phí thực tế để cập nhật</h3>
+                    <p className="text-sm text-gray-600">Chọn một chi phí thực tế đã có để cập nhật thông tin</p>
+                  </div>
+                </div>
+                    <button
+                  onClick={() => setShowExpenseSelector(false)}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  
+              <div className="mt-4">
+                {existingExpenses.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>Không có chi phí thực tế nào cho dự án này</p>
+                    </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mã chi phí</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mô tả</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Số tiền</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {existingExpenses.map((expense) => (
+                          <tr key={expense.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-900">{expense.expense_code || expense.id.substring(0, 8)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900">{expense.description}</td>
+                            <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expense.amount || 0)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-center text-gray-600">
+                              {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                expense.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                expense.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {expense.status === 'approved' ? 'Đã duyệt' :
+                                 expense.status === 'rejected' ? 'Từ chối' :
+                                 'Chờ duyệt'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                    <button
+                                onClick={() => loadExpenseDataForUpdate(expense)}
+                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                              >
+                                Chọn
+                    </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowExpenseSelector(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Hủy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
