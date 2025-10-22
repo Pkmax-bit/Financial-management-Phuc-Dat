@@ -559,7 +559,15 @@ const handleApproveExpense = async (expenseId: string) => {
       if (!acc[key]) {
         acc[key] = { planned: 0, actual: 0 }
       }
-      acc[key][exp.category] += exp.category === 'planned' ? exp.planned_amount : exp.actual_amount
+      // Planned: cộng tất cả
+      if (exp.category === 'planned') {
+        acc[key].planned += exp.planned_amount
+      } else {
+        // Actual: chỉ cộng parent (id_parent null)
+        if (!exp.id_parent) {
+          acc[key].actual += exp.actual_amount
+        }
+      }
       return acc
     }, {})
     return Object.entries(comparison).map(([projectId, { planned, actual }]: [string, { planned: number; actual: number }]) => ({
@@ -673,8 +681,13 @@ const handleApproveExpense = async (expenseId: string) => {
   })
 
   // Calculate summary statistics
-  const totalPlanned = expenses.filter(e => e.category === 'planned').reduce((sum, e) => sum + e.planned_amount, 0)
-  const totalActual = expenses.filter(e => e.category === 'actual').reduce((sum, e) => sum + e.actual_amount, 0)
+  const totalPlanned = expenses
+    .filter(e => e.category === 'planned')
+    .reduce((sum, e) => sum + e.planned_amount, 0)
+  // Thực tế: chỉ tính các chi phí đối tượng cha (id_parent null)
+  const totalActual = expenses
+    .filter(e => e.category === 'actual' && !e.id_parent)
+    .reduce((sum, e) => sum + e.actual_amount, 0)
   const totalVariance = totalActual - totalPlanned
   const variancePercentage = totalPlanned > 0 ? (totalVariance / totalPlanned) * 100 : 0
 
@@ -684,8 +697,12 @@ const handleApproveExpense = async (expenseId: string) => {
       if (!acc[project_id]) {
         acc[project_id] = { planned: 0, actual: 0 }
       }
+      // Planned giữ nguyên
       acc[project_id].planned += planned_amount
-      acc[project_id].actual += actual_amount
+      // Actual: chỉ cộng khi là đối tượng cha
+      if (!expense.id_parent) {
+        acc[project_id].actual += actual_amount
+      }
       return acc
     }, {})
 
