@@ -228,3 +228,5 @@ Error xảy ra → Catch exception → Hiển thị alert → Không đóng dial
 - 🎯 **An toàn**: Error handling và rollback khi cần
 
 **Tính năng sẵn sàng để test và deploy!** 🚀
+
+

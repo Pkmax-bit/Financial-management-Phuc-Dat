@@ -131,3 +131,5 @@ if __name__ == "__main__":
         print("\n🎯 Workshop parent display feature is ready!")
     else:
         print("\n❌ Some tests failed!")
+
+

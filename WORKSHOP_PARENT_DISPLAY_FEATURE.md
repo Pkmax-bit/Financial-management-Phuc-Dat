@@ -177,3 +177,5 @@ Parent object → Green background → Large font → Total amount → Children 
 - 🎯 **Chính xác**: Tính toán đúng tổng chi phí và phần trăm
 
 **Tính năng sẵn sàng để test và deploy!** 🚀
+
+

@@ -247,3 +247,5 @@ if __name__ == "__main__":
         print("\n🎯 Conditional expense objects display feature is ready!")
     else:
         print("\n❌ Some tests failed!")
+
+

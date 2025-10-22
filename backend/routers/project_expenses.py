@@ -15,6 +15,61 @@ from services.supabase_client import get_supabase_client
 from services.auto_snapshot_service import AutoSnapshotService
 
 router = APIRouter()
+
+async def update_parent_expense_object_total(expense_object_id: str, supabase):
+    """Cập nhật tổng chi phí của đối tượng cha dựa trên tổng các đối tượng con"""
+    try:
+        # Lấy thông tin đối tượng chi phí
+        expense_object_result = supabase.table("expense_objects").select("*").eq("id", expense_object_id).execute()
+        if not expense_object_result.data:
+            return
+        
+        expense_object = expense_object_result.data[0]
+        
+        # Nếu đây là đối tượng con, tìm đối tượng cha
+        if expense_object.get('parent_id'):
+            parent_id = expense_object['parent_id']
+            
+            # Tính tổng chi phí của tất cả đối tượng con
+            children_result = supabase.table("expense_objects").select("id").eq("parent_id", parent_id).execute()
+            children_ids = [child['id'] for child in children_result.data or []]
+            
+            if children_ids:
+                # Tính tổng chi phí từ project_expenses
+                total_result = supabase.table("project_expenses").select("amount").in_("expense_object_id", children_ids).execute()
+                total_amount = sum(float(expense.get('amount', 0)) for expense in total_result.data or [])
+                
+                # Cập nhật tổng chi phí vào đối tượng cha (nếu có field total_amount)
+                # Hoặc tạo một record tổng kết trong project_expenses
+                parent_expense_data = {
+                    "id": str(uuid.uuid4()),
+                    "description": f"Tổng {expense_object.get('name', 'đối tượng')}",
+                    "amount": total_amount,
+                    "expense_date": datetime.utcnow().date().isoformat(),
+                    "expense_object_id": parent_id,
+                    "status": "pending",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                # Kiểm tra xem đã có record tổng kết chưa
+                existing_total = supabase.table("project_expenses").select("id").eq("expense_object_id", parent_id).eq("description", f"Tổng {expense_object.get('name', 'đối tượng')}").execute()
+                
+                if existing_total.data:
+                    # Cập nhật record tổng kết
+                    supabase.table("project_expenses").update({
+                        "amount": total_amount,
+                        "updated_at": datetime.utcnow().isoformat()
+                    }).eq("id", existing_total.data[0]['id']).execute()
+                else:
+                    # Tạo record tổng kết mới
+                    supabase.table("project_expenses").insert(parent_expense_data).execute()
+                
+                print(f"✅ Updated parent expense object total: {total_amount}")
+        
+    except Exception as e:
+        print(f"❌ Error updating parent expense object total: {e}")
+        raise
 @router.post("/project-expenses/quotes")
 async def create_project_expense_quote(
     payload: dict, current_user: User = Depends(get_current_user)
@@ -205,6 +260,13 @@ async def create_project_expense(
                 except Exception as e:
                     print(f"Warning: Failed to create auto-snapshot: {e}")
             
+            # Tự động cập nhật chi phí đối tượng cha nếu có expense_object_id
+            if expense.get('expense_object_id'):
+                try:
+                    await update_parent_expense_object_total(expense['expense_object_id'], supabase)
+                except Exception as e:
+                    print(f"Warning: Failed to update parent expense object total: {e}")
+            
             return created_expense
         raise HTTPException(status_code=400, detail="Create failed")
     except HTTPException:
@@ -235,7 +297,16 @@ async def update_project_expense(
             supabase.table("project_expenses").update(update_dict).eq("id", expense_id).execute()
         )
         if result.data:
-            return result.data[0]
+            updated_expense = result.data[0]
+            
+            # Tự động cập nhật chi phí đối tượng cha nếu có expense_object_id
+            if update_dict.get('expense_object_id'):
+                try:
+                    await update_parent_expense_object_total(update_dict['expense_object_id'], supabase)
+                except Exception as e:
+                    print(f"Warning: Failed to update parent expense object total: {e}")
+            
+            return updated_expense
         raise HTTPException(status_code=400, detail="Update failed")
     except HTTPException:
         raise

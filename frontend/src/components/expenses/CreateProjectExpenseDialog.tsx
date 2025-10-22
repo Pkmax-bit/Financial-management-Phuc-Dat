@@ -22,6 +22,7 @@ import {
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { getExpenseObjectsByRole } from '@/utils/expenseObjectPermissions'
+import { ExpenseObjectRoleFilter, useExpenseObjectRoleFilter, ExpenseObjectDisplayUtils } from '@/utils/expenseObjectRoleFilter'
 import ExpenseObjectSelector from '@/components/ExpenseObjectSelector'
 import ExpenseObjectMultiSelector from '@/components/ExpenseObjectMultiSelector'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
@@ -89,6 +90,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const [showUpdateCreateDialog, setShowUpdateCreateDialog] = useState(false)
   const [pendingExpenseData, setPendingExpenseData] = useState<any>(null)
   const [workshopParentObject, setWorkshopParentObject] = useState<SimpleExpenseObject | null>(null)
+  
+  // Use expense object role filter hook
+  const { processExpenseObjects, canAccessExpenseObject } = useExpenseObjectRoleFilter()
   
 
   // Form data
@@ -247,7 +251,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }))
   }, [selectedExpenseObjectIds])
 
-  // Load expense objects to choose columns
+  // Load expense objects to choose columns - NEW VERSION
   const loadExpenseObjectsOptions = async () => {
     if (!userRole) {
       console.log('⏳ Waiting for user role to load expense objects...')
@@ -255,6 +259,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
     
     try {
+      // Step 1: Load data from API
       let data
       try {
         console.log('🔍 Trying authenticated endpoint for expense objects options...')
@@ -262,11 +267,27 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         console.log('✅ Authenticated endpoint succeeded for options')
       } catch (err) {
         console.log('⚠️ Authenticated endpoint failed for options, trying public endpoint:', err)
-        // fallback public
         data = await apiGet(`${API_BASE_URL}/api/expense-objects/public?active_only=true`)
         console.log('✅ Public endpoint succeeded for options')
       }
-      // Map and sort options by preferred order
+      
+      // Step 2: Map data to ExpenseObject format
+      const allExpenseObjects = Array.isArray(data) ? data.map((o: any) => ({ 
+        id: o.id, 
+        name: o.name, 
+        description: o.description,
+        is_active: o.is_active ?? true,
+        parent_id: o.parent_id,
+        is_parent: o.is_parent ?? false,
+        role: o.role
+      })) : []
+      
+      console.log(`📊 Loaded ${allExpenseObjects.length} expense objects from API`)
+      
+      // Step 3: Process expense objects using new role filter
+      const result = processExpenseObjects(allExpenseObjects, userRole, category, isEdit)
+      
+      // Step 4: Sort options by preferred order
       const normalizeLower = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
       const preferredOrder = [
         'quan ly',       // quản lý
@@ -276,62 +297,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         'lap dat',       // lắp đặt
         'nha dau tu'     // nhà đầu tư
       ]
-      let opts: SimpleExpenseObject[] = Array.isArray(data) ? data.map((o: any) => ({ 
-        id: o.id, 
-        name: o.name, 
-        description: o.description,
-        is_active: o.is_active ?? true,
-        parent_id: o.parent_id, // Added parent_id
-        is_parent: o.is_parent ?? false // Added is_parent
-      })) : []
-
-      // Store all objects before filtering for parent lookup
-      const allObjects = [...opts]
       
-      // Apply role-based filtering using the centralized function
-      opts = getExpenseObjectsByRole(opts, userRole)
-      console.log(`🔍 Filtered expense objects for role ${userRole}:`, opts.map(o => o.name))
-      
-      // Log chi tiết các đối tượng chi phí con được hiển thị
-      const filteredChildrenObjects = opts.filter(o => o.parent_id)
-      const filteredParentObjects = opts.filter(o => o.is_parent)
-      console.log(`📊 Children objects (${filteredChildrenObjects.length}):`, filteredChildrenObjects.map(o => o.name))
-      console.log(`📊 Parent objects (${filteredParentObjects.length}):`, filteredParentObjects.map(o => o.name))
-      
-      // For planned expenses, only show parent objects (no children)
-      if (category === 'planned') {
-        opts = opts.filter(o => !o.parent_id) // Only show parent objects
-        console.log('📋 Planned expenses - showing only parent objects:', opts.map(o => o.name))
-      }
-      
-      // Special handling for Supplier with actual expenses
-      if (userRole === 'Supplier' && category === 'actual') {
-        // Find workshop parent object
-        const workshopParent = opts.find(o => 
-          o.is_parent && (o.name.includes('Xưởng') || o.name.includes('xuong') || o.name.includes('sản xuất'))
-        )
-        
-        if (workshopParent) {
-          // Show both parent and children of workshop parent
-          opts = opts.filter(o => o.id === workshopParent.id || o.parent_id === workshopParent.id)
-          console.log('🔧 Supplier actual expenses - showing parent and children of:', workshopParent.name, opts.map(o => o.name))
-        }
-      }
-      
-      // Ensure parent objects are always included when their children are available
-      // This ensures the parent object is visible for total calculation
-      const childrenObjects = opts.filter(o => o.parent_id)
-      const parentIds = [...new Set(childrenObjects.map(o => o.parent_id))]
-      const missingParents = parentIds
-        .map(parentId => allObjects.find(o => o.id === parentId))
-        .filter((parent): parent is SimpleExpenseObject => parent !== undefined)
-        .filter(parent => !opts.some(o => o.id === parent.id))
-      
-      if (missingParents.length > 0) {
-        opts = [...opts, ...missingParents]
-        console.log('🔧 Added missing parent objects for total calculation:', missingParents.map(p => p.name))
-      }
-      const sortedOpts = [...opts].sort((a, b) => {
+      const sortedOpts = [...result.filteredObjects].sort((a, b) => {
         const na = normalizeLower(a.name)
         const nb = normalizeLower(b.name)
         const ia = preferredOrder.indexOf(na)
@@ -341,17 +308,22 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         if (ra !== rb) return ra - rb
         return a.name.localeCompare(b.name, 'vi')
       })
+      
+      // Step 5: Set state
       setExpenseObjectsOptions(sortedOpts)
       
-      // Tự động chọn tất cả đối tượng con cho actual expenses
-      if (category === 'actual') {
-        const childrenObjects = sortedOpts.filter(o => o.parent_id)
-        if (childrenObjects.length > 0) {
-          const childrenIds = childrenObjects.map(o => o.id)
-          setSelectedExpenseObjectIds(childrenIds)
-          console.log('🎯 Auto-selected all children objects:', childrenIds)
-        }
+      // Step 6: Auto-select objects
+      if (result.selectedIds.length > 0) {
+        setSelectedExpenseObjectIds(result.selectedIds)
+        console.log('🎯 Auto-selected objects:', result.selectedIds)
       }
+      
+      // Step 7: Set parent object
+      if (result.parentObject) {
+        setWorkshopParentObject(result.parentObject)
+        console.log('🔧 Set parent object:', result.parentObject.name)
+      }
+      
     } catch (e) {
       console.error('❌ Error loading expense object options:', e)
       setExpenseObjectsOptions([])
@@ -538,21 +510,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               // Tự động điền role của user (đã được map)
               setSelectedRole(mappedRole)
               
-              // Tự động điền employee_id của user hiện tại
-              setFormData(prev => ({
-                ...prev,
-                employee_id: session.user.id
-              }))
+              // Kiểm tra xem user có tồn tại trong bảng employees không
+              const { data: employeeData, error: employeeError } = await supabase
+                .from('employees')
+                .select('id')
+                .eq('id', session.user.id)
+                .single()
+              
+              if (!employeeError && employeeData) {
+                // Tự động điền employee_id của user hiện tại
+                setFormData(prev => ({
+                  ...prev,
+                  employee_id: session.user.id
+                }))
+                console.log('✅ Auto-filled employee_id:', session.user.id)
+              } else {
+                console.log('⚠️ User not found in employees table, employee_id will be empty')
+                // Không auto-fill employee_id nếu user không có trong bảng employees
+              }
               
               console.log('✅ Auto-filled user info:', {
                 original_role: userData.role,
                 mapped_role: mappedRole,
-                employee_id: session.user.id,
+                employee_id: employeeData ? session.user.id : 'not found in employees table',
                 full_name: userData.full_name
               })
               
-              // Load expense objects after role is set
-              loadExpenseObjectsOptions()
+              // Expense objects will be loaded by the consolidated useEffect
             }
           }
         } catch (err) {
@@ -562,22 +546,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }, [isOpen])
 
-  // Load expense objects when userRole changes
-  useEffect(() => {
-    if (userRole && isOpen) {
-      loadExpenseObjectsOptions()
-    }
-  }, [userRole, isOpen])
-
-  // Load expense objects when category changes (especially for workshop employee)
+  // Load expense objects when userRole, category, or isOpen changes - CONSOLIDATED
   useEffect(() => {
     if (userRole && isOpen && category) {
-      console.log(`🔄 Category changed to ${category}, reloading expense objects for ${userRole}`)
+      console.log(`🔄 Loading expense objects for role: ${userRole}, category: ${category}`)
       // Clear current selection to trigger auto-selection with new category
       setSelectedExpenseObjectIds([])
+      // Load expense objects
       loadExpenseObjectsOptions()
     }
-  }, [category, userRole, isOpen])
+  }, [userRole, category, isOpen])
 
   // Auto-select expense objects based on role when options are loaded (for create mode)
   useEffect(() => {
@@ -612,6 +590,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       }
     }
   }, [userRole, category, expenseObjectsOptions, isEdit])
+
+  // Auto-select children objects for all roles when expense objects are loaded and no selection exists
+  useEffect(() => {
+    if (expenseObjectsOptions.length > 0 && selectedExpenseObjectIds.length === 0 && userRole && category === 'actual' && !isEdit) {
+      console.log(`🔄 Auto-selecting children objects for ${userRole} after expense objects loaded`)
+      
+      // Tự động chọn tất cả đối tượng con cho actual expenses
+      const childrenObjects = expenseObjectsOptions.filter(o => o.parent_id)
+      if (childrenObjects.length > 0) {
+        const childrenIds = childrenObjects.map(o => o.id)
+        setSelectedExpenseObjectIds(childrenIds)
+        console.log('🎯 Auto-selected all children objects:', childrenIds)
+      }
+    }
+  }, [expenseObjectsOptions, selectedExpenseObjectIds.length, userRole, category, isEdit])
 
   // Set workshop parent object for all users when they select children objects
   useEffect(() => {
@@ -943,7 +936,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           employee_id: formData.employee_id || null,
           description: formData.description,
           expense_object_id: primaryExpenseObjectId,
-          role: selectedRole,
+          // role field không cần thiết cho planned expenses (quotes)
             amount: (() => {
               const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
               return hasDirectObjectInputs 
@@ -1030,25 +1023,30 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           }
         }
       } else {
-        // Create actual expense directly
+        // Create actual expense directly - tạo cho mỗi đối tượng chi phí được chọn
+        const createdExpenses = []
+        
+        for (const expenseObjectId of selectedExpenseObjectIds) {
           const expenseData: any = {
-          id: crypto.randomUUID(),
-          project_id: formData.project_id,
-          description: formData.description,
-          expense_object_id: primaryExpenseObjectId,
-          role: selectedRole,
+            id: crypto.randomUUID(),
+            project_id: formData.project_id,
+            description: formData.description,
+            expense_object_id: expenseObjectId,
+            role: selectedRole,
             amount: (() => {
               const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-              return hasDirectObjectInputs 
-                ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
-                : (Number(grandAllocationTotal) || 0)
+              if (hasDirectObjectInputs) {
+                return directObjectTotals[expenseObjectId] || 0
+              } else {
+                return expenseObjectTotals[expenseObjectId] || 0
+              }
             })(),
-          currency: formData.currency,
-          expense_date: formData.expense_date,
-          status: 'approved', // Actual expenses are automatically approved
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          expense_object_columns: selectedExpenseObjectIds,
+            currency: formData.currency,
+            expense_date: formData.expense_date,
+            status: 'approved', // Actual expenses are automatically approved
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            expense_object_columns: selectedExpenseObjectIds,
           // Save object totals if only object totals are provided
           expense_object_totals: (() => {
             const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
@@ -1085,42 +1083,44 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               components_pct: r.componentsPct
             }))
           })()
-        }
-        
-        // Add optional fields
-        if (formData.employee_id) expenseData.employee_id = formData.employee_id
-        if (formData.notes) expenseData.notes = formData.notes
-        if (formData.receipt_url) expenseData.receipt_url = formData.receipt_url
-        if (formData.id_parent) expenseData.id_parent = formData.id_parent
-        
-        if (isEdit && editId) {
-          // Do not override id/created_at when updating
-          const updateData = { ...expenseData }
-          delete (updateData as any).id
-          delete (updateData as any).created_at
-          console.log('📤 Updating project expense (actual):', editId, updateData)
-          const { error } = await supabase
-            .from('project_expenses')
-            .update(updateData)
-            .eq('id', editId)
-          if (error) throw error
-        } else {
-          console.log('📤 Submitting project expense (actual):', expenseData)
-          const { data, error } = await supabase
-            .from('project_expenses')
-            .insert(expenseData)
-            .select()
-          if (error) throw error
-          console.log('✅ Project expense (actual) created successfully:', data)
+          }
+          
+          // Add optional fields
+          if (formData.employee_id) expenseData.employee_id = formData.employee_id
+          if (formData.notes) expenseData.notes = formData.notes
+          if (formData.receipt_url) expenseData.receipt_url = formData.receipt_url
+          if (formData.id_parent) expenseData.id_parent = formData.id_parent
+          
+          if (isEdit && editId) {
+            // Do not override id/created_at when updating
+            const updateData = { ...expenseData }
+            delete (updateData as any).id
+            delete (updateData as any).created_at
+            console.log('📤 Updating project expense (actual):', editId, updateData)
+            const { error } = await supabase
+              .from('project_expenses')
+              .update(updateData)
+              .eq('id', editId)
+            if (error) throw error
+          } else {
+            console.log('📤 Submitting project expense (actual):', expenseData)
+            const { data, error } = await supabase
+              .from('project_expenses')
+              .insert(expenseData)
+              .select()
+            if (error) throw error
+            console.log('✅ Project expense (actual) created successfully:', data)
+            createdExpenses.push(data[0])
+          }
         }
         
         // Reset direct object totals after successful creation
         setDirectObjectTotals({})
         
         // After create, if has parent, update parent expense amount = sum(children)
-        if (expenseData.id_parent) {
+        if (createdExpenses.length > 0 && createdExpenses[0].id_parent) {
           try {
-            const parentId = expenseData.id_parent as string
+            const parentId = createdExpenses[0].id_parent as string
             const { data: children } = await supabase
               .from('project_expenses')
               .select('amount')
@@ -1714,13 +1714,28 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </div>
                   </div>
 
-                  {/* Role field is now hidden and auto-filled based on user's role */}
-                  <div style={{ display: 'none' }}>
-                    <input
-                      type="hidden"
-                      value={selectedRole}
-                      readOnly
-                    />
+                  {/* Role field - hiển thị lại để user có thể thấy role của mình */}
+                  <div className="space-y-2">
+                    <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+                      Vai trò *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="role"
+                        value={selectedRole}
+                        readOnly
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+                        placeholder="Vai trò của bạn"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                        <span className="text-green-600 text-sm">✅</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      ✅ Đã tự động điền vai trò của nhân viên đang đăng nhập
+                    </p>
                   </div>
 
                   <div>
@@ -1986,7 +2001,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       <div className="text-sm text-green-700 font-medium mb-2">📋 Chi tiết các đối tượng chi phí con:</div>
                       <div className="space-y-2">
                         {selectedExpenseObjectIds.map((id) => {
-                          const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
+                          const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
                           const totalAmount = directObjectTotals[id] || expenseObjectTotals[id] || 0
                           const parentTotal = (() => {
                             const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
@@ -2053,10 +2068,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     <div className="space-y-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                       <span className="text-black font-semibold text-sm">Tổng chi phí từng đối tượng:</span>
                       {selectedExpenseObjectIds.map((id) => {
-                        const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
+                        const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
                         return (
                           <div key={id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-800 text-sm">{expenseObject?.name || 'Đối tượng'}:</span>
+                            <span className="text-gray-800 text-sm">{ExpenseObjectDisplayUtils.formatName(expenseObject)}:</span>
                             <div className="flex items-center space-x-2">
                               <input
                                 type="number"
@@ -2079,7 +2094,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 {/* Current Breakdown Display */}
                 <div className="space-y-1">
                   {selectedExpenseObjectIds.map((id) => {
-                    const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
+                    const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
                     // Use direct input value if available, otherwise use calculated total
                     const totalAmount = directObjectTotals[id] || expenseObjectTotals[id] || 0
                     
@@ -2095,7 +2110,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       <div key={id} className="flex items-center justify-between text-sm py-1">
                         <div className="flex items-center space-x-2">
                           <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                          <span className="text-black font-medium">{expenseObject?.name || 'Đối tượng'}</span>
+                          <span className="text-black font-medium">{ExpenseObjectDisplayUtils.formatName(expenseObject)}</span>
                         </div>
                         <div className="flex items-center space-x-3">
                           <span className="text-gray-800 font-medium">{percentage.toFixed(1)}%</span>
@@ -2159,6 +2174,34 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         </span>
                       </div>
                     </div>
+                    
+                    {/* Hiển thị tổng đối tượng cha = tổng đối tượng con */}
+                    {workshopParentObject && selectedExpenseObjectIds.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <span className="text-gray-700 font-medium">📊 Tổng đối tượng cha = Tổng đối tượng con</span>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <span className="text-gray-600 text-xs">Cha = Con</span>
+                            <span className="font-semibold text-blue-800">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                                (() => {
+                                  const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                                  return hasDirectObjectInputs 
+                                    ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                                    : grandAllocationTotal
+                                })()
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          <span className="font-medium">{workshopParentObject.name}</span> = Tổng các đối tượng con
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2201,10 +2244,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 </div>
                 <div className="space-y-2">
                   {selectedExpenseObjectIds.map((id) => {
-                    const expenseObject = expenseObjectsOptions.find(obj => obj.id === id)
+                    const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
                     return (
                       <div key={id} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700">{expenseObject?.name || 'Đối tượng'}</span>
+                        <span className="text-gray-700">{ExpenseObjectDisplayUtils.formatName(expenseObject)}</span>
                         <div className="flex items-center space-x-2">
                           <input
                             type="number"
@@ -2343,6 +2386,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
             >
               Hủy
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent rounded-md disabled:opacity-50 flex items-center space-x-2"
+            >
+              <Save className="h-4 w-4" />
+              <span>Cập nhật</span>
             </button>
             <button
               onClick={handleSubmit}
