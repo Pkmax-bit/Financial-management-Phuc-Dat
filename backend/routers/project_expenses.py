@@ -10,7 +10,7 @@ from datetime import datetime
 import uuid
 
 from models.user import User
-from utils.auth import get_current_user, require_manager_or_admin
+from utils.auth import get_current_user
 from services.supabase_client import get_supabase_client
 from services.auto_snapshot_service import AutoSnapshotService
 
@@ -112,9 +112,17 @@ async def create_project_expense_quote(
 
 @router.put("/project-expenses/quotes/{quote_id}/approve")
 async def approve_project_expense_quote(
-    quote_id: str, current_user: User = Depends(require_manager_or_admin)
+    quote_id: str, current_user: User = Depends(get_current_user)
 ):
     try:
+        # Check if user has permission to approve expenses
+        allowed_roles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403, 
+                detail="Requires admin, accountant, manager, Supplier, vận chuyển, or nhân công role"
+            )
+        
         supabase = get_supabase_client()
         q = supabase.table("project_expenses_quote").select("*").eq("id", quote_id).execute()
         if not q.data:

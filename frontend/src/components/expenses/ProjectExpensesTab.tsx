@@ -62,6 +62,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [viewMode, setViewMode] = useState<'all' | 'planned' | 'actual'>('all')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
+  const [userRole, setUserRole] = useState<string>('employee')
 
 // Filter expenses based on view mode and build tree
 const getFilteredExpenses = () => {
@@ -96,28 +97,61 @@ const getDisplayData = () => {
 
 // CRUD permissions
 const canEdit = (expense: ProjectExpense) => {
+  // Check if user role has permission to edit
+  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+  console.log('🔍 canEdit check:', { userRole, allowedRoles, isAllowed: allowedRoles.includes(userRole) })
+  
+  if (!allowedRoles.includes(userRole)) {
+    console.log('❌ canEdit: User role not allowed', userRole)
+    return false
+  }
+  
   // Planned: only pending can be edited
   // Actual: can be edited (for corrections)
   if (expense.category === 'planned') {
-    return expense.status === 'pending'
+    const canEditPlanned = expense.status === 'pending'
+    console.log('📋 canEdit planned:', { category: expense.category, status: expense.status, canEdit: canEditPlanned })
+    return canEditPlanned
   }
   // Actual expenses can be edited
+  console.log('✅ canEdit actual: true')
   return true
 }
 
 const canDelete = (expense: ProjectExpense) => {
+  // Check if user role has permission to delete
+  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+  console.log('🔍 canDelete check:', { userRole, allowedRoles, isAllowed: allowedRoles.includes(userRole) })
+  
+  if (!allowedRoles.includes(userRole)) {
+    console.log('❌ canDelete: User role not allowed', userRole)
+    return false
+  }
+  
   // Planned: only pending can be deleted
   // Actual: can be deleted (for corrections)
   if (expense.category === 'planned') {
-    return expense.status === 'pending'
+    const canDeletePlanned = expense.status === 'pending'
+    console.log('📋 canDelete planned:', { category: expense.category, status: expense.status, canDelete: canDeletePlanned })
+    return canDeletePlanned
   }
   // Actual expenses can be deleted
+  console.log('✅ canDelete actual: true')
   return true
 }
 
 const canApprove = (expense: ProjectExpense) => {
   // Only planned expenses that are pending can be approved
-  return expense.category === 'planned' && expense.status === 'pending'
+  if (expense.category !== 'planned' || expense.status !== 'pending') {
+    console.log('❌ canApprove: Not planned or not pending', { category: expense.category, status: expense.status })
+    return false
+  }
+  
+  // Check if user role has permission to approve
+  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+  const canApproveResult = allowedRoles.includes(userRole)
+  console.log('🔍 canApprove check:', { userRole, allowedRoles, canApprove: canApproveResult })
+  return canApproveResult
 }
 
 const [editExpense, setEditExpense] = useState<{ id: string; category: 'planned' | 'actual' } | null>(null)
@@ -332,6 +366,38 @@ const handleApproveExpense = async (expenseId: string) => {
 
   useEffect(() => {
     fetchProjectExpenses()
+  }, [])
+
+  // Load user role
+  useEffect(() => {
+    const loadUserRole = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user?.id) {
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', session.user.id)
+            .single()
+          
+          if (!userError && userData) {
+            // Map role cũ sang role mới (giống như trong CreateProjectExpenseDialog)
+            let mappedRole = userData.role
+            if (userData.role === 'workshop_employee') {
+              mappedRole = 'Supplier'
+              console.log('🔄 Mapped workshop_employee to Supplier')
+            }
+            
+            setUserRole(mappedRole || 'employee')
+            console.log('✅ Loaded user role:', mappedRole)
+          }
+        }
+      } catch (err) {
+        console.error('Error loading user role:', err)
+      }
+    }
+    
+    loadUserRole()
   }, [])
 
 
