@@ -154,6 +154,15 @@ const canApprove = (expense: ProjectExpense) => {
   return canApproveResult
 }
 
+// Approve permission for actual expenses (pending only)
+const canApproveActual = (expense: ProjectExpense) => {
+  if (expense.category !== 'actual' || expense.status !== 'pending') {
+    return false
+  }
+  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+  return allowedRoles.includes(userRole)
+}
+
 const [editExpense, setEditExpense] = useState<{ id: string; category: 'planned' | 'actual' } | null>(null)
 
 const handleEditExpense = (expense: ProjectExpense) => {
@@ -647,6 +656,26 @@ const handleApproveExpense = async (expenseId: string) => {
       setError((e as Error).message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Approve actual expense (set status to approved)
+  const handleApproveActual = async (expenseId: string) => {
+    const expense = expenses.find(e => e.id === expenseId)
+    if (!expense || !canApproveActual(expense)) return
+    
+    if (window.confirm('Duyệt chi phí thực tế này?')) {
+      try {
+        const { error } = await supabase
+          .from('project_expenses')
+          .update({ status: 'approved', updated_at: new Date().toISOString() })
+          .eq('id', expenseId)
+        if (error) throw error
+        await fetchProjectExpenses()
+      } catch (e) {
+        console.error('Approve actual expense failed:', e)
+        setError((e as Error).message)
+      }
     }
   }
 
@@ -1170,6 +1199,15 @@ return (
                                 title="Sửa"
                               >
                                 <Edit className="h-4 w-4" />
+                              </button>
+                            )}
+                            {canApproveActual(expense) && (
+                              <button 
+                                onClick={() => handleApproveActual(expense.id)}
+                                className="text-green-600 hover:text-green-900 p-1"
+                                title="Duyệt chi phí thực tế"
+                              >
+                                <CheckCircle className="h-4 w-4" />
                               </button>
                             )}
                             {canDelete(expense) && (
