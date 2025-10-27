@@ -14,6 +14,7 @@ interface ExpenseObject {
   parent_id?: string
   amount?: number
   hierarchy_level: number
+  level?: number
   is_parent: boolean
   total_children_cost: number
   cost_from_children: boolean
@@ -140,6 +141,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
                     <span className={`font-medium ${level > 0 ? 'text-blue-700' : 'text-gray-900'} truncate`}>
                       {obj.name}
                     </span>
+                    
                     {obj.is_parent && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                         Parent
@@ -163,7 +165,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
                       {obj.is_active ? 'Hoạt động' : 'Không hoạt động'}
                     </span>
                     <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
-                      Cấp {obj.hierarchy_level}
+                    Cấp: {obj.level}
                     </span>
                   </div>
                 </div>
@@ -231,14 +233,14 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
   }
 
   const handleDelete = async (objectId: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa đối tượng chi phí này?')) {
+    if (!confirm('Bạn có chắc chắn muốn xóa HẲN đối tượng chi phí này? Dữ liệu sẽ bị xóa vĩnh viễn và không thể khôi phục!')) {
       return
     }
 
     try {
       setDeletingId(objectId)
       await apiDelete(`${API_BASE_URL}/api/expense-objects/${objectId}`)
-      alert('Xóa đối tượng chi phí thành công!')
+      alert('Đã xóa hẳn đối tượng chi phí khỏi hệ thống!')
       await loadExpenseObjects() // Reload the list
     } catch (err) {
       console.error('Error deleting expense object:', err)
@@ -377,7 +379,7 @@ export default function CreateExpenseObjectDialog({ isOpen, onClose, onSuccess }
                   <option value="">-- Chọn đối tượng cha --</option>
                   {expenseObjects.map(obj => (
                     <option key={obj.id} value={obj.id}>
-                      {obj.name}
+                      {obj.name} {(obj.level !== undefined && obj.level !== null) ? `(Cấp: ${obj.level})` : ''}
                     </option>
                   ))}
                 </select>

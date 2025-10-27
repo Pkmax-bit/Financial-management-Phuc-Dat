@@ -8,6 +8,7 @@ interface ExpenseObject {
   name: string
   description?: string
   is_active: boolean
+  level?: number
 }
 
 interface ExpenseObjectMultiSelectorProps {
@@ -113,7 +114,14 @@ export default function ExpenseObjectMultiSelector({
             )}
             {selectedObjects.slice(0, 3).map(obj => (
               <span key={obj.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                {obj.name}
+                <span className="flex items-center space-x-1">
+                  <span>{obj.name}</span>
+                  {obj.level !== undefined && obj.level !== null && (
+                    <span className="text-xs bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
+                      {obj.level}
+                    </span>
+                  )}
+                </span>
                 <span
                   role="button"
                   aria-label="Bỏ chọn đối tượng"
@@ -175,7 +183,14 @@ export default function ExpenseObjectMultiSelector({
                     className={`w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center justify-between ${checked ? 'bg-blue-50' : ''}`}
                   >
                     <div>
-                      <div className={`font-medium ${checked ? 'text-blue-700' : 'text-gray-900'}`}>{obj.name}</div>
+                      <div className={`font-medium ${checked ? 'text-blue-700' : 'text-gray-900'} flex items-center space-x-2`}>
+                        <span>{obj.name}</span>
+                        {obj.level !== undefined && obj.level !== null && (
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                            {obj.level}
+                          </span>
+                        )}
+                      </div>
                       {obj.description && (
                         <div className="text-sm text-gray-500 truncate">{obj.description}</div>
                       )}

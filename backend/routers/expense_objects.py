@@ -13,6 +13,26 @@ from models.user import User
 from utils.auth import get_current_user
 from services.supabase_client import get_supabase_client
 
+def calculate_level(parent_id: str = None, supabase_client=None) -> int:
+    """Tính toán level dựa trên parent_id"""
+    if not parent_id:
+        return 1  # Cấp cha (root level)
+    
+    try:
+        # Lấy thông tin parent
+        parent_result = supabase_client.table("expense_objects")\
+            .select("level")\
+            .eq("id", parent_id)\
+            .execute()
+        
+        if parent_result.data:
+            parent_level = parent_result.data[0].get("level", 1)
+            return parent_level + 1
+        else:
+            return 2  # Nếu không tìm thấy parent, mặc định là cấp 2
+    except Exception:
+        return 2  # Fallback to level 2
+
 router = APIRouter()
 
 def recalc_parent_totals(supabase, parent_id: Optional[str]):
@@ -62,6 +82,7 @@ async def get_expense_objects_public(active_only: bool = Query(True, description
                 name=row["name"],
                 description=row.get("description"),
                 parent_id=row.get("parent_id"),
+                level=row.get("level"),
                 is_active=row["is_active"],
                 role=row.get("role"),
                 created_at=row["created_at"],
@@ -96,6 +117,7 @@ async def get_expense_objects(
                 name=row["name"],
                 description=row.get("description"),
                 parent_id=row.get("parent_id"),
+                level=row.get("level"),
                 is_active=row["is_active"],
                 role=row.get("role"),
                 created_at=row["created_at"],
@@ -138,6 +160,7 @@ async def get_expense_object(
             name=row["name"],
             description=row.get("description"),
             parent_id=row.get("parent_id"),
+            level=row.get("level"),
             is_active=row["is_active"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -162,11 +185,15 @@ async def create_expense_object(
     try:
         supabase = get_supabase_client()
         
+        # Tính toán level dựa trên parent_id
+        level = calculate_level(expense_object.parent_id, supabase)
+        
         expense_object_data = {
             "id": str(uuid.uuid4()),
             "name": expense_object.name,
             "description": expense_object.description,
             "parent_id": expense_object.parent_id,
+            "level": level,
             "is_active": True,
             "created_by": current_user.id,
             "updated_by": current_user.id,
@@ -191,6 +218,7 @@ async def create_expense_object(
             name=row["name"],
             description=row.get("description"),
             parent_id=row.get("parent_id"),
+            level=row.get("level"),
             is_active=row["is_active"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -242,6 +270,8 @@ async def update_expense_object(
             update_data["is_active"] = expense_object.is_active
         if expense_object.parent_id is not None:
             update_data["parent_id"] = expense_object.parent_id
+            # Tính toán lại level khi parent_id thay đổi
+            update_data["level"] = calculate_level(expense_object.parent_id, supabase)
         
         result = supabase.table("expense_objects")\
             .update(update_data)\
@@ -268,6 +298,7 @@ async def update_expense_object(
             name=row["name"],
             description=row.get("description"),
             parent_id=row.get("parent_id"),
+            level=row.get("level"),
             is_active=row["is_active"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -288,7 +319,7 @@ async def delete_expense_object(
     expense_object_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Xóa đối tượng chi phí (soft delete)"""
+    """Xóa đối tượng chi phí (hard delete)"""
     try:
         supabase = get_supabase_client()
         
@@ -304,12 +335,9 @@ async def delete_expense_object(
                 detail="Không tìm thấy đối tượng chi phí"
             )
         
-        # Soft delete - chỉ đánh dấu is_active = False
+        # Hard delete - xóa hẳn dữ liệu khỏi database
         result = supabase.table("expense_objects")\
-            .update({
-                "is_active": False,
-                "updated_by": current_user.id
-            })\
+            .delete()\
             .eq("id", expense_object_id)\
             .execute()
         
