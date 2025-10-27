@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft, Calculator } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // Test accounts with different roles - Updated with real accounts
@@ -37,7 +37,7 @@ const testAccounts = [
   },
   {
     name: 'Workshop Employee',
-    email: 'workshop@test.com',
+    email: 'xuong@gmail.com',
     password: '123456',
     role: 'WORKSHOP_EMPLOYEE',
     icon: Wrench,
@@ -72,22 +72,13 @@ const testAccounts = [
     description: 'Công nhân - Tạo chi phí cơ bản'
   },
   {
-    name: 'Test Employee',
-    email: 'test.employee.new@company.com',
+    name: 'Kế Toán (Sales)',
+    email: 'sales@example.com',
     password: '123456',
-    role: 'EMPLOYEE',
-    icon: User,
-    color: 'bg-green-500',
-    description: 'Nhân viên test - Tạo chi phí cơ bản'
-  },
-  {
-    name: 'Test Employee Auth',
-    email: 'test.employee.auth@company.com',
-    password: '123456',
-    role: 'EMPLOYEE',
-    icon: User,
-    color: 'bg-green-600',
-    description: 'Nhân viên test - Tạo chi phí cơ bản'
+    role: 'SALES',
+    icon: Calculator,
+    color: 'bg-emerald-500',
+    description: 'Kế toán - Quản lý tài chính và báo cáo (dùng tài khoản Sales)'
   }
 ]
 
@@ -194,6 +185,7 @@ export default function LoginPage() {
     setError('')
   }
 
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       {/* Back to Home Button */}
@@ -215,6 +207,7 @@ export default function LoginPage() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Đăng nhập vào tài khoản
           </h2>
+          
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -337,8 +330,47 @@ export default function LoginPage() {
           <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">
             Tài khoản Test
           </h3>
+          
+          {/* Featured Accountant Account */}
+          <div className="mb-6">
+            <h4 className="text-sm font-medium text-gray-700 mb-3 text-center">⭐ Tài khoản nổi bật</h4>
+            {(() => {
+              const accountantAccount = testAccounts.find(acc => acc.role === 'SALES' && acc.email === 'sales@example.com')!
+              const IconComponent = accountantAccount.icon
+              return (
+                <button
+                  onClick={() => handleTestAccountClick(accountantAccount)}
+                  className={`relative w-full flex items-center p-4 rounded-xl border-2 border-emerald-200 hover:border-emerald-400 hover:shadow-lg transition-all duration-200 ${
+                    formData.email === accountantAccount.email ? 'border-emerald-500 bg-emerald-50' : 'bg-gradient-to-r from-emerald-50 to-green-50'
+                  }`}
+                >
+                  <div className={`flex-shrink-0 w-12 h-12 ${accountantAccount.color} rounded-full flex items-center justify-center text-white shadow-lg`}>
+                    <IconComponent className="h-6 w-6" />
+                  </div>
+                  <div className="ml-4 flex-1 text-left">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-base font-semibold text-gray-900">{accountantAccount.name}</h4>
+                      <span className="text-xs font-mono text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">{accountantAccount.role}</span>
+                    </div>
+                    <p className="text-sm text-gray-700 mt-1 font-medium">{accountantAccount.description}</p>
+                    <p className="text-xs text-gray-500 mt-1 font-mono">
+                      {accountantAccount.email} / {accountantAccount.password}
+                    </p>
+                  </div>
+                  {formData.email === accountantAccount.email && (
+                    <div className="absolute top-3 right-3">
+                      <div className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center">
+                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              )
+            })()}
+          </div>
+          
           <div className="grid grid-cols-1 gap-3">
-            {testAccounts.map((account, index) => {
+            {testAccounts.filter(acc => !(acc.role === 'SALES' && acc.email === 'sales@example.com')).map((account, index) => {
               const IconComponent = account.icon
               return (
                 <button

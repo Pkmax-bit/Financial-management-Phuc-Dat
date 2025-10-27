@@ -28,7 +28,7 @@ def create_additional_test_accounts():
     # Danh sach tai khoan can tao
     test_accounts = [
         {
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "password": "123456",
             "full_name": "Workshop Employee Test",
             "role": "workshop_employee"
@@ -112,7 +112,7 @@ def test_new_accounts():
     
     # Test accounts
     test_accounts = [
-        "workshop@test.com",
+        "xuong@gmail.com",
         "transport@test.com", 
         "customer@test.com",
         "worker@test.com"
@@ -228,7 +228,7 @@ def update_login_page():
   },
   {
     name: 'Workshop Employee',
-    email: 'workshop@test.com',
+    email: 'xuong@gmail.com',
     password: '123456',
     role: 'WORKSHOP_EMPLOYEE',
     icon: Wrench,
@@ -273,7 +273,7 @@ def update_login_page():
         
         print("Trang login da duoc cap nhat voi cac tai khoan moi")
         print("Cac tai khoan moi:")
-        print("- workshop@test.com (WORKSHOP_EMPLOYEE)")
+        print("- xuong@gmail.com (WORKSHOP_EMPLOYEE)")
         print("- transport@test.com (TRANSPORT)")
         print("- customer@test.com (CUSTOMER)")
         print("- worker@test.com (WORKER)")

@@ -20,12 +20,16 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Pause
+  Pause,
+  Receipt,
+  CreditCard
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import ProjectTeam from '@/components/projects/ProjectTeam'
 import ProjectTimeline from '@/components/projects/ProjectTimeline'
+import ProjectInvoices from '@/components/projects/ProjectInvoices'
+import ProjectExpenses from '@/components/projects/ProjectExpenses'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 
 interface Project {
@@ -99,13 +103,13 @@ const priorityConfig = {
 export default function ProjectDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const projectId = params.id as string
+  const projectId = params?.id as string
 
   const [project, setProject] = useState<Project | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents' | 'invoices' | 'expenses'>('overview')
   const [showEditSidebar, setShowEditSidebar] = useState(false)
 
   useEffect(() => {
@@ -366,6 +370,8 @@ export default function ProjectDetailPage() {
                 { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
                 { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
                 { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
+                { id: 'invoices', label: 'Hóa đơn', icon: Receipt, color: 'green' },
+                { id: 'expenses', label: 'Chi phí', icon: CreditCard, color: 'red' },
                 { id: 'documents', label: 'Tài liệu', icon: FileText, color: 'gray' }
               ].map((tab) => {
                 const Icon = tab.icon
@@ -586,18 +592,6 @@ export default function ProjectDetailPage() {
                       <Edit className="h-4 w-4 text-blue-600 group-hover:text-blue-700" />
                       <span className="font-medium text-gray-900">Chỉnh sửa dự án</span>
                     </button>
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-green-50 rounded-lg transition-colors group">
-                      <Users className="h-4 w-4 text-green-600 group-hover:text-green-700" />
-                      <span className="font-medium text-gray-900">Thêm thành viên</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-orange-50 rounded-lg transition-colors group">
-                      <BarChart3 className="h-4 w-4 text-orange-600 group-hover:text-orange-700" />
-                      <span className="font-medium text-gray-900">Tạo báo cáo</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 rounded-lg transition-colors group">
-                      <FileText className="h-4 w-4 text-gray-600 group-hover:text-gray-700" />
-                      <span className="font-medium text-gray-900">Xuất dữ liệu</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -611,7 +605,7 @@ export default function ProjectDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-8">
                 <div className="bg-white rounded-xl shadow-sm border p-4">
-                  <ProjectTimeline projectId={projectId} projectName={project.name} currentUser={user} />
+                  <ProjectTimeline projectId={projectId} projectName={project.name} currentUser={user || undefined} />
                 </div>
               </div>
               <div className="lg:col-span-4">
@@ -636,7 +630,43 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-gray-600">Danh sách thành viên, vai trò và thông tin liên hệ.</p>
               </div>
               <div className="p-4">
-                <ProjectTeam projectId={projectId} projectName={project.name} currentUser={user} />
+                <ProjectTeam projectId={projectId} projectName={project.name} currentUser={user || undefined} />
+              </div>
+            </div>
+          )}
+
+          {/* Invoices Tab */}
+          {activeTab === 'invoices' && (
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="px-6 py-4 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-50 rounded-lg">
+                    <Receipt className="h-5 w-5 text-green-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900">Hóa đơn dự án</h3>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">Chi tiết các hóa đơn và sản phẩm đã duyệt</p>
+              </div>
+              <div className="p-6">
+                <ProjectInvoices projectId={projectId} projectName={project.name} />
+              </div>
+            </div>
+          )}
+
+          {/* Expenses Tab */}
+          {activeTab === 'expenses' && (
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="px-6 py-4 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-50 rounded-lg">
+                    <CreditCard className="h-5 w-5 text-red-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900">Chi phí dự án</h3>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">Chi phí kế hoạch và thực tế với chi tiết từng khoản</p>
+              </div>
+              <div className="p-6">
+                <ProjectExpenses projectId={projectId} projectName={project.name} />
               </div>
             </div>
           )}

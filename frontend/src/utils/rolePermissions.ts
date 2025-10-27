@@ -76,6 +76,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'workflow'
   },
   {
+    name: 'Duyệt chi phí',
+    href: '/expenses/pending-approval',
+    icon: 'CheckCircle',
+    description: 'Duyệt và quản lý chi phí đang chờ phê duyệt',
+    roles: ['admin', 'accountant', 'sales'],
+    category: 'management'
+  },
+  {
     name: 'Báo cáo & Phân tích',
     href: '/reports',
     icon: 'BarChart3',

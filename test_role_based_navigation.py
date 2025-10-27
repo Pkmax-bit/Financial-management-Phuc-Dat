@@ -35,7 +35,7 @@ def test_role_based_navigation():
             ]
         },
         {
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "password": "123456",
             "role": "workshop_employee",
             "expected_features": [

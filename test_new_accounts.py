@@ -15,7 +15,7 @@ def test_new_accounts():
     # Test accounts
     test_accounts = [
         {
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "password": "123456",
             "role": "WORKSHOP_EMPLOYEE",
             "description": "Nhân viên xưởng"

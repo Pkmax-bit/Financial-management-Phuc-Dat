@@ -34,7 +34,7 @@ def test_all_login_accounts():
         },
         {
             "name": "Workshop Employee",
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "role": "WORKSHOP_EMPLOYEE",
             "description": "Nhân viên xưởng - Tạo chi phí sản xuất"
         },
@@ -150,7 +150,7 @@ def create_login_usage_guide():
     print("   - Admin Test (admin@test.com) - ADMIN")
     print("   - Admin Example (admin@example.com) - ADMIN")
     print("   - Sales Manager (sales@example.com) - SALES")
-    print("   - Workshop Employee (workshop@test.com) - WORKSHOP_EMPLOYEE")
+    print("   - Workshop Employee (xuong@gmail.com) - WORKSHOP_EMPLOYEE")
     print("   - Transport Employee (transport@test.com) - TRANSPORT")
     print("   - Customer (customer@test.com) - CUSTOMER")
     print("   - Worker (worker@test.com) - WORKER")

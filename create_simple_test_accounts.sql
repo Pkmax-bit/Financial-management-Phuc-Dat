@@ -23,7 +23,7 @@ INSERT INTO users (id, email, full_name, role, is_active, created_at, updated_at
 ('test-sales-001', 'sales@test.com', 'Sales Test', 'sales', true, now(), now()),
 
 -- WORKSHOP_EMPLOYEE
-('test-workshop-001', 'workshop@test.com', 'Workshop Test', 'workshop_employee', true, now(), now()),
+('test-workshop-001', 'xuong@gmail.com', 'Workshop Test', 'workshop_employee', true, now(), now()),
 
 -- EMPLOYEE
 ('test-emp-001', 'employee@test.com', 'Employee Test', 'employee', true, now(), now()),
@@ -82,7 +82,7 @@ ORDER BY role;
 -- 🔑 Password: 123456
 -- 👤 Role: sales
 --
--- 📧 Email: workshop@test.com
+-- 📧 Email: xuong@gmail.com
 -- 🔑 Password: 123456
 -- 👤 Role: workshop_employee
 --

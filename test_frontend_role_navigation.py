@@ -29,7 +29,7 @@ def test_frontend_navigation():
             "description": "Quan ly ban hang va chi phi"
         },
         {
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "password": "123456", 
             "role": "workshop_employee",
             "description": "Nhan vien xuong - Tao chi phi san xuat"
@@ -130,7 +130,7 @@ def create_navigation_guide():
     print("   - Xem bao cao ban hang")
     print("   - Khong the quan ly nhan vien")
     
-    print("\n3. WORKSHOP_EMPLOYEE (workshop@test.com):")
+    print("\n3. WORKSHOP_EMPLOYEE (xuong@gmail.com):")
     print("   - Tao chi phi san xuat")
     print("   - Xem du an")
     print("   - Su dung AI Image Reader")

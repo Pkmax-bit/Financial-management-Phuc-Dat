@@ -27,7 +27,7 @@ def test_new_support_center():
             "description": "Quan ly ban hang va chi phi"
         },
         {
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "password": "123456",
             "role": "workshop_employee",
             "description": "Nhan vien xuong - Tao chi phi san xuat"

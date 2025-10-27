@@ -27,7 +27,7 @@ def create_simple_auth_accounts():
         {"email": "admin@test.com", "password": "123456", "role": "admin"},
         {"email": "accountant@test.com", "password": "123456", "role": "accountant"},
         {"email": "sales@test.com", "password": "123456", "role": "sales"},
-        {"email": "workshop@test.com", "password": "123456", "role": "workshop_employee"},
+        {"email": "xuong@gmail.com", "password": "123456", "role": "workshop_employee"},
         {"email": "employee@test.com", "password": "123456", "role": "employee"},
         {"email": "worker@test.com", "password": "123456", "role": "worker"},
         {"email": "transport@test.com", "password": "123456", "role": "transport"},

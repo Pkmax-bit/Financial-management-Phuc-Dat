@@ -166,11 +166,8 @@ async def get_project(
         # Debug: Log the project_id being searched
         print(f"Searching for project ID: {project_id}")
         
-        result = supabase.table("projects").select("""
-            *,
-            customers:customer_id(name),
-            employees:manager_id(first_name, last_name)
-        """).eq("id", project_id).execute()
+        # Get project data first
+        result = supabase.table("projects").select("*").eq("id", project_id).execute()
         
         print(f"Query result: {result.data}")
         
@@ -186,10 +183,25 @@ async def get_project(
         
         project = result.data[0]
         
+        # Get customer and manager data separately
+        customer_name = None
+        manager_name = None
+        
+        if project.get('customer_id'):
+            customer_result = supabase.table("customers").select("name").eq("id", project['customer_id']).execute()
+            if customer_result.data:
+                customer_name = customer_result.data[0]['name']
+        
+        if project.get('manager_id'):
+            manager_result = supabase.table("employees").select("first_name, last_name").eq("id", project['manager_id']).execute()
+            if manager_result.data:
+                manager_data = manager_result.data[0]
+                manager_name = f"{manager_data.get('first_name', '')} {manager_data.get('last_name', '')}".strip()
+        
         # Process data to add customer_name and manager_name
         project_data = dict(project)
-        project_data['customer_name'] = project.get('customers', {}).get('name') if project.get('customers') else None
-        project_data['manager_name'] = f"{project.get('employees', {}).get('first_name', '')} {project.get('employees', {}).get('last_name', '')}".strip() if project.get('employees') else None
+        project_data['customer_name'] = customer_name
+        project_data['manager_name'] = manager_name
         
         return Project(**project_data)
         

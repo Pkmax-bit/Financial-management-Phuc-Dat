@@ -27,7 +27,7 @@ def delete_test_auth_users():
         "admin@test.com",
         "accountant@test.com", 
         "sales@test.com",
-        "workshop@test.com",
+        "xuong@gmail.com",
         "employee@test.com",
         "worker@test.com",
         "transport@test.com",

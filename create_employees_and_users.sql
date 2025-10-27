@@ -77,7 +77,7 @@ INSERT INTO employees (id, user_id, employee_code, first_name, last_name, email,
 ('emp-sales-001', 'test-sales-001', 'EMP003', 'Phạm Văn', 'Kinh Doanh', 'sales@test.com', '0901000003', 'dept-003', 'pos-005', '2024-01-01', 35000000, 'active', 'sales', now(), now()),
 
 -- WORKSHOP_EMPLOYEE
-('emp-workshop-001', 'test-workshop-001', 'EMP004', 'Võ Văn', 'Quản Đốc', 'workshop@test.com', '0901000004', 'dept-006', 'pos-011', '2024-01-01', 25000000, 'active', 'workshop_employee', now(), now()),
+('emp-workshop-001', 'test-workshop-001', 'EMP004', 'Võ Văn', 'Quản Đốc', 'xuong@gmail.com', '0901000004', 'dept-006', 'pos-011', '2024-01-01', 25000000, 'active', 'workshop_employee', now(), now()),
 
 -- EMPLOYEE
 ('emp-emp-001', 'test-emp-001', 'EMP005', 'Bùi Văn', 'IT', 'employee@test.com', '0901000005', 'dept-004', 'pos-008', '2024-01-01', 25000000, 'active', 'employee', now(), now()),
@@ -103,7 +103,7 @@ INSERT INTO users (id, email, full_name, role, is_active, created_at, updated_at
 ('test-admin-001', 'admin@test.com', 'Admin Test', 'admin', true, now(), now()),
 ('test-acc-001', 'accountant@test.com', 'Accountant Test', 'accountant', true, now(), now()),
 ('test-sales-001', 'sales@test.com', 'Sales Test', 'sales', true, now(), now()),
-('test-workshop-001', 'workshop@test.com', 'Workshop Test', 'workshop_employee', true, now(), now()),
+('test-workshop-001', 'xuong@gmail.com', 'Workshop Test', 'workshop_employee', true, now(), now()),
 ('test-emp-001', 'employee@test.com', 'Employee Test', 'employee', true, now(), now()),
 ('test-worker-001', 'worker@test.com', 'Worker Test', 'worker', true, now(), now()),
 ('test-trans-001', 'transport@test.com', 'Transport Test', 'transport', true, now(), now()),
@@ -179,7 +179,7 @@ ORDER BY user_role;
 -- 🔑 Password: 123456
 -- 👤 Role: sales
 --
--- 📧 Email: workshop@test.com
+-- 📧 Email: xuong@gmail.com
 -- 🔑 Password: 123456
 -- 👤 Role: workshop_employee
 --

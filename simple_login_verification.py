@@ -16,7 +16,7 @@ def test_login_accounts():
         ("admin@test.com", "ADMIN"),
         ("admin@example.com", "ADMIN"),
         ("sales@example.com", "SALES"),
-        ("workshop@test.com", "WORKSHOP_EMPLOYEE"),
+        ("xuong@gmail.com", "WORKSHOP_EMPLOYEE"),
         ("transport@test.com", "TRANSPORT"),
         ("customer@test.com", "CUSTOMER"),
         ("worker@test.com", "WORKER"),
@@ -64,7 +64,7 @@ def create_summary():
     print("1. admin@test.com - ADMIN")
     print("2. admin@example.com - ADMIN")
     print("3. sales@example.com - SALES")
-    print("4. workshop@test.com - WORKSHOP_EMPLOYEE")
+    print("4. xuong@gmail.com - WORKSHOP_EMPLOYEE")
     print("5. transport@test.com - TRANSPORT")
     print("6. customer@test.com - CUSTOMER")
     print("7. worker@test.com - WORKER")

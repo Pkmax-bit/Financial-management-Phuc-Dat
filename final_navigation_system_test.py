@@ -40,7 +40,7 @@ def test_final_navigation_system():
             ]
         },
         {
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "password": "123456",
             "role": "workshop_employee",
             "expected_navigation": [
@@ -256,7 +256,7 @@ def create_usage_guide():
     print("\n2. CAC TAI KHOAN TEST:")
     print("   - admin@test.com (ADMIN) - Toan quyen")
     print("   - sales@example.com (SALES) - Quan ly ban hang")
-    print("   - workshop@test.com (WORKSHOP_EMPLOYEE) - Nhan vien xuong")
+    print("   - xuong@gmail.com (WORKSHOP_EMPLOYEE) - Nhan vien xuong")
     print("   - transport@test.com (TRANSPORT) - Nhan vien van chuyen")
     print("   - customer@test.com (CUSTOMER) - Khach hang")
     print("   - worker@test.com (WORKER) - Cong nhan")

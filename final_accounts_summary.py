@@ -37,7 +37,7 @@ def test_all_accounts():
         },
         {
             "name": "Workshop Employee",
-            "email": "workshop@test.com",
+            "email": "xuong@gmail.com",
             "password": "123456",
             "role": "WORKSHOP_EMPLOYEE",
             "description": "Nhân viên xưởng - Tạo chi phí sản xuất"
@@ -152,7 +152,7 @@ def create_login_page_summary():
     print("1. Admin Test (admin@test.com) - ADMIN")
     print("2. Admin Example (admin@example.com) - ADMIN")
     print("3. Sales Manager (sales@example.com) - SALES")
-    print("4. Workshop Employee (workshop@test.com) - WORKSHOP_EMPLOYEE")
+    print("4. Workshop Employee (xuong@gmail.com) - WORKSHOP_EMPLOYEE")
     print("5. Transport Employee (transport@test.com) - TRANSPORT")
     print("6. Customer (customer@test.com) - CUSTOMER")
     print("7. Worker (worker@test.com) - WORKER")
