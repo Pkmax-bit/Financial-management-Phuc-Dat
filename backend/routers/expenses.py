@@ -143,6 +143,58 @@ async def get_expenses(
             detail=f"Failed to fetch expenses: {str(e)}"
         )
 
+# ============================================================================
+# PUBLIC ENDPOINTS - Các endpoint công khai (không cần authentication)
+# ============================================================================
+
+@router.get("/expenses/public", response_model=List[Expense])
+async def get_expenses_public():
+    """Get all expenses (public endpoint - no authentication required)"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("expenses").select("*").order("created_at", desc=True).execute()
+        
+        return [Expense(**expense) for expense in result.data]
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch expenses: {str(e)}"
+        )
+
+@router.get("/bills/public", response_model=List[Bill])
+async def get_bills_public():
+    """Get all bills (public endpoint - no authentication required)"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("bills").select("*").order("created_at", desc=True).execute()
+        
+        return [Bill(**bill) for bill in result.data]
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch bills: {str(e)}"
+        )
+
+@router.get("/vendors/public", response_model=List[Vendor])
+async def get_vendors_public():
+    """Get all vendors (public endpoint - no authentication required)"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("vendors").select("*").order("name", desc=False).execute()
+        
+        return [Vendor(**vendor) for vendor in result.data]
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch vendors: {str(e)}"
+        )
+
 @router.get("/expenses/{expense_id}", response_model=Expense)
 async def get_expense(
     expense_id: str,

@@ -69,7 +69,7 @@ class PurchaseOrder(PurchaseOrderBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class PurchaseOrderApproval(BaseModel):
     """Model for approving/rejecting purchase orders"""
@@ -99,7 +99,7 @@ class PurchaseOrderSummary(BaseModel):
     item_count: int = 0
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class PurchaseOrderStats(BaseModel):
     """Statistics for purchase orders"""

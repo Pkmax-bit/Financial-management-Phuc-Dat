@@ -64,7 +64,7 @@ class Budget(BudgetBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class BudgetSummary(BaseModel):
     """Summary model for budget lists"""
@@ -91,7 +91,7 @@ class BudgetSummary(BaseModel):
     total_variance_amount: float = 0.0
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class BudgetLine(BaseModel):
     """Detailed budget line model"""
@@ -108,14 +108,14 @@ class BudgetLine(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class BudgetWithLines(Budget):
     """Budget with detailed lines"""
     lines: List[BudgetLine] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class BudgetVariance(BaseModel):
     """Budget variance analysis"""

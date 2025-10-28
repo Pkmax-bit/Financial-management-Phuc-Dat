@@ -91,7 +91,7 @@ class ExpenseClaim(ExpenseClaimBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ExpenseClaimSummary(BaseModel):
     """Summary model for expense claim lists"""
@@ -122,7 +122,7 @@ class ExpenseClaimSummary(BaseModel):
     item_count: int = 0
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ExpenseClaimStats(BaseModel):
     """Statistics for expense claims"""
@@ -150,11 +150,11 @@ class ExpenseClaimItemDetail(BaseModel):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ExpenseClaimWithItems(ExpenseClaim):
     """Expense claim with detailed items"""
     items: List[ExpenseClaimItemDetail] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
