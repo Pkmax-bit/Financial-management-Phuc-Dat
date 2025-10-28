@@ -3296,12 +3296,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               {visibleColumns.expense_unit_price && (
                                 <td className="px-3 py-2 text-right">
                                   <input
-                                    type="text"
+                                    type="number"
                                     className="w-full border-2 border-gray-400 rounded px-2 py-1.5 text-sm text-right text-black font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     style={{ minWidth: '90px' }}
-                                    value={formatNumber(row.componentsUnitPrice[id] || 0)}
+                                    value={row.componentsUnitPrice[id] || 0}
                                     onChange={(e) => {
-                                      const unitPrice = parseFloat(e.target.value.replace(/[^\d.-]/g, '')) || 0
+                                      const unitPrice = parseFloat(e.target.value) || 0
                                       const quantity = row.componentsQuantity[id] || 0
                                       const amount = quantity * unitPrice
                                       updateRow(i, r => {
@@ -3312,6 +3312,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                       })
                                     }}
                                     placeholder="0"
+                                    min="0"
+                                    step="100000"
                                   />
                                 </td>
                               )}
