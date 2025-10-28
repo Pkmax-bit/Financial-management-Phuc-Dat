@@ -223,8 +223,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     unit_price: true,
     total_price: true,
     expense_percentage: true,
-    expense_quantity: false,
-    expense_unit_price: false,
+    expense_quantity: true,
+    expense_unit_price: true,
     expense_amount: true
   })
   
@@ -254,8 +254,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       unit_price: true,
       total_price: true,
       expense_percentage: true,
-      expense_quantity: false,
-      expense_unit_price: false,
+      expense_quantity: true,
+      expense_unit_price: true,
       expense_amount: true
     })
   }
@@ -978,6 +978,19 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             const componentsQuantity: Record<string, number> = {}
             const componentsUnitPrice: Record<string, number> = {}
             
+            // Load components quantity and unit price from invoice_items
+            if (it.components_quantity) {
+              Object.entries(it.components_quantity).forEach(([objectId, quantity]) => {
+                componentsQuantity[objectId] = Number(quantity) || 0
+              })
+            }
+            
+            if (it.components_unit_price) {
+              Object.entries(it.components_unit_price).forEach(([objectId, unitPrice]) => {
+                componentsUnitPrice[objectId] = Number(unitPrice) || 0
+              })
+            }
+            
             // Calculate componentsAmt from componentsPct and lineTotal
             Object.keys(componentsPct).forEach(id => {
               const pct = Number(componentsPct[id]) || 0
@@ -1293,6 +1306,19 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           const componentsQuantity: Record<string, number> = {}
           const componentsUnitPrice: Record<string, number> = {}
           
+          // Load components quantity and unit price from invoice_items
+          if (it.components_quantity) {
+            Object.entries(it.components_quantity).forEach(([objectId, quantity]) => {
+              componentsQuantity[objectId] = Number(quantity as any) || 0
+            })
+          }
+          
+          if (it.components_unit_price) {
+            Object.entries(it.components_unit_price).forEach(([objectId, unitPrice]) => {
+              componentsUnitPrice[objectId] = Number(unitPrice as any) || 0
+            })
+          }
+          
           Object.keys(componentsPct).forEach((key: string) => {
             const qty = it.quantity || 0
             const price = it.unit_price || 0
@@ -1381,7 +1407,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         status: 'pending',
         employee_id: dataToUse.formData.employee_id,
         expense_object_columns: mergedColumns,
-        invoice_items: mergedInvoiceItems,
+        invoice_items: mergedInvoiceItems.map((item: any) => ({
+          ...item,
+          components_pct: item.componentsPct || {},
+          components_quantity: item.componentsQuantity || {},
+          components_unit_price: item.componentsUnitPrice || {},
+          components_amount: item.componentsAmt || {}
+        })),
         updated_at: new Date().toISOString()
       }
       
@@ -1439,7 +1471,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           employee_id: dataToUse.formData.employee_id,
           id_parent: selectedExpenseToUpdate.id,
           expense_object_columns: [objectId],
-          invoice_items: dataToUse.invoiceItems
+          invoice_items: dataToUse.invoiceItems?.map((item: any) => ({
+            ...item,
+            components_pct: item.componentsPct || {},
+            components_quantity: item.componentsQuantity || {},
+            components_unit_price: item.componentsUnitPrice || {},
+            components_amount: item.componentsAmt || {}
+          })) || []
         }))
         
         if (childExpenses.length > 0) {
@@ -1470,7 +1508,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           employee_id: dataToUse.formData.employee_id,
           id_parent: selectedExpenseToUpdate.id,
           expense_object_columns: [objectId],
-          invoice_items: dataToUse.invoiceItems
+          invoice_items: dataToUse.invoiceItems?.map((item: any) => ({
+            ...item,
+            components_pct: item.componentsPct || {},
+            components_quantity: item.componentsQuantity || {},
+            components_unit_price: item.componentsUnitPrice || {},
+            components_amount: item.componentsAmt || {}
+          })) || []
         }))
         
         if (childExpenses.length > 0) {
@@ -1597,7 +1641,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         status: 'pending',
         employee_id: dataToUse.formData.employee_id,
         expense_object_columns: mergedTargetColumns,
-        invoice_items: mergedTargetInvoiceItems,
+        invoice_items: mergedTargetInvoiceItems.map((item: any) => ({
+          ...item,
+          components_pct: item.componentsPct || {},
+          components_quantity: item.componentsQuantity || {},
+          components_unit_price: item.componentsUnitPrice || {},
+          components_amount: item.componentsAmt || {}
+        })),
         updated_at: new Date().toISOString()
       }
       
@@ -1655,7 +1705,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           employee_id: dataToUse.formData.employee_id,
           id_parent: targetParentExpense.id,
           expense_object_columns: [objectId],
-          invoice_items: dataToUse.invoiceItems
+          invoice_items: dataToUse.invoiceItems?.map((item: any) => ({
+            ...item,
+            components_pct: item.componentsPct || {},
+            components_quantity: item.componentsQuantity || {},
+            components_unit_price: item.componentsUnitPrice || {},
+            components_amount: item.componentsAmt || {}
+          })) || []
         }))
         
         if (newChildExpenses.length > 0) {
@@ -1686,7 +1742,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           employee_id: dataToUse.formData.employee_id,
           id_parent: targetParentExpense.id,
           expense_object_columns: [objectId],
-          invoice_items: dataToUse.invoiceItems
+          invoice_items: dataToUse.invoiceItems?.map((item: any) => ({
+            ...item,
+            components_pct: item.componentsPct || {},
+            components_quantity: item.componentsQuantity || {},
+            components_unit_price: item.componentsUnitPrice || {},
+            components_amount: item.componentsAmt || {}
+          })) || []
         }))
         
         if (newChildExpenses.length > 0) {
@@ -1919,7 +1981,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             id_parent: formData.id_parent || null,
             expense_object_columns: selectedExpenseObjectIds,
         expense_object_totals: Object.values(directObjectTotals).some(val => val > 0) ? directObjectTotals : undefined,
-        invoice_items: getInvoiceItems()
+        invoice_items: getInvoiceItems().map((item: any) => ({
+          ...item,
+          components_pct: item.components_pct || {},
+          components_quantity: item.components_quantity || {},
+          components_unit_price: item.components_unit_price || {},
+          components_amount: item.components_amount || {}
+        }))
       }
 
       console.log('📤 Expense data prepared:', expenseData)
@@ -1998,7 +2066,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               updated_at: new Date().toISOString(),
               expense_object_columns: selectedExpenseObjectIds,
           expense_object_totals: Object.values(directObjectTotals).some(val => val > 0) ? directObjectTotals : undefined,
-          invoice_items: getInvoiceItems()
+          invoice_items: getInvoiceItems().map((item: any) => ({
+          ...item,
+          components_pct: item.components_pct || {},
+          components_quantity: item.components_quantity || {},
+          components_unit_price: item.components_unit_price || {},
+          components_amount: item.components_amount || {}
+        }))
             }
             
             // Add optional fields
@@ -2073,14 +2147,29 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       return []
     }
     
-    return invoiceItems.map(r => ({
-      product_name: r.productName,
-      unit_price: r.unitPrice,
-      quantity: r.quantity,
-      unit: r.unit,
-      line_total: r.lineTotal,
-      components_pct: r.componentsPct
-    }))
+    return invoiceItems.map(r => {
+      const components_pct: Record<string, number> = {}
+      const components_quantity: Record<string, number> = {}
+      const components_unit_price: Record<string, number> = {}
+      const components_amount: Record<string, number> = {}
+      selectedExpenseObjectIds.forEach(id => {
+        components_pct[id] = (r.componentsPct && r.componentsPct[id] !== undefined) ? Number(r.componentsPct[id]) || 0 : 0
+        components_quantity[id] = (r.componentsQuantity && r.componentsQuantity[id] !== undefined) ? Number(r.componentsQuantity[id]) || 0 : 0
+        components_unit_price[id] = (r.componentsUnitPrice && r.componentsUnitPrice[id] !== undefined) ? Number(r.componentsUnitPrice[id]) || 0 : 0
+        components_amount[id] = (r.componentsAmt && r.componentsAmt[id] !== undefined) ? Number(r.componentsAmt[id]) || 0 : 0
+      })
+      return {
+        product_name: r.productName,
+        unit_price: r.unitPrice,
+        quantity: r.quantity,
+        unit: r.unit,
+        line_total: r.lineTotal,
+        components_pct,
+        components_quantity,
+        components_unit_price,
+        components_amount
+      }
+    })
   }
   
   // ========================================
@@ -2419,7 +2508,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         expense_object_columns: Object.keys(dataToUse.directObjectTotals || {}),
-        invoice_items: dataToUse.invoiceItems || []
+        invoice_items: dataToUse.invoiceItems?.map((item: any) => ({
+          ...item,
+          components_quantity: item.componentsQuantity || {},
+          components_unit_price: item.componentsUnitPrice || {}
+        })) || []
       }
       
       console.log('📤 Parent expense data:', parentExpenseData)
@@ -3281,10 +3374,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                       const quantity = parseFloat(e.target.value) || 0
                                       const unitPrice = row.componentsUnitPrice[id] || 0
                                       const amount = quantity * unitPrice
+                                      const lineTotal = row.lineTotal || 0
+                                      const percentage = lineTotal > 0 ? (amount / lineTotal) * 100 : 0
+                                      
                                       updateRow(i, r => {
                                         const next = { ...r }
                                         next.componentsQuantity[id] = quantity
                                         next.componentsAmt[id] = amount
+                                        next.componentsPct[id] = Math.round(percentage * 100) / 100 // Làm tròn 2 chữ số thập phân
                                         return next
                                       })
                                     }}
@@ -3304,10 +3401,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                       const unitPrice = parseFloat(e.target.value) || 0
                                       const quantity = row.componentsQuantity[id] || 0
                                       const amount = quantity * unitPrice
+                                      const lineTotal = row.lineTotal || 0
+                                      const percentage = lineTotal > 0 ? (amount / lineTotal) * 100 : 0
+                                      
                                       updateRow(i, r => {
                                         const next = { ...r }
                                         next.componentsUnitPrice[id] = unitPrice
                                         next.componentsAmt[id] = amount
+                                        next.componentsPct[id] = Math.round(percentage * 100) / 100 // Làm tròn 2 chữ số thập phân
                                         return next
                                       })
                                     }}
@@ -3320,12 +3421,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               {visibleColumns.expense_amount && (
                                 <td className="px-3 py-2 text-right">
                                   <input
-                                    type="text"
+                                    type="number"
                                     className="w-full border-2 border-gray-400 rounded px-2 py-1.5 text-sm text-right text-black font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     style={{ minWidth: '100px' }}
-                                    value={formatNumber(row.componentsAmt[id] ?? 0)}
+                                    value={row.componentsAmt[id] || 0}
                                     onChange={(e) => {
-                                      const amount = parseFloat(e.target.value.replace(/[^\d.-]/g, '')) || 0
+                                      const amount = parseFloat(e.target.value) || 0
                                       const quantity = row.componentsQuantity[id] || 0
                                       const unitPrice = quantity > 0 ? amount / quantity : 0
                                       updateRow(i, r => {
@@ -3336,6 +3437,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                       })
                                     }}
                                     placeholder="0"
+                                    step="100000"
+                                    min="0"
                                   />
                                 </td>
                               )}
