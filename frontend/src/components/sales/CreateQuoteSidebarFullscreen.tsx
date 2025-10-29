@@ -133,16 +133,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
   const [visibleColumns, setVisibleColumns] = useState({
     name: true,
-    description: false,
+    description: true,
     quantity: true,
     unit: true,
     unit_price: true,
     total_price: true,
-    area: true,
-    volume: true,
-    height: true,
-    length: true,
-    depth: true
+    area: false,
+    volume: false,
+    height: false,
+    length: false,
+    depth: false
   })
 
   // Form data
@@ -441,16 +441,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const resetColumns = () => {
     setVisibleColumns({
       name: true,
-      description: false,
+      description: true,
       quantity: true,
       unit: true,
       unit_price: true,
       total_price: true,
-      area: true,
-      volume: true,
-      height: true,
-      length: true,
-      depth: true
+      area: false,
+      volume: false,
+      height: false,
+      length: false,
+      depth: false
     })
   }
 

@@ -26,6 +26,8 @@ import { getExpenseObjectsByRole } from '@/utils/expenseObjectPermissions'
 import { ExpenseObjectRoleFilter, useExpenseObjectRoleFilter, ExpenseObjectDisplayUtils } from '@/utils/expenseObjectRoleFilter'
 import ExpenseObjectSelector from '@/components/ExpenseObjectSelector'
 import ExpenseObjectMultiSelector from '@/components/ExpenseObjectMultiSelector'
+import ExpenseObjectMultiSelectorEnhanced from '@/components/ExpenseObjectMultiSelectorEnhanced'
+import ExpenseSummaryDisplay from '@/components/ExpenseSummaryDisplay'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
 import ExpenseColumnVisibilityDialog from './ExpenseColumnVisibilityDialog'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -217,7 +219,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const [showColumnDialog, setShowColumnDialog] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
     name: true,
-    description: false,
+    description: true,
     quantity: true,
     unit: true,
     unit_price: true,
@@ -248,7 +250,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const resetColumns = () => {
     setVisibleColumns({
       name: true,
-      description: false,
+      description: true,
       quantity: true,
       unit: true,
       unit_price: true,
@@ -279,6 +281,42 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
   // Form validation
   const [errors, setErrors] = useState<Record<string, string>>({})
+  
+  // System notification state
+  const [systemNotification, setSystemNotification] = useState<string>('')
+  
+  // Get validation status for button display
+  const getValidationStatus = () => {
+    if (!formData.description.trim()) {
+      return { 
+        message: '⚠️ Thiếu mô tả', 
+        color: 'orange',
+        details: 'Nhập mô tả chi phí'
+      }
+    }
+    if (!formData.project_id) {
+      return { 
+        message: '⚠️ Thiếu dự án', 
+        color: 'orange',
+        details: 'Chọn dự án'
+      }
+    }
+    if (!formData.expense_date) {
+      return { 
+        message: '⚠️ Thiếu ngày', 
+        color: 'orange',
+        details: 'Chọn ngày chi phí'
+      }
+    }
+    if ((Number(grandAllocationTotal) || 0) <= 0) {
+      return { 
+        message: '⚠️ Thiếu số tiền', 
+        color: 'orange',
+        details: 'Nhập số tiền kế hoạch'
+      }
+    }
+    return null
+  }
 
   // Invoice-like table state (left side)
   interface InvoiceItemRow {
@@ -286,6 +324,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     index: number // STT
     productCode?: string // Mã sản phẩm
     productName: string // Tên sản phẩm
+    description?: string // Mô tả sản phẩm
     unitPrice: number // Đơn giá
     quantity: number // Số lượng
     unit: string // Đơn vị
@@ -320,6 +359,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       index: 1,
       productCode: '',
       productName: 'Tủ bếp trên',
+      description: '',
       unitPrice: 0,
       quantity: 0,
       unit: 'cái',
@@ -352,6 +392,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         index: prev.length + 1,
         productCode: '',
         productName: '',
+        description: '',
         unitPrice: 0,
         quantity: 0,
         unit: 'cái',
@@ -502,11 +543,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       // Step 5: Set state
       setExpenseObjectsOptions(sortedOpts)
       
-      // Step 6: Auto-select objects
-      if (result.selectedIds.length > 0) {
-        setSelectedExpenseObjectIds(result.selectedIds)
-        console.log('🎯 Auto-selected objects:', result.selectedIds)
-      }
+      // Step 6: Auto-select objects - DISABLED per requirement
+      // Do not auto-select any objects; user will choose manually
+      console.log('ℹ️ Auto-selection disabled: User must manually choose expense objects')
       
       // Step 7: Set parent object
       if (result.parentObject) {
@@ -605,6 +644,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               index: rows.length + 1,
               productCode: it.product_code || it.code || '',
               productName: it.product_name || it.name || it.description || '',
+              description: it.description || '',
               unitPrice,
               quantity,
               unit: it.unit || 'cái',
@@ -647,6 +687,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               index: rows.length + 1,
               productCode: it.product_code || it.code || '',
               productName: it.name_product || it.description || '',
+              description: it.description || '',
               unitPrice,
               quantity,
               unit: it.unit || 'cái',
@@ -838,38 +879,19 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }, [expenseObjectsOptions, isEdit, selectedExpenseObjectIds.length, userRole, category])
 
-  // Auto-select children objects for Supplier when creating actual expense
+  // Auto-select children objects for Supplier when creating actual expense - DISABLED per requirement
   useEffect(() => {
     if (userRole === 'Supplier' && category === 'actual' && expenseObjectsOptions.length > 0 && !isEdit) {
-      // Tìm workshop parent object
-      const workshopParent = expenseObjectsOptions.find(o => 
-        o.is_parent && (o.name.includes('Xưởng') || o.name.includes('xuong') || o.name.includes('sản xuất'))
-      )
-      
-      if (workshopParent) {
-        setWorkshopParentObject(workshopParent)
-        // Auto-select tất cả children objects (không chọn parent)
-        const childrenIds = expenseObjectsOptions.filter(o => o.parent_id === workshopParent.id).map(o => o.id)
-        if (childrenIds.length > 0) {
-          setSelectedExpenseObjectIds(childrenIds)
-          console.log(`✅ Auto-selected ${childrenIds.length} children objects for Supplier:`, childrenIds)
-        }
-      }
+      // Do not auto-select any expense objects; user will choose manually
+      console.log('ℹ️ Auto-selection disabled: Supplier must manually choose expense objects')
     }
   }, [userRole, category, expenseObjectsOptions, isEdit])
 
-  // Auto-select children objects for all roles when expense objects are loaded and no selection exists
+  // Auto-select children objects for all roles when expense objects are loaded - DISABLED per requirement
   useEffect(() => {
     if (expenseObjectsOptions.length > 0 && selectedExpenseObjectIds.length === 0 && userRole && category === 'actual' && !isEdit) {
-      console.log(`🔄 Auto-selecting children objects for ${userRole} after expense objects loaded`)
-      
-      // Tự động chọn tất cả đối tượng con cho actual expenses
-      const childrenObjects = expenseObjectsOptions.filter(o => o.parent_id)
-      if (childrenObjects.length > 0) {
-        const childrenIds = childrenObjects.map(o => o.id)
-        setSelectedExpenseObjectIds(childrenIds)
-        console.log('🎯 Auto-selected all children objects:', childrenIds)
-      }
+      // Do not auto-select; user will choose manually
+      console.log('ℹ️ Auto-selection disabled: Users must manually choose expense objects')
     }
   }, [expenseObjectsOptions, selectedExpenseObjectIds.length, userRole, category, isEdit])
 
@@ -1003,6 +1025,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               index: idx + 1,
               productCode: '',
               productName: it.product_name || it.description || '',
+              description: it.description || '',
               unitPrice: Number(it.unit_price) || 0,
               quantity: Number(it.quantity) || 0,
               unit: it.unit || 'cái',
@@ -1790,7 +1813,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
 
     if (!formData.description.trim()) {
-      newErrors.description = 'Vui lòng nhập mô tả chi phí'
+      newErrors.description = '⚠️ Hệ thống yêu cầu: Vui lòng nhập mô tả chi phí để tiếp tục'
     }
 
     if (!formData.expense_date) {
@@ -1814,7 +1837,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   }
 
   const handleSubmit = async () => {
+    // Clear previous system notification
+    setSystemNotification('')
+    
     if (!validateForm()) {
+      // Thông báo hệ thống nếu chưa nhập mô tả
+      if (!formData.description.trim()) {
+        setSystemNotification('⚠️ Hệ thống yêu cầu: Vui lòng nhập mô tả chi phí để tiếp tục lưu dữ liệu.')
+        console.warn('⚠️ Hệ thống: Chưa nhập mô tả chi phí')
+      }
       return
     }
 
@@ -2033,113 +2064,391 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // FUNCTION TẠO CHI PHÍ THỰC TẾ (ACTUAL)
   // ========================================
   const createActualExpense = async () => {
-    console.log('💰 ===== CREATING ACTUAL EXPENSE =====')
+    console.log('💰 ===== CREATING ACTUAL EXPENSE (SIMPLIFIED) =====')
     
     try {
-          const createdExpenses = []
-          
-          for (const expenseObjectId of selectedExpenseObjectIds) {
-        console.log('🔄 Processing expense object:', expenseObjectId)
+      // Validate basic requirements first
+      if (!formData.project_id) {
+        alert('Vui lòng chọn dự án!')
+        return
+      }
+      
+      if (!formData.description || formData.description.trim() === '') {
+        alert('Vui lòng nhập mô tả chi phí!')
+        return
+      }
+      
+      if (selectedExpenseObjectIds.length === 0) {
+        alert('Vui lòng chọn ít nhất một đối tượng chi phí!')
+        return
+      }
+      
+      const createdExpenses = []
+      
+      // If we have invoice_items, save ONE combined expense with allocations
+      let builtInvoiceItems: any[] = []
+      try {
+        const items = getInvoiceItems()
+        if (Array.isArray(items) && items.length > 0) {
+          builtInvoiceItems = items
+        }
+      } catch (e) {
+        console.warn('⚠️ getInvoiceItems failed, continue without items', e)
+      }
+
+      if (builtInvoiceItems.length > 0 && Array.isArray(selectedExpenseObjectIds) && selectedExpenseObjectIds.length > 0) {
+        // Compute total amount from invoice_items components for selected objects
+        const selectedIds = selectedExpenseObjectIds
+        const totalAmount = builtInvoiceItems.reduce((sum: number, it: any) => {
+          const compAmt = it?.components_amount || {}
+          let itemSum = 0
+          selectedIds.forEach((id: string) => {
+            itemSum += Number(compAmt[id] || 0)
+          })
+          return sum + itemSum
+        }, 0)
+
+        const combinedId = (globalThis as any)?.crypto?.randomUUID
+          ? (globalThis as any).crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+              const r = Math.random() * 16 | 0
+              const v = c === 'x' ? r : (r & 0x3 | 0x8)
+              return v.toString(16)
+            })
+
+        const combinedExpense: any = {
+          id: combinedId,
+          project_id: formData.project_id,
+          description: formData.description,
+          expense_object_id: selectedIds[0],
+          expense_object_columns: selectedIds,
+          amount: Number(totalAmount) || 0,
+          currency: formData.currency || 'VND',
+          expense_date: formData.expense_date ? formData.expense_date.toString() : new Date().toISOString().split('T')[0],
+          status: 'pending',
+          expense_code: `EXP-${Date.now()}-COMB-${Math.random().toString(36).substr(2, 6)}`,
+          invoice_items: builtInvoiceItems
+        }
+        if (formData.employee_id) combinedExpense.employee_id = formData.employee_id
+        if (formData.notes) combinedExpense.notes = formData.notes
+        if (formData.receipt_url) combinedExpense.receipt_url = formData.receipt_url
+        if (formData.id_parent) combinedExpense.id_parent = formData.id_parent
+
+        console.log('📤 Creating combined expense with data:', {
+          id: combinedExpense.id,
+          project_id: combinedExpense.project_id,
+          amount: combinedExpense.amount,
+          expense_object_id: combinedExpense.expense_object_id,
+          expense_object_columns: combinedExpense.expense_object_columns,
+          items: builtInvoiceItems.length
+        })
+
+        const { data, error } = await supabase
+          .from('project_expenses')
+          .insert(combinedExpense)
+          .select()
+        if (error) {
+          console.error('❌ Error creating combined expense:', error)
+          throw new Error(error.message || 'Insert failed')
+        }
+        console.log('✅ Combined expense created:', data)
+        createdExpenses.push(data?.[0])
+
+        // Reset and exit early (no per-object splitting)
+        console.log('📊 Total created expenses:', createdExpenses.length)
+        if (createdExpenses.length === 0) {
+          alert('Không có chi phí nào được tạo! Vui lòng kiểm tra lại dữ liệu.')
+          return
+        }
+        setDirectObjectTotals({})
+        alert(`Tạo thành công ${createdExpenses.length} chi phí thực tế!`)
+        onSuccess()
+        onClose()
+        resetForm()
+        return
+      }
+
+      console.log('🔄 Processing', selectedExpenseObjectIds.length, 'expense objects')
+      
+      for (let i = 0; i < selectedExpenseObjectIds.length; i++) {
+        const expenseObjectId = selectedExpenseObjectIds[i]
+        console.log(`🔄 Processing expense object ${i + 1}/${selectedExpenseObjectIds.length}:`, expenseObjectId)
         
+        // Calculate amount
         const amount = Object.values(directObjectTotals).some(val => val > 0)
           ? (directObjectTotals[expenseObjectId] || 0)
           : (expenseObjectTotals[expenseObjectId] || 0)
-        
-        console.log('📊 Amount for object:', amount)
         
         if (amount <= 0) {
           console.log('⚠️ Skipping expense object with zero amount:', expenseObjectId)
           continue
         }
         
-            const expenseData: any = {
-              id: crypto.randomUUID(),
+        // Generate UUID for primary key id (DB has no default)
+        const newId = (globalThis as any)?.crypto?.randomUUID
+          ? (globalThis as any).crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+              const r = Math.random() * 16 | 0
+              const v = c === 'x' ? r : (r & 0x3 | 0x8)
+              return v.toString(16)
+            })
+        
+        // Create simple expense data - only essential fields
+        const expenseData: any = {
+          id: newId,
+          project_id: formData.project_id,
+          description: formData.description,
+          expense_object_id: expenseObjectId,
+          amount: Number(amount),
+          currency: formData.currency || 'VND',
+          expense_date: formData.expense_date ? formData.expense_date.toString() : new Date().toISOString().split('T')[0],
+          status: 'pending',
+          expense_code: `EXP-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 6)}`
+        }
+            
+        // Add optional fields only if they exist
+        if (formData.employee_id) {
+          expenseData.employee_id = formData.employee_id
+        }
+        if (formData.notes) {
+          expenseData.notes = formData.notes
+        }
+        if (formData.receipt_url) {
+          expenseData.receipt_url = formData.receipt_url
+        }
+        if (formData.id_parent) {
+          expenseData.id_parent = formData.id_parent
+        }
+        
+        // Attach invoice_items (JSONB) if available
+        try {
+          const items = getInvoiceItems()
+          if (Array.isArray(items) && items.length > 0) {
+            expenseData.invoice_items = items
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not build invoice_items, skipping. Error:', e)
+        }
+        
+        // Attach expense_object_columns (JSONB) as selected IDs if present
+        if (Array.isArray(selectedExpenseObjectIds) && selectedExpenseObjectIds.length > 0) {
+          expenseData.expense_object_columns = selectedExpenseObjectIds
+        }
+            
+        console.log('📤 Creating expense with data:', {
+          id: expenseData.id,
+          project_id: expenseData.project_id,
+          description: expenseData.description,
+          expense_object_id: expenseData.expense_object_id,
+          amount: expenseData.amount,
+          currency: expenseData.currency,
+          expense_date: expenseData.expense_date,
+          status: expenseData.status,
+          expense_code: expenseData.expense_code
+        })
+            
+        try {
+          const { data, error } = await supabase
+            .from('project_expenses')
+            .insert(expenseData)
+            .select()
+          
+          if (error) {
+            console.error('❌ Error creating expense:', error)
+            console.error('❌ Error message:', error.message)
+            console.error('❌ Error details:', error.details)
+            console.error('❌ Error hint:', error.hint)
+            console.error('❌ Error code:', error.code)
+            
+            // Try with even simpler data
+            const simpleData = {
+              id: (globalThis as any)?.crypto?.randomUUID
+                ? (globalThis as any).crypto.randomUUID()
+                : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                    const r = Math.random() * 16 | 0
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+                    return v.toString(16)
+                  }),
               project_id: formData.project_id,
               description: formData.description,
               expense_object_id: expenseObjectId,
-              role: selectedRole,
-          amount: amount,
-              currency: formData.currency,
-              expense_date: formData.expense_date,
-          status: 'approved',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              expense_object_columns: selectedExpenseObjectIds,
-          expense_object_totals: Object.values(directObjectTotals).some(val => val > 0) ? directObjectTotals : undefined,
-          invoice_items: getInvoiceItems().map((item: any) => ({
-          ...item,
-          components_pct: item.components_pct || {},
-          components_quantity: item.components_quantity || {},
-          components_unit_price: item.components_unit_price || {},
-          components_amount: item.components_amount || {}
-        }))
+              amount: Number(amount),
+              currency: 'VND',
+              expense_date: new Date().toISOString().split('T')[0],
+              status: 'pending'
             }
             
-            // Add optional fields
-            if (formData.employee_id) expenseData.employee_id = formData.employee_id
-            if (formData.notes) expenseData.notes = formData.notes
-            if (formData.receipt_url) expenseData.receipt_url = formData.receipt_url
-            if (formData.id_parent) expenseData.id_parent = formData.id_parent
-        
-        console.log('📤 Expense data for object:', expenseData)
+            console.log('🔄 Trying with minimal data:', simpleData)
             
-            if (isEdit && editId) {
-          console.log('📤 Updating actual expense:', editId)
-              const updateData = { ...expenseData }
-              delete (updateData as any).id
-              delete (updateData as any).created_at
-              const { error } = await supabase
-                .from('project_expenses')
-                .update(updateData)
-                .eq('id', editId)
-          if (error) {
-            console.error('❌ Error updating actual expense:', error)
-            throw error
-          }
-          console.log('✅ Actual expense updated successfully')
+            const { data: simpleResult, error: simpleError } = await supabase
+              .from('project_expenses')
+              .insert(simpleData)
+              .select()
+            
+            if (simpleError) {
+              console.error('❌ Even minimal data failed:', simpleError)
+              throw new Error(`Failed to create expense: ${simpleError.message}`)
             } else {
-          console.log('📤 Creating actual expense for object:', expenseObjectId, 'amount:', amount)
-              const { data, error } = await supabase
-                .from('project_expenses')
-                .insert(expenseData)
-                .select()
-          if (error) {
-            console.error('❌ Error creating actual expense:', error)
-            throw error
-          }
-          console.log('✅ Actual expense created:', data)
-              createdExpenses.push(data[0])
+              console.log('✅ Minimal data succeeded:', simpleResult)
+              createdExpenses.push(simpleResult[0])
             }
+          } else {
+            console.log('✅ Expense created successfully:', data)
+            createdExpenses.push(data[0])
           }
-          
+        } catch (insertError) {
+          console.error('❌ Insert error for expense object:', expenseObjectId, insertError)
+          throw insertError
+        }
+      }
+      
       console.log('📊 Total created expenses:', createdExpenses.length)
-          
-      // Update parent if exists
-          if (createdExpenses.length > 0 && createdExpenses[0].id_parent) {
-        console.log('🔄 Updating parent expense amount...')
-        await updateParentExpenseAmount(createdExpenses[0].id_parent, 'project_expenses')
+      
+      if (createdExpenses.length === 0) {
+        alert('Không có chi phí nào được tạo! Vui lòng kiểm tra lại dữ liệu.')
+        return
       }
       
       // Reset form
       setDirectObjectTotals({})
       
       // Show success notification and close dialog
-      alert('Tạo chi phí thực tế thành công!')
+      alert(`Tạo thành công ${createdExpenses.length} chi phí thực tế!`)
       onSuccess()
       onClose()
       resetForm()
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('❌ Error in createActualExpense:', error)
-      alert('Lỗi khi tạo chi phí thực tế!')
+      alert(`Lỗi khi tạo chi phí thực tế: ${error?.message || 'Unknown error'}`)
     }
   }
   
   // ========================================
+  // TEST FUNCTION: KIỂM TRA DỮ LIỆU CÓ LƯU ĐƯỢC KHÔNG
+  // ========================================
+  const testSaveData = async () => {
+    const uniqueCode = `EXP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-TEST`
+    const testId = (globalThis as any)?.crypto?.randomUUID
+      ? (globalThis as any).crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0
+          const v = c === 'x' ? r : (r & 0x3 | 0x8)
+          return v.toString(16)
+        })
+    console.log('🔑 Generated unique expense code:', uniqueCode)
+    console.log('🆔 Generated test id:', testId)
+    
+    const testData = {
+      "id": testId,
+      "project_id": "1623f25e-8f63-4525-abcd-219b993e9f1b",
+      "description": "d",
+      "expense_object_id": "198ecff2-1cd9-416e-acae-07b918eb5f43",
+      "amount": 477700,
+      "currency": "VND",
+      "expense_date": "2025-10-29",
+      "status": "pending",
+      "expense_code": uniqueCode,
+      "employee_id": "27112c37-d9eb-46b5-92a5-a5c7a150a8bc",
+      "invoice_items": [
+        {
+          "product_name": "Ban lam viec go",
+          "description": "Ban lam viec go tu nhien, kich thuoc 120x60cm",
+          "unit_price": 3500000,
+          "quantity": 1,
+          "unit": "cai",
+          "line_total": 3500000,
+          "components_pct": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 6.67
+          },
+          "components_quantity": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 10
+          },
+          "components_unit_price": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 23330
+          },
+          "components_amount": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 233300
+          }
+        },
+        {
+          "product_name": "Ghe van phong",
+          "description": "Ghe van phong co the dieu chinh do cao, mau den",
+          "unit_price": 1200000,
+          "quantity": 1,
+          "unit": "cai",
+          "line_total": 1200000,
+          "components_pct": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 20.37
+          },
+          "components_quantity": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 10
+          },
+          "components_unit_price": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 24440
+          },
+          "components_amount": {
+            "198ecff2-1cd9-416e-acae-07b918eb5f43": 244400
+          }
+        }
+      ],
+      "expense_object_columns": [
+        "198ecff2-1cd9-416e-acae-07b918eb5f43"
+      ]
+    }
+    
+    console.log('🧪 Testing save data:', testData)
+    
+    try {
+      // Test Supabase connection first
+      const { data: testData, error: testError } = await supabase
+        .from('project_expenses')
+        .select('id')
+        .limit(1)
+      
+      if (testError) {
+        console.error('❌ Supabase connection test failed:', testError)
+        return false
+      }
+      
+      console.log('✅ Supabase connection test passed')
+      
+      // Try to insert the test data
+      console.log('📤 Inserting test data:', JSON.stringify(testData, null, 2))
+      const { data, error } = await supabase
+        .from('project_expenses')
+        .insert(testData)
+        .select()
+      
+      if (error) {
+        console.error('❌ Test data insert failed:', error)
+        console.error('❌ Error details:', {
+          message: error?.message || 'No message',
+          details: error?.details || 'No details',
+          hint: error?.hint || 'No hint',
+          code: error?.code || 'No code'
+        })
+        console.error('❌ Full error object:', JSON.stringify(error, null, 2))
+        console.error('❌ Error type:', typeof error)
+        console.error('❌ Error keys:', Object.keys(error || {}))
+        return false
+      }
+      
+      console.log('✅ Test data inserted successfully:', data)
+      return true
+      
+    } catch (error) {
+      console.error('❌ Test save error:', error)
+      return false
+    }
+  }
+
+  // ========================================
   // HELPER FUNCTION: LẤY INVOICE ITEMS
   // ========================================
   const getInvoiceItems = () => {
-    const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-    const hasProductDetails = invoiceItems.some(row => 
+    const hasDirectObjectInputs = directObjectTotals && Object.values(directObjectTotals).some(val => val > 0)
+    const hasProductDetails = invoiceItems && invoiceItems.some(row => 
       row.productName.trim() !== '' || row.unitPrice > 0 || row.quantity > 0
     )
     
@@ -2147,29 +2456,30 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       return []
     }
     
-    return invoiceItems.map(r => {
+    return Array.isArray(invoiceItems) ? invoiceItems.map((r: any) => {
       const components_pct: Record<string, number> = {}
       const components_quantity: Record<string, number> = {}
       const components_unit_price: Record<string, number> = {}
       const components_amount: Record<string, number> = {}
-      selectedExpenseObjectIds.forEach(id => {
+      Array.isArray(selectedExpenseObjectIds) ? selectedExpenseObjectIds.forEach((id: string) => {
         components_pct[id] = (r.componentsPct && r.componentsPct[id] !== undefined) ? Number(r.componentsPct[id]) || 0 : 0
         components_quantity[id] = (r.componentsQuantity && r.componentsQuantity[id] !== undefined) ? Number(r.componentsQuantity[id]) || 0 : 0
         components_unit_price[id] = (r.componentsUnitPrice && r.componentsUnitPrice[id] !== undefined) ? Number(r.componentsUnitPrice[id]) || 0 : 0
         components_amount[id] = (r.componentsAmt && r.componentsAmt[id] !== undefined) ? Number(r.componentsAmt[id]) || 0 : 0
-      })
+      }) : null
       return {
-        product_name: r.productName,
-        unit_price: r.unitPrice,
-        quantity: r.quantity,
-        unit: r.unit,
-        line_total: r.lineTotal,
-        components_pct,
-        components_quantity,
-        components_unit_price,
-        components_amount
+        product_name: r.productName || '',
+        description: r.description || '',
+        unit_price: r.unitPrice || 0,
+        quantity: r.quantity || 0,
+        unit: r.unit || '',
+        line_total: r.lineTotal || 0,
+        components_pct: components_pct || {},
+        components_quantity: components_quantity || {},
+        components_unit_price: components_unit_price || {},
+        components_amount: components_amount || {}
       }
-    })
+    }) : []
   }
   
   // ========================================
@@ -3176,20 +3486,67 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <label className="block text-base font-semibold text-gray-900 mb-3">
                       <div className="flex items-center space-x-2">
+                        <div className="p-1.5 bg-blue-100 rounded-lg">
+                          <Target className="w-4 h-4 text-blue-600" />
+                        </div>
                         <span>Đối tượng chi phí (có thể chọn nhiều)</span>
                       </div>
+                      <div className="text-sm font-normal text-gray-600 mt-1 ml-8">
+                        Chọn các đối tượng chi phí để phân bổ ngân sách dự án
+                      </div>
                     </label>
-                    <div className="grid grid-cols-1 gap-2">
-                      <ExpenseObjectMultiSelector
-                        values={selectedExpenseObjectIds}
-                        onChange={setSelectedExpenseObjectIds}
-                        placeholder="Chọn nhiều đối tượng chi phí để phân bổ"
-                        expenseObjects={expenseObjectsOptions}
-                      />
-                      {/* Removed primary object optional selection per request */}
+                    
+                    <div className="space-y-3">
+                      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-sm hover:border-blue-400 transition-colors">
+                        <ExpenseObjectMultiSelectorEnhanced
+                          values={selectedExpenseObjectIds}
+                          onChange={setSelectedExpenseObjectIds}
+                          placeholder="Chọn nhiều đối tượng chi phí để phân bổ"
+                          expenseObjects={expenseObjectsOptions}
+                        />
+                      </div>
+                      
+                      {/* Selected Objects Summary */}
+                      {selectedExpenseObjectIds.length > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center space-x-2">
+                              <CheckCircle className="w-4 h-4 text-blue-600" />
+                              <span className="text-sm font-semibold text-blue-800">
+                                Đã chọn {selectedExpenseObjectIds.length} đối tượng
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedExpenseObjectIds([])}
+                              className="text-xs text-blue-600 hover:text-blue-800 underline"
+                            >
+                              Bỏ chọn tất cả
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedExpenseObjectIds.slice(0, 4).map(id => {
+                              const obj = expenseObjectsOptions.find(o => o.id === id)
+                              return obj ? (
+                                <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                                  <span className="truncate max-w-24">{obj.name}</span>
+                                  <span className="text-xs bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full">
+                                    L{obj.level || 1}
+                                  </span>
+                                </span>
+                              ) : null
+                            })}
+                            {selectedExpenseObjectIds.length > 4 && (
+                              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                                +{selectedExpenseObjectIds.length - 4} nữa
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -3199,7 +3556,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </label>
                     <textarea
                       value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, description: e.target.value })
+                        // Clear system notification when user starts typing
+                        if (systemNotification && e.target.value.trim()) {
+                          setSystemNotification('')
+                        }
+                      }}
                       className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
                         errors.description ? 'border-red-300 bg-red-50' : 'border-gray-300'
                       }`}
@@ -3207,10 +3570,19 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       placeholder="Mô tả chi tiết về chi phí dự án..."
                     />
                     {errors.description && (
-                      <p className="text-red-500 text-xs mt-1 flex items-center">
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        {errors.description}
-                      </p>
+                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="flex items-start">
+                          <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                          <div>
+                            <p className="text-red-700 text-sm font-medium">
+                              {errors.description}
+                            </p>
+                            <p className="text-red-600 text-xs mt-1">
+                              Mô tả chi phí giúp quản lý và theo dõi ngân sách dự án hiệu quả hơn.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3222,6 +3594,23 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           {/* Split area: Left invoice details, Right amount/additional sections */}
           <div className="flex-1 overflow-hidden mt-6">
             <div className="grid grid-cols-1 gap-6 h-full">
+              {/* System Notification */}
+              {systemNotification && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 mr-3 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-orange-800 font-medium text-sm">
+                        Thông báo hệ thống
+                      </h4>
+                      <p className="text-orange-700 text-sm mt-1">
+                        {systemNotification}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Invoice-like details full width */}
               <div className="h-full overflow-auto bg-white border border-gray-200 rounded-lg">
                 <div className="p-4 border-b border-gray-200">
@@ -3293,6 +3682,17 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                 value={row.productName}
                                 onChange={(e) => updateRow(i, r => ({ ...r, productName: e.target.value }))}
                                 disabled
+                              />
+                            </td>
+                          )}
+                          {visibleColumns.description && (
+                            <td className="px-3 py-2 bg-white">
+                              <input
+                                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                                style={{ minWidth: '140px' }}
+                                value={row.description || ''}
+                                onChange={(e) => updateRow(i, r => ({ ...r, description: e.target.value }))}
+                                placeholder="Mô tả sản phẩm..."
                               />
                             </td>
                           )}
@@ -3529,6 +3929,27 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   </div>
                 </div>
             </div>
+
+            {/* Expense Summary Display - Enhanced with hierarchical totals */}
+            {selectedExpenseObjectIds.length > 0 && (
+              <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  <span>Tóm tắt chi phí theo cấp độ</span>
+                </h3>
+                <ExpenseSummaryDisplay
+                  selectedObjectIds={selectedExpenseObjectIds}
+                  expenseObjects={expenseObjectsOptions}
+                  expenseAmounts={(() => {
+                    const amounts: { [key: string]: number } = {}
+                    selectedExpenseObjectIds.forEach(id => {
+                      amounts[id] = directObjectTotals[id] || expenseObjectTotals[id] || 0
+                    })
+                    return amounts
+                  })()}
+                />
+              </div>
+            )}
 
             {/* Total Cost Breakdown Section - Always visible */}
             {/* Hiển thị chi phí đối tượng cha khi có parent object và children được chọn */}
@@ -3981,27 +4402,43 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               Hủy
             </button>
             <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent rounded-md disabled:opacity-50 flex items-center space-x-2"
+              onClick={testSaveData}
+              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-transparent rounded-md"
             >
-              <Save className="h-4 w-4" />
-              <span>Cập nhật</span>
+              🧪 Test Save
             </button>
             <button
               onClick={handleSubmit}
               disabled={submitting}
               className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 flex items-center space-x-2 ${
-                category === 'actual' 
-                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
+                getValidationStatus() 
+                  ? 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-500' 
                   : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
               }`}
+              title={getValidationStatus()?.details || ''}
+            >
+              <Save className="h-4 w-4" />
+              <span>
+                {getValidationStatus()?.message || 'Cập nhật'}
+              </span>
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 flex items-center space-x-2 ${
+                getValidationStatus() 
+                  ? 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-500' 
+                  : category === 'actual' 
+                    ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
+                    : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+              }`}
+              title={getValidationStatus()?.details || ''}
             >
               <Save className="h-4 w-4" />
               <span>
                 {submitting 
                   ? 'Đang lưu...' 
-                  : (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch')
+                  : getValidationStatus()?.message || (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch')
                 }
               </span>
             </button>

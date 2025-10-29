@@ -23,20 +23,29 @@ export default function NotificationBell() {
       }
 
       // Lấy dữ liệu trực tiếp từ bảng notifications trong database (giống trang thông báo)
+      // RLS thường yêu cầu lọc theo user_id
       const { data: notifications, error } = await supabase
         .from('notifications')
         .select('id, is_read')
         .eq('is_read', false)
+        .eq('user_id', session.user.id)
 
       if (error) {
         console.error('Error fetching notifications from database:', error)
+        console.error('Error details:', {
+          message: (error as any)?.message,
+          details: (error as any)?.details,
+          hint: (error as any)?.hint,
+          code: (error as any)?.code
+        })
         setHasError(true)
         return
       }
 
       setUnreadCount(notifications?.length || 0)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching unread count:', error)
+      console.error('Error message:', error?.message)
       setHasError(true)
     } finally {
       setIsLoading(false)
