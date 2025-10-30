@@ -186,3 +186,4 @@ focus:border-blue-500 /* ✅ Consistent focus color */
 
 
 
+

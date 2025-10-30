@@ -997,8 +997,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           const rows: InvoiceItemRow[] = data.invoice_items.map((it: any, idx: number) => {
             const componentsPct = it.components_pct || {}
             const componentsAmt: Record<string, number> = {}
-            const componentsQuantity: Record<string, number> = {}
-            const componentsUnitPrice: Record<string, number> = {}
+            const componentsQuantity: Record<string, number> = it.components_quantity || {}
+            const componentsUnitPrice: Record<string, number> = it.components_unit_price || {}
             
             // Load components quantity and unit price from invoice_items
             if (it.components_quantity) {
@@ -1326,8 +1326,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         const rows: InvoiceItemRow[] = parentData.invoice_items.map((it: any, idx: number) => {
           const componentsPct = it.components_pct || {}
           const componentsAmt: Record<string, number> = {}
-          const componentsQuantity: Record<string, number> = {}
-          const componentsUnitPrice: Record<string, number> = {}
+          const componentsQuantity: Record<string, number> = it.components_quantity || {}
+          const componentsUnitPrice: Record<string, number> = it.components_unit_price || {}
           
           // Load components quantity and unit price from invoice_items
           if (it.components_quantity) {
@@ -2456,6 +2456,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       return []
     }
     
+<<<<<<< Updated upstream
     return Array.isArray(invoiceItems) ? invoiceItems.map((r: any) => {
       const components_pct: Record<string, number> = {}
       const components_quantity: Record<string, number> = {}
@@ -2480,6 +2481,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         components_amount: components_amount || {}
       }
     }) : []
+=======
+    return invoiceItems.map(r => ({
+      product_name: r.productName,
+      unit_price: r.unitPrice,
+      quantity: r.quantity,
+      unit: r.unit,
+      line_total: r.lineTotal,
+      components_pct: r.componentsPct,
+      components_quantity: r.componentsQuantity,
+      components_unit_price: r.componentsUnitPrice
+    }))
+>>>>>>> Stashed changes
   }
   
   // ========================================

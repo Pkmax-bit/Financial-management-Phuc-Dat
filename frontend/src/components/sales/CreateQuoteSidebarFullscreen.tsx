@@ -196,6 +196,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   ])
 
+  // Shared components schema for header/body alignment
+  const headerComponents = (Array.isArray(items?.[0]?.components) ? (items[0].components as any[]) : [])
+
   useEffect(() => {
     if (isOpen) {
       fetchCustomers()
@@ -1030,241 +1033,247 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <div className="bg-white border border-gray-300 rounded-md overflow-hidden min-w-[1800px]">
-                {/* Header */}
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-300">
+              <div className="overflow-auto max-h-[60vh]">
+                <div className="bg-white border border-gray-300 rounded-md inline-block min-w-max">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 sticky top-0 z-10 shadow-sm">
                     <div className="grid gap-4 text-sm font-medium text-black" style={{
-                    gridTemplateColumns: [
-                      visibleColumns.name && 'minmax(260px, 1fr)',
-                      visibleColumns.description && 'minmax(320px, 1fr)', 
-                      visibleColumns.quantity && 'minmax(70px, 1fr)',
-                      visibleColumns.unit && 'minmax(70px, 1fr)',
-                      visibleColumns.unit_price && 'minmax(120px, 1fr)',
-                      visibleColumns.total_price && 'minmax(120px, 1fr)',
-                      visibleColumns.area && 'minmax(90px, 1fr)',
-                      visibleColumns.volume && 'minmax(90px, 1fr)',
-                      visibleColumns.height && 'minmax(90px, 1fr)',
-                      visibleColumns.length && 'minmax(90px, 1fr)',
-                      visibleColumns.depth && 'minmax(90px, 1fr)',
-                      visibleColumns.components_block && 'minmax(480px, 2fr)'
-                    ].filter(Boolean).join(' ')
-                  }}>
-                    {visibleColumns.name && <div>Tên sản phẩm</div>}
-                    {visibleColumns.description && <div>Mô tả</div>}
-                    {visibleColumns.quantity && <div>Số lượng</div>}
-                    {visibleColumns.unit && <div>Đơn vị</div>}
-                    {visibleColumns.unit_price && <div>Đơn giá</div>}
-                    {visibleColumns.total_price && <div>Thành tiền</div>}
-                    {visibleColumns.area && <div>Diện tích (m²)</div>}
-                    {visibleColumns.volume && <div>Thể tích (m³)</div>}
-                    {visibleColumns.height && <div>Cao (mm)</div>}
-                    {visibleColumns.length && <div>Dài (mm)</div>}
-                    {visibleColumns.depth && <div>Sâu (mm)</div>}
-                    {visibleColumns.components_block && <div>Vật tư (theo sản phẩm)</div>}
+                      gridTemplateColumns: [
+                        visibleColumns.name && 'minmax(260px, auto)',
+                        visibleColumns.description && 'minmax(320px, auto)',
+                        visibleColumns.quantity && 'minmax(70px, auto)',
+                        visibleColumns.unit && 'minmax(70px, auto)',
+                        visibleColumns.unit_price && 'minmax(120px, auto)',
+                        visibleColumns.total_price && 'minmax(120px, auto)',
+                        visibleColumns.area && 'minmax(90px, auto)',
+                        visibleColumns.volume && 'minmax(90px, auto)',
+                        visibleColumns.height && 'minmax(90px, auto)',
+                        visibleColumns.length && 'minmax(90px, auto)',
+                        visibleColumns.depth && 'minmax(90px, auto)',
+                        visibleColumns.components_block && 'minmax(520px, auto)'
+                      ].filter(Boolean).join(' ')
+                    }}>
+                      {visibleColumns.name && <div>Tên sản phẩm</div>}
+                      {visibleColumns.description && <div>Mô tả</div>}
+                      {visibleColumns.quantity && <div>Số lượng</div>}
+                      {visibleColumns.unit && <div>Đơn vị</div>}
+                      {visibleColumns.unit_price && <div>Đơn giá</div>}
+                      {visibleColumns.total_price && <div>Thành tiền</div>}
+                      {visibleColumns.area && <div>Diện tích (m²)</div>}
+                      {visibleColumns.volume && <div>Thể tích (m³)</div>}
+                      {visibleColumns.height && <div>Cao (mm)</div>}
+                      {visibleColumns.length && <div>Dài (mm)</div>}
+                      {visibleColumns.depth && <div>Sâu (mm)</div>}
+                      {visibleColumns.components_block && (
+                        <div className="min-w-[520px]">
+                          <div className="w-full">
+                            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(120px, auto))` }}>
+                              {(headerComponents.length > 0 ? headerComponents : [{}]).map((c: any, idx: number) => (
+                                <div key={`hdr-comp-name-${idx}`} className="col-span-4 font-semibold text-gray-800 whitespace-nowrap px-2">
+                                  {c?.name || c?.expense_object_id || 'Vật tư'}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(120px, auto))` }}>
+                              {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
+                                <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
+                                <div key={`hdr-price-${idx}`} className="px-2">Đơn giá</div>,
+                                <div key={`hdr-qty-${idx}`} className="px-2">Số lượng</div>,
+                                <div key={`hdr-total-${idx}`} className="px-2">Thành tiền</div>
+                              ])}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Items */}
-                <div className="divide-y divide-gray-300">
-                  {items.map((item, index) => (
-                    <div key={index} className="px-4 py-3">
-                      <div className="grid gap-4 items-center" style={{
-                        gridTemplateColumns: [
-                          visibleColumns.name && 'minmax(260px, 1fr)',
-                          visibleColumns.description && 'minmax(320px, 1fr)', 
-                          visibleColumns.quantity && 'minmax(70px, 1fr)',
-                          visibleColumns.unit && 'minmax(70px, 1fr)',
-                          visibleColumns.unit_price && 'minmax(120px, 1fr)',
-                          visibleColumns.total_price && 'minmax(120px, 1fr)',
-                          visibleColumns.area && 'minmax(90px, 1fr)',
-                          visibleColumns.volume && 'minmax(90px, 1fr)',
-                          visibleColumns.height && 'minmax(90px, 1fr)',
-                          visibleColumns.length && 'minmax(90px, 1fr)',
-                          visibleColumns.depth && 'minmax(90px, 1fr)',
-                          visibleColumns.components_block && 'minmax(480px, 2fr)'
-                        ].filter(Boolean).join(' ')
-                      }}>
-                        {visibleColumns.name && (
-                          <div>
-                            <div className="flex gap-2">
+                  <div className="divide-y divide-gray-300">
+                    {items.map((item, index) => (
+                      <div
+                        key={index}
+                        className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors px-4 py-3`}
+                      >
+                        <div className="grid gap-4 items-start" style={{
+                          gridTemplateColumns: [
+                            visibleColumns.name && 'minmax(260px, auto)',
+                            visibleColumns.description && 'minmax(320px, auto)',
+                            visibleColumns.quantity && 'minmax(70px, auto)',
+                            visibleColumns.unit && 'minmax(70px, auto)',
+                            visibleColumns.unit_price && 'minmax(120px, auto)',
+                            visibleColumns.total_price && 'minmax(120px, auto)',
+                            visibleColumns.area && 'minmax(90px, auto)',
+                            visibleColumns.volume && 'minmax(90px, auto)',
+                            visibleColumns.height && 'minmax(90px, auto)',
+                            visibleColumns.length && 'minmax(90px, auto)',
+                            visibleColumns.depth && 'minmax(90px, auto)',
+                            visibleColumns.components_block && 'minmax(520px, auto)'
+                          ].filter(Boolean).join(' ')
+                        }}>
+                          {visibleColumns.name && (
+                            <div>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={item.name_product}
+                                  onChange={(e) => updateItem(index, 'name_product', e.target.value)}
+                                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  placeholder="Tên sản phẩm"
+                                title={item.name_product}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => openProductModal(index)}
+                                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center"
+                                  title="Chọn sản phẩm từ danh sách"
+                                >
+                                  <Search className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {visibleColumns.description && (
+                            <div>
                               <input
                                 type="text"
-                                value={item.name_product}
-                                onChange={(e) => updateItem(index, 'name_product', e.target.value)}
-                                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                placeholder="Tên sản phẩm"
+                                value={item.description}
+                                onChange={(e) => updateItem(index, 'description', e.target.value)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Mô tả"
+                                title={item.description}
                               />
-                              <button
-                                type="button"
-                                onClick={() => openProductModal(index)}
-                                className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center"
-                                title="Chọn sản phẩm từ danh sách"
-                              >
-                                <Search className="h-4 w-4" />
-                              </button>
                             </div>
-                          </div>
-                        )}
-                        {visibleColumns.description && (
-                          <div>
-                            <input
-                              type="text"
-                              value={item.description}
-                              onChange={(e) => updateItem(index, 'description', e.target.value)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Mô tả"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.quantity && (
-                          <div>
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              step="1"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.unit && (
-                          <div>
-                            <input
-                              type="text"
-                              value={item.unit}
-                              onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="cái"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.unit_price && (
-                          <div>
-                            <input
-                              type="number"
-                              value={item.unit_price}
-                              onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              step="100000"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.total_price && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-black">
-                              {formatCurrency(item.total_price)}
-                            </span>
-                            {items.length > 1 && (
-                              <button
-                                onClick={() => removeItem(index)}
-                                className="p-1 text-red-600 hover:text-red-800"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {visibleColumns.area && (
-                          <div>
-                            <input
-                              type="number"
-                              value={item.area ?? ''}
-                              onChange={(e) => updateItem(index, 'area', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="m²"
-                              step="0.01"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.volume && (
-                          <div>
-                            <input
-                              type="number"
-                              value={item.volume ?? ''}
-                              onChange={(e) => updateItem(index, 'volume', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="m³"
-                              step="0.001"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.height && (
-                          <div>
-                            <input
-                              type="number"
-                              value={item.height ?? ''}
-                              onChange={(e) => updateItem(index, 'height', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="mm"
-                              step="1"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.length && (
-                          <div>
-                            <input
-                              type="number"
-                              value={item.length ?? ''}
-                              onChange={(e) => updateItem(index, 'length', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="mm"
-                              step="1"
-                            />
-                          </div>
-                        )}
-                        {visibleColumns.depth && (
-                          <div>
-                            <input
-                              type="number"
-                              value={item.depth ?? ''}
-                              onChange={(e) => updateItem(index, 'depth', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="mm"
-                              step="1"
-                            />
-                          </div>
-                        )}
-                        {/* standalone component columns removed per request */}
-                        {visibleColumns.components_block && (
-                          <div className="text-sm text-black">
-                            {/* Use the main table's horizontal scroll only */}
-                            <div className="min-w-max">
-                              {/* Header row: component names, each spans 4 columns */}
-                              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(item.components || []).length * 4 || 4}, minmax(100px, 1fr))` }}>
-                                {(item.components || []).map((c, idx) => (
-                                  <div key={`name-${idx}`} className="col-span-4 font-semibold text-gray-800 whitespace-nowrap px-2 py-1 bg-gray-100 border border-gray-200 rounded-md">
-                                    {c.name || c.expense_object_id}
-                                  </div>
-                                ))}
-                              </div>
-                              {/* Subheader: fixed labels for each component */}
-                              <div className="mt-2 grid gap-2 text-xs text-gray-600" style={{ gridTemplateColumns: `repeat(${(item.components || []).length * 4 || 4}, minmax(100px, 1fr))` }}>
-                                {(item.components || []).flatMap((_, idx) => [
-                                  <div key={`lbl-unit-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Đơn vị</div>,
-                                  <div key={`lbl-price-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Đơn giá</div>,
-                                  <div key={`lbl-qty-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Số lượng</div>,
-                                  <div key={`lbl-total-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Thành tiền</div>
-                                ])}
-                              </div>
-                              {/* Values row: values per component */}
-                              <div className="mt-1 grid gap-2 text-xs text-gray-800" style={{ gridTemplateColumns: `repeat(${(item.components || []).length * 4 || 4}, minmax(100px, 1fr))` }}>
-                                {(item.components || []).flatMap((c, idx) => [
-                                  <div key={`val-unit-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{c.unit}</div>,
-                                  <div key={`val-price-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{formatCurrency(c.unit_price)}</div>,
-                                  <div key={`val-qty-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{c.quantity}</div>,
-                                  <div key={`val-total-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{formatCurrency(c.total_price)}</div>
-                                ])}
+                          )}
+                          {visibleColumns.quantity && (
+                            <div>
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                min="0"
+                                step="1"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.unit && (
+                            <div>
+                              <input
+                                type="text"
+                                value={item.unit}
+                                onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="cái"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.unit_price && (
+                            <div>
+                              <input
+                                type="number"
+                                value={item.unit_price}
+                                onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                min="0"
+                                step="100000"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.total_price && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-black">
+                                {formatCurrency(item.total_price)}
+                              </span>
+                              {items.length > 1 && (
+                                <button
+                                  onClick={() => removeItem(index)}
+                                  className="p-1 text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {visibleColumns.area && (
+                            <div>
+                              <input
+                                type="number"
+                                value={item.area ?? ''}
+                                onChange={(e) => updateItem(index, 'area', e.target.value ? Number(e.target.value) : null)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="m²"
+                                step="0.01"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.volume && (
+                            <div>
+                              <input
+                                type="number"
+                                value={item.volume ?? ''}
+                                onChange={(e) => updateItem(index, 'volume', e.target.value ? Number(e.target.value) : null)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="m³"
+                                step="0.001"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.height && (
+                            <div>
+                              <input
+                                type="number"
+                                value={item.height ?? ''}
+                                onChange={(e) => updateItem(index, 'height', e.target.value ? Number(e.target.value) : null)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="mm"
+                                step="1"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.length && (
+                            <div>
+                              <input
+                                type="number"
+                                value={item.length ?? ''}
+                                onChange={(e) => updateItem(index, 'length', e.target.value ? Number(e.target.value) : null)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="mm"
+                                step="1"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.depth && (
+                            <div>
+                              <input
+                                type="number"
+                                value={item.depth ?? ''}
+                                onChange={(e) => updateItem(index, 'depth', e.target.value ? Number(e.target.value) : null)}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="mm"
+                                step="1"
+                              />
+                            </div>
+                          )}
+                          {visibleColumns.components_block && (
+                            <div className="text-sm text-black">
+                              <div className="min-w-max">
+                                <div className="grid" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(120px, auto))` }}>
+                                  {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
+                                    const match = (item.components || []).find((c: any) => c.expense_object_id === hc.expense_object_id) || (item.components || [])[idx] || {}
+                                    return [
+                                      <div key={`val-unit-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.unit || ''}>{match.unit || ''}</div>,
+                                      <div key={`val-price-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.unit_price != null ? String(match.unit_price) : ''}>{match.unit_price != null ? formatCurrency(match.unit_price) : ''}</div>,
+                                      <div key={`val-qty-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.quantity != null ? String(match.quantity) : ''}>{match.quantity != null ? match.quantity : ''}</div>,
+                                      <div key={`val-total-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.total_price != null ? String(match.total_price) : ''}>{match.total_price != null ? formatCurrency(match.total_price) : ''}</div>
+                                    ]
+                                  })}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
