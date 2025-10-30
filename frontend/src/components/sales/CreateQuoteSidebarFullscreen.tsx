@@ -118,6 +118,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [productSearch, setProductSearch] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [selectedProject, setSelectedProject] = useState<any>(null)
+  const [editingCell, setEditingCell] = useState<{ index: number; field: string } | null>(null)
   
   // Toggle category expansion
   const toggleCategory = (category: string) => {
@@ -562,6 +563,27 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     setItems(updatedItems)
   }
 
+  // Editable components (vật tư) fields per quote item
+  const updateComponentField = (
+    itemIndex: number,
+    compIndex: number,
+    field: 'unit' | 'unit_price' | 'quantity',
+    value: string | number
+  ) => {
+    const updated = [...items]
+    const comps = Array.isArray(updated[itemIndex].components) ? [...(updated[itemIndex].components as any[])] : []
+    if (!comps[compIndex]) return
+    const comp = { ...comps[compIndex], [field]: value }
+    const qty = Number(comp.quantity || 0)
+    const price = Number(comp.unit_price || 0)
+    comp.total_price = qty * price
+    comps[compIndex] = comp
+    ;(updated[itemIndex] as any).components = comps
+    const compSum = comps.reduce((s: number, c: any) => s + (Number(c.total_price) || 0), 0)
+    updated[itemIndex].total_price = compSum > 0 ? compSum : (updated[itemIndex].quantity * updated[itemIndex].unit_price)
+    setItems(updated)
+  }
+
   const openProductModal = (itemIndex: number) => {
     setSelectedItemIndex(itemIndex)
     setShowProductModal(true)
@@ -836,11 +858,90 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }])
   }
 
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      maximumFractionDigits: 3
+    }).format(value)
+  }
+
+  const parseNumber = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(/,/g, '.')
+    const n = Number(cleaned)
+    return isNaN(n) ? 0 : n
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
     }).format(amount)
+  }
+
+  const EditableNumberCell = ({
+    value,
+    onChange,
+    format,
+    step,
+    min,
+    placeholder,
+    index,
+    field
+  }: {
+    value: number | null
+    onChange: (v: number | null) => void
+    format: 'currency' | 'number'
+    step?: number
+    min?: number
+    placeholder?: string
+    index: number
+    field: string
+  }) => {
+    const [text, setText] = useState<string>('')
+    const isEditing = editingCell && editingCell.index === index && editingCell.field === field
+
+    useEffect(() => {
+      if (isEditing) {
+        setText(value == null ? '' : String(value))
+      }
+    }, [isEditing])
+
+    if (!isEditing) {
+      const display = value == null ? '' : (format === 'currency' ? formatCurrency(value) : formatNumber(value))
+      return (
+        <div
+          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text"
+          onClick={() => setEditingCell({ index, field })}
+          title={display}
+        >
+          {display || (placeholder || '')}
+        </div>
+      )
+    }
+
+    return (
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          const nv = text.trim() === '' ? null : parseNumber(text)
+          onChange(nv)
+          setEditingCell(null)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            const nv = text.trim() === '' ? null : parseNumber(text)
+            onChange(nv)
+            setEditingCell(null)
+          } else if (e.key === 'Escape') {
+            setEditingCell(null)
+          }
+        }}
+        className="w-full border border-blue-400 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+        placeholder={placeholder}
+        inputMode="decimal"
+      />
+    )
   }
 
   if (!isOpen) return null
@@ -1036,19 +1137,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               <div className="overflow-auto max-h-[60vh]">
                 <div className="bg-white border border-gray-300 rounded-md inline-block min-w-max">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 sticky top-0 z-10 shadow-sm">
-                    <div className="grid gap-4 text-sm font-medium text-black" style={{
+                    <div className="grid gap-2 text-xs font-medium text-black" style={{
                       gridTemplateColumns: [
-                        visibleColumns.name && 'minmax(260px, auto)',
-                        visibleColumns.description && 'minmax(320px, auto)',
-                        visibleColumns.quantity && 'minmax(70px, auto)',
-                        visibleColumns.unit && 'minmax(70px, auto)',
-                        visibleColumns.unit_price && 'minmax(120px, auto)',
-                        visibleColumns.total_price && 'minmax(120px, auto)',
-                        visibleColumns.area && 'minmax(90px, auto)',
-                        visibleColumns.volume && 'minmax(90px, auto)',
-                        visibleColumns.height && 'minmax(90px, auto)',
-                        visibleColumns.length && 'minmax(90px, auto)',
-                        visibleColumns.depth && 'minmax(90px, auto)',
+                        visibleColumns.name && 'minmax(200px, auto)',
+                        visibleColumns.description && 'minmax(220px, auto)',
+                        visibleColumns.quantity && 'minmax(60px, auto)',
+                        visibleColumns.unit && 'minmax(60px, auto)',
+                        visibleColumns.unit_price && 'minmax(100px, auto)',
+                        visibleColumns.total_price && 'minmax(110px, auto)',
+                        visibleColumns.area && 'minmax(80px, auto)',
+                        visibleColumns.volume && 'minmax(80px, auto)',
+                        visibleColumns.height && 'minmax(80px, auto)',
+                        visibleColumns.length && 'minmax(80px, auto)',
+                        visibleColumns.depth && 'minmax(80px, auto)',
                         visibleColumns.components_block && 'minmax(520px, auto)'
                       ].filter(Boolean).join(' ')
                     }}>
@@ -1064,16 +1165,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       {visibleColumns.length && <div>Dài (mm)</div>}
                       {visibleColumns.depth && <div>Sâu (mm)</div>}
                       {visibleColumns.components_block && (
-                        <div className="min-w-[520px]">
+                        <div className="min-w-[440px]">
                           <div className="w-full">
-                            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(120px, auto))` }}>
+                            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(100px, auto))` }}>
                               {(headerComponents.length > 0 ? headerComponents : [{}]).map((c: any, idx: number) => (
                                 <div key={`hdr-comp-name-${idx}`} className="col-span-4 font-semibold text-gray-800 whitespace-nowrap px-2">
                                   {c?.name || c?.expense_object_id || 'Vật tư'}
                                 </div>
                               ))}
                             </div>
-                            <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(120px, auto))` }}>
+                            <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(100px, auto))` }}>
                               {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
                                 <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
                                 <div key={`hdr-price-${idx}`} className="px-2">Đơn giá</div>,
@@ -1093,37 +1194,37 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         key={index}
                         className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors px-4 py-3`}
                       >
-                        <div className="grid gap-4 items-start" style={{
+                        <div className="grid gap-2 items-start text-xs" style={{
                           gridTemplateColumns: [
-                            visibleColumns.name && 'minmax(260px, auto)',
-                            visibleColumns.description && 'minmax(320px, auto)',
-                            visibleColumns.quantity && 'minmax(70px, auto)',
-                            visibleColumns.unit && 'minmax(70px, auto)',
-                            visibleColumns.unit_price && 'minmax(120px, auto)',
-                            visibleColumns.total_price && 'minmax(120px, auto)',
-                            visibleColumns.area && 'minmax(90px, auto)',
-                            visibleColumns.volume && 'minmax(90px, auto)',
-                            visibleColumns.height && 'minmax(90px, auto)',
-                            visibleColumns.length && 'minmax(90px, auto)',
-                            visibleColumns.depth && 'minmax(90px, auto)',
-                            visibleColumns.components_block && 'minmax(520px, auto)'
+                            visibleColumns.name && 'minmax(200px, auto)',
+                            visibleColumns.description && 'minmax(220px, auto)',
+                            visibleColumns.quantity && 'minmax(60px, auto)',
+                            visibleColumns.unit && 'minmax(60px, auto)',
+                            visibleColumns.unit_price && 'minmax(100px, auto)',
+                            visibleColumns.total_price && 'minmax(110px, auto)',
+                            visibleColumns.area && 'minmax(80px, auto)',
+                            visibleColumns.volume && 'minmax(80px, auto)',
+                            visibleColumns.height && 'minmax(80px, auto)',
+                            visibleColumns.length && 'minmax(80px, auto)',
+                            visibleColumns.depth && 'minmax(80px, auto)',
+                            visibleColumns.components_block && 'minmax(440px, auto)'
                           ].filter(Boolean).join(' ')
                         }}>
                           {visibleColumns.name && (
                             <div>
-                              <div className="flex gap-2">
+                              <div className="flex gap-2 text-xs">
                                 <input
                                   type="text"
                                   value={item.name_product}
                                   onChange={(e) => updateItem(index, 'name_product', e.target.value)}
-                                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="flex-1 border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                                   placeholder="Tên sản phẩm"
                                 title={item.name_product}
                                 />
                                 <button
                                   type="button"
                                   onClick={() => openProductModal(index)}
-                                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center"
+                                  className="px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xs flex items-center"
                                   title="Chọn sản phẩm từ danh sách"
                                 >
                                   <Search className="h-4 w-4" />
@@ -1137,7 +1238,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 type="text"
                                 value={item.description}
                                 onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="Mô tả"
                                 title={item.description}
                               />
@@ -1145,13 +1246,15 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           )}
                           {visibleColumns.quantity && (
                             <div>
-                              <input
-                                type="number"
+                              <EditableNumberCell
                                 value={item.quantity}
-                                onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                min="0"
-                                step="1"
+                                onChange={(v) => updateItem(index, 'quantity', Number(v || 0))}
+                                format="number"
+                                step={1}
+                                min={0}
+                                placeholder="0"
+                                index={index}
+                                field={'quantity'}
                               />
                             </div>
                           )}
@@ -1161,26 +1264,28 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 type="text"
                                 value={item.unit}
                                 onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="cái"
                               />
                             </div>
                           )}
                           {visibleColumns.unit_price && (
                             <div>
-                              <input
-                                type="number"
+                              <EditableNumberCell
                                 value={item.unit_price}
-                                onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                min="0"
-                                step="100000"
+                                onChange={(v) => updateItem(index, 'unit_price', Number(v || 0))}
+                                format="currency"
+                                step={1000}
+                                min={0}
+                                placeholder="0 ₫"
+                                index={index}
+                                field={'unit_price'}
                               />
                             </div>
                           )}
                           {visibleColumns.total_price && (
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-black">
+                              <span className="text-xs font-semibold text-gray-900">
                                 {formatCurrency(item.total_price)}
                               </span>
                               {items.length > 1 && (
@@ -1195,61 +1300,71 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           )}
                           {visibleColumns.area && (
                             <div>
-                              <input
-                                type="number"
-                                value={item.area ?? ''}
-                                onChange={(e) => updateItem(index, 'area', e.target.value ? Number(e.target.value) : null)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              <EditableNumberCell
+                                value={item.area ?? null}
+                                onChange={(v) => updateItem(index, 'area', v == null ? null : Number(v))}
+                                format="number"
+                                step={0.01}
+                                min={0}
                                 placeholder="m²"
-                                step="0.01"
+                                index={index}
+                                field={'area'}
                               />
                             </div>
                           )}
                           {visibleColumns.volume && (
                             <div>
-                              <input
-                                type="number"
-                                value={item.volume ?? ''}
-                                onChange={(e) => updateItem(index, 'volume', e.target.value ? Number(e.target.value) : null)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              <EditableNumberCell
+                                value={item.volume ?? null}
+                                onChange={(v) => updateItem(index, 'volume', v == null ? null : Number(v))}
+                                format="number"
+                                step={0.001}
+                                min={0}
                                 placeholder="m³"
-                                step="0.001"
+                                index={index}
+                                field={'volume'}
                               />
                             </div>
                           )}
                           {visibleColumns.height && (
                             <div>
-                              <input
-                                type="number"
-                                value={item.height ?? ''}
-                                onChange={(e) => updateItem(index, 'height', e.target.value ? Number(e.target.value) : null)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              <EditableNumberCell
+                                value={item.height ?? null}
+                                onChange={(v) => updateItem(index, 'height', v == null ? null : Number(v))}
+                                format="number"
+                                step={1}
+                                min={0}
                                 placeholder="mm"
-                                step="1"
+                                index={index}
+                                field={'height'}
                               />
                             </div>
                           )}
                           {visibleColumns.length && (
                             <div>
-                              <input
-                                type="number"
-                                value={item.length ?? ''}
-                                onChange={(e) => updateItem(index, 'length', e.target.value ? Number(e.target.value) : null)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              <EditableNumberCell
+                                value={item.length ?? null}
+                                onChange={(v) => updateItem(index, 'length', v == null ? null : Number(v))}
+                                format="number"
+                                step={1}
+                                min={0}
                                 placeholder="mm"
-                                step="1"
+                                index={index}
+                                field={'length'}
                               />
                             </div>
                           )}
                           {visibleColumns.depth && (
                             <div>
-                              <input
-                                type="number"
-                                value={item.depth ?? ''}
-                                onChange={(e) => updateItem(index, 'depth', e.target.value ? Number(e.target.value) : null)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              <EditableNumberCell
+                                value={item.depth ?? null}
+                                onChange={(v) => updateItem(index, 'depth', v == null ? null : Number(v))}
+                                format="number"
+                                step={1}
+                                min={0}
                                 placeholder="mm"
-                                step="1"
+                                index={index}
+                                field={'depth'}
                               />
                             </div>
                           )}
@@ -1259,11 +1374,44 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 <div className="grid" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(120px, auto))` }}>
                                   {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
                                     const match = (item.components || []).find((c: any) => c.expense_object_id === hc.expense_object_id) || (item.components || [])[idx] || {}
+                                    const editIndex = index * 1000 + idx
                                     return [
-                                      <div key={`val-unit-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.unit || ''}>{match.unit || ''}</div>,
-                                      <div key={`val-price-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.unit_price != null ? String(match.unit_price) : ''}>{match.unit_price != null ? formatCurrency(match.unit_price) : ''}</div>,
-                                      <div key={`val-qty-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.quantity != null ? String(match.quantity) : ''}>{match.quantity != null ? match.quantity : ''}</div>,
-                                      <div key={`val-total-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate" title={match.total_price != null ? String(match.total_price) : ''}>{match.total_price != null ? formatCurrency(match.total_price) : ''}</div>
+                                      <div key={`val-unit-${idx}`} className="px-2 py-1 text-xs text-gray-800 border border-gray-200">
+                                        <input
+                                          type="text"
+                                          value={match.unit || ''}
+                                          onChange={(e) => updateComponentField(index, idx, 'unit', e.target.value)}
+                                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                          placeholder="Đơn vị"
+                                        />
+                                      </div>,
+                                      <div key={`val-price-${idx}`} className="px-2 py-1 text-xs text-gray-800 border border-gray-200">
+                                        <EditableNumberCell
+                                          value={match.unit_price != null ? Number(match.unit_price) : null}
+                                          onChange={(v) => updateComponentField(index, idx, 'unit_price', Number(v || 0))}
+                                          format="currency"
+                                          step={1000}
+                                          min={0}
+                                          placeholder="0 ₫"
+                                          index={editIndex}
+                                          field={`comp-${idx}-unit_price`}
+                                        />
+                                      </div>,
+                                      <div key={`val-qty-${idx}`} className="px-2 py-1 text-xs text-gray-800 border border-gray-200">
+                                        <EditableNumberCell
+                                          value={match.quantity != null ? Number(match.quantity) : null}
+                                          onChange={(v) => updateComponentField(index, idx, 'quantity', Number(v || 0))}
+                                          format="number"
+                                          step={1}
+                                          min={0}
+                                          placeholder="0"
+                                          index={editIndex}
+                                          field={`comp-${idx}-quantity`}
+                                        />
+                                      </div>,
+                                      <div key={`val-total-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate">
+                                        {match.total_price != null ? formatCurrency(Number(match.total_price)) : ''}
+                                      </div>
                                     ]
                                   })}
                                 </div>
