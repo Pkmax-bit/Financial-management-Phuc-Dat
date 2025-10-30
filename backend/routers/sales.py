@@ -243,6 +243,9 @@ async def create_quote(
         quote_dict["tax_amount"] = tax_amount
         quote_dict["total_amount"] = total_amount
         quote_dict["created_by"] = created_by
+        # Persist selected employee in charge if provided; fallback to created_by
+        selected_emp = getattr(quote_data, 'employee_in_charge_id', None)
+        quote_dict["employee_in_charge_id"] = selected_emp or created_by
         quote_dict["created_at"] = datetime.utcnow().isoformat()
         quote_dict["updated_at"] = datetime.utcnow().isoformat()
         
@@ -591,11 +594,29 @@ async def send_quote_to_customer(
                         # Get quote items for email
                         quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
                         quote_items = quote_items_result.data if quote_items_result.data else []
+                        # Get employee in charge (prefer employee_in_charge_id, fallback created_by)
+                        employee_name = None
+                        employee_phone = None
+                        emp_id = quote_result.data[0].get("employee_in_charge_id") or quote_result.data[0].get("created_by")
+                        if emp_id:
+                            try:
+                                emp_res = supabase.table("employees").select("first_name, last_name, full_name, phone").eq("id", emp_id).single().execute()
+                                if emp_res.data:
+                                    emp = emp_res.data
+                                    employee_name = emp.get("full_name") or f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+                                    employee_phone = emp.get("phone")
+                            except Exception:
+                                pass
                         
                         # Send email in background
                         background_tasks.add_task(
                             email_service.send_quote_email,
-                            { **quote_result.data[0], **({"project_name": project_name} if project_name else {}) },
+                            {
+                                **quote_result.data[0],
+                                **({"project_name": project_name} if project_name else {}),
+                                **({"employee_in_charge_name": employee_name} if employee_name else {}),
+                                **({"employee_in_charge_phone": employee_phone} if employee_phone else {})
+                            },
                             customer_email,
                             customer_name,
                             quote_items
@@ -837,6 +858,7 @@ async def convert_quote_to_invoice(
             "terms_and_conditions": quote.get("terms_and_conditions"),
             "payment_terms": convert_data.payment_terms if convert_data else None,
             "created_by": current_user.id,
+            "employee_in_charge_id": quote.get("employee_in_charge_id") or quote.get("created_by"),
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         }

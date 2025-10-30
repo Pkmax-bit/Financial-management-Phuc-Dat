@@ -12,7 +12,7 @@ interface ColumnVisibilityDialogProps {
 }
 
 const COLUMN_LABELS = {
-  name: 'Tên sản phẩm',
+  name: 'Tên vật tư (từ đối tượng chi phí)',
   description: 'Mô tả',
   quantity: 'Số lượng',
   unit: 'Đơn vị',

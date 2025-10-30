@@ -542,7 +542,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           quantity: item.quantity,
           unit: item.unit,
           unit_price: item.unit_price,
-          total_price: item.total_price
+          total_price: item.total_price,
+          area: item.area ?? null,
+          volume: item.volume ?? null,
+          height: item.height ?? null,
+          length: item.length ?? null,
+          depth: item.depth ?? null
         }))
       }
 

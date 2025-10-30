@@ -186,3 +186,4 @@ LEFT JOIN expense_objects eo2 ON eo1.id = eo2.parent_id
 LEFT JOIN expense_objects eo3 ON eo2.id = eo3.parent_id
 WHERE eo1.level = 1
 ORDER BY eo1.name, eo2.name, eo3.name;
+    

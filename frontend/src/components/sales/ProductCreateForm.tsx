@@ -40,6 +40,11 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
   const [lengthDisplay, setLengthDisplay] = useState('')
   const [depth, setDepth] = useState<number | null>(null)
   const [depthDisplay, setDepthDisplay] = useState('')
+  // Đối tượng chi phí (vật tư) - selector
+  const [expenseObjects, setExpenseObjects] = useState<Array<{ id: string; name: string; level: number; parent_id?: string | null; l1?: string; l2?: string }>>([])
+  const [componentRows, setComponentRows] = useState<Array<{ expense_object_id: string; expense_object_name?: string; unit: string; unit_price: number; quantity: number }>>([
+    { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }
+  ])
 
   useEffect(() => {
     const load = async () => {
@@ -61,6 +66,46 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
     load()
   }, [])
 
+  // Tải đối tượng chi phí cấp 3
+  useEffect(() => {
+    const loadExpenseObjects = async () => {
+      try {
+        // Load tất cả level 1-3
+        const { data: allObjs, error: e1 } = await supabase
+          .from('expense_objects')
+          .select('id, name, parent_id, level, is_active')
+          .eq('is_active', true)
+          .in('level', [1, 2, 3])
+        if (e1) throw e1
+
+        const byId: Record<string, any> = {}
+        ;(allObjs || []).forEach((o: any) => { byId[o.id] = o })
+
+        const withPaths = (allObjs || []).map((o: any) => {
+          let l1: string | undefined
+          let l2: string | undefined
+          if (o.level === 1) {
+            l1 = o.name
+          } else if (o.level === 2) {
+            const p1 = o.parent_id ? byId[o.parent_id] : null
+            l1 = p1?.name
+          } else if (o.level === 3) {
+            const p2 = o.parent_id ? byId[o.parent_id] : null
+            const p1 = p2?.parent_id ? byId[p2.parent_id] : null
+            l1 = p1?.name
+            l2 = p2?.name
+          }
+          return { id: o.id, name: o.name, level: o.level, parent_id: o.parent_id, l1, l2 }
+        })
+
+        setExpenseObjects(withPaths)
+      } catch (_) {
+        setExpenseObjects([])
+      }
+    }
+    loadExpenseObjects()
+  }, [])
+
   const onPriceChange = (val: string) => {
     const num = parseCurrency(val)
     setPrice(num)
@@ -78,6 +123,25 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
     setter(num)
     displaySetter(num ? formatNumber(num) : val)
   }
+
+  // Auto-calculate area/volume with inputs in mm
+  // area (m²) = (length_mm/1000) × (height_mm/1000)
+  // volume (m³) = (length_mm/1000) × (height_mm/1000) × (depth_mm/1000)
+  useEffect(() => {
+    if (length != null && height != null) {
+      const a = Number((((length / 1000) * (height / 1000))).toFixed(6))
+      setArea(a)
+      setAreaDisplay(formatNumber(a))
+    }
+  }, [length, height])
+
+  useEffect(() => {
+    if (length != null && height != null && depth != null) {
+      const v = Number((((length / 1000) * (height / 1000) * (depth / 1000))).toFixed(6))
+      setVolume(v)
+      setVolumeDisplay(formatNumber(v))
+    }
+  }, [length, height, depth])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,6 +163,14 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           height: height,
           length: length,
           depth: depth,
+          product_components: componentRows
+            .filter(r => r.expense_object_id)
+            .map(r => ({
+              expense_object_id: r.expense_object_id,
+              unit: r.unit || null,
+              unit_price: r.unit_price || 0,
+              quantity: r.quantity || 0
+            })),
           is_active: true
         })
       if (error) throw error
@@ -123,6 +195,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
       setLengthDisplay('')
       setDepth(null)
       setDepthDisplay('')
+      setComponentRows([{ expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])
       
       // Auto-hide success message after 3 seconds
       setTimeout(() => {
@@ -276,7 +349,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Chiều cao (m)</label>
+          <label className="block text-sm font-medium text-gray-900 mb-1">Chiều cao (mm)</label>
           <input
             type="text"
             value={heightDisplay}
@@ -288,7 +361,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Dài (m)</label>
+          <label className="block text-sm font-medium text-gray-900 mb-1">Dài (mm)</label>
           <input
             type="text"
             value={lengthDisplay}
@@ -300,7 +373,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Sâu (m)</label>
+          <label className="block text-sm font-medium text-gray-900 mb-1">Sâu (mm)</label>
           <input
             type="text"
             value={depthDisplay}
@@ -311,8 +384,107 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
             autoComplete="off"
           />
         </div>
-        <div className="md:col-span-2">
-          {/* Empty column for spacing */}
+        {/* Chọn đối tượng chi phí (Vật tư) */}
+        <div className="md:col-span-12">
+          <h4 className="text-md font-medium text-gray-900 mb-3 mt-4">Vật tư (đối tượng chi phí cấp 3)</h4>
+          <div className="overflow-x-auto border border-gray-200 rounded">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-gray-900 text-left">Đối tượng chi phí</th>
+                  <th className="px-3 py-2 text-gray-900 text-left">Đơn vị</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">Đơn giá</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">Số lượng</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">Thành tiền</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">&nbsp;</th>
+                </tr>
+              </thead>
+              <tbody>
+                {componentRows.map((row, idx) => {
+                  const total = (row.unit_price || 0) * (row.quantity || 0)
+                  return (
+                    <tr key={idx} className="border-t">
+                      <td className="px-3 py-2 min-w-[320px]">
+                        <select
+                          value={row.expense_object_id}
+                          onChange={(e) => {
+                            const id = e.target.value
+                            const name = expenseObjects.find(o => o.id === id)?.name
+                            const next = [...componentRows]
+                            next[idx] = { ...row, expense_object_id: id, expense_object_name: name }
+                            setComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
+                        >
+                          <option value="">Chọn đối tượng</option>
+                          {Object.entries(expenseObjects.reduce<Record<string, { id: string; name: string; level: number; l2?: string }[]>>((acc, cur) => {
+                            const key = cur.l1 || 'Khác'
+                            if (!acc[key]) acc[key] = []
+                            acc[key].push({ id: cur.id, name: cur.name, level: cur.level, l2: cur.l2 })
+                            return acc
+                          }, {})).sort(([a],[b]) => a.localeCompare(b, 'vi')).map(([group, list]) => (
+                            <optgroup key={group} label={group}>
+                              {list
+                                .sort((a,b)=>{
+                                  if (a.level!==b.level) return a.level-b.level
+                                  return (a.l2||'').localeCompare(b.l2||'', 'vi') || a.name.localeCompare(b.name, 'vi')
+                                })
+                                .map(o => (
+                                  <option key={o.id} value={o.id}>
+                                    {o.level===1 ? `${group}` : o.level===2 ? `${group} / ${o.name}` : `${group}${o.l2?` / ${o.l2}`:''} / ${o.name}`}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 w-40">
+                        <input
+                          value={row.unit}
+                          onChange={(e)=>{
+                            const next=[...componentRows]; next[idx]={...row, unit:e.target.value}; setComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
+                          placeholder="m, m2, cái..."
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right w-40">
+                        <input
+                          type="number"
+                          value={row.unit_price}
+                          onChange={(e)=>{
+                            const next=[...componentRows]; next[idx]={...row, unit_price: parseFloat(e.target.value)||0}; setComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black"
+                          step="1000"
+                          min="0"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right w-40">
+                        <input
+                          type="number"
+                          value={row.quantity}
+                          onChange={(e)=>{
+                            const next=[...componentRows]; next[idx]={...row, quantity: parseFloat(e.target.value)||0}; setComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black"
+                          step="0.01"
+                          min="0"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{new Intl.NumberFormat('vi-VN').format(total)}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={()=>setComponentRows(prev=>prev.filter((_,i)=>i!==idx))} className="text-red-600 text-xs hover:underline">Xóa</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-2">
+            <button type="button" onClick={()=>setComponentRows(prev=>[...prev,{ expense_object_id:'', unit:'', unit_price:0, quantity:1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
+          </div>
         </div>
         
         <div className="md:col-span-12">

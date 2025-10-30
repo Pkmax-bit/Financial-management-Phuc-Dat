@@ -6,8 +6,11 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from email.mime.application import MIMEApplication
 from typing import Dict, Any
 from datetime import datetime
+from services.supabase_client import get_supabase_client
 
 class EmailService:
     def __init__(self):
@@ -15,6 +18,49 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_username = os.getenv("SMTP_USERNAME", "phannguyendangkhoa0915@gmail.com")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "wozhwluxehsfuqjm")
+        # Resolve logo path robustly: allow env override, then project-root/image/logo_phucdat.jpg
+        env_logo = os.getenv("COMPANY_LOGO_PATH")
+        if env_logo and os.path.exists(env_logo):
+            self.logo_path = env_logo
+        else:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            self.logo_path = os.path.join(project_root, 'image', 'logo_phucdat.jpg')
+
+    def _attach_company_logo(self, msg: MIMEMultipart) -> str | None:
+        """Attach company logo inline and return its content-id.
+        Returns 'company_logo' if attached successfully, otherwise None.
+        """
+        try:
+            if os.path.exists(self.logo_path):
+                with open(self.logo_path, 'rb') as f:
+                    img = MIMEImage(f.read())
+                    img.add_header('Content-ID', '<company_logo>')
+                    img.add_header('Content-Disposition', 'inline', filename='logo_phucdat.jpg')
+                    msg.attach(img)
+                    return 'company_logo'
+            return None
+        except Exception:
+            return None
+
+    def _html_to_pdf_bytes(self, html: str) -> bytes | None:
+        """Best-effort HTML→PDF conversion. Tries WeasyPrint, then xhtml2pdf. Returns None if unavailable."""
+        # Try WeasyPrint
+        try:
+            from weasyprint import HTML  # type: ignore
+            pdf_bytes = HTML(string=html).write_pdf()
+            return pdf_bytes
+        except Exception:
+            pass
+        # Try xhtml2pdf
+        try:
+            from xhtml2pdf import pisa  # type: ignore
+            import io
+            src = io.StringIO(html)
+            out = io.BytesIO()
+            pisa.CreatePDF(src, dest=out)  # returns pisaStatus, but we can ignore
+            return out.getvalue()
+        except Exception:
+            return None
         
     async def send_quote_email(self, quote_data: Dict[str, Any], customer_email: str, customer_name: str, quote_items: list = None) -> bool:
         """Send quote email to customer"""
@@ -23,6 +69,57 @@ class EmailService:
                 print("Email credentials not configured, skipping email send")
                 return False
                 
+            # Resolve employee in charge from ID if needed
+            employee_name = quote_data.get('employee_in_charge_name')
+            employee_phone = quote_data.get('employee_in_charge_phone')
+            emp_id = quote_data.get('employee_in_charge_id') or quote_data.get('created_by')
+            if not employee_name:
+                try:
+                    if emp_id:
+                        supabase = get_supabase_client()
+                        # Step 1: read employee basic fields including user_id
+                        emp_res = (
+                            supabase
+                            .table('employees')
+                            .select('id, user_id, full_name, first_name, last_name, phone')
+                            .eq('id', emp_id)
+                            .single()
+                            .execute()
+                        )
+                        if emp_res.data:
+                            emp = emp_res.data
+                            employee_phone = emp.get('phone')
+                            # Candidate names from employees table
+                            candidate_name = emp.get('full_name') or f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+                            # Step 2: prefer users.full_name if available
+                            user_full_name = None
+                            user_id = emp.get('user_id')
+                            if user_id:
+                                try:
+                                    user_res = (
+                                        supabase
+                                        .table('users')
+                                        .select('full_name')
+                                        .eq('id', user_id)
+                                        .single()
+                                        .execute()
+                                    )
+                                    if user_res.data and user_res.data.get('full_name'):
+                                        user_full_name = user_res.data.get('full_name')
+                                except Exception:
+                                    pass
+                            employee_name = user_full_name or candidate_name or None
+                except Exception:
+                    pass
+
+            # Build display string: prefer "<id> - <name>", fallback id only
+            employee_display = None
+            try:
+                if emp_id:
+                    employee_display = f"{emp_id} - {employee_name}" if employee_name else str(emp_id)
+            except Exception:
+                employee_display = employee_name
+
             # Create email content
             subject = f"Báo giá {quote_data['quote_number']} - {customer_name}"
             
@@ -34,16 +131,21 @@ class EmailService:
             quote_items_html = ""
             if quote_items:
                 quote_items_html = """
-                <div style="margin: 20px 0;">
-                    <h3 style="margin: 0 0 15px 0; color: #333;">Chi tiết sản phẩm/dịch vụ</h3>
-                    <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+                <div style=\"margin: 20px 0;\">
+                    <h3 style=\"margin: 0 0 15px 0; color: #333;\">Chi tiết sản phẩm/dịch vụ</h3>
+                    <table style=\"width: 100%; border-collapse: collapse; border: 1px solid #ddd;\">
                         <thead>
-                            <tr style="background: #f5f5f5;">
-                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Tên sản phẩm</th>
-                                <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Số lượng</th>
-                                <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Đơn vị</th>
-                                <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Đơn giá</th>
-                                <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Thành tiền</th>
+                            <tr style=\"background: #f5f5f5;\">
+                                <th style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">Tên sản phẩm</th>
+                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">SL</th>
+                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Đơn vị</th>
+                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Dài</th>
+                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Rộng</th>
+                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Sâu</th>
+                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Diện tích</th>
+                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Thể tích</th>
+                                <th style=\"padding: 10px; text-align: right; border: 1px solid #ddd;\">Đơn giá</th>
+                                <th style=\"padding: 10px; text-align: right; border: 1px solid #ddd;\">Thành tiền</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -52,11 +154,19 @@ class EmailService:
                 for item in quote_items:
                     quote_items_html += f"""
                             <tr>
-                                <td style="padding: 10px; border: 1px solid #ddd;">{item.get('name_product', '')}</td>
-                                <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">{item.get('quantity', 0)}</td>
-                                <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">{item.get('unit', '')}</td>
-                                <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">{format_currency(item.get('unit_price', 0))}</td>
-                                <td style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;">{format_currency(item.get('total_price', 0))}</td>
+                                <td style=\"padding: 10px; border: 1px solid #ddd;\">
+                                    <div style=\"font-weight:600;\">{item.get('name_product', '')}</div>
+                                    {f"<div style='font-size:12px;color:#666;margin-top:4px;'>{item.get('description','')}</div>" if (item.get('description')) else ''}
+                                </td>
+                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('quantity', 0)}</td>
+                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('unit', '')}</td>
+                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('length', '')}</td>
+                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('height', '')}</td>
+                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('depth', '')}</td>
+                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('area', '')}</td>
+                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('volume', '')}</td>
+                                <td style=\"padding: 10px; text-align: right; border: 1px solid #ddd;\">{format_currency(item.get('unit_price', 0))}</td>
+                                <td style=\"padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">{format_currency(item.get('total_price', 0))}</td>
                             </tr>
                     """
                 
@@ -68,12 +178,57 @@ class EmailService:
             
             html_body = f"""
             <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px;">
                 <div style="border: 1px solid #ddd;">
-                    <!-- Header -->
-                    <div style="padding: 20px; border-bottom: 1px solid #ddd;">
-                        <h1 style="margin: 0; color: #333; font-size: 24px;">Báo Giá Dịch Vụ</h1>
-                        <p style="margin: 10px 0 0 0; color: #666;">Cảm ơn bạn đã quan tâm đến dịch vụ của chúng tôi</p>
+                    <!-- Header (giống mẫu hình) -->
+                    <div style="padding: 12px 20px 0 20px; border-bottom: 1px solid #ddd;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                            <tr>
+                                <td style="width:40%; vertical-align:middle; padding:10px 0;">
+                                    <!-- Logo công ty -->
+                                    <div style="display:inline-block;">
+                                        <img src="cid:company_logo" alt="PHÚC ĐẠT" style="height:64px; display:block;">
+                                        <div style="font-size:12px; color:#1f2937; margin-top:6px; letter-spacing:1px;">KẾT NỐI KHÔNG GIAN</div>
+                                    </div>
+                                </td>
+                                <td style="width:60%; text-align:right; vertical-align:middle; padding:10px 0;">
+                                    <div style="font-size:13px; color:#111; font-weight:600;">Công Ty TNHH Nhôm Kính Phúc Đạt</div>
+                                    <div style="font-size:12px; color:#374151; margin-top:4px;">Showroom: 480/3 Tân Kỳ Tân Quý, P. Sơn Kỳ, Q. Tân Phú, TP.HCM</div>
+                                    <div style="font-size:12px; color:#374151;">Xưởng sản xuất: 334/6A Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú</div>
+                                    <div style="font-size:12px; color:#374151;">
+                                        <a href="https://www.kinhphucdat.com" style="color:#2563eb; text-decoration:none;">www.kinhphucdat.com</a>
+                                        <span style="color:#6b7280;"> | Hotline: 0901.116.118</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Tiêu đề trung tâm -->
+                        <div style="text-align:center; padding: 8px 0 16px 0;">
+                            <div style="font-size:20px; font-weight:800; letter-spacing:1px;">BẢNG BÁO GIÁ</div>
+                            <div style="font-size:12px; color:#374151; margin-top:6px;">
+                                Công ty TNHH Nhôm Kính Phúc Đạt xin chân thành cám ơn Quý khách đã quan tâm đến dịch vụ và sản phẩm của công ty.
+                            </div>
+                            <div style="font-size:12px; color:#374151;">
+                                Phúc Đạt xin gửi đến Quý khách bảng báo giá khối lượng công trình như sau:
+                            </div>
+                        </div>
+
+                        <!-- Thông tin khách hàng & nhân viên phụ trách -->
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; margin-bottom:10px;">
+                            <tr>
+                                <td style="font-size:13px; color:#111; font-weight:600; padding:6px 0;">
+                                    Khách Hàng: <span style="text-transform:uppercase;">{customer_name}</span>
+                                </td>
+                            </tr>
+                            {f'''<tr><td style="font-size:12px; color:#374151; padding:2px 0;">Địa chỉ: {quote_data.get('customer_address','')}</td></tr>''' if quote_data.get('customer_address') else ''}
+                            <tr>
+                                <td style="font-size:12px; color:#111; font-weight:600; padding:6px 0; text-align:right;">
+                                    Nhân viên phụ trách: {employee_display or '—'}
+                                    {f'&nbsp;&nbsp; SDT: {employee_phone}' if employee_phone else ''}
+                                </td>
+                            </tr>
+                        </table>
                     </div>
                     
                     <!-- Content -->
@@ -127,12 +282,7 @@ class EmailService:
                         </div>
                         ''' if quote_data.get('notes') else ''}
                         
-                        <!-- Action Buttons -->
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="http://localhost:3000/sales/quotes/{quote_data.get('id')}" style="background: #666; color: white; padding: 12px 24px; text-decoration: none; display: inline-block; margin: 5px;">
-                                Xem Chi Tiết Báo Giá
-                            </a>
-                        </div>
+                        
                     </div>
                     
                     <!-- Footer -->
@@ -174,18 +324,29 @@ class EmailService:
             """
             
             # Create message
-            msg = MIMEMultipart('alternative')
+            # Root related (for inline images)
+            msg = MIMEMultipart('related')
             msg['Subject'] = subject
             # Set display name for sender
             msg['From'] = f"Bộ phận Công ty Phúc Đạt <{self.smtp_username}>"
             msg['To'] = customer_email
             
-            # Attach both plain text and HTML versions
-            text_part = MIMEText(text_body, 'plain', 'utf-8')
-            html_part = MIMEText(html_body, 'html', 'utf-8')
-            
-            msg.attach(text_part)
-            msg.attach(html_part)
+            # Alternative container inside related
+            alt = MIMEMultipart('alternative')
+            alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
+            alt.attach(MIMEText(html_body, 'html', 'utf-8'))
+            msg.attach(alt)
+            self._attach_company_logo(msg)
+
+            # Try attach PDF version of the quote
+            try:
+                pdf_bytes = self._html_to_pdf_bytes(html_body)
+                if pdf_bytes:
+                    pdf_part = MIMEApplication(pdf_bytes, _subtype='pdf')
+                    pdf_part.add_header('Content-Disposition', 'attachment', filename=f"Bao-gia-{quote_data.get('quote_number','')}.pdf")
+                    msg.attach(pdf_part)
+            except Exception:
+                pass
             
             # Send email
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
@@ -229,13 +390,17 @@ class EmailService:
 
             text_body = f"{title or 'Thông báo'}\n\n{message or ''}\n\n{('Xem chi tiết: ' + action_url) if action_url else ''}"
 
-            msg = MIMEMultipart('alternative')
+            # Root related (for inline images)
+            msg = MIMEMultipart('related')
             msg['Subject'] = subject
             msg['From'] = f"Bộ phận Công ty Phúc Đạt <{self.smtp_username}>"
             msg['To'] = employee_email
 
-            msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
-            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+            alt = MIMEMultipart('alternative')
+            alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
+            alt.attach(MIMEText(html_body, 'html', 'utf-8'))
+            msg.attach(alt)
+            self._attach_company_logo(msg)
 
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
@@ -303,9 +468,12 @@ class EmailService:
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="border: 1px solid #ddd;">
                     <!-- Header -->
-                    <div style="padding: 20px; border-bottom: 1px solid #ddd; background: #f8f9fa;">
-                        <h1 style="margin: 0; color: #28a745; font-size: 24px;">Báo Giá Đã Được Duyệt</h1>
-                        <p style="margin: 10px 0 0 0; color: #666;">Chúc mừng! Báo giá của bạn đã được phê duyệt</p>
+                    <div style="padding: 12px 20px; border-bottom: 1px solid #ddd; background: #f8f9fa; display:flex; align-items:center; gap:12px;">
+                        <img src=\"cid:company_logo\" alt=\"PHÚC ĐẠT\" style=\"height:40px; display:block;\" />
+                        <div>
+                            <h1 style=\"margin: 0; color: #28a745; font-size: 20px;\">Báo Giá Đã Được Duyệt</h1>
+                            <p style=\"margin: 6px 0 0 0; color: #666;\">Chúc mừng! Báo giá của bạn đã được phê duyệt</p>
+                        </div>
                     </div>
                     
                     <!-- Content -->
@@ -358,12 +526,7 @@ class EmailService:
                         </div>
                         ''' if quote_data.get('notes') else ''}
                         
-                        <!-- Action Buttons -->
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="http://localhost:3000/sales/quotes/{quote_data.get('id')}" style="background: #28a745; color: white; padding: 12px 24px; text-decoration: none; display: inline-block; margin: 5px; border-radius: 5px;">
-                                Xem Chi Tiết Báo Giá
-                            </a>
-                        </div>
+                        
                     </div>
                     
                     <!-- Footer -->
@@ -406,17 +569,17 @@ class EmailService:
             """
             
             # Create message
-            msg = MIMEMultipart('alternative')
+            # Root related (for inline images)
+            msg = MIMEMultipart('related')
             msg['Subject'] = subject
             msg['From'] = self.smtp_username
             msg['To'] = employee_email
             
-            # Attach both plain text and HTML versions
-            text_part = MIMEText(text_body, 'plain', 'utf-8')
-            html_part = MIMEText(html_body, 'html', 'utf-8')
-            
-            msg.attach(text_part)
-            msg.attach(html_part)
+            alt = MIMEMultipart('alternative')
+            alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
+            alt.attach(MIMEText(html_body, 'html', 'utf-8'))
+            msg.attach(alt)
+            self._attach_company_logo(msg)
             
             # Send email
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:

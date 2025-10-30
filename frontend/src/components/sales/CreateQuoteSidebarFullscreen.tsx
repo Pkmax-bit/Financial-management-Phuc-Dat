@@ -38,6 +38,8 @@ interface Employee {
 interface QuoteItem {
   id?: string
   product_service_id?: string
+  expense_object_id?: string
+  component_name?: string
   name_product: string
   description: string
   quantity: number
@@ -49,6 +51,19 @@ interface QuoteItem {
   height?: number | null
   length?: number | null
   depth?: number | null
+  // values sourced strictly from product_components
+  component_unit?: string
+  component_unit_price?: number
+  component_quantity?: number
+  component_total_price?: number
+  components?: Array<{
+    expense_object_id: string
+    name?: string
+    unit: string
+    unit_price: number
+    quantity: number
+    total_price: number
+  }>
 }
 
 interface Product {
@@ -138,11 +153,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     unit: true,
     unit_price: true,
     total_price: true,
-    area: false,
-    volume: false,
-    height: false,
-    length: false,
-    depth: false
+    area: true,
+    volume: true,
+    height: true,
+    length: true,
+    depth: true,
+    components_block: true
   })
 
   // Form data
@@ -157,6 +173,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     tax_rate: 10,
     tax_amount: 0,
     total_amount: 0,
+    discount_amount: 0,
     currency: 'VND',
     status: 'draft',
     notes: '',
@@ -206,6 +223,69 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setFormData(prev => ({ ...prev, project_id: '' }))
     }
   }, [formData.customer_id])
+
+  // Load product components for selected project and convert to quote items
+  const loadProductComponentsForProject = async (projectId: string) => {
+    try {
+      if (!projectId) return
+      // Try to find a product tied to this project (by project_id); fallback: none
+      const { data: prod } = await supabase
+        .from('products')
+        .select('id, name, product_components')
+        .eq('project_id', projectId)
+        .limit(1)
+        .maybeSingle()
+      const components: any[] = Array.isArray(prod?.product_components) ? prod!.product_components as any[] : []
+      if (components.length === 0) return
+
+      // Fetch names for expense_object_ids
+      const ids = Array.from(new Set(components.map(c => String(c.expense_object_id)).filter(Boolean)))
+      let nameMap: Record<string, string> = {}
+      if (ids.length > 0) {
+        const { data: exp } = await supabase
+          .from('expense_objects')
+          .select('id, name')
+          .in('id', ids)
+        if (exp) {
+          exp.forEach((e: any) => { nameMap[e.id] = e.name })
+        }
+      }
+
+      // Convert to quote items
+      const converted = components.map(c => {
+        const quantity = Number(c.quantity || 0)
+        const unit_price = Number(c.unit_price || 0)
+        return {
+          expense_object_id: String(c.expense_object_id || ''),
+          name_product: nameMap[String(c.expense_object_id)] || String(c.expense_object_id || ''),
+          description: '',
+          quantity,
+          unit: c.unit || '',
+          unit_price,
+          total_price: quantity * unit_price,
+          area: null,
+          volume: null,
+          height: null,
+          length: null,
+          depth: null,
+          component_unit: c.unit || '',
+          component_unit_price: unit_price,
+          component_quantity: quantity,
+          component_total_price: quantity * unit_price
+        } as QuoteItem
+      })
+      if (converted.length > 0) setItems(converted)
+    } catch (_) {
+      // ignore silently
+    }
+  }
+
+  // When project changes, load product components and fill items
+  useEffect(() => {
+    if (formData.project_id) {
+      loadProductComponentsForProject(formData.project_id)
+    }
+  }, [formData.project_id])
 
   // Update selected project when project_id changes
   useEffect(() => {
@@ -372,12 +452,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       }
       
       if (data && data.length > 0) {
-        const transformedEmployees = data.map(emp => ({
-          id: emp.id,
-          name: emp.users?.full_name || `${emp.first_name} ${emp.last_name}`.trim(),
-          email: emp.email,
-          user_id: emp.user_id
-        }))
+        const transformedEmployees = data.map((emp: any) => {
+          const usersRel = emp.users
+          const userFullName = Array.isArray(usersRel) ? usersRel[0]?.full_name : usersRel?.full_name
+          return {
+            id: emp.id,
+            name: userFullName || `${emp.first_name} ${emp.last_name}`.trim(),
+            email: emp.email,
+            user_id: emp.user_id
+          }
+        })
         setEmployees(transformedEmployees)
         console.log('🔍 Employees data:', transformedEmployees)
       } else {
@@ -431,10 +515,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }])
   }
 
-  const toggleColumn = (column: string) => {
+  type VisibleColumns = typeof visibleColumns
+  const toggleColumn = (column: keyof VisibleColumns | string) => {
     setVisibleColumns(prev => ({
       ...prev,
-      [column]: !prev[column]
+      [column as keyof VisibleColumns]: !prev[column as keyof VisibleColumns]
     }))
   }
 
@@ -446,11 +531,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       unit: true,
       unit_price: true,
       total_price: true,
-      area: false,
-      volume: false,
-      height: false,
-      length: false,
-      depth: false
+      area: true,
+      volume: true,
+      height: true,
+      length: true,
+      depth: true,
+      components_block: true
     })
   }
 
@@ -460,7 +546,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   }
 
-  const updateItem = (index: number, field: keyof QuoteItem, value: string | number) => {
+  const updateItem = (index: number, field: keyof QuoteItem, value: string | number | null) => {
     const updatedItems = [...items]
     updatedItems[index] = { ...updatedItems[index], [field]: value }
     
@@ -488,27 +574,99 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       depth: product.depth
     })
     
-    if (selectedItemIndex !== null) {
-      const updatedItems = [...items]
-      const newItem = {
-        ...updatedItems[selectedItemIndex],
-        name_product: product.name,
-        description: product.description || '',
-        unit: product.unit || '',
-        unit_price: product.unit_price || 0,
-        total_price: updatedItems[selectedItemIndex].quantity * (product.unit_price || 0),
-        area: product.area !== undefined ? product.area : null,
-        volume: product.volume !== undefined ? product.volume : null,
-        height: product.height !== undefined ? product.height : null,
-        length: product.length !== undefined ? product.length : null,
-        depth: product.depth !== undefined ? product.depth : null
+    const fillFromProductComponents = async () => {
+      try {
+        // Load product with components (in case not included)
+        const { data: prod } = await supabase
+          .from('products')
+          .select('id, name, description, unit, unit_price, area, volume, height, length, depth, product_components')
+          .eq('id', product.id)
+          .maybeSingle()
+        const components: any[] = Array.isArray(prod?.product_components) ? (prod!.product_components as any[]) : []
+        // If no components and no target index, nothing to do
+        if (selectedItemIndex === null && components.length === 0) return
+
+        if (components.length === 0) {
+          // fallback to original single-line behavior
+          if (selectedItemIndex !== null) {
+            const updatedItems = [...items]
+            const newItem = {
+              ...updatedItems[selectedItemIndex],
+              name_product: product.name,
+              description: product.description || '',
+              unit: product.unit || '',
+              unit_price: (product as any).unit_price || 0,
+              total_price: updatedItems[selectedItemIndex].quantity * ((product as any).unit_price || 0),
+              area: (product as any).area ?? null,
+              volume: (product as any).volume ?? null,
+              height: (product as any).height ?? null,
+              length: (product as any).length ?? null,
+              depth: (product as any).depth ?? null
+            }
+            updatedItems[selectedItemIndex] = newItem
+            setItems(updatedItems)
+          }
+          return
+        }
+
+        // Populate only the first component onto the current row (single-row presentation)
+        const first = components[0]
+        const cQty = Number(first.quantity || 0)
+        const cPrice = Number(first.unit_price || 0)
+        // fetch names for all components
+        const compIds = Array.from(new Set(components.map((c: any) => String(c.expense_object_id)).filter(Boolean)))
+        let compNameMap: Record<string, string> = {}
+        if (compIds.length > 0) {
+          const { data: expAll } = await supabase
+            .from('expense_objects')
+            .select('id, name')
+            .in('id', compIds)
+          expAll?.forEach((e: any) => { compNameMap[e.id] = e.name })
+        }
+        const compNameSingle = compNameMap[String(first.expense_object_id)]
+        if (selectedItemIndex !== null) {
+          const updatedItems = [...items]
+          const current = updatedItems[selectedItemIndex]
+          updatedItems[selectedItemIndex] = {
+            ...current,
+            // keep base product values
+            name_product: product.name,
+            description: product.description || current.description,
+            unit: product.unit || current.unit,
+            unit_price: (product as any).unit_price ?? current.unit_price,
+            total_price: current.quantity * ((product as any).unit_price ?? current.unit_price),
+            area: (product as any).area ?? current.area ?? null,
+            volume: (product as any).volume ?? current.volume ?? null,
+            height: (product as any).height ?? current.height ?? null,
+            length: (product as any).length ?? current.length ?? null,
+            depth: (product as any).depth ?? current.depth ?? null,
+            // component-sourced fields
+            expense_object_id: String(first.expense_object_id || ''),
+            component_name: compNameSingle,
+            component_unit: first.unit || '',
+            component_unit_price: cPrice,
+            component_quantity: cQty,
+            component_total_price: cQty * cPrice,
+            components: components.map((c: any) => ({
+              expense_object_id: String(c.expense_object_id || ''),
+              name: compNameMap[String(c.expense_object_id)] || String(c.expense_object_id || ''),
+              unit: c.unit || '',
+              unit_price: Number(c.unit_price || 0),
+              quantity: Number(c.quantity || 0),
+              total_price: Number(c.quantity || 0) * Number(c.unit_price || 0)
+            }))
+          }
+          setItems(updatedItems)
+        }
+      } catch (_) {
+        // ignore
       }
-      console.log('🔍 New item after selection:', newItem)
-      updatedItems[selectedItemIndex] = newItem
-      setItems(updatedItems)
     }
-    setShowProductModal(false)
-    setSelectedItemIndex(null)
+
+    fillFromProductComponents().finally(() => {
+      setShowProductModal(false)
+      setSelectedItemIndex(null)
+    })
   }
 
   const handleSubmit = async () => {
@@ -550,7 +708,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         status: formData.status,
         notes: formData.notes || null,
         terms: formData.terms || null,
-        created_by
+        created_by,
+        employee_in_charge_id: created_by
       }
 
       // Debug logging
@@ -653,6 +812,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       tax_rate: 10,
       tax_amount: 0,
       total_amount: 0,
+      discount_amount: 0,
       currency: 'VND',
       status: 'draft',
       notes: '',
@@ -701,7 +861,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-auto p-6">
           <div className="w-full">
             {/* Basic Information */}
             <div className="mb-8">
@@ -870,22 +1030,24 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-300 rounded-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <div className="bg-white border border-gray-300 rounded-md overflow-hidden min-w-[1800px]">
                 {/* Header */}
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-300">
-                  <div className="grid gap-4 text-sm font-medium text-black" style={{
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-300">
+                    <div className="grid gap-4 text-sm font-medium text-black" style={{
                     gridTemplateColumns: [
-                      visibleColumns.name && '2fr',
-                      visibleColumns.description && '2fr', 
-                      visibleColumns.quantity && '1fr',
-                      visibleColumns.unit && '1fr',
-                      visibleColumns.unit_price && '1.5fr',
-                      visibleColumns.total_price && '1.5fr',
-                      visibleColumns.area && '1fr',
-                      visibleColumns.volume && '1fr',
-                      visibleColumns.height && '1fr',
-                      visibleColumns.length && '1fr',
-                      visibleColumns.depth && '1fr'
+                      visibleColumns.name && 'minmax(260px, 1fr)',
+                      visibleColumns.description && 'minmax(320px, 1fr)', 
+                      visibleColumns.quantity && 'minmax(70px, 1fr)',
+                      visibleColumns.unit && 'minmax(70px, 1fr)',
+                      visibleColumns.unit_price && 'minmax(120px, 1fr)',
+                      visibleColumns.total_price && 'minmax(120px, 1fr)',
+                      visibleColumns.area && 'minmax(90px, 1fr)',
+                      visibleColumns.volume && 'minmax(90px, 1fr)',
+                      visibleColumns.height && 'minmax(90px, 1fr)',
+                      visibleColumns.length && 'minmax(90px, 1fr)',
+                      visibleColumns.depth && 'minmax(90px, 1fr)',
+                      visibleColumns.components_block && 'minmax(480px, 2fr)'
                     ].filter(Boolean).join(' ')
                   }}>
                     {visibleColumns.name && <div>Tên sản phẩm</div>}
@@ -894,11 +1056,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     {visibleColumns.unit && <div>Đơn vị</div>}
                     {visibleColumns.unit_price && <div>Đơn giá</div>}
                     {visibleColumns.total_price && <div>Thành tiền</div>}
-                    {visibleColumns.area && <div>Diện tích</div>}
-                    {visibleColumns.volume && <div>Thể tích</div>}
-                    {visibleColumns.height && <div>Cao</div>}
-                    {visibleColumns.length && <div>Dài</div>}
-                    {visibleColumns.depth && <div>Sâu</div>}
+                    {visibleColumns.area && <div>Diện tích (m²)</div>}
+                    {visibleColumns.volume && <div>Thể tích (m³)</div>}
+                    {visibleColumns.height && <div>Cao (mm)</div>}
+                    {visibleColumns.length && <div>Dài (mm)</div>}
+                    {visibleColumns.depth && <div>Sâu (mm)</div>}
+                    {visibleColumns.components_block && <div>Vật tư (theo sản phẩm)</div>}
                   </div>
                 </div>
 
@@ -908,17 +1071,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     <div key={index} className="px-4 py-3">
                       <div className="grid gap-4 items-center" style={{
                         gridTemplateColumns: [
-                          visibleColumns.name && '2fr',
-                          visibleColumns.description && '2fr', 
-                          visibleColumns.quantity && '1fr',
-                          visibleColumns.unit && '1fr',
-                          visibleColumns.unit_price && '1.5fr',
-                          visibleColumns.total_price && '1.5fr',
-                          visibleColumns.area && '1fr',
-                          visibleColumns.volume && '1fr',
-                          visibleColumns.height && '1fr',
-                          visibleColumns.length && '1fr',
-                          visibleColumns.depth && '1fr'
+                          visibleColumns.name && 'minmax(260px, 1fr)',
+                          visibleColumns.description && 'minmax(320px, 1fr)', 
+                          visibleColumns.quantity && 'minmax(70px, 1fr)',
+                          visibleColumns.unit && 'minmax(70px, 1fr)',
+                          visibleColumns.unit_price && 'minmax(120px, 1fr)',
+                          visibleColumns.total_price && 'minmax(120px, 1fr)',
+                          visibleColumns.area && 'minmax(90px, 1fr)',
+                          visibleColumns.volume && 'minmax(90px, 1fr)',
+                          visibleColumns.height && 'minmax(90px, 1fr)',
+                          visibleColumns.length && 'minmax(90px, 1fr)',
+                          visibleColumns.depth && 'minmax(90px, 1fr)',
+                          visibleColumns.components_block && 'minmax(480px, 2fr)'
                         ].filter(Boolean).join(' ')
                       }}>
                         {visibleColumns.name && (
@@ -1034,8 +1198,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               value={item.height ?? ''}
                               onChange={(e) => updateItem(index, 'height', e.target.value ? Number(e.target.value) : null)}
                               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="cm"
-                              step="0.1"
+                              placeholder="mm"
+                              step="1"
                             />
                           </div>
                         )}
@@ -1046,8 +1210,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               value={item.length ?? ''}
                               onChange={(e) => updateItem(index, 'length', e.target.value ? Number(e.target.value) : null)}
                               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="cm"
-                              step="0.1"
+                              placeholder="mm"
+                              step="1"
                             />
                           </div>
                         )}
@@ -1058,14 +1222,49 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               value={item.depth ?? ''}
                               onChange={(e) => updateItem(index, 'depth', e.target.value ? Number(e.target.value) : null)}
                               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="cm"
-                              step="0.1"
+                              placeholder="mm"
+                              step="1"
                             />
+                          </div>
+                        )}
+                        {/* standalone component columns removed per request */}
+                        {visibleColumns.components_block && (
+                          <div className="text-sm text-black">
+                            {/* Use the main table's horizontal scroll only */}
+                            <div className="min-w-max">
+                              {/* Header row: component names, each spans 4 columns */}
+                              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(item.components || []).length * 4 || 4}, minmax(100px, 1fr))` }}>
+                                {(item.components || []).map((c, idx) => (
+                                  <div key={`name-${idx}`} className="col-span-4 font-semibold text-gray-800 whitespace-nowrap px-2 py-1 bg-gray-100 border border-gray-200 rounded-md">
+                                    {c.name || c.expense_object_id}
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Subheader: fixed labels for each component */}
+                              <div className="mt-2 grid gap-2 text-xs text-gray-600" style={{ gridTemplateColumns: `repeat(${(item.components || []).length * 4 || 4}, minmax(100px, 1fr))` }}>
+                                {(item.components || []).flatMap((_, idx) => [
+                                  <div key={`lbl-unit-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Đơn vị</div>,
+                                  <div key={`lbl-price-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Đơn giá</div>,
+                                  <div key={`lbl-qty-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Số lượng</div>,
+                                  <div key={`lbl-total-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded">Thành tiền</div>
+                                ])}
+                              </div>
+                              {/* Values row: values per component */}
+                              <div className="mt-1 grid gap-2 text-xs text-gray-800" style={{ gridTemplateColumns: `repeat(${(item.components || []).length * 4 || 4}, minmax(100px, 1fr))` }}>
+                                {(item.components || []).flatMap((c, idx) => [
+                                  <div key={`val-unit-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{c.unit}</div>,
+                                  <div key={`val-price-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{formatCurrency(c.unit_price)}</div>,
+                                  <div key={`val-qty-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{c.quantity}</div>,
+                                  <div key={`val-total-${idx}`} className="px-2 py-1 bg-white border border-gray-200 rounded truncate">{formatCurrency(c.total_price)}</div>
+                                ])}
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
                   ))}
+                </div>
                 </div>
               </div>
             </div>
@@ -1363,13 +1562,33 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 Hủy
               </button>
               <button
-                onClick={() => {
-                  // Map selected products into quote items, starting at current/first empty row
+                onClick={async () => {
                   const map = new Map(products.map(p => [p.id, p]))
                   const chosen = selectedProductIds.map(id => map.get(id)).filter(Boolean) as Product[]
                   if (chosen.length > 0) {
+                    // Load full products with product_components
+                    const productIds = chosen.map(p => p.id)
+                    const { data: prods } = await supabase
+                      .from('products')
+                      .select('id, name, description, unit, price, area, volume, height, length, depth, product_components')
+                      .in('id', productIds)
+
+                    const byId: Record<string, any> = {}
+                    prods?.forEach((pr: any) => { byId[pr.id] = pr })
+
+                    // Collect all expense_object_ids to batch fetch names
+                    const allComponents = (prods || []).flatMap((pr: any) => Array.isArray(pr.product_components) ? pr.product_components : [])
+                    const ids = Array.from(new Set(allComponents.map((c: any) => String(c.expense_object_id)).filter(Boolean)))
+                    let nameMap: Record<string, string> = {}
+                    if (ids.length > 0) {
+                      const { data: exp } = await supabase
+                        .from('expense_objects')
+                        .select('id, name')
+                        .in('id', ids)
+                      exp?.forEach((e: any) => { nameMap[e.id] = e.name })
+                    }
+
                     const newItems = [...items]
-                    // Determine starting index: selected row or first empty row
                     const findEmptyFrom = (startIdx: number) => {
                       for (let i = Math.max(0, startIdx); i < newItems.length; i++) {
                         if (!newItems[i].name_product || newItems[i].name_product.trim() === '') return i
@@ -1377,9 +1596,52 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       return -1
                     }
                     let insertIdx = selectedItemIndex !== null ? selectedItemIndex : findEmptyFrom(0)
+
                     for (const p of chosen) {
+                      const full = byId[p.id]
+                      const components: any[] = Array.isArray(full?.product_components) ? full.product_components : []
+                      if (components.length === 0) {
+                        // fallback to single product row
+                        if (insertIdx !== -1) {
+                          newItems[insertIdx] = {
+                            ...newItems[insertIdx],
+                            name_product: p.name,
+                            description: p.description || '',
+                            quantity: newItems[insertIdx].quantity || 1,
+                            unit: p.unit || '',
+                            unit_price: p.unit_price || 0,
+                            total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0),
+                            area: p.area ?? null,
+                            volume: p.volume ?? null,
+                            height: p.height ?? null,
+                            length: p.length ?? null,
+                            depth: p.depth ?? null
+                          }
+                          insertIdx = findEmptyFrom(insertIdx + 1)
+                        } else {
+                          newItems.push({
+                            name_product: p.name,
+                            description: p.description || '',
+                            quantity: 1,
+                            unit: p.unit || '',
+                            unit_price: p.unit_price || 0,
+                            total_price: (p.unit_price || 0),
+                            area: p.area ?? null,
+                            volume: p.volume ?? null,
+                            height: p.height ?? null,
+                            length: p.length ?? null,
+                            depth: p.depth ?? null
+                          })
+                        }
+                        continue
+                      }
+
+                      // single-row presentation: take only first component
+                      const first = components[0]
+                      const q = Number(first.quantity || 0)
+                      const up = Number(first.unit_price || 0)
+                      const compName = nameMap[String(first.expense_object_id)] || String(first.expense_object_id || '')
                       if (insertIdx !== -1) {
-                        // Fill existing empty row
                         newItems[insertIdx] = {
                           ...newItems[insertIdx],
                           name_product: p.name,
@@ -1388,15 +1650,28 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
                           total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0),
-                          area: p.area !== undefined ? p.area : null,
-                          volume: p.volume !== undefined ? p.volume : null,
-                          height: p.height !== undefined ? p.height : null,
-                          length: p.length !== undefined ? p.length : null,
-                          depth: p.depth !== undefined ? p.depth : null
+                          area: p.area ?? null,
+                          volume: p.volume ?? null,
+                          height: p.height ?? null,
+                          length: p.length ?? null,
+                          depth: p.depth ?? null,
+                          expense_object_id: String(first.expense_object_id || ''),
+                          component_name: compName,
+                          component_unit: first.unit || '',
+                          component_unit_price: up,
+                          component_quantity: q,
+                          component_total_price: q * up,
+                          components: components.map((c: any) => ({
+                            expense_object_id: String(c.expense_object_id || ''),
+                            name: nameMap[String(c.expense_object_id)] || String(c.expense_object_id || ''),
+                            unit: c.unit || '',
+                            unit_price: Number(c.unit_price || 0),
+                            quantity: Number(c.quantity || 0),
+                            total_price: Number(c.quantity || 0) * Number(c.unit_price || 0)
+                          }))
                         }
                         insertIdx = findEmptyFrom(insertIdx + 1)
                       } else {
-                        // Append new row
                         newItems.push({
                           name_product: p.name,
                           description: p.description || '',
@@ -1404,11 +1679,25 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
                           total_price: (p.unit_price || 0),
-                          area: p.area !== undefined ? p.area : null,
-                          volume: p.volume !== undefined ? p.volume : null,
-                          height: p.height !== undefined ? p.height : null,
-                          length: p.length !== undefined ? p.length : null,
-                          depth: p.depth !== undefined ? p.depth : null
+                          area: p.area ?? null,
+                          volume: p.volume ?? null,
+                          height: p.height ?? null,
+                          length: p.length ?? null,
+                          depth: p.depth ?? null,
+                          expense_object_id: String(first.expense_object_id || ''),
+                          component_name: compName,
+                          component_unit: first.unit || '',
+                          component_unit_price: up,
+                          component_quantity: q,
+                          component_total_price: q * up,
+                          components: components.map((c: any) => ({
+                            expense_object_id: String(c.expense_object_id || ''),
+                            name: nameMap[String(c.expense_object_id)] || String(c.expense_object_id || ''),
+                            unit: c.unit || '',
+                            unit_price: Number(c.unit_price || 0),
+                            quantity: Number(c.quantity || 0),
+                            total_price: Number(c.quantity || 0) * Number(c.unit_price || 0)
+                          }))
                         })
                       }
                     }

@@ -29,6 +29,11 @@ interface QuoteItem {
   unit_price: number
   subtotal: number
   unit?: string
+  length?: number
+  height?: number
+  depth?: number
+  area?: number
+  volume?: number
 }
 
 interface CreateQuoteModalProps {
@@ -56,7 +61,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
   })
 
   const [items, setItems] = useState<QuoteItem[]>([
-    { description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '' }
+    { description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '', length: undefined, height: undefined, depth: undefined, area: undefined, volume: undefined }
   ])
 
   useEffect(() => {
@@ -98,7 +103,7 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
   }
 
   const addItem = () => {
-    setItems([...items, { description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '' }])
+    setItems([...items, { description: '', quantity: 1, unit_price: 0, subtotal: 0, unit: '', length: undefined, height: undefined, depth: undefined, area: undefined, volume: undefined }])
   }
 
   const removeItem = (index: number) => {
@@ -133,7 +138,12 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
           quantity: item.quantity,
           unit_price: item.unit_price,
           subtotal: item.subtotal,
-          unit: item.unit || null
+          unit: item.unit || null,
+          length: item.length ?? null,
+          height: item.height ?? null,
+          depth: item.depth ?? null,
+          area: item.area ?? null,
+          volume: item.volume ?? null
         })),
         tax_amount,
         total_amount,
@@ -282,6 +292,11 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Mô tả</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Số lượng</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Đơn vị</th>
+                    <th className="px-2 py-3 text-left text-sm font-semibold text-gray-900">Dài</th>
+                    <th className="px-2 py-3 text-left text-sm font-semibold text-gray-900">Rộng</th>
+                    <th className="px-2 py-3 text-left text-sm font-semibold text-gray-900">Sâu</th>
+                    <th className="px-2 py-3 text-left text-sm font-semibold text-gray-900">Diện tích</th>
+                    <th className="px-2 py-3 text-left text-sm font-semibold text-gray-900">Thể tích</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Đơn giá</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Thành tiền</th>
                     <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">Hành động</th>
@@ -297,6 +312,61 @@ export default function CreateQuoteModal({ isOpen, onClose, onSuccess }: CreateQ
                           onChange={(e) => updateItem(index, 'description', e.target.value)}
                           className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
                           placeholder="Mô tả sản phẩm/dịch vụ"
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          type="number"
+                          value={item.length ?? ''}
+                          onChange={(e) => updateItem(index, 'length', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
+                          placeholder="cm"
+                          min="0"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          type="number"
+                          value={item.height ?? ''}
+                          onChange={(e) => updateItem(index, 'height', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
+                          placeholder="cm"
+                          min="0"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          type="number"
+                          value={item.depth ?? ''}
+                          onChange={(e) => updateItem(index, 'depth', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
+                          placeholder="cm"
+                          min="0"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          type="number"
+                          value={item.area ?? ''}
+                          onChange={(e) => updateItem(index, 'area', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
+                          placeholder="m²"
+                          min="0"
+                          step="0.0001"
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          type="number"
+                          value={item.volume ?? ''}
+                          onChange={(e) => updateItem(index, 'volume', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-right text-gray-900"
+                          placeholder="m³"
+                          min="0"
+                          step="0.0001"
                         />
                       </td>
                     <td className="px-4 py-2">
