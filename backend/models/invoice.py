@@ -56,6 +56,7 @@ class Invoice(BaseModel):
     items: Optional[List[dict]] = None
     notes: Optional[str] = None
     created_by: Optional[str] = None
+    product_components: Optional[List[dict]] = None
     reminder_sent_at: Optional[datetime] = None
     reminder_count: int = 0
     created_at: datetime
@@ -76,6 +77,7 @@ class InvoiceCreate(BaseModel):
     currency: str = "VND"
     items: Optional[List[dict]] = None
     notes: Optional[str] = None
+    product_components: Optional[List[dict]] = None
 
 class InvoiceUpdate(BaseModel):
     """Invoice update model"""
@@ -97,6 +99,7 @@ class InvoiceUpdate(BaseModel):
     payment_date: Optional[date] = None
     items: Optional[List[dict]] = None
     notes: Optional[str] = None
+    product_components: Optional[List[dict]] = None
     terms_and_conditions: Optional[str] = None
     payment_terms: Optional[str] = None
     discount_amount: Optional[float] = None

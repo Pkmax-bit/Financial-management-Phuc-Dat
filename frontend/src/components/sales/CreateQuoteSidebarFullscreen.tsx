@@ -17,7 +17,7 @@ import {
   Search,
   Eye
 } from 'lucide-react'
-import { apiPost } from '@/lib/api'
+import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ColumnVisibilityDialog from './ColumnVisibilityDialog'
 
@@ -550,8 +550,124 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   }
 
-  const updateItem = (index: number, field: keyof QuoteItem, value: string | number | null) => {
+  // Helper function to apply material adjustment rules
+  const applyMaterialAdjustmentRules = async (
+    itemIndex: number,
+    dimensionType: 'area' | 'volume' | 'height' | 'length' | 'depth' | 'quantity',
+    oldValue: number | null,
+    newValue: number | null
+  ) => {
+    if (oldValue === null || newValue === null || oldValue === newValue) {
+      return // No change or invalid values
+    }
+
+    const item = items[itemIndex]
+    const components = Array.isArray(item.components) ? item.components : []
+    if (components.length === 0) return
+
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      
+      // Apply adjustments for each component
+      const adjustedComponents = await Promise.all(
+        components.map(async (component: any) => {
+          const expenseObjectId = component.expense_object_id
+          if (!expenseObjectId) return component
+
+          // Get applicable rules using apiGet for authentication
+          try {
+            const rules = await apiGet(
+              `${API_BASE_URL}/api/material-adjustment-rules?expense_object_id=${expenseObjectId}&dimension_type=${dimensionType}&is_active=true`
+            )
+            if (!Array.isArray(rules) || rules.length === 0) return component
+
+            // Calculate change
+            const changePercentage = ((newValue - oldValue) / oldValue) * 100
+            const changeAbsolute = newValue - oldValue
+            const changeDirection = changeAbsolute > 0 ? 'increase' : 'decrease'
+
+              // Find applicable rules
+            const applicableRules = rules.filter((rule: any) => {
+              // Check change direction
+              if (rule.change_direction !== 'both' && rule.change_direction !== changeDirection) {
+                return false
+              }
+
+              // Check change threshold
+              if (rule.change_type === 'percentage') {
+                return Math.abs(changePercentage) >= Math.abs(rule.change_value)
+              } else if (rule.change_type === 'absolute') {
+                return Math.abs(changeAbsolute) >= Math.abs(rule.change_value)
+              }
+              return false
+            })
+
+            if (applicableRules.length === 0) return component
+
+            // Apply adjustments (multiple rules can stack)
+            let adjustedQuantity = Number(component.quantity || 0)
+            let adjustedUnitPrice = Number(component.unit_price || 0)
+
+            for (const rule of applicableRules.sort((a: any, b: any) => a.priority - b.priority)) {
+              const adjustmentValue = Number(rule.adjustment_value || 0)
+              
+              if (rule.adjustment_type === 'percentage') {
+                // Apply percentage adjustment to quantity
+                const adjustmentFactor = 1 + (adjustmentValue / 100)
+                adjustedQuantity = adjustedQuantity * adjustmentFactor
+              } else if (rule.adjustment_type === 'absolute') {
+                // Apply absolute adjustment to quantity
+                adjustedQuantity = adjustedQuantity + adjustmentValue
+              }
+            }
+
+            return {
+              ...component,
+              quantity: Math.max(0, adjustedQuantity), // Ensure non-negative
+              total_price: Math.max(0, adjustedQuantity) * adjustedUnitPrice
+            }
+          } catch (error) {
+            console.error('Error fetching adjustment rules:', error)
+            return component
+          }
+        })
+      )
+
+      // Update item with adjusted components
+      const updatedItems = [...items]
+      updatedItems[itemIndex] = {
+        ...updatedItems[itemIndex],
+        components: adjustedComponents
+      }
+
+      // Recalculate item total from components
+      const compSum = adjustedComponents.reduce(
+        (sum: number, c: any) => sum + (Number(c.total_price) || 0),
+        0
+      )
+      updatedItems[itemIndex].total_price = compSum > 0 
+        ? compSum 
+        : updatedItems[itemIndex].quantity * updatedItems[itemIndex].unit_price
+
+      setItems(updatedItems)
+    } catch (error) {
+      console.error('Error applying material adjustment rules:', error)
+      // Continue without adjustment on error
+    }
+  }
+
+  const updateItem = async (index: number, field: keyof QuoteItem, value: string | number | null) => {
     const updatedItems = [...items]
+    const oldItem = { ...updatedItems[index] }
+    
+    // Store old values for dimension fields
+    const oldArea = oldItem.area
+    const oldVolume = oldItem.volume
+    const oldHeight = oldItem.height
+    const oldLength = oldItem.length
+    const oldDepth = oldItem.depth
+    const oldQuantity = oldItem.quantity
+
     updatedItems[index] = { ...updatedItems[index], [field]: value }
     
     // Recalculate total_price for this item
@@ -561,6 +677,24 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
     
     setItems(updatedItems)
+
+    // Apply material adjustment rules when dimensions or quantity change
+    const newValue = value !== null ? Number(value) : null
+    if (newValue !== null && oldItem.components && oldItem.components.length > 0) {
+      if (field === 'area' && oldArea !== null && oldArea !== undefined && oldArea !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'area', oldArea, newValue)
+      } else if (field === 'volume' && oldVolume !== null && oldVolume !== undefined && oldVolume !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'volume', oldVolume, newValue)
+      } else if (field === 'height' && oldHeight !== null && oldHeight !== undefined && oldHeight !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'height', oldHeight, newValue)
+      } else if (field === 'length' && oldLength !== null && oldLength !== undefined && oldLength !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'length', oldLength, newValue)
+      } else if (field === 'depth' && oldDepth !== null && oldDepth !== undefined && oldDepth !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'depth', oldDepth, newValue)
+      } else if (field === 'quantity' && oldQuantity !== null && oldQuantity !== undefined && oldQuantity !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'quantity', oldQuantity, newValue)
+      }
+    }
   }
 
   // Editable components (vật tư) fields per quote item
@@ -771,13 +905,39 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           depth: item.depth
         }))
 
-        const { error: itemsError } = await supabase
+        const { data: insertedItems, error: itemsError } = await supabase
           .from('quote_items')
           .insert(quoteItems)
+          .select('id')
 
         if (itemsError) {
           console.error('Error creating quote items:', itemsError)
           // Don't throw error here, quote was created successfully
+        } else if (insertedItems && insertedItems.length === items.length) {
+          // Insert components for each quote item if any
+          const componentRows = items.flatMap((item, idx) => {
+            const quote_item_id = insertedItems[idx].id
+            const comps: any[] = Array.isArray((item as any).components) ? ((item as any).components as any[]) : []
+            return comps.map((c: any) => ({
+              quote_item_id,
+              expense_object_id: c.expense_object_id || null,
+              name: c.name || null,
+              unit: c.unit || null,
+              unit_price: Number(c.unit_price || 0),
+              quantity: Number(c.quantity || 0),
+              total_price: Number(c.total_price || 0)
+            }))
+          })
+
+          if (componentRows.length > 0) {
+            const { error: compsError } = await supabase
+              .from('quote_item_components')
+              .insert(componentRows)
+
+            if (compsError) {
+              console.error('Error creating quote item components:', compsError)
+            }
+          }
         }
       }
 
@@ -1137,12 +1297,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               <div className="overflow-auto max-h-[60vh]">
                 <div className="bg-white border border-gray-300 rounded-md inline-block min-w-max">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 sticky top-0 z-10 shadow-sm">
-                    <div className="grid gap-2 text-xs font-medium text-black" style={{
+                    <div className="grid gap-2 text-xs font-medium text-black items-start" style={{
                       gridTemplateColumns: [
                         visibleColumns.name && 'minmax(200px, auto)',
                         visibleColumns.description && 'minmax(220px, auto)',
                         visibleColumns.quantity && 'minmax(60px, auto)',
-                        visibleColumns.unit && 'minmax(60px, auto)',
+                        visibleColumns.unit && 'minmax(50px, auto)',
                         visibleColumns.unit_price && 'minmax(100px, auto)',
                         visibleColumns.total_price && 'minmax(110px, auto)',
                         visibleColumns.area && 'minmax(80px, auto)',
@@ -1150,7 +1310,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         visibleColumns.height && 'minmax(80px, auto)',
                         visibleColumns.length && 'minmax(80px, auto)',
                         visibleColumns.depth && 'minmax(80px, auto)',
-                        visibleColumns.components_block && 'minmax(520px, auto)'
+                        visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * (50 + 100 + 80 + 110)}px, auto)`
                       ].filter(Boolean).join(' ')
                     }}>
                       {visibleColumns.name && <div>Tên sản phẩm</div>}
@@ -1165,23 +1325,30 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       {visibleColumns.length && <div>Dài (mm)</div>}
                       {visibleColumns.depth && <div>Sâu (mm)</div>}
                       {visibleColumns.components_block && (
-                        <div className="min-w-[440px]">
-                          <div className="w-full">
-                            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(100px, auto))` }}>
-                              {(headerComponents.length > 0 ? headerComponents : [{}]).map((c: any, idx: number) => (
-                                <div key={`hdr-comp-name-${idx}`} className="col-span-4 font-semibold text-gray-800 whitespace-nowrap px-2">
-                                  {c?.name || c?.expense_object_id || 'Vật tư'}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(100px, auto))` }}>
-                              {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
-                                <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
-                                <div key={`hdr-price-${idx}`} className="px-2">Đơn giá</div>,
-                                <div key={`hdr-qty-${idx}`} className="px-2">Số lượng</div>,
-                                <div key={`hdr-total-${idx}`} className="px-2">Thành tiền</div>
-                              ])}
-                            </div>
+                        <div className="w-full">
+                          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(auto, auto))` }}>
+                            {(headerComponents.length > 0 ? headerComponents : [{}]).map((c: any, idx: number) => (
+                              <div key={`hdr-comp-name-${idx}`} className="col-span-4 font-semibold text-gray-800 whitespace-nowrap px-2">
+                                {c?.name || c?.expense_object_id || 'Vật tư'}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{ 
+                            gridTemplateColumns: [
+                              ...Array((headerComponents.length || 1)).fill(null).flatMap(() => [
+                                'minmax(50px, auto)',  // Đơn vị - 5 ký tự
+                                'minmax(100px, auto)', // Đơn giá
+                                'minmax(80px, auto)',  // Số lượng
+                                'minmax(110px, auto)'  // Thành tiền
+                              ])
+                            ].join(' ')
+                          }}>
+                            {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
+                              <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
+                              <div key={`hdr-price-${idx}`} className="px-2">Đơn giá</div>,
+                              <div key={`hdr-qty-${idx}`} className="px-2">Số lượng</div>,
+                              <div key={`hdr-total-${idx}`} className="px-2">Thành tiền</div>
+                            ])}
                           </div>
                         </div>
                       )}
@@ -1199,7 +1366,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             visibleColumns.name && 'minmax(200px, auto)',
                             visibleColumns.description && 'minmax(220px, auto)',
                             visibleColumns.quantity && 'minmax(60px, auto)',
-                            visibleColumns.unit && 'minmax(60px, auto)',
+                            visibleColumns.unit && 'minmax(50px, auto)',
                             visibleColumns.unit_price && 'minmax(100px, auto)',
                             visibleColumns.total_price && 'minmax(110px, auto)',
                             visibleColumns.area && 'minmax(80px, auto)',
@@ -1207,7 +1374,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             visibleColumns.height && 'minmax(80px, auto)',
                             visibleColumns.length && 'minmax(80px, auto)',
                             visibleColumns.depth && 'minmax(80px, auto)',
-                            visibleColumns.components_block && 'minmax(440px, auto)'
+                            visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * (50 + 100 + 80 + 110)}px, auto)`
                           ].filter(Boolean).join(' ')
                         }}>
                           {visibleColumns.name && (
@@ -1264,8 +1431,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 type="text"
                                 value={item.unit}
                                 onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="cái"
+                                maxLength={5}
                               />
                             </div>
                           )}
@@ -1369,52 +1537,60 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             </div>
                           )}
                           {visibleColumns.components_block && (
-                            <div className="text-sm text-black">
-                              <div className="min-w-max">
-                                <div className="grid" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(120px, auto))` }}>
-                                  {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
-                                    const match = (item.components || []).find((c: any) => c.expense_object_id === hc.expense_object_id) || (item.components || [])[idx] || {}
-                                    const editIndex = index * 1000 + idx
-                                    return [
-                                      <div key={`val-unit-${idx}`} className="px-2 py-1 text-xs text-gray-800 border border-gray-200">
-                                        <input
-                                          type="text"
-                                          value={match.unit || ''}
-                                          onChange={(e) => updateComponentField(index, idx, 'unit', e.target.value)}
-                                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                          placeholder="Đơn vị"
-                                        />
-                                      </div>,
-                                      <div key={`val-price-${idx}`} className="px-2 py-1 text-xs text-gray-800 border border-gray-200">
-                                        <EditableNumberCell
-                                          value={match.unit_price != null ? Number(match.unit_price) : null}
-                                          onChange={(v) => updateComponentField(index, idx, 'unit_price', Number(v || 0))}
-                                          format="currency"
-                                          step={1000}
-                                          min={0}
-                                          placeholder="0 ₫"
-                                          index={editIndex}
-                                          field={`comp-${idx}-unit_price`}
-                                        />
-                                      </div>,
-                                      <div key={`val-qty-${idx}`} className="px-2 py-1 text-xs text-gray-800 border border-gray-200">
-                                        <EditableNumberCell
-                                          value={match.quantity != null ? Number(match.quantity) : null}
-                                          onChange={(v) => updateComponentField(index, idx, 'quantity', Number(v || 0))}
-                                          format="number"
-                                          step={1}
-                                          min={0}
-                                          placeholder="0"
-                                          index={editIndex}
-                                          field={`comp-${idx}-quantity`}
-                                        />
-                                      </div>,
-                                      <div key={`val-total-${idx}`} className="px-3 py-2 text-xs text-gray-800 border border-gray-200 truncate">
-                                        {match.total_price != null ? formatCurrency(Number(match.total_price)) : ''}
-                                      </div>
-                                    ]
-                                  })}
-                                </div>
+                            <div className="text-sm text-black w-full">
+                              <div className="grid gap-2" style={{ 
+                                gridTemplateColumns: [
+                                  ...Array((headerComponents.length || 1)).fill(null).flatMap(() => [
+                                    'minmax(50px, auto)',  // Đơn vị - 5 ký tự
+                                    'minmax(100px, auto)', // Đơn giá
+                                    'minmax(80px, auto)',  // Số lượng
+                                    'minmax(110px, auto)'  // Thành tiền
+                                  ])
+                                ].join(' ')
+                              }}>
+                                {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
+                                  const match = (item.components || []).find((c: any) => c.expense_object_id === hc.expense_object_id) || (item.components || [])[idx] || {}
+                                  const editIndex = index * 1000 + idx
+                                  return [
+                                    <div key={`val-unit-${idx}`} className="px-2 py-1 text-xs text-gray-800">
+                                      <input
+                                        type="text"
+                                        value={match.unit || ''}
+                                        onChange={(e) => updateComponentField(index, idx, 'unit', e.target.value)}
+                                        className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        placeholder="Đơn vị"
+                                        maxLength={5}
+                                      />
+                                    </div>,
+                                    <div key={`val-price-${idx}`} className="px-2 py-1 text-xs text-gray-800">
+                                      <EditableNumberCell
+                                        value={match.unit_price != null ? Number(match.unit_price) : null}
+                                        onChange={(v) => updateComponentField(index, idx, 'unit_price', Number(v || 0))}
+                                        format="currency"
+                                        step={1000}
+                                        min={0}
+                                        placeholder="0 ₫"
+                                        index={editIndex}
+                                        field={`comp-${idx}-unit_price`}
+                                      />
+                                    </div>,
+                                    <div key={`val-qty-${idx}`} className="px-2 py-1 text-xs text-gray-800">
+                                      <EditableNumberCell
+                                        value={match.quantity != null ? Number(match.quantity) : null}
+                                        onChange={(v) => updateComponentField(index, idx, 'quantity', Number(v || 0))}
+                                        format="number"
+                                        step={1}
+                                        min={0}
+                                        placeholder="0"
+                                        index={editIndex}
+                                        field={`comp-${idx}-quantity`}
+                                      />
+                                    </div>,
+                                    <div key={`val-total-${idx}`} className="px-2 py-1 text-xs text-gray-800">
+                                      {match.total_price != null ? formatCurrency(Number(match.total_price)) : ''}
+                                    </div>
+                                  ]
+                                })}
                               </div>
                             </div>
                           )}

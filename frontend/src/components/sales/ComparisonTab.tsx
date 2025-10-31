@@ -40,6 +40,12 @@ interface Quote {
   tax_amount: number
   total_amount: number
   status: string
+  product_components?: Array<{
+    unit: string
+    quantity: number
+    unit_price: number
+    expense_object_id: string
+  }>
   created_at: string
 }
 
@@ -57,6 +63,12 @@ interface Invoice {
   tax_rate: number
   tax_amount: number
   total_amount: number
+  product_components?: Array<{
+    unit: string
+    quantity: number
+    unit_price: number
+    expense_object_id: string
+  }>
   status: string
   payment_status: string
   created_at: string

@@ -104,6 +104,12 @@ export interface Invoice {
   paid_amount: number
   items: InvoiceItem[]
   notes?: string
+  product_components?: Array<{
+    unit: string
+    quantity: number
+    unit_price: number
+    expense_object_id: string
+  }>
   created_at: string
   updated_at: string
 }

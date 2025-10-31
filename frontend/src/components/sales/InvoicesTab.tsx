@@ -51,6 +51,12 @@ interface Invoice {
   items: unknown[]
   notes?: string
   terms_and_conditions?: string
+  product_components?: Array<{
+    unit: string
+    quantity: number
+    unit_price: number
+    expense_object_id: string
+  }>
   sent_at?: string
   viewed_at?: string
   last_reminder_sent?: string

@@ -31,6 +31,12 @@ interface Quote {
   status: string
   notes?: string
   terms?: string
+  product_components?: Array<{
+    unit: string
+    quantity: number
+    unit_price: number
+    expense_object_id: string
+  }>
   created_by: string
   created_at: string
   updated_at: string

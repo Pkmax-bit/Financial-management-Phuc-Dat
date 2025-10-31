@@ -30,6 +30,7 @@ class Quote(BaseModel):
     status: QuoteStatus = QuoteStatus.DRAFT
     notes: Optional[str] = None
     created_by: Optional[str] = None
+    product_components: Optional[List[dict]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -62,6 +63,7 @@ class QuoteCreate(BaseModel):
     discount_rate: float = 0.0
     discount_amount: float = 0.0
     items: Optional[List[dict]] = None
+    product_components: Optional[List[dict]] = None
 
 class QuoteUpdate(BaseModel):
     """Quote update model"""
@@ -77,6 +79,7 @@ class QuoteUpdate(BaseModel):
     currency: Optional[str] = None
     status: Optional[QuoteStatus] = None
     notes: Optional[str] = None
+    product_components: Optional[List[dict]] = None
 
 class QuoteConvertToInvoice(BaseModel):
     """Convert quote to invoice model"""
