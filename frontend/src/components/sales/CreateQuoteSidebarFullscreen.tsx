@@ -200,6 +200,25 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   // Shared components schema for header/body alignment
   const headerComponents = (Array.isArray(items?.[0]?.components) ? (items[0].components as any[]) : [])
 
+  // Compute a single grid template to keep header and body perfectly aligned
+  // Align with Project Expense planned table sizing
+  // Main columns: name 200, description 150, quantity 80, unit 80, unit_price 100, total 120
+  const gridTemplateColumns = [
+    visibleColumns.name && 'minmax(200px, auto)',
+    visibleColumns.description && 'minmax(150px, auto)',
+    visibleColumns.quantity && 'minmax(80px, auto)',
+    visibleColumns.unit && '80px',
+    visibleColumns.unit_price && 'minmax(100px, auto)',
+    visibleColumns.total_price && 'minmax(120px, auto)',
+    visibleColumns.area && 'minmax(80px, auto)',
+    visibleColumns.volume && 'minmax(80px, auto)',
+    visibleColumns.height && 'minmax(80px, auto)',
+    visibleColumns.length && 'minmax(80px, auto)',
+    visibleColumns.depth && 'minmax(80px, auto)',
+    // Components block width per component: unit 80 + unit_price 100 + quantity 80 + total 120 = 380
+    visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * (80 + 100 + 80 + 120)}px, auto)`
+  ].filter(Boolean).join(' ')
+
   useEffect(() => {
     if (isOpen) {
       fetchCustomers()
@@ -1297,28 +1316,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               <div className="overflow-auto max-h-[60vh]">
                 <div className="bg-white border border-gray-300 rounded-md inline-block min-w-max">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 sticky top-0 z-10 shadow-sm">
-                    <div className="grid gap-2 text-xs font-medium text-black items-start" style={{
-                      gridTemplateColumns: [
-                        visibleColumns.name && 'minmax(200px, auto)',
-                        visibleColumns.description && 'minmax(220px, auto)',
-                        visibleColumns.quantity && 'minmax(60px, auto)',
-                        visibleColumns.unit && 'minmax(50px, auto)',
-                        visibleColumns.unit_price && 'minmax(100px, auto)',
-                        visibleColumns.total_price && 'minmax(110px, auto)',
-                        visibleColumns.area && 'minmax(80px, auto)',
-                        visibleColumns.volume && 'minmax(80px, auto)',
-                        visibleColumns.height && 'minmax(80px, auto)',
-                        visibleColumns.length && 'minmax(80px, auto)',
-                        visibleColumns.depth && 'minmax(80px, auto)',
-                        visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * (50 + 100 + 80 + 110)}px, auto)`
-                      ].filter(Boolean).join(' ')
-                    }}>
+                    <div className="grid gap-2 text-xs font-medium text-black items-start" style={{ gridTemplateColumns }}>
                       {visibleColumns.name && <div>Tên sản phẩm</div>}
                       {visibleColumns.description && <div>Mô tả</div>}
-                      {visibleColumns.quantity && <div>Số lượng</div>}
-                      {visibleColumns.unit && <div>Đơn vị</div>}
-                      {visibleColumns.unit_price && <div>Đơn giá</div>}
-                      {visibleColumns.total_price && <div>Thành tiền</div>}
+                      {visibleColumns.quantity && <div className="text-right">Số lượng</div>}
+                      {visibleColumns.unit && <div className="text-center">Đơn vị</div>}
+                      {visibleColumns.unit_price && <div className="text-right">Đơn giá</div>}
+                      {visibleColumns.total_price && <div className="text-right">Thành tiền</div>}
                       {visibleColumns.area && <div>Diện tích (m²)</div>}
                       {visibleColumns.volume && <div>Thể tích (m³)</div>}
                       {visibleColumns.height && <div>Cao (mm)</div>}
@@ -1334,14 +1338,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             ))}
                           </div>
                           <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{ 
-                            gridTemplateColumns: [
-                              ...Array((headerComponents.length || 1)).fill(null).flatMap(() => [
-                                'minmax(50px, auto)',  // Đơn vị - 5 ký tự
-                                'minmax(100px, auto)', // Đơn giá
-                                'minmax(80px, auto)',  // Số lượng
-                                'minmax(110px, auto)'  // Thành tiền
-                              ])
-                            ].join(' ')
+                            // Repeat 4 fixed columns per component to match expense layout
+                            gridTemplateColumns: `repeat(${(headerComponents.length || 1)}, 80px 100px 80px 120px)`
                           }}>
                             {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
                               <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
@@ -1361,22 +1359,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         key={index}
                         className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors px-4 py-3`}
                       >
-                        <div className="grid gap-2 items-start text-xs" style={{
-                          gridTemplateColumns: [
-                            visibleColumns.name && 'minmax(200px, auto)',
-                            visibleColumns.description && 'minmax(220px, auto)',
-                            visibleColumns.quantity && 'minmax(60px, auto)',
-                            visibleColumns.unit && 'minmax(50px, auto)',
-                            visibleColumns.unit_price && 'minmax(100px, auto)',
-                            visibleColumns.total_price && 'minmax(110px, auto)',
-                            visibleColumns.area && 'minmax(80px, auto)',
-                            visibleColumns.volume && 'minmax(80px, auto)',
-                            visibleColumns.height && 'minmax(80px, auto)',
-                            visibleColumns.length && 'minmax(80px, auto)',
-                            visibleColumns.depth && 'minmax(80px, auto)',
-                            visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * (50 + 100 + 80 + 110)}px, auto)`
-                          ].filter(Boolean).join(' ')
-                        }}>
+                        <div className="grid gap-2 items-start text-xs" style={{ gridTemplateColumns }}>
                           {visibleColumns.name && (
                             <div>
                               <div className="flex gap-2 text-xs">
@@ -1431,7 +1414,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 type="text"
                                 value={item.unit}
                                 onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="cái"
                                 maxLength={5}
                               />
@@ -1539,14 +1522,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           {visibleColumns.components_block && (
                             <div className="text-sm text-black w-full">
                               <div className="grid gap-2" style={{ 
-                                gridTemplateColumns: [
-                                  ...Array((headerComponents.length || 1)).fill(null).flatMap(() => [
-                                    'minmax(50px, auto)',  // Đơn vị - 5 ký tự
-                                    'minmax(100px, auto)', // Đơn giá
-                                    'minmax(80px, auto)',  // Số lượng
-                                    'minmax(110px, auto)'  // Thành tiền
-                                  ])
-                                ].join(' ')
+                                // Body grid for components: fixed widths like header
+                                gridTemplateColumns: `repeat(${(headerComponents.length || 1)}, 80px 100px 80px 120px)`
                               }}>
                                 {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
                                   const match = (item.components || []).find((c: any) => c.expense_object_id === hc.expense_object_id) || (item.components || [])[idx] || {}
@@ -1557,9 +1534,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                         type="text"
                                         value={match.unit || ''}
                                         onChange={(e) => updateComponentField(index, idx, 'unit', e.target.value)}
-                                        className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full border border-gray-300 rounded-md px-0.5 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                                         placeholder="Đơn vị"
-                                        maxLength={5}
+                                        maxLength={3}
                                       />
                                     </div>,
                                     <div key={`val-price-${idx}`} className="px-2 py-1 text-xs text-gray-800">
