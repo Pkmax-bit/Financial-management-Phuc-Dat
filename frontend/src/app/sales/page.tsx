@@ -37,6 +37,7 @@ import SalesReceiptsTab from '@/components/sales/SalesReceiptsTab'
 import VarianceTab from '@/components/sales/VarianceTab'
 import CreateSalesReceiptModal from '@/components/sales/CreateSalesReceiptModal'
 import QuickGuideModal from '@/components/sales/QuickGuideModal'
+import MaterialAdjustmentRulesTab from '@/components/sales/MaterialAdjustmentRulesTab'
 import { apiGet } from '@/lib/api'
 
 interface User {
@@ -510,6 +511,16 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                 >
                   Loại sản phẩm
                 </button>
+                <button
+                  onClick={() => setActiveTab('adjustments')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'adjustments'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Điều chỉnh
+                </button>
               </nav>
             </div>
 
@@ -610,6 +621,15 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   <ProductCategoriesTab />
                 </div>
               )}
+              {activeTab === 'adjustments' && (
+                <div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Điều chỉnh vật tư</h3>
+                    <p className="text-sm text-black">Thiết lập quy tắc điều chỉnh theo kích thước, số lượng</p>
+                  </div>
+                  <MaterialAdjustmentRulesTab />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -649,7 +669,7 @@ function SalesPageWithParams() {
 
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'customers', 'variance'].includes(tab)) {
+    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'customers', 'variance', 'products', 'product-categories', 'adjustments'].includes(tab)) {
       setActiveTab(tab)
     }
   }, [searchParams])

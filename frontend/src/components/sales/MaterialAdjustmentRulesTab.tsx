@@ -1,0 +1,565 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Trash2, RefreshCw, Save, Edit2, Check, X } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+
+type DimensionType = 'area' | 'volume' | 'height' | 'length' | 'depth' | 'quantity'
+type ChangeType = 'percentage' | 'absolute'
+type ChangeDirection = 'increase' | 'decrease' | 'both'
+type AdjustmentType = 'percentage' | 'absolute'
+
+interface ExpenseObjectOption {
+  id: string
+  name: string
+}
+
+interface RuleRow {
+  id?: string
+  expense_object_id: string
+  dimension_type: DimensionType
+  change_type: ChangeType
+  change_value: number
+  change_direction: ChangeDirection
+  adjustment_type: AdjustmentType
+  adjustment_value: number
+  priority: number
+  name?: string
+  description?: string
+  is_active: boolean
+}
+
+function Input({ className = '', ...props }: any) {
+  return (
+    <input
+      {...props}
+      className={`w-full border border-gray-300 rounded-md px-2 py-1 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500 ${className}`}
+    />
+  )
+}
+
+export default function MaterialAdjustmentRulesTab() {
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [rules, setRules] = useState<RuleRow[]>([])
+  const [expenseObjects, setExpenseObjects] = useState<ExpenseObjectOption[]>([])
+  const [search, setSearch] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
+
+  const filteredRules = useMemo(() => {
+    const s = search.trim().toLowerCase()
+    if (!s) return rules
+    return rules.filter(r =>
+      (r.name || '').toLowerCase().includes(s) ||
+      (r.description || '').toLowerCase().includes(s)
+    )
+  }, [rules, search])
+
+  const dimOptions: { value: DimensionType, label: string }[] = [
+    { value: 'area', label: 'Diện tích (m²)' },
+    { value: 'volume', label: 'Thể tích (m³)' },
+    { value: 'height', label: 'Cao (mm)' },
+    { value: 'length', label: 'Dài (mm)' },
+    { value: 'depth', label: 'Sâu (mm)' },
+    { value: 'quantity', label: 'Số lượng' }
+  ]
+  const getDimensionLabel = (v: DimensionType) => dimOptions.find(o => o.value === v)?.label || v
+  const changeTypeOptions: { value: ChangeType, label: string }[] = [
+    { value: 'percentage', label: 'Phần trăm' },
+    { value: 'absolute', label: 'Tuyệt đối' }
+  ]
+  const getChangeTypeLabel = (v: ChangeType) => changeTypeOptions.find(o => o.value === v)?.label || v
+  const directionOptions: { value: ChangeDirection, label: string }[] = [
+    { value: 'increase', label: 'Tăng' },
+    { value: 'decrease', label: 'Giảm' },
+    { value: 'both', label: 'Cả hai' }
+  ]
+  const getDirectionLabel = (v: ChangeDirection) => directionOptions.find(o => o.value === v)?.label || v
+  const adjustmentTypeOptions: { value: AdjustmentType, label: string, hint: string }[] = [
+    { value: 'percentage', label: 'Phần trăm', hint: 'Áp dụng theo % vào số lượng vật tư (ví dụ -2 = giảm 2%)' },
+    { value: 'absolute', label: 'Tuyệt đối', hint: 'Cộng/trừ trực tiếp vào số lượng vật tư (ví dụ 2 = +2)' }
+  ]
+  const getAdjustmentTypeLabel = (v: AdjustmentType) => adjustmentTypeOptions.find(o => o.value === v)?.label || v
+
+  useEffect(() => {
+    refresh()
+  }, [])
+
+  const refresh = async () => {
+    try {
+      setLoading(true)
+      // Load expense objects for dropdown
+      const { data: exp } = await supabase
+        .from('expense_objects')
+        .select('id, name')
+        .order('name')
+      setExpenseObjects(exp || [])
+
+      // Load rules
+      const { data: rows } = await supabase
+        .from('material_adjustment_rules')
+        .select('*')
+        .order('priority', { ascending: true })
+      setRules((rows || []).map((r: any) => ({
+        id: r.id,
+        expense_object_id: r.expense_object_id,
+        dimension_type: r.dimension_type,
+        change_type: r.change_type,
+        change_value: Number(r.change_value || 0),
+        change_direction: r.change_direction || 'increase',
+        adjustment_type: r.adjustment_type,
+        adjustment_value: Number(r.adjustment_value || 0),
+        priority: Number(r.priority ?? 100),
+        name: r.name || '',
+        description: r.description || '',
+        is_active: !!r.is_active
+      })))
+    } catch (e) {
+      console.error('Failed to load adjustment rules:', e)
+      setRules([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const addBlank = () => {
+    const firstExp = expenseObjects[0]?.id || ''
+    setRules(prev => ([
+      {
+        expense_object_id: firstExp,
+        dimension_type: 'quantity',
+        change_type: 'percentage',
+        change_value: 10,
+        change_direction: 'increase',
+        adjustment_type: 'percentage',
+        adjustment_value: 10,
+        priority: 100,
+        name: '',
+        description: '',
+        is_active: true
+      },
+      ...prev
+    ]))
+    setEditingId('new')
+  }
+
+  const saveRow = async (row: RuleRow, idx: number) => {
+    try {
+      setSaving(true)
+      if (!row.expense_object_id) throw new Error('Vui lòng chọn vật tư (expense_object)')
+      if (!row.dimension_type) throw new Error('Vui lòng chọn loại kích thước')
+      if (!row.change_type) throw new Error('Vui lòng chọn loại thay đổi')
+      if (row.change_value == null) throw new Error('Vui lòng nhập ngưỡng thay đổi')
+      if (!row.adjustment_type) throw new Error('Vui lòng chọn cách điều chỉnh')
+      if (row.adjustment_value == null) throw new Error('Vui lòng nhập giá trị điều chỉnh')
+
+      const payload: any = {
+        expense_object_id: row.expense_object_id,
+        dimension_type: row.dimension_type,
+        change_type: row.change_type,
+        change_value: row.change_value,
+        change_direction: row.change_direction,
+        adjustment_type: row.adjustment_type,
+        adjustment_value: row.adjustment_value,
+        priority: row.priority ?? 100,
+        name: row.name || null,
+        description: row.description || null,
+        is_active: row.is_active
+      }
+
+      if (row.id) {
+        const { error } = await supabase
+          .from('material_adjustment_rules')
+          .update(payload)
+          .eq('id', row.id)
+        if (error) throw error
+      } else {
+        const { data, error } = await supabase
+          .from('material_adjustment_rules')
+          .insert(payload)
+          .select('id')
+          .single()
+        if (error) throw error
+        row.id = data?.id
+      }
+
+      const updated = [...rules]
+      updated[idx] = { ...row }
+      setRules(updated)
+      setEditingId(null)
+    } catch (e: any) {
+      alert('Lưu quy tắc thất bại: ' + (e?.message || 'unknown'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const removeRow = async (row: RuleRow, idx: number) => {
+    try {
+      if (row.id) {
+        const { error } = await supabase
+          .from('material_adjustment_rules')
+          .delete()
+          .eq('id', row.id)
+        if (error) throw error
+      }
+      const updated = [...rules]
+      updated.splice(idx, 1)
+      setRules(updated)
+    } catch (e: any) {
+      alert('Xóa quy tắc thất bại: ' + (e?.message || 'unknown'))
+    }
+  }
+
+  const toggleActive = async (row: RuleRow, idx: number) => {
+    try {
+      const newActive = !row.is_active
+      if (row.id) {
+        const { error } = await supabase
+          .from('material_adjustment_rules')
+          .update({ is_active: newActive })
+          .eq('id', row.id)
+        if (error) throw error
+      }
+      const updated = [...rules]
+      updated[idx] = { ...row, is_active: newActive }
+      setRules(updated)
+    } catch (e: any) {
+      alert('Cập nhật trạng thái thất bại: ' + (e?.message || 'unknown'))
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg">
+      <div className="px-4 py-3 border-b flex items-center gap-2">
+        <button onClick={refresh} className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-black bg-white hover:bg-gray-50">
+          <RefreshCw className="h-4 w-4 mr-2" /> Làm mới
+        </button>
+        <button onClick={addBlank} className="inline-flex items-center px-3 py-2 border border-transparent rounded-md text-sm text-white bg-blue-600 hover:bg-blue-700">
+          <Plus className="h-4 w-4 mr-2" /> Thêm quy tắc
+        </button>
+        <button onClick={() => setShowHelp(true)} className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-black bg-white hover:bg-gray-50">
+          <HelpIcon /> Hướng dẫn
+        </button>
+        <div className="ml-auto">
+          <Input placeholder="Tìm theo tên/mô tả..." value={search} onChange={(e: any) => setSearch(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="overflow-auto">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium text-black">Vật tư</th>
+              <th className="px-3 py-2 text-left font-medium text-black">Kích thước</th>
+              <th className="px-3 py-2 text-left font-medium text-black">Loại thay đổi</th>
+              <th className="px-3 py-2 text-right font-medium text-black">Ngưỡng</th>
+              <th className="px-3 py-2 text-left font-medium text-black">Chiều thay đổi</th>
+              <th className="px-3 py-2 text-left font-medium text-black">Cách điều chỉnh</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }}>Giá trị điều chỉnh</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 120 }}>Ưu tiên</th>
+              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 200 }}>Tên</th>
+              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 280 }}>Mô tả</th>
+              <th className="px-3 py-2 text-center font-medium text-black" style={{ minWidth: 120 }}>Kích hoạt</th>
+              <th className="px-3 py-2 text-right font-medium text-black">Hành động</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {loading ? (
+              <tr>
+                <td colSpan={12} className="px-3 py-6 text-center text-black">Đang tải...</td>
+              </tr>
+            ) : filteredRules.length === 0 ? (
+              <tr>
+                <td colSpan={12} className="px-3 py-6 text-center text-black">Chưa có quy tắc</td>
+              </tr>
+            ) : (
+              filteredRules.map((row, idx) => {
+                const isEditing = editingId === row.id || (editingId === 'new' && !row.id)
+                return (
+                  <tr key={row.id || `new-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-3 py-2">
+                      {isEditing ? (
+                        <select
+                          className="w-56 border border-gray-300 rounded-md px-2 py-1 text-sm text-black"
+                          value={row.expense_object_id}
+                          onChange={(e) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, expense_object_id: e.target.value }
+                            setRules(updated)
+                          }}
+                        >
+                          {expenseObjects.map(o => (
+                            <option key={o.id} value={o.id}>{o.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-black">{expenseObjects.find(o => o.id === row.expense_object_id)?.name || row.expense_object_id}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {isEditing ? (
+                        <select
+                          className="w-32 border border-gray-300 rounded-md px-2 py-1 text-sm text-black"
+                          value={row.dimension_type}
+                          onChange={(e) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, dimension_type: e.target.value as DimensionType }
+                            setRules(updated)
+                          }}
+                        >
+                          {dimOptions.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                        </select>
+                      ) : (
+                        <span className="text-black">{getDimensionLabel(row.dimension_type)}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {isEditing ? (
+                        <select
+                          className="w-32 border border-gray-300 rounded-md px-2 py-1 text-sm text-black"
+                          value={row.change_type}
+                          onChange={(e) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, change_type: e.target.value as ChangeType }
+                            setRules(updated)
+                          }}
+                        >
+                          {changeTypeOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-black">{getChangeTypeLabel(row.change_type)}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          value={row.change_value}
+                          onChange={(e: any) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, change_value: Number(e.target.value) }
+                            setRules(updated)
+                          }}
+                        />
+                      ) : (
+                        <span className="text-black">{row.change_value}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {isEditing ? (
+                        <select
+                          className="w-32 border border-gray-300 rounded-md px-2 py-1 text-sm text-black"
+                          value={row.change_direction}
+                          onChange={(e) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, change_direction: e.target.value as ChangeDirection }
+                            setRules(updated)
+                          }}
+                        >
+                          {directionOptions.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                        </select>
+                      ) : (
+                        <span className="text-black">{getDirectionLabel(row.change_direction)}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {isEditing ? (
+                        <select
+                          className="w-40 border border-gray-300 rounded-md px-2 py-1 text-sm text-black"
+                          value={row.adjustment_type}
+                          title={adjustmentTypeOptions.find(o => o.value === row.adjustment_type)?.hint}
+                          onChange={(e) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, adjustment_type: e.target.value as AdjustmentType }
+                            setRules(updated)
+                          }}
+                        >
+                          {adjustmentTypeOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-black" title={adjustmentTypeOptions.find(o => o.value === row.adjustment_type)?.hint}>
+                          {getAdjustmentTypeLabel(row.adjustment_type)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right" style={{ minWidth: 140 }}>
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          value={row.adjustment_value}
+                          onChange={(e: any) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, adjustment_value: Number(e.target.value) }
+                            setRules(updated)
+                          }}
+                        />
+                      ) : (
+                        <span className="text-black">{row.adjustment_value}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right" style={{ minWidth: 120 }}>
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          value={row.priority}
+                          onChange={(e: any) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, priority: Number(e.target.value) }
+                            setRules(updated)
+                          }}
+                        />
+                      ) : (
+                        <span className="text-black">{row.priority}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: 200 }}>
+                      {isEditing ? (
+                        <Input
+                          value={row.name || ''}
+                          placeholder="Tên quy tắc (ví dụ: Tăng DT 20% → +10% vật tư)"
+                          title="Tên gợi nhớ cho quy tắc"
+                          onChange={(e: any) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, name: e.target.value }
+                            setRules(updated)
+                          }}
+                        />
+                      ) : (
+                        <span className="text-black">{row.name}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2" style={{ minWidth: 280 }}>
+                      {isEditing ? (
+                        <Input
+                          value={row.description || ''}
+                          placeholder="Ghi chú mô tả quy tắc (tùy chọn)"
+                          title="Mô tả ngắn giúp giải thích quy tắc"
+                          onChange={(e: any) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, description: e.target.value }
+                            setRules(updated)
+                          }}
+                        />
+                      ) : (
+                        <span className="text-black">{row.description}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center" style={{ minWidth: 120 }}>
+                      <input
+                        type="checkbox"
+                        checked={row.is_active}
+                        onChange={() => toggleActive(row, idx)}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {isEditing ? (
+                        <div className="flex justify-end gap-2">
+                          <button disabled={saving} onClick={() => saveRow(row, idx)} className="inline-flex items-center px-3 py-1 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => setEditingId(null)} className="inline-flex items-center px-3 py-1 rounded-md text-white bg-gray-500 hover:bg-gray-600">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => setEditingId(row.id || 'new')} className="inline-flex items-center px-3 py-1 rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => removeRow(row, idx)} className="inline-flex items-center px-3 py-1 rounded-md text-white bg-red-600 hover:bg-red-700">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      {showHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowHelp(false)}></div>
+          <div className="relative rounded-lg shadow-xl w-full max-w-3xl mx-4 bg-white/80 backdrop-blur-md">
+            <div className="px-5 py-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Hướng dẫn sử dụng quy tắc điều chỉnh</h3>
+              <button onClick={() => setShowHelp(false)} className="p-2 hover:bg-gray-100 rounded-md">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-sm text-black">
+              <div>
+                <p className="font-semibold mb-1">Mục đích</p>
+                <p>Tự động điều chỉnh số lượng vật tư khi kích thước/số lượng của dòng báo giá thay đổi, theo các quy tắc do bạn định nghĩa.</p>
+              </div>
+              <div>
+                <p className="font-semibold mb-1">Các trường chính</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><span className="font-medium">Vật tư</span>: Chọn vật tư (expense_object) sẽ bị điều chỉnh.</li>
+                  <li><span className="font-medium">Kích thước</span>: Chọn loại theo dõi thay đổi (Diện tích, Thể tích, Cao, Dài, Sâu, Số lượng).</li>
+                  <li><span className="font-medium">Loại thay đổi</span>: Phần trăm hoặc Tuyệt đối (cách đo mức thay đổi).</li>
+                  <li><span className="font-medium">Ngưỡng</span>: Mức thay đổi tối thiểu để quy tắc kích hoạt.</li>
+                  <li><span className="font-medium">Chiều thay đổi</span>: Tăng, Giảm hoặc Cả hai.</li>
+                  <li><span className="font-medium">Cách điều chỉnh</span>: Phần trăm hoặc Tuyệt đối (cách áp dụng lên số lượng vật tư). Giá trị âm để giảm.</li>
+                  <li><span className="font-medium">Giá trị điều chỉnh</span>: Mức tăng/giảm vật tư (ví dụ -2% hay +2).</li>
+                  <li><span className="font-medium">Ưu tiên</span>: Số nhỏ chạy trước khi nhiều quy tắc cùng khớp.</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-semibold mb-1">Ví dụ mẫu</p>
+                <div className="space-y-2">
+                  <div className="p-3 bg-gray-50 border rounded">
+                    <p className="font-medium">1) Tăng diện tích ≥ 10% → Giảm vật tư 2%</p>
+                    <ul className="list-disc list-inside">
+                      <li>Kích thước: Diện tích (m²); Loại thay đổi: Phần trăm; Ngưỡng: 10; Chiều thay đổi: Tăng</li>
+                      <li>Cách điều chỉnh: Phần trăm; Giá trị điều chỉnh: -2</li>
+                    </ul>
+                  </div>
+                  <div className="p-3 bg-gray-50 border rounded">
+                    <p className="font-medium">2) Dài tăng ≥ 100mm → Cộng thêm 1 đơn vị vật tư</p>
+                    <ul className="list-disc list-inside">
+                      <li>Kích thước: Dài (mm); Loại thay đổi: Tuyệt đối; Ngưỡng: 100; Chiều thay đổi: Tăng</li>
+                      <li>Cách điều chỉnh: Tuyệt đối; Giá trị điều chỉnh: 1</li>
+                    </ul>
+                  </div>
+                  <div className="p-3 bg-gray-50 border rounded">
+                    <p className="font-medium">3) Số lượng giảm ≥ 5 → Giảm vật tư 10%</p>
+                    <ul className="list-disc list-inside">
+                      <li>Kích thước: Số lượng; Loại thay đổi: Tuyệt đối; Ngưỡng: 5; Chiều thay đổi: Giảm</li>
+                      <li>Cách điều chỉnh: Phần trăm; Giá trị điều chỉnh: -10</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div className="text-xs text-gray-600">
+                Lưu ý: Nhiều quy tắc có thể cùng áp dụng và sẽ cộng dồn theo thứ tự Ưu tiên (nhỏ → lớn).
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t flex justify-end">
+              <button onClick={() => setShowHelp(false)} className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">Đã hiểu</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HelpIcon() {
+  return (
+    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6a4 4 0 00-4 4h2a2 2 0 114 0c0 2-3 1.75-3 5h2c0-2.5 3-2.5 3-5a4 4 0 00-4-4z"/>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01"/>
+    </svg>
+  )
+}
+
+

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   X, 
   FileText, 
@@ -51,6 +51,9 @@ interface QuoteItem {
   height?: number | null
   length?: number | null
   depth?: number | null
+  // UI-only flags to avoid overwriting manual inputs
+  area_is_manual?: boolean
+  volume_is_manual?: boolean
   // values sourced strictly from product_components
   component_unit?: string
   component_unit_price?: number
@@ -119,6 +122,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [selectedProject, setSelectedProject] = useState<any>(null)
   const [editingCell, setEditingCell] = useState<{ index: number; field: string } | null>(null)
+  
+  // Cache for adjustment rules to avoid re-fetching on every edit
+  const adjustmentRulesCache = useRef<Map<string, any[]>>(new Map())
   
   // Toggle category expansion
   const toggleCategory = (category: string) => {
@@ -193,7 +199,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       volume: null,
       height: null,
       length: null,
-      depth: null
+      depth: null,
+      area_is_manual: false,
+      volume_is_manual: false
     }
   ])
 
@@ -230,6 +238,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setSelectedItemIndex(null)
       setSelectedProductIds([])
       resetForm()
+      // Clear adjustment rules cache when closing
+      adjustmentRulesCache.current.clear()
     }
   }, [isOpen])
 
@@ -534,7 +544,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       volume: null,
       height: null,
       length: null,
-      depth: null
+      depth: null,
+      area_is_manual: false,
+      volume_is_manual: false
     }])
   }
 
@@ -593,11 +605,47 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           const expenseObjectId = component.expense_object_id
           if (!expenseObjectId) return component
 
-          // Get applicable rules using apiGet for authentication
+          // Get applicable rules from cache first, then Supabase/API if needed
           try {
-            const rules = await apiGet(
-              `${API_BASE_URL}/api/material-adjustment-rules?expense_object_id=${expenseObjectId}&dimension_type=${dimensionType}&is_active=true`
-            )
+            const cacheKey = `${expenseObjectId}_${dimensionType}`
+            let rules: any[] = adjustmentRulesCache.current.get(cacheKey) || []
+            
+            // Only fetch if not in cache
+            if (rules.length === 0) {
+              try {
+                const { data: supaRules } = await supabase
+                  .from('material_adjustment_rules')
+                  .select('*')
+                  .eq('expense_object_id', expenseObjectId)
+                  .eq('dimension_type', dimensionType)
+                  .eq('is_active', true)
+                rules = Array.isArray(supaRules) ? supaRules : []
+                // Cache the result
+                if (rules.length > 0) {
+                  adjustmentRulesCache.current.set(cacheKey, rules)
+                }
+              } catch (_) {
+                // ignore and try API fallback
+              }
+
+              if ((!rules || rules.length === 0)) {
+                try {
+                  const apiRules = await apiGet(
+                    `${API_BASE_URL}/api/material-adjustment-rules?expense_object_id=${expenseObjectId}&dimension_type=${dimensionType}&is_active=true`
+                  )
+                  if (Array.isArray(apiRules)) {
+                    rules = apiRules
+                    // Cache API result too
+                    if (rules.length > 0) {
+                      adjustmentRulesCache.current.set(cacheKey, rules)
+                    }
+                  }
+                } catch (_) {
+                  // ignore
+                }
+              }
+            }
+
             if (!Array.isArray(rules) || rules.length === 0) return component
 
             // Calculate change
@@ -688,11 +736,65 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     const oldQuantity = oldItem.quantity
 
     updatedItems[index] = { ...updatedItems[index], [field]: value }
+
+    // Mark manual overrides for area/volume
+    if (field === 'area') {
+      updatedItems[index].area_is_manual = value != null
+    } else if (field === 'volume') {
+      updatedItems[index].volume_is_manual = value != null
+    }
     
     // Recalculate total_price for this item
     if (field === 'quantity' || field === 'unit_price') {
       const itemTotal = updatedItems[index].quantity * updatedItems[index].unit_price
       updatedItems[index].total_price = itemTotal
+    }
+
+    // Auto-calc area (m²) and volume (m³) from dimensions (length, depth, height in mm)
+    // Only auto-update when the respective field is not marked as manual
+    const curr = updatedItems[index]
+    let autoAreaChanged = false
+    let autoVolumeChanged = false
+    const lengthMm = curr.length != null ? Number(curr.length) : null
+    const depthMm = curr.depth != null ? Number(curr.depth) : null
+    const heightMm = curr.height != null ? Number(curr.height) : null
+
+    // Recompute area when length/depth changes and area is not manual
+    if ((field === 'length' || field === 'depth') && !curr.area_is_manual) {
+      if (lengthMm != null && depthMm != null) {
+        const computedArea = (lengthMm * depthMm) / 1_000_000 // mm^2 -> m^2
+        if (curr.area !== computedArea) {
+          curr.area = Number(computedArea)
+          autoAreaChanged = true
+        }
+      } else {
+        // If one dim missing, clear auto area (but only if not manual)
+        if (curr.area != null) {
+          curr.area = null
+          autoAreaChanged = true
+        }
+      }
+    }
+
+    // Recompute volume when any of area/height/length/depth changes and volume is not manual
+    if ((field === 'height' || field === 'length' || field === 'depth' || field === 'area') && !curr.volume_is_manual) {
+      let computedVolume: number | null = null
+      if (lengthMm != null && depthMm != null && heightMm != null) {
+        computedVolume = (lengthMm * depthMm * heightMm) / 1_000_000_000 // mm^3 -> m^3
+      } else if (curr.area != null && heightMm != null) {
+        computedVolume = Number(curr.area) * (heightMm / 1000)
+      }
+      if (computedVolume != null) {
+        if (curr.volume !== computedVolume) {
+          curr.volume = Number(computedVolume)
+          autoVolumeChanged = true
+        }
+      } else {
+        if (curr.volume != null) {
+          curr.volume = null
+          autoVolumeChanged = true
+        }
+      }
     }
     
     setItems(updatedItems)
@@ -712,6 +814,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         await applyMaterialAdjustmentRules(index, 'depth', oldDepth, newValue)
       } else if (field === 'quantity' && oldQuantity !== null && oldQuantity !== undefined && oldQuantity !== newValue) {
         await applyMaterialAdjustmentRules(index, 'quantity', oldQuantity, newValue)
+      }
+
+      // Also trigger rules if auto-calculated area/volume changed due to dimension edits
+      if (autoAreaChanged && oldArea != null && curr.area != null && oldArea !== curr.area) {
+        await applyMaterialAdjustmentRules(index, 'area', oldArea, Number(curr.area))
+      }
+      if (autoVolumeChanged && oldVolume != null && curr.volume != null && oldVolume !== curr.volume) {
+        await applyMaterialAdjustmentRules(index, 'volume', oldVolume, Number(curr.volume))
       }
     }
   }
@@ -1033,7 +1143,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       volume: null,
       height: null,
       length: null,
-      depth: null
+      depth: null,
+      area_is_manual: false,
+      volume_is_manual: false
     }])
   }
 
@@ -1064,7 +1176,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     min,
     placeholder,
     index,
-    field
+    field,
+    commitOnChange
   }: {
     value: number | null
     onChange: (v: number | null) => void
@@ -1074,6 +1187,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     placeholder?: string
     index: number
     field: string
+    commitOnChange?: boolean
   }) => {
     const [text, setText] = useState<string>('')
     const isEditing = editingCell && editingCell.index === index && editingCell.field === field
@@ -1099,9 +1213,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
     return (
       <input
-        type="text"
+        type={format === 'number' ? 'number' : 'text'}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          const nvRaw = e.target.value
+          setText(nvRaw)
+          if (commitOnChange) {
+            const parsed = nvRaw.trim() === '' ? null : (format === 'number' ? Number(nvRaw) : parseNumber(nvRaw))
+            onChange(parsed)
+          }
+        }}
         onBlur={() => {
           const nv = text.trim() === '' ? null : parseNumber(text)
           onChange(nv)
@@ -1119,6 +1240,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         className="w-full border border-blue-400 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
         placeholder={placeholder}
         inputMode="decimal"
+        step={format === 'number' ? step : undefined}
+        min={format === 'number' ? min : undefined}
       />
     )
   }
@@ -1483,11 +1606,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 value={item.height ?? null}
                                 onChange={(v) => updateItem(index, 'height', v == null ? null : Number(v))}
                                 format="number"
-                                step={1}
+                            step={100}
                                 min={0}
                                 placeholder="mm"
                                 index={index}
                                 field={'height'}
+                                commitOnChange
                               />
                             </div>
                           )}
@@ -1497,11 +1621,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 value={item.length ?? null}
                                 onChange={(v) => updateItem(index, 'length', v == null ? null : Number(v))}
                                 format="number"
-                                step={1}
+                            step={100}
                                 min={0}
                                 placeholder="mm"
                                 index={index}
                                 field={'length'}
+                                commitOnChange
                               />
                             </div>
                           )}
@@ -1511,11 +1636,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 value={item.depth ?? null}
                                 onChange={(v) => updateItem(index, 'depth', v == null ? null : Number(v))}
                                 format="number"
-                                step={1}
+                            step={100}
                                 min={0}
                                 placeholder="mm"
                                 index={index}
                                 field={'depth'}
+                                commitOnChange
                               />
                             </div>
                           )}
