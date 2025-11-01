@@ -27,6 +27,8 @@ interface RuleRow {
   name?: string
   description?: string
   is_active: boolean
+  max_adjustment_percentage?: number | null
+  max_adjustment_value?: number | null
 }
 
 function Input({ className = '', ...props }: any) {
@@ -113,7 +115,9 @@ export default function MaterialAdjustmentRulesTab() {
         priority: Number(r.priority ?? 100),
         name: r.name || '',
         description: r.description || '',
-        is_active: !!r.is_active
+        is_active: !!r.is_active,
+        max_adjustment_percentage: r.max_adjustment_percentage != null ? Number(r.max_adjustment_percentage) : null,
+        max_adjustment_value: r.max_adjustment_value != null ? Number(r.max_adjustment_value) : null
       })))
     } catch (e) {
       console.error('Failed to load adjustment rules:', e)
@@ -133,6 +137,8 @@ export default function MaterialAdjustmentRulesTab() {
         change_value: 10,
         change_direction: 'increase',
         adjustment_type: 'percentage',
+        max_adjustment_percentage: null,
+        max_adjustment_value: null,
         adjustment_value: 10,
         priority: 100,
         name: '',
@@ -165,7 +171,9 @@ export default function MaterialAdjustmentRulesTab() {
         priority: row.priority ?? 100,
         name: row.name || null,
         description: row.description || null,
-        is_active: row.is_active
+        is_active: row.is_active,
+        max_adjustment_percentage: row.max_adjustment_percentage != null ? row.max_adjustment_percentage : null,
+        max_adjustment_value: row.max_adjustment_value != null ? row.max_adjustment_value : null
       }
 
       if (row.id) {
@@ -258,6 +266,8 @@ export default function MaterialAdjustmentRulesTab() {
               <th className="px-3 py-2 text-left font-medium text-black">Chiều thay đổi</th>
               <th className="px-3 py-2 text-left font-medium text-black">Cách điều chỉnh</th>
               <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }}>Giá trị điều chỉnh</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }}>Tối đa điều chỉnh (%)</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }}>Tối đa điều chỉnh (abs)</th>
               <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 120 }}>Ưu tiên</th>
               <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 200 }}>Tên</th>
               <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 280 }}>Mô tả</th>
@@ -268,11 +278,11 @@ export default function MaterialAdjustmentRulesTab() {
           <tbody className="divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-black">Đang tải...</td>
+                <td colSpan={14} className="px-3 py-6 text-center text-black">Đang tải...</td>
               </tr>
             ) : filteredRules.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-black">Chưa có quy tắc</td>
+                <td colSpan={14} className="px-3 py-6 text-center text-black">Chưa có quy tắc</td>
               </tr>
             ) : (
               filteredRules.map((row, idx) => {
@@ -403,6 +413,42 @@ export default function MaterialAdjustmentRulesTab() {
                         <span className="text-black">{row.adjustment_value}</span>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-right" style={{ minWidth: 140 }}>
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Tối đa %"
+                          title="Giới hạn tối đa cho điều chỉnh phần trăm (ví dụ: 30 cho tối đa 30%)"
+                          value={row.max_adjustment_percentage != null ? row.max_adjustment_percentage : ''}
+                          onChange={(e: any) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, max_adjustment_percentage: e.target.value === '' ? null : Number(e.target.value) }
+                            setRules(updated)
+                          }}
+                        />
+                      ) : (
+                        <span className="text-black">{row.max_adjustment_percentage != null ? row.max_adjustment_percentage : '-'}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right" style={{ minWidth: 140 }}>
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="Tối đa abs"
+                          title="Giới hạn tối đa cho điều chỉnh tuyệt đối (cho adjustment_type = absolute)"
+                          value={row.max_adjustment_value != null ? row.max_adjustment_value : ''}
+                          onChange={(e: any) => {
+                            const updated = [...rules]
+                            updated[idx] = { ...row, max_adjustment_value: e.target.value === '' ? null : Number(e.target.value) }
+                            setRules(updated)
+                          }}
+                        />
+                      ) : (
+                        <span className="text-black">{row.max_adjustment_value != null ? row.max_adjustment_value : '-'}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right" style={{ minWidth: 120 }}>
                       {isEditing ? (
                         <Input
@@ -488,14 +534,14 @@ export default function MaterialAdjustmentRulesTab() {
       {showHelp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowHelp(false)}></div>
-          <div className="relative rounded-lg shadow-xl w-full max-w-3xl mx-4 bg-white/80 backdrop-blur-md">
-            <div className="px-5 py-4 border-b flex items-center justify-between">
+          <div className="relative rounded-lg shadow-xl w-full max-w-5xl mx-4 bg-white/80 backdrop-blur-md max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b flex items-center justify-between bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-900">Hướng dẫn sử dụng quy tắc điều chỉnh</h3>
               <button onClick={() => setShowHelp(false)} className="p-2 hover:bg-gray-100 rounded-md">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-5 space-y-4 text-sm text-black">
+            <div className="p-6 space-y-4 text-sm text-black overflow-y-auto flex-1">
               <div>
                 <p className="font-semibold mb-1">Mục đích</p>
                 <p>Tự động điều chỉnh số lượng vật tư khi kích thước/số lượng của dòng báo giá thay đổi, theo các quy tắc do bạn định nghĩa.</p>
@@ -506,41 +552,60 @@ export default function MaterialAdjustmentRulesTab() {
                   <li><span className="font-medium">Vật tư</span>: Chọn vật tư (expense_object) sẽ bị điều chỉnh.</li>
                   <li><span className="font-medium">Kích thước</span>: Chọn loại theo dõi thay đổi (Diện tích, Thể tích, Cao, Dài, Sâu, Số lượng).</li>
                   <li><span className="font-medium">Loại thay đổi</span>: Phần trăm hoặc Tuyệt đối (cách đo mức thay đổi).</li>
-                  <li><span className="font-medium">Ngưỡng</span>: Mức thay đổi tối thiểu để quy tắc kích hoạt.</li>
+                  <li><span className="font-medium">Ngưỡng</span>: Mức thay đổi tối thiểu để quy tắc kích hoạt (ví dụ: 10 cho 10%).</li>
                   <li><span className="font-medium">Chiều thay đổi</span>: Tăng, Giảm hoặc Cả hai.</li>
-                  <li><span className="font-medium">Cách điều chỉnh</span>: Phần trăm hoặc Tuyệt đối (cách áp dụng lên số lượng vật tư). Giá trị âm để giảm.</li>
-                  <li><span className="font-medium">Giá trị điều chỉnh</span>: Mức tăng/giảm vật tư (ví dụ -2% hay +2).</li>
-                  <li><span className="font-medium">Ưu tiên</span>: Số nhỏ chạy trước khi nhiều quy tắc cùng khớp.</li>
+                  <li><span className="font-medium">Cách điều chỉnh</span>: Phần trăm hoặc Tuyệt đối (cách áp dụng lên số lượng vật tư).</li>
+                  <li><span className="font-medium">Giá trị điều chỉnh</span>: Mức tăng/giảm vật tư (ví dụ: -10 để giảm 10%, hoặc +2 để tăng 2 đơn vị).</li>
+                  <li><span className="font-medium">Tối đa điều chỉnh (%)</span>: Giới hạn tối đa cho điều chỉnh phần trăm (tùy chọn). Ví dụ: Nếu diện tích tăng 20% → giảm 10%, nhưng tối đa chỉ giảm 30% thì đặt 30.</li>
+                  <li><span className="font-medium">Tối đa điều chỉnh (abs)</span>: Giới hạn tối đa cho điều chỉnh tuyệt đối (tùy chọn, dùng khi Cách điều chỉnh = Tuyệt đối).</li>
+                  <li><span className="font-medium">Ưu tiên</span>: Số nhỏ chạy trước khi nhiều quy tắc cùng khớp (mặc định 100).</li>
                 </ul>
               </div>
               <div>
                 <p className="font-semibold mb-1">Ví dụ mẫu</p>
                 <div className="space-y-2">
                   <div className="p-3 bg-gray-50 border rounded">
-                    <p className="font-medium">1) Tăng diện tích ≥ 10% → Giảm vật tư 2%</p>
-                    <ul className="list-disc list-inside">
+                    <p className="font-medium">1) Tăng diện tích ≥ 10% → Tăng vật tư 5%</p>
+                    <ul className="list-disc list-inside text-xs">
                       <li>Kích thước: Diện tích (m²); Loại thay đổi: Phần trăm; Ngưỡng: 10; Chiều thay đổi: Tăng</li>
-                      <li>Cách điều chỉnh: Phần trăm; Giá trị điều chỉnh: -2</li>
+                      <li>Cách điều chỉnh: Phần trăm; Giá trị điều chỉnh: 5</li>
+                      <li>Kết quả: Diện tích tăng 20% (≥10%) → Vật tư tăng 5%</li>
                     </ul>
                   </div>
                   <div className="p-3 bg-gray-50 border rounded">
-                    <p className="font-medium">2) Dài tăng ≥ 100mm → Cộng thêm 1 đơn vị vật tư</p>
-                    <ul className="list-disc list-inside">
+                    <p className="font-medium">2) Tăng diện tích ≥ 10% → Giảm nhân công 10%, tối đa giảm 30%</p>
+                    <ul className="list-disc list-inside text-xs">
+                      <li>Kích thước: Diện tích (m²); Loại thay đổi: Phần trăm; Ngưỡng: 10; Chiều thay đổi: Giảm</li>
+                      <li>Cách điều chỉnh: Phần trăm; Giá trị điều chỉnh: -10; Tối đa điều chỉnh (%): 30</li>
+                      <li><span className="font-semibold">Lưu ý:</span> Đây là inverse rule - "Giảm" với giá trị âm sẽ áp dụng khi diện tích TĂNG</li>
+                      <li>Kết quả: Diện tích tăng 20% (≥10%) → Nhân công giảm 10%; Diện tích tăng 60% → Nhân công chỉ giảm tối đa 30% (giới hạn)</li>
+                    </ul>
+                  </div>
+                  <div className="p-3 bg-gray-50 border rounded">
+                    <p className="font-medium">3) Dài tăng ≥ 100mm → Cộng thêm 1 đơn vị vật tư</p>
+                    <ul className="list-disc list-inside text-xs">
                       <li>Kích thước: Dài (mm); Loại thay đổi: Tuyệt đối; Ngưỡng: 100; Chiều thay đổi: Tăng</li>
                       <li>Cách điều chỉnh: Tuyệt đối; Giá trị điều chỉnh: 1</li>
+                      <li>Kết quả: Dài tăng 150mm (≥100mm) → Vật tư tăng 1 đơn vị</li>
                     </ul>
                   </div>
                   <div className="p-3 bg-gray-50 border rounded">
-                    <p className="font-medium">3) Số lượng giảm ≥ 5 → Giảm vật tư 10%</p>
-                    <ul className="list-disc list-inside">
-                      <li>Kích thước: Số lượng; Loại thay đổi: Tuyệt đối; Ngưỡng: 5; Chiều thay đổi: Giảm</li>
-                      <li>Cách điều chỉnh: Phần trăm; Giá trị điều chỉnh: -10</li>
+                    <p className="font-medium">4) Số lượng tăng → Diện tích tự động tăng theo</p>
+                    <ul className="list-disc list-inside text-xs">
+                      <li>Khi số lượng sản phẩm thay đổi, diện tích và thể tích sẽ tự động điều chỉnh theo tỷ lệ: area = baseline_area × quantity</li>
+                      <li>Ví dụ: Baseline area = 8.4 m², quantity = 1 → area = 8.4 m²; quantity = 2 → area = 16.8 m²</li>
                     </ul>
                   </div>
                 </div>
               </div>
-              <div className="text-xs text-gray-600">
-                Lưu ý: Nhiều quy tắc có thể cùng áp dụng và sẽ cộng dồn theo thứ tự Ưu tiên (nhỏ → lớn).
+              <div className="space-y-2 text-xs text-gray-600">
+                <p><span className="font-semibold">Lưu ý:</span></p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Nhiều quy tắc có thể cùng áp dụng và sẽ cộng dồn theo thứ tự Ưu tiên (nhỏ → lớn).</li>
+                  <li>Giới hạn tối đa ngăn tổng điều chỉnh vượt quá giá trị đã đặt (ví dụ: tối đa giảm 30% dù có nhiều quy tắc).</li>
+                  <li>Giá trị điều chỉnh âm (-) để giảm, dương (+) để tăng.</li>
+                  <li>Quy tắc "decrease" với giá trị điều chỉnh âm sẽ áp dụng khi dimension tăng (inverse rule).</li>
+                </ul>
               </div>
             </div>
             <div className="px-5 py-3 border-t flex justify-end">

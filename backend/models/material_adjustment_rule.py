@@ -46,6 +46,8 @@ class MaterialAdjustmentRuleBase(BaseModel):
     name: Optional[str] = Field(None, description="Tên quy tắc")
     description: Optional[str] = Field(None, description="Mô tả quy tắc")
     is_active: bool = Field(True, description="Trạng thái hoạt động")
+    max_adjustment_percentage: Optional[float] = Field(None, description="Giới hạn tối đa cho điều chỉnh phần trăm (ví dụ: 30 cho tối đa 30%)")
+    max_adjustment_value: Optional[float] = Field(None, description="Giới hạn tối đa cho điều chỉnh tuyệt đối (cho adjustment_type = absolute)")
 
 class MaterialAdjustmentRuleCreate(MaterialAdjustmentRuleBase):
     """Model để tạo quy tắc mới"""
@@ -64,6 +66,8 @@ class MaterialAdjustmentRuleUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    max_adjustment_percentage: Optional[float] = None
+    max_adjustment_value: Optional[float] = None
 
 class MaterialAdjustmentRule(MaterialAdjustmentRuleBase):
     """Model đầy đủ cho quy tắc điều chỉnh vật tư"""

@@ -959,11 +959,72 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             const originalQuantity = Number(component.quantity || 0)
             let adjustedQuantity = originalQuantity
             let adjustedUnitPrice = Number(component.unit_price || 0)
+            
+            // Track total adjustment percentage for max limit
+            let totalAdjustmentPercentage = 0
 
             for (const rule of applicableRules.sort((a: any, b: any) => a.priority - b.priority)) {
               const beforeAdjustment = adjustedQuantity
-              adjustedQuantity = applyRuleAdjustment(adjustedQuantity, rule, changeDirection)
               const adjustmentValue = Number(rule.adjustment_value || 0)
+              
+              // Check if rule has max_adjustment_value or max_adjustment_percentage limit
+              const maxAdjustmentPercentage = rule.max_adjustment_percentage != null ? Number(rule.max_adjustment_percentage) : null
+              const maxAdjustmentValue = rule.max_adjustment_value != null ? Number(rule.max_adjustment_value) : null
+              
+              // Apply adjustment
+              let newAdjustedQuantity = applyRuleAdjustment(adjustedQuantity, rule, changeDirection)
+              
+              // Calculate adjustment percentage applied
+              let adjustmentPercentageApplied = 0
+              if (rule.adjustment_type === 'percentage' && adjustedQuantity > 0) {
+                adjustmentPercentageApplied = ((newAdjustedQuantity - adjustedQuantity) / adjustedQuantity) * 100
+              }
+              
+              // Apply max limit if specified
+              if (rule.adjustment_type === 'percentage') {
+                // For percentage adjustments, check max_adjustment_percentage
+                // Example: If area increases 20%, decrease 10%, but max decrease is 30%
+                // This means total decrease cannot exceed 30%
+                if (maxAdjustmentPercentage != null && maxAdjustmentPercentage > 0) {
+                  // Calculate how much adjustment has been applied so far (from original)
+                  const adjustmentFromOriginal = ((adjustedQuantity - originalQuantity) / originalQuantity) * 100
+                  const newAdjustmentFromOriginal = ((newAdjustedQuantity - originalQuantity) / originalQuantity) * 100
+                  
+                  // Check if adding this adjustment would exceed the max limit
+                  // Max limit is based on the sign of the adjustment (increase or decrease)
+                  if (adjustmentValue < 0) {
+                    // For decrease adjustments, check if total decrease exceeds max
+                    // maxAdjustmentPercentage is positive (e.g., 30), so compare with absolute value
+                    if (Math.abs(newAdjustmentFromOriginal) > maxAdjustmentPercentage) {
+                      // Limit to max decrease
+                      const maxDecreaseFactor = 1 - (maxAdjustmentPercentage / 100)
+                      newAdjustedQuantity = originalQuantity * maxDecreaseFactor
+                      adjustmentPercentageApplied = ((newAdjustedQuantity - adjustedQuantity) / adjustedQuantity) * 100
+                      console.log('[Adjust] Max limit applied (decrease)', { maxAdjustmentPercentage, adjustmentFromOriginal, newAdjustmentFromOriginal })
+                    }
+                  } else {
+                    // For increase adjustments, check if total increase exceeds max
+                    if (newAdjustmentFromOriginal > maxAdjustmentPercentage) {
+                      // Limit to max increase
+                      const maxIncreaseFactor = 1 + (maxAdjustmentPercentage / 100)
+                      newAdjustedQuantity = originalQuantity * maxIncreaseFactor
+                      adjustmentPercentageApplied = ((newAdjustedQuantity - adjustedQuantity) / adjustedQuantity) * 100
+                      console.log('[Adjust] Max limit applied (increase)', { maxAdjustmentPercentage, adjustmentFromOriginal, newAdjustmentFromOriginal })
+                    }
+                  }
+                  totalAdjustmentPercentage = ((newAdjustedQuantity - originalQuantity) / originalQuantity) * 100
+                }
+              } else if (rule.adjustment_type === 'absolute' && maxAdjustmentValue != null) {
+                // For absolute adjustments, check max_adjustment_value
+                const currentAdjustment = Math.abs(newAdjustedQuantity - originalQuantity)
+                if (currentAdjustment > Math.abs(maxAdjustmentValue)) {
+                  // Limit the adjustment
+                  newAdjustedQuantity = originalQuantity + (maxAdjustmentValue > 0 ? Math.abs(maxAdjustmentValue) : -Math.abs(maxAdjustmentValue))
+                  console.log('[Adjust] Max limit applied (absolute)', { maxAdjustmentValue, currentAdjustment })
+                }
+              }
+              
+              adjustedQuantity = newAdjustedQuantity
               console.log('[Adjust] Apply rule', { 
                 expenseObjectId, 
                 ruleId: rule.id || 'unknown',
@@ -973,7 +1034,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 priority: rule.priority, 
                 before: beforeAdjustment, 
                 after: adjustedQuantity,
-                isInverse: rule.change_direction === 'decrease' && adjustmentValue < 0
+                isInverse: rule.change_direction === 'decrease' && adjustmentValue < 0,
+                maxAdjustmentPercentage,
+                maxAdjustmentValue,
+                adjustmentPercentageApplied
               })
             }
 
@@ -1001,14 +1065,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         components: adjustedComponents
       }
 
-      // Recalculate item total from components
-      const compSum = adjustedComponents.reduce(
-        (sum: number, c: any) => sum + (Number(c.total_price) || 0),
-        0
-      )
-      updatedItems[itemIndex].total_price = compSum > 0 
-        ? compSum 
-        : updatedItems[itemIndex].quantity * updatedItems[itemIndex].unit_price
+      // Recalculate item total_price from quantity * unit_price (NOT from components)
+      // total_price should always be the product price, not the material cost
+      updatedItems[itemIndex].total_price = updatedItems[itemIndex].quantity * updatedItems[itemIndex].unit_price
 
       setItems(updatedItems)
       // Sync snapshot immediately so subsequent applies in the same tick see latest state
@@ -1091,6 +1150,33 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     const depthMm = curr.depth != null && isFinite(Number(curr.depth)) ? Number(curr.depth) : null
     const heightMm = curr.height != null && isFinite(Number(curr.height)) ? Number(curr.height) : null
 
+    // When quantity changes, adjust area and volume proportionally (if baseline exists)
+    if (field === 'quantity') {
+      const newQuantity = Number(value || 0)
+      
+      // Adjust area proportionally to quantity (if baseline_area exists)
+      // area = baseline_area * quantity (e.g., if quantity x2, area x2)
+      if (curr.baseline_area != null && curr.baseline_area > 0 && !curr.area_is_manual) {
+        const newArea = curr.baseline_area * newQuantity
+        const roundedArea = Math.round(newArea * 1e6) / 1e6
+        if (curr.area == null || Math.abs(Number(curr.area) - roundedArea) > 1e-9) {
+          curr.area = roundedArea
+          autoAreaChanged = true
+        }
+      }
+      
+      // Adjust volume proportionally to quantity (if baseline_volume exists)
+      // volume = baseline_volume * quantity (e.g., if quantity x2, volume x2)
+      if (curr.baseline_volume != null && curr.baseline_volume > 0 && !curr.volume_is_manual) {
+        const newVolume = curr.baseline_volume * newQuantity
+        const roundedVolume = Math.round(newVolume * 1e9) / 1e9
+        if (curr.volume == null || Math.abs(Number(curr.volume) - roundedVolume) > 1e-12) {
+          curr.volume = roundedVolume
+          autoVolumeChanged = true
+        }
+      }
+    }
+
     if (autoCalcDimensions) {
       // When user edits kích thước, ưu tiên tự tính lại: bỏ cờ manual
       if (field === 'length' || field === 'height') {
@@ -1101,15 +1187,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       }
 
     // Recompute area when length/height changes and area is not manual
+      // Formula: area = (length × height / 1_000_000) × quantity (integrate quantity into calculation)
       if ((field === 'length' || field === 'height') && !curr.area_is_manual) {
         if (lengthMm != null && heightMm != null) {
-          const computedArea = (lengthMm * heightMm) / 1_000_000 // mm^2 -> m^2
+          const quantity = Number(curr.quantity || 1)
+          const baselineAreaPerUnit = (lengthMm * heightMm) / 1_000_000 // mm^2 -> m^2 per unit
+          const computedArea = baselineAreaPerUnit * quantity // Multiply by quantity
           const rounded = Math.round(computedArea * 1e6) / 1e6
           if (curr.area == null || Math.abs(Number(curr.area) - rounded) > 1e-9) {
             curr.area = rounded
             autoAreaChanged = true
+            // Store baseline area per unit (not multiplied by quantity)
             if (curr.baseline_area == null) {
-              curr.baseline_area = rounded
+              curr.baseline_area = baselineAreaPerUnit
             }
           }
         } else {
@@ -1122,20 +1212,30 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       }
 
       // Recompute volume when any of area/height/length/depth changes and volume is not manual
+      // Formula: volume = (length × height × depth / 1_000_000_000) × quantity (integrate quantity into calculation)
       if ((field === 'height' || field === 'length' || field === 'depth' || field === 'area') && !curr.volume_is_manual) {
+        const quantity = Number(curr.quantity || 1)
         let computedVolume: number | null = null
+        let baselineVolumePerUnit: number | null = null
+        
         if (lengthMm != null && heightMm != null && depthMm != null) {
-          computedVolume = (lengthMm * heightMm * depthMm) / 1_000_000_000 // mm^3 -> m^3
+          baselineVolumePerUnit = (lengthMm * heightMm * depthMm) / 1_000_000_000 // mm^3 -> m^3 per unit
+          computedVolume = baselineVolumePerUnit * quantity // Multiply by quantity
         } else if (curr.area != null && heightMm != null) {
-          computedVolume = Number(curr.area) * (heightMm / 1000)
+          // If using area, calculate volume per unit first
+          const baselineAreaPerUnit = curr.baseline_area ?? (curr.area / quantity) // Get per-unit area
+          baselineVolumePerUnit = baselineAreaPerUnit * (heightMm / 1000)
+          computedVolume = baselineVolumePerUnit * quantity // Multiply by quantity
         }
+        
         if (computedVolume != null && isFinite(computedVolume)) {
           const roundedV = Math.round(computedVolume * 1e9) / 1e9
           if (curr.volume == null || Math.abs(Number(curr.volume) - roundedV) > 1e-12) {
             curr.volume = roundedV
             autoVolumeChanged = true
-            if (curr.baseline_volume == null) {
-              curr.baseline_volume = roundedV
+            // Store baseline volume per unit (not multiplied by quantity)
+            if (curr.baseline_volume == null && baselineVolumePerUnit != null) {
+              curr.baseline_volume = baselineVolumePerUnit
             }
           }
         } else {
@@ -1254,8 +1354,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (idx >= 0) comps[idx] = comp
     else comps.push(comp)
     ;(updated[itemIndex] as any).components = comps
-    const compSum = comps.reduce((s: number, c: any) => s + (Number(c.total_price) || 0), 0)
-    updated[itemIndex].total_price = compSum > 0 ? compSum : (updated[itemIndex].quantity * updated[itemIndex].unit_price)
+    // Recalculate item total_price from quantity * unit_price (NOT from components)
+    // total_price should always be the product price, not the material cost
+    updated[itemIndex].total_price = updated[itemIndex].quantity * updated[itemIndex].unit_price
     setItems(updated)
   }
 
@@ -2024,11 +2125,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             <div>
                               <div
                                 className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-gray-50"
-                                title={item.length != null && item.height != null ? `${formatNumber(((Number(item.length) || 0) * (Number(item.height) || 0)) / 1_000_000)} m²` : 'Nhập Dài và Cao để tự tính'}
+                                title={item.length != null && item.height != null ? `${formatNumber(((Number(item.length) || 0) * (Number(item.height) || 0) * (Number(item.quantity) || 1)) / 1_000_000)} m² (đã nhân với số lượng)` : 'Nhập Dài và Cao để tự tính'}
                               >
                                 {item.length != null && item.height != null
-                                  ? `${formatNumber(((Number(item.length) || 0) * (Number(item.height) || 0)) / 1_000_000)} m²`
-                                  : ''}
+                                  ? `${formatNumber(((Number(item.length) || 0) * (Number(item.height) || 0) * (Number(item.quantity) || 1)) / 1_000_000)} m²`
+                                  : item.area != null ? `${formatNumber(item.area)} m²` : ''}
                               </div>
                             </div>
                           )}
@@ -2189,7 +2290,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         <span className="text-sm font-medium text-black">Thuế ({formData.tax_rate}%):</span>
                         <span className="text-sm font-medium text-black">{formatCurrency(formData.tax_amount)}</span>
                       </div>
-                      <div className="flex justify-between items-center py-2">
+                      <div className="flex justify-between items-center py-2 border-b border-gray-300">
                         <span className="text-base font-semibold text-black">Tổng cộng:</span>
                         <span className={`text-base font-semibold ${
                           isOverBudget ? 'text-red-600' : 'text-black'
@@ -2197,6 +2298,112 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           {formatCurrency(formData.total_amount)}
                         </span>
                       </div>
+                      
+                      {/* Profit Analysis */}
+                      {(() => {
+                        // Calculate total material cost (from components)
+                        const totalMaterialCost = items.reduce((sum, item) => {
+                          const components = Array.isArray(item.components) ? item.components : []
+                          const materialCost = components.reduce((compSum, comp) => {
+                            return compSum + (Number(comp.total_price) || 0)
+                          }, 0)
+                          return sum + materialCost
+                        }, 0)
+                        
+                        // Calculate total product price
+                        const totalProductPrice = items.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0)
+                        
+                        // Calculate profit
+                        const profit = totalProductPrice - totalMaterialCost
+                        const profitPercentage = totalProductPrice > 0 ? (profit / totalProductPrice) * 100 : 0
+                        
+                        return (
+                          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                            <div className="text-sm font-medium text-blue-800 mb-2">Phân tích lợi nhuận</div>
+                            <div className="space-y-1 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-gray-700">Tổng giá vật tư:</span>
+                                <span className="font-medium text-gray-900">{formatCurrency(totalMaterialCost)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-700">Tổng giá sản phẩm:</span>
+                                <span className="font-medium text-gray-900">{formatCurrency(totalProductPrice)}</span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t border-blue-200">
+                                <span className="text-gray-700 font-medium">Lợi nhuận:</span>
+                                <span className={`font-semibold ${
+                                  profit >= 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {formatCurrency(profit)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-700">Tỷ lệ lợi nhuận:</span>
+                                <span className={`font-semibold ${
+                                  profitPercentage >= 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {profitPercentage.toFixed(2)}%
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* Per-product breakdown */}
+                            {items.length > 0 && items.some(item => {
+                              const components = Array.isArray(item.components) ? item.components : []
+                              return components.length > 0
+                            }) && (
+                              <div className="mt-3 pt-3 border-t border-blue-200">
+                                <div className="text-xs font-medium text-blue-800 mb-2">Chi tiết theo sản phẩm:</div>
+                                <div className="space-y-2 max-h-32 overflow-y-auto">
+                                  {items.map((item, idx) => {
+                                    const components = Array.isArray(item.components) ? item.components : []
+                                    const materialCost = components.reduce((sum, comp) => sum + (Number(comp.total_price) || 0), 0)
+                                    const productPrice = Number(item.total_price) || 0
+                                    const itemProfit = productPrice - materialCost
+                                    const itemProfitPercentage = productPrice > 0 ? (itemProfit / productPrice) * 100 : 0
+                                    
+                                    if (components.length === 0) return null
+                                    
+                                    return (
+                                      <div key={idx} className="text-xs bg-white p-2 rounded border border-blue-100">
+                                        <div className="font-medium text-gray-800 mb-1">
+                                          {item.name_product || item.description || `Sản phẩm #${idx + 1}`}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-gray-600">
+                                          <div>
+                                            <span>Vật tư: </span>
+                                            <span className="font-medium">{formatCurrency(materialCost)}</span>
+                                          </div>
+                                          <div>
+                                            <span>Giá SP: </span>
+                                            <span className="font-medium">{formatCurrency(productPrice)}</span>
+                                          </div>
+                                          <div>
+                                            <span>Lợi nhuận: </span>
+                                            <span className={`font-semibold ${
+                                              itemProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                                            }`}>
+                                              {formatCurrency(itemProfit)}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span>Tỷ lệ: </span>
+                                            <span className={`font-semibold ${
+                                              itemProfitPercentage >= 0 ? 'text-green-600' : 'text-red-600'
+                                            }`}>
+                                              {itemProfitPercentage.toFixed(2)}%
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                       
                       {/* Budget Warning */}
                       {selectedProject && selectedProject.budget && (
@@ -2665,10 +2872,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         const lengthMm = it.length != null ? Number(it.length) : null
                         const heightMm = it.height != null ? Number(it.height) : null
                         const depthMm = it.depth != null ? Number(it.depth) : null
+                        const qty = Number(it.quantity || 1)
+                        // Baseline area is per unit, so no multiplication needed for display
                         const baseArea = it.baseline_area != null ? Number(it.baseline_area) : ((lengthMm != null && heightMm != null) ? Math.round(((lengthMm * heightMm) / 1_000_000) * 1e6) / 1e6 : null)
-                        const areaVal = (lengthMm != null && heightMm != null) ? Math.round(((lengthMm * heightMm) / 1_000_000) * 1e6) / 1e6 : (it.area ?? null)
+                        // Area value should include quantity (integrate quantity into calculation)
+                        const areaVal = (lengthMm != null && heightMm != null) 
+                          ? Math.round(((lengthMm * heightMm * qty) / 1_000_000) * 1e6) / 1e6 
+                          : (it.area ?? null)
+                        // Volume value should include quantity (integrate quantity into calculation)
                         const volumeVal = (lengthMm != null && heightMm != null && depthMm != null)
-                          ? Math.round(((lengthMm * heightMm * depthMm) / 1_000_000_000) * 1e9) / 1e9
+                          ? Math.round(((lengthMm * heightMm * depthMm * qty) / 1_000_000_000) * 1e9) / 1e9
                           : (it.area != null && heightMm != null ? Math.round((Number(it.area) * (heightMm / 1000)) * 1e9) / 1e9 : (it.volume ?? null))
                         const compIds = Array.isArray((it as any).components) ? ((it as any).components as any[]).map(c => c.expense_object_id).filter(Boolean) : []
                         return (
