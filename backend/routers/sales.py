@@ -813,7 +813,13 @@ async def convert_quote_to_invoice(
         
         # Convert quote items to invoice items
         converted_items = []
+        
         for item in quote_items:
+            # Get product_components from quote_item (copy to invoice_item, not to invoice table)
+            product_components = item.get("product_components")
+            if not product_components or not isinstance(product_components, list):
+                product_components = []
+            
             # Create new invoice item from quote item
             invoice_item = {
                 "id": str(uuid.uuid4()),
@@ -831,6 +837,7 @@ async def convert_quote_to_invoice(
                 "height": item.get("height"),
                 "length": item.get("length"),
                 "depth": item.get("depth"),
+                "product_components": product_components,  # Copy product_components to invoice_item
                 "created_at": datetime.utcnow().isoformat()
             }
             converted_items.append(invoice_item)

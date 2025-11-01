@@ -352,6 +352,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const [expenseObjectsOptions, setExpenseObjectsOptions] = useState<SimpleExpenseObject[]>([])
   const [selectedExpenseObjectIds, setSelectedExpenseObjectIds] = useState<string[]>([])
   const [selectedRole, setSelectedRole] = useState<string>('')
+  // Store product components data from quote_items for auto-filling
+  const [quoteProductComponents, setQuoteProductComponents] = useState<Array<{
+    expense_object_id: string
+    name?: string
+    unit?: string
+    quantity: number
+    unit_price: number
+    total_price?: number
+  }>>([])
 
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItemRow[]>([
     {
@@ -444,6 +453,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const profitComputed = useMemo(() => {
     return (Number(projectRevenueTotal) || 0) - (Number(grandAllocationTotal) || 0)
   }, [projectRevenueTotal, grandAllocationTotal])
+
+  // Auto-select expense objects from product_components when both are ready (for both planned and actual expenses)
+  useEffect(() => {
+    if (
+      quoteProductComponents.length > 0 && 
+      expenseObjectsOptions.length > 0 && 
+      formData.project_id
+    ) {
+      // Extract unique expense_object_ids from quoteProductComponents (works for both planned and actual)
+      const expenseObjectIds = Array.from(new Set(
+        quoteProductComponents
+          .map(comp => comp.expense_object_id)
+          .filter(id => !!id)
+      ))
+      
+      // Only select IDs that exist in expenseObjectsOptions
+      const validIds = expenseObjectIds.filter(id => 
+        expenseObjectsOptions.some(obj => obj.id === id)
+      )
+      
+      if (validIds.length > 0) {
+        setSelectedExpenseObjectIds(validIds)
+        const categoryText = category === 'planned' ? 'quote_items' : 'invoice_items'
+        console.log(`✅ Auto-selected ${validIds.length} expense objects from ${categoryText} product_components`)
+      }
+    }
+  }, [quoteProductComponents, expenseObjectsOptions, formData.project_id, category])
 
   // Ensure each row has keys for all selected expense objects
   useEffect(() => {
@@ -562,146 +598,493 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Load invoice items from backend purchase orders API for selected project
   const loadInvoiceItemsForProject = async (projectId: string) => {
     try {
-      // Load revenue (invoices) to compute profit
-      try {
-        const { data: invForRevenue } = await supabase
-          .from('invoices')
-          .select('id, total_amount, items')
+      // For planned expenses: load quote_items with product_components
+      if (category === 'planned') {
+        console.log('📋 Loading quote_items with product_components for planned expense, project:', projectId)
+        
+        // First, get quote IDs for this project
+        const { data: quotesData, error: quotesError } = await supabase
+          .from('quotes')
+          .select('id')
           .eq('project_id', projectId)
-        if (Array.isArray(invForRevenue)) {
-          const sumRevenue = invForRevenue.reduce((s: number, inv: any) => {
-            const totalAmt = Number(inv.total_amount)
-            if (!isNaN(totalAmt) && totalAmt > 0) return s + totalAmt
-            // fallback: sum items if total_amount missing
-            const items = Array.isArray(inv.items) ? inv.items : []
-            const itemsSum = items.reduce((ss: number, it: any) => {
-              const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
-              const qty = Number(it.quantity ?? it.qty) || 0
-              const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * qty)
-              return ss + (lineTotal || 0)
-            }, 0)
-            return s + itemsSum
-          }, 0)
-          setProjectRevenueTotal(sumRevenue)
-        } else {
-          setProjectRevenueTotal(0)
+        
+        if (quotesError) {
+          console.error('❌ Error loading quotes:', quotesError)
+          setInvoiceItems([])
+          setQuoteProductComponents([])
+          return
         }
-      } catch (_re) {
-        setProjectRevenueTotal(0)
-      }
-      // Try purchase orders first (have structured line_items)
-      const params = new URLSearchParams()
-      params.append('project_id', projectId)
-      const url = `${API_BASE_URL}/api/expenses/purchase-orders?${params.toString()}`
-      const poList = await apiGet(url)
-
-      if (Array.isArray(poList) && poList.length > 0) {
+        
+        if (!Array.isArray(quotesData) || quotesData.length === 0) {
+          console.log('ℹ️ No quotes found for project')
+          setInvoiceItems([])
+          setQuoteProductComponents([])
+          return
+        }
+        
+        const quoteIds = quotesData.map((q: any) => q.id)
+        
+        // Load quote_items - try to get components column (product_components may not exist in quote_items)
+        // First try with both columns, if fails, try only with components
+        let quoteItemsData: any[] | null = null
+        let quoteItemsError: any = null
+        
+        // Try loading with both columns first
+        const { data: quoteItemsDataWithBoth, error: errorWithBoth } = await supabase
+          .from('quote_items')
+          .select('*')
+          .in('quote_id', quoteIds)
+          .order('created_at', { ascending: true })
+        
+        if (errorWithBoth) {
+          console.warn('⚠️ Error loading quote_items with all columns, trying basic select:', errorWithBoth)
+          // Try with minimal columns including product_components
+          const { data: basicData, error: basicError } = await supabase
+            .from('quote_items')
+            .select('id, quote_id, name_product, description, quantity, unit_price, unit, total_price, created_at, components, product_components')
+            .in('quote_id', quoteIds)
+            .order('created_at', { ascending: true })
+          
+          if (basicError) {
+            console.error('❌ Error loading quote_items:', basicError)
+            quoteItemsError = basicError
+          } else {
+            quoteItemsData = basicData
+          }
+        } else {
+          quoteItemsData = quoteItemsDataWithBoth
+        }
+        
+        if (quoteItemsError) {
+          console.error('❌ Error loading quote_items:', quoteItemsError)
+          setInvoiceItems([])
+          setQuoteProductComponents([])
+          return
+        }
+        
+        if (!Array.isArray(quoteItemsData) || quoteItemsData.length === 0) {
+          console.log('ℹ️ No quote_items found')
+          setInvoiceItems([])
+          setQuoteProductComponents([])
+          return
+        }
+        
+        // Collect all product_components from all quote_items
+        const allComponents: Array<{
+          expense_object_id: string
+          name?: string
+          unit?: string
+          quantity: number
+          unit_price: number
+          total_price?: number
+        }> = []
+        
+        // Extract expense_object_ids and create invoice items
+        const expenseObjectIdsSet = new Set<string>()
+        
         const rows: InvoiceItemRow[] = []
-        poList.forEach((po: any, idx: number) => {
-            const sectionName = ''
-          const items = Array.isArray(po.line_items) ? po.line_items : []
-          items.forEach((li: any, liIdx: number) => {
-            const unitPrice = Number(li.unit_price) || 0
-            const quantity = Number(li.quantity) || 0
-            const lineTotal = Number(li.line_total) || (unitPrice * quantity)
-            rows.push({
-              section: sectionName,
-              index: rows.length + 1,
-              productCode: '',
-              productName: li.product_name || li.description || '',
-              unitPrice,
-              quantity,
-              unit: li.unit || 'cái',
-              lineTotal,
-              componentsPct: {},
-              componentsAmt: {},
-              componentsQuantity: {},
-              componentsUnitPrice: {}
+        quoteItemsData.forEach((qi: any) => {
+          // Use product_components from quote_items (may also have components as fallback)
+          const productComponents = qi.product_components || qi.components || []
+          
+          if (Array.isArray(productComponents) && productComponents.length > 0) {
+            // Collect components for auto-selection and auto-fill
+            productComponents.forEach((comp: any) => {
+              if (comp?.expense_object_id) {
+                expenseObjectIdsSet.add(comp.expense_object_id)
+                allComponents.push({
+                  expense_object_id: comp.expense_object_id,
+                  name: comp.name,
+                  unit: comp.unit,
+                  quantity: Number(comp.quantity) || 0,
+                  unit_price: Number(comp.unit_price) || 0,
+                  total_price: Number(comp.total_price) || 0
+                })
+              }
             })
+          }
+          
+          // Create invoice item row from quote_item
+          const unitPrice = Number(qi.unit_price ?? qi.price) || 0
+          const quantity = Number(qi.quantity ?? qi.qty) || 0
+          const lineTotal = Number(qi.total_price ?? qi.subtotal ?? qi.total) || (unitPrice * quantity)
+          
+          // Prepare components data for this row
+          const componentsPct: Record<string, number> = {}
+          const componentsAmt: Record<string, number> = {}
+          const componentsQuantity: Record<string, number> = {}
+          const componentsUnitPrice: Record<string, number> = {}
+          
+          // Fill components data if product_components exists
+          if (Array.isArray(productComponents) && productComponents.length > 0) {
+            productComponents.forEach((comp: any) => {
+              if (comp?.expense_object_id) {
+                const compQty = Number(comp.quantity) || 0
+                const compUnitPrice = Number(comp.unit_price) || 0
+                // Use total_price from product_components, or calculate from quantity * unit_price
+                const compTotal = Number(comp.total_price) || (compQty * compUnitPrice)
+                
+                // Fill the 4 columns: %, số lượng, đơn giá, thành tiền
+                componentsQuantity[comp.expense_object_id] = compQty
+                componentsUnitPrice[comp.expense_object_id] = compUnitPrice
+                componentsAmt[comp.expense_object_id] = compTotal
+                
+                // Calculate percentage: (component total / line total) * 100
+                if (lineTotal > 0 && compTotal > 0) {
+                  const percentage = (compTotal / lineTotal) * 100
+                  componentsPct[comp.expense_object_id] = Math.round(percentage * 100) / 100 // Round to 2 decimal places
+                } else {
+                  componentsPct[comp.expense_object_id] = 0
+                }
+              }
+            })
+          }
+          
+          rows.push({
+            section: '',
+            index: rows.length + 1,
+            productCode: qi.product_code || qi.code || '',
+            productName: qi.name_product || qi.product_name || qi.description || '',
+            description: qi.description || '',
+            unitPrice,
+            quantity,
+            unit: qi.unit || 'cái',
+            lineTotal,
+            componentsPct,
+            componentsAmt,
+            componentsQuantity,
+            componentsUnitPrice
           })
         })
-        setInvoiceItems(rows)
-        return
-      }
-
-      // Fallback A: load invoices for this project directly from Supabase and map their embedded JSON items
-      const { data: invoices, error } = await supabase
-        .from('invoices')
-        .select('id, items, created_at')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false })
-
-      if (!error && Array.isArray(invoices)) {
-        const rows: InvoiceItemRow[] = []
-        invoices.forEach((inv: any) => {
-          const items = Array.isArray(inv.items) ? inv.items : []
-          items.forEach((it: any) => {
-            const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
-            const quantity = Number(it.quantity ?? it.qty) || 0
-            const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * quantity)
-            rows.push({
-              section: '',
-              index: rows.length + 1,
-              productCode: it.product_code || it.code || '',
-              productName: it.product_name || it.name || it.description || '',
-              description: it.description || '',
-              unitPrice,
-              quantity,
-              unit: it.unit || 'cái',
-              lineTotal,
-              componentsPct: {},
-              componentsAmt: {},
-              componentsQuantity: {},
-              componentsUnitPrice: {}
-            })
-          })
-        })
+        
+        // Store components for auto-selection
+        setQuoteProductComponents(allComponents)
+        
+        // Store expense object IDs for auto-selection (will be handled by useEffect)
+        if (expenseObjectIdsSet.size > 0) {
+          const expenseObjectIds = Array.from(expenseObjectIdsSet)
+          console.log(`✅ Found ${expenseObjectIds.length} expense objects from quote_items product_components:`, expenseObjectIds)
+        }
+        
         if (rows.length > 0) {
+          console.log(`✅ Loaded ${rows.length} quote_items with product_components`)
           setInvoiceItems(rows)
           return
         }
       }
-
-      // Fallback B: load invoice_items rows for all invoices of the project
-      const { data: invIdsData, error: invIdsErr } = await supabase
-        .from('invoices')
-        .select('id')
-        .eq('project_id', projectId)
-
-      if (!invIdsErr && Array.isArray(invIdsData) && invIdsData.length > 0) {
-        const invoiceIds = invIdsData.map((r: any) => r.id)
-        const { data: itemRows, error: itemsErr } = await supabase
-          .from('invoice_items')
-          .select('*')
-          .in('invoice_id', invoiceIds)
-          .order('created_at', { ascending: true })
-
-        if (!itemsErr && Array.isArray(itemRows) && itemRows.length > 0) {
-          const rows: InvoiceItemRow[] = []
-          itemRows.forEach((it: any) => {
-            const unitPrice = Number(it.unit_price ?? it.price) || 0
-            const quantity = Number(it.quantity ?? it.qty) || 0
-            const lineTotal = Number(it.total_price ?? it.subtotal ?? it.total) || (unitPrice * quantity)
-            rows.push({
-              section: '',
-              index: rows.length + 1,
-              productCode: it.product_code || it.code || '',
-              productName: it.name_product || it.description || '',
-              description: it.description || '',
-              unitPrice,
-              quantity,
-              unit: it.unit || 'cái',
-              lineTotal,
-              componentsPct: {},
-              componentsAmt: {},
-              componentsQuantity: {},
-              componentsUnitPrice: {}
+      
+      // For actual expenses: load invoice_items with product_components
+      if (category === 'actual') {
+        console.log('💰 Loading invoice_items with product_components for actual expense, project:', projectId)
+        
+        // First, get invoice IDs for this project
+        const { data: invoicesData, error: invoicesError } = await supabase
+          .from('invoices')
+          .select('id, total_amount')
+          .eq('project_id', projectId)
+        
+        if (invoicesError) {
+          console.error('❌ Error loading invoices:', invoicesError)
+          // Continue with fallback logic below
+        }
+        
+        // Load revenue for profit calculation
+        if (Array.isArray(invoicesData) && invoicesData.length > 0) {
+          const sumRevenue = invoicesData.reduce((s: number, inv: any) => {
+            const totalAmt = Number(inv.total_amount) || 0
+            return s + (totalAmt > 0 ? totalAmt : 0)
+          }, 0)
+          setProjectRevenueTotal(sumRevenue)
+          
+          const invoiceIds = invoicesData.map((inv: any) => inv.id)
+          
+          // Load invoice_items with product_components (or components column)
+          let invoiceItemsData: any[] | null = null
+          let invoiceItemsError: any = null
+          
+          // Try loading with all columns first
+          const { data: invoiceItemsWithAll, error: errorWithAll } = await supabase
+            .from('invoice_items')
+            .select('*')
+            .in('invoice_id', invoiceIds)
+            .order('created_at', { ascending: true })
+          
+          if (errorWithAll) {
+            console.warn('⚠️ Error loading invoice_items with all columns, trying basic select:', errorWithAll)
+            // Try with minimal columns including product_components
+            const { data: basicData, error: basicError } = await supabase
+              .from('invoice_items')
+              .select('id, invoice_id, name_product, description, quantity, unit_price, unit, total_price, created_at, components, product_components')
+              .in('invoice_id', invoiceIds)
+              .order('created_at', { ascending: true })
+            
+            if (basicError) {
+              console.error('❌ Error loading invoice_items:', basicError)
+              invoiceItemsError = basicError
+            } else {
+              invoiceItemsData = basicData
+            }
+          } else {
+            invoiceItemsData = invoiceItemsWithAll
+          }
+          
+          if (!invoiceItemsError && Array.isArray(invoiceItemsData) && invoiceItemsData.length > 0) {
+            // Collect all product_components from all invoice_items
+            const allComponents: Array<{
+              expense_object_id: string
+              name?: string
+              unit?: string
+              quantity: number
+              unit_price: number
+              total_price?: number
+            }> = []
+            
+            // Extract expense_object_ids and create invoice items
+            const expenseObjectIdsSet = new Set<string>()
+            
+            const rows: InvoiceItemRow[] = []
+            invoiceItemsData.forEach((ii: any) => {
+              // Use product_components from invoice_items (may also have components as fallback)
+              const productComponents = ii.product_components || ii.components || []
+              
+              if (Array.isArray(productComponents) && productComponents.length > 0) {
+                // Collect components for auto-selection and auto-fill
+                productComponents.forEach((comp: any) => {
+                  if (comp?.expense_object_id) {
+                    expenseObjectIdsSet.add(comp.expense_object_id)
+                    allComponents.push({
+                      expense_object_id: comp.expense_object_id,
+                      name: comp.name,
+                      unit: comp.unit,
+                      quantity: Number(comp.quantity) || 0,
+                      unit_price: Number(comp.unit_price) || 0,
+                      total_price: Number(comp.total_price) || 0
+                    })
+                  }
+                })
+              }
+              
+              // Create invoice item row from invoice_item
+              const unitPrice = Number(ii.unit_price ?? ii.price) || 0
+              const quantity = Number(ii.quantity ?? ii.qty) || 0
+              const lineTotal = Number(ii.total_price ?? ii.subtotal ?? ii.total) || (unitPrice * quantity)
+              
+              // Prepare components data for this row
+              const componentsPct: Record<string, number> = {}
+              const componentsAmt: Record<string, number> = {}
+              const componentsQuantity: Record<string, number> = {}
+              const componentsUnitPrice: Record<string, number> = {}
+              
+              // Fill components data if product_components exists
+              if (Array.isArray(productComponents) && productComponents.length > 0) {
+                productComponents.forEach((comp: any) => {
+                  if (comp?.expense_object_id) {
+                    const compQty = Number(comp.quantity) || 0
+                    const compUnitPrice = Number(comp.unit_price) || 0
+                    // Use total_price from product_components, or calculate from quantity * unit_price
+                    const compTotal = Number(comp.total_price) || (compQty * compUnitPrice)
+                    
+                    // Fill the 4 columns: %, số lượng, đơn giá, thành tiền
+                    componentsQuantity[comp.expense_object_id] = compQty
+                    componentsUnitPrice[comp.expense_object_id] = compUnitPrice
+                    componentsAmt[comp.expense_object_id] = compTotal
+                    
+                    // Calculate percentage: (component total / line total) * 100
+                    if (lineTotal > 0 && compTotal > 0) {
+                      const percentage = (compTotal / lineTotal) * 100
+                      componentsPct[comp.expense_object_id] = Math.round(percentage * 100) / 100 // Round to 2 decimal places
+                    } else {
+                      componentsPct[comp.expense_object_id] = 0
+                    }
+                  }
+                })
+              }
+              
+              rows.push({
+                section: '',
+                index: rows.length + 1,
+                productCode: ii.product_code || ii.code || '',
+                productName: ii.name_product || ii.product_name || ii.description || '',
+                description: ii.description || '',
+                unitPrice,
+                quantity,
+                unit: ii.unit || 'cái',
+                lineTotal,
+                componentsPct,
+                componentsAmt,
+                componentsQuantity,
+                componentsUnitPrice
+              })
             })
-          })
-          if (rows.length > 0) {
+            
+            // Store components for auto-selection
+            setQuoteProductComponents(allComponents)
+            
+            // Store expense object IDs for auto-selection (will be handled by useEffect)
+            if (expenseObjectIdsSet.size > 0) {
+              const expenseObjectIds = Array.from(expenseObjectIdsSet)
+              console.log(`✅ Found ${expenseObjectIds.length} expense objects from invoice_items product_components:`, expenseObjectIds)
+            }
+            
+            if (rows.length > 0) {
+              console.log(`✅ Loaded ${rows.length} invoice_items with product_components`)
+              setInvoiceItems(rows)
+              return
+            }
+          }
+        }
+      }
+      
+      // For actual expenses: load revenue and continue with fallback logic if no invoice_items with product_components found
+      if (category === 'actual') {
+        // Load revenue (invoices) to compute profit
+        try {
+          const { data: invForRevenue } = await supabase
+            .from('invoices')
+            .select('id, total_amount, items')
+            .eq('project_id', projectId)
+          if (Array.isArray(invForRevenue)) {
+            const sumRevenue = invForRevenue.reduce((s: number, inv: any) => {
+              const totalAmt = Number(inv.total_amount)
+              if (!isNaN(totalAmt) && totalAmt > 0) return s + totalAmt
+              // fallback: sum items if total_amount missing
+              const items = Array.isArray(inv.items) ? inv.items : []
+              const itemsSum = items.reduce((ss: number, it: any) => {
+                const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
+                const qty = Number(it.quantity ?? it.qty) || 0
+                const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * qty)
+                return ss + (lineTotal || 0)
+              }, 0)
+              return s + itemsSum
+            }, 0)
+            setProjectRevenueTotal(sumRevenue)
+          } else {
+            setProjectRevenueTotal(0)
+          }
+        } catch (_re) {
+          setProjectRevenueTotal(0)
+        }
+        
+        // Fallback for actual expenses: continue with existing logic
+        try {
+          // Try purchase orders first (have structured line_items)
+          const params = new URLSearchParams()
+          params.append('project_id', projectId)
+          const url = `${API_BASE_URL}/api/expenses/purchase-orders?${params.toString()}`
+          const poList = await apiGet(url)
+
+          if (Array.isArray(poList) && poList.length > 0) {
+            const rows: InvoiceItemRow[] = []
+            poList.forEach((po: any, idx: number) => {
+              const sectionName = ''
+              const items = Array.isArray(po.line_items) ? po.line_items : []
+              items.forEach((li: any, liIdx: number) => {
+                const unitPrice = Number(li.unit_price) || 0
+                const quantity = Number(li.quantity) || 0
+                const lineTotal = Number(li.line_total) || (unitPrice * quantity)
+                rows.push({
+                  section: sectionName,
+                  index: rows.length + 1,
+                  productCode: '',
+                  productName: li.product_name || li.description || '',
+                  unitPrice,
+                  quantity,
+                  unit: li.unit || 'cái',
+                  lineTotal,
+                  componentsPct: {},
+                  componentsAmt: {},
+                  componentsQuantity: {},
+                  componentsUnitPrice: {}
+                })
+              })
+            })
             setInvoiceItems(rows)
             return
           }
+
+          // Fallback A: load invoices for this project directly from Supabase and map their embedded JSON items
+          const { data: invoices, error } = await supabase
+            .from('invoices')
+            .select('id, items, created_at')
+            .eq('project_id', projectId)
+            .order('created_at', { ascending: false })
+
+          if (!error && Array.isArray(invoices)) {
+            const rows: InvoiceItemRow[] = []
+            invoices.forEach((inv: any) => {
+              const items = Array.isArray(inv.items) ? inv.items : []
+              items.forEach((it: any) => {
+                const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
+                const quantity = Number(it.quantity ?? it.qty) || 0
+                const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * quantity)
+                rows.push({
+                  section: '',
+                  index: rows.length + 1,
+                  productCode: it.product_code || it.code || '',
+                  productName: it.product_name || it.name || it.description || '',
+                  description: it.description || '',
+                  unitPrice,
+                  quantity,
+                  unit: it.unit || 'cái',
+                  lineTotal,
+                  componentsPct: {},
+                  componentsAmt: {},
+                  componentsQuantity: {},
+                  componentsUnitPrice: {}
+                })
+              })
+            })
+            if (rows.length > 0) {
+              setInvoiceItems(rows)
+              return
+            }
+          }
+
+          // Fallback B: load invoice_items rows for all invoices of the project
+          const { data: invIdsData, error: invIdsErr } = await supabase
+            .from('invoices')
+            .select('id')
+            .eq('project_id', projectId)
+
+          if (!invIdsErr && Array.isArray(invIdsData) && invIdsData.length > 0) {
+            const invoiceIds = invIdsData.map((r: any) => r.id)
+            const { data: itemRows, error: itemsErr } = await supabase
+              .from('invoice_items')
+              .select('*')
+              .in('invoice_id', invoiceIds)
+              .order('created_at', { ascending: true })
+
+            if (!itemsErr && Array.isArray(itemRows) && itemRows.length > 0) {
+              const rows: InvoiceItemRow[] = []
+              itemRows.forEach((it: any) => {
+                const unitPrice = Number(it.unit_price ?? it.price) || 0
+                const quantity = Number(it.quantity ?? it.qty) || 0
+                const lineTotal = Number(it.total_price ?? it.subtotal ?? it.total) || (unitPrice * quantity)
+                rows.push({
+                  section: '',
+                  index: rows.length + 1,
+                  productCode: it.product_code || it.code || '',
+                  productName: it.name_product || it.description || '',
+                  description: it.description || '',
+                  unitPrice,
+                  quantity,
+                  unit: it.unit || 'cái',
+                  lineTotal,
+                  componentsPct: {},
+                  componentsAmt: {},
+                  componentsQuantity: {},
+                  componentsUnitPrice: {}
+                })
+              })
+              if (rows.length > 0) {
+                setInvoiceItems(rows)
+                return
+              }
+            }
+          }
+        } catch (e) {
+          console.error('❌ Error loading invoice items for project:', e)
+          // Keep current invoiceItems if load fails
         }
       }
     } catch (e) {
@@ -3254,6 +3637,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               await loadInvoiceItemsForProject(value)
                             } else {
                               setInvoiceItems([])
+                              setQuoteProductComponents([])
+                              setSelectedExpenseObjectIds([])
                             }
                           }}
                           className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${

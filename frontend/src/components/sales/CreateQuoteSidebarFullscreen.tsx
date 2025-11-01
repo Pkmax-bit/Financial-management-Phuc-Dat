@@ -1324,7 +1324,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         const baselineVolume = Number((curr as any).baseline_volume ?? 0)
         oldValueForSchedule = baselineVolume > 0 ? baselineVolume : oldVolume
       } else {
-        const oldMap: any = { area: oldArea, volume: oldVolume, height: oldHeight, length: oldLength, depth: oldDepth, quantity: oldQuantity }
+      const oldMap: any = { area: oldArea, volume: oldVolume, height: oldHeight, length: oldLength, depth: oldDepth, quantity: oldQuantity }
         oldValueForSchedule = oldMap[field as any]
       }
       scheduleAutoAdjust(index, field as any, oldValueForSchedule, newValue as any)
@@ -1491,11 +1491,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       if (items.length === 0 || items.every(item => !item.name_product.trim())) {
         throw new Error('Vui lòng thêm ít nhất một sản phẩm')
       }
-      // Enforce dimensions present to compute area (auto-calc mode)
-      const missingDims = items.some(it => (it.name_product?.trim() || '') !== '' && (it.length == null || it.depth == null))
-      if (missingDims) {
-        throw new Error('Vui lòng nhập đầy đủ Dài và Sâu (mm) cho tất cả dòng sản phẩm')
-      }
+      // Dimensions are optional - allow null values for length and depth
       if (!formData.created_by) {
         throw new Error('Vui lòng chọn nhân viên tạo báo giá')
       }
@@ -1541,20 +1537,35 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
       // Insert quote items
       if (items.length > 0) {
-        const quoteItems = items.map(item => ({
-          quote_id: quote.id,
-          name_product: item.name_product,
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-          area: item.area,
-          volume: item.volume,
-          height: item.height,
-          length: item.length,
-          depth: item.depth
-        }))
+        const quoteItems = items.map(item => {
+          // Format components as JSONB array for product_components column
+          // Structure: [{"expense_object_id":"<uuid>", "quantity":0, "unit_price":0, "unit":"", "total_price":0, "name":""}]
+          const comps: any[] = Array.isArray((item as any).components) ? ((item as any).components as any[]) : []
+          const productComponents = comps.map((c: any) => ({
+            expense_object_id: c.expense_object_id || null,
+            name: c.name || null,
+            unit: c.unit || '',
+            unit_price: Number(c.unit_price || 0),
+            quantity: Number(c.quantity || 0),
+            total_price: Number(c.total_price || 0)
+          }))
+
+          return {
+            quote_id: quote.id,
+            name_product: item.name_product,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unit_price: item.unit_price,
+            total_price: item.total_price,
+            area: item.area,
+            volume: item.volume,
+            height: item.height,
+            length: item.length,
+            depth: item.depth,
+            product_components: productComponents.length > 0 ? productComponents : [] // JSONB column - empty array if no components
+          }
+        })
 
         const { data: insertedItems, error: itemsError } = await supabase
           .from('quote_items')
@@ -1564,32 +1575,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         if (itemsError) {
           console.error('Error creating quote items:', itemsError)
           // Don't throw error here, quote was created successfully
-        } else if (insertedItems && insertedItems.length === items.length) {
-          // Insert components for each quote item if any
-          const componentRows = items.flatMap((item, idx) => {
-            const quote_item_id = insertedItems[idx].id
-            const comps: any[] = Array.isArray((item as any).components) ? ((item as any).components as any[]) : []
-            return comps.map((c: any) => ({
-              quote_item_id,
-              expense_object_id: c.expense_object_id || null,
-              name: c.name || null,
-              unit: c.unit || null,
-              unit_price: Number(c.unit_price || 0),
-              quantity: Number(c.quantity || 0),
-              total_price: Number(c.total_price || 0)
-            }))
-          })
-
-          if (componentRows.length > 0) {
-            const { error: compsError } = await supabase
-              .from('quote_item_components')
-              .insert(componentRows)
-
-            if (compsError) {
-              console.error('Error creating quote item components:', compsError)
-            }
-          }
         }
+        // Components are already saved in product_components JSONB column, no need to insert separately
       }
 
       // Show success notification

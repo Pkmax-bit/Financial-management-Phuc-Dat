@@ -310,8 +310,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       
       // Convert quote items to invoice items
       const convertedItems = []
+      
       if (quote.quote_items && Array.isArray(quote.quote_items)) {
         for (const item of quote.quote_items) {
+          // Get product_components from quote_item (copy to invoice_item, not invoice)
+          const productComponents = item.product_components && Array.isArray(item.product_components) 
+            ? item.product_components 
+            : []
+          
           const invoiceItem = {
             id: crypto.randomUUID(),
             invoice_id: '', // Will be set after invoice creation
@@ -328,6 +334,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             height: item.height,
             length: item.length,
             depth: item.depth,
+            product_components: productComponents, // Copy product_components to invoice_item
             created_at: new Date().toISOString()
           }
           convertedItems.push(invoiceItem)

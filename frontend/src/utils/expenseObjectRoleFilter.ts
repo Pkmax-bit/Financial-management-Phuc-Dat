@@ -198,15 +198,14 @@ export const useExpenseObjectRoleFilter = () => {
       category
     );
 
-    // For planned expenses, only show parent objects
+    // For planned expenses, show all levels (all objects, not just parent objects)
     if (category === 'planned') {
-      const parentObjects = result.filteredObjects.filter(obj => !obj.parent_id);
-      console.log(`📋 [useExpenseObjectRoleFilter] Planned expenses - showing only parent objects:`, 
-        parentObjects.map(o => o.name));
+      console.log(`📋 [useExpenseObjectRoleFilter] Planned expenses - showing all levels:`, 
+        result.filteredObjects.map(o => `${o.name} (Level ${o.level || 'N/A'})`));
       
       return {
         ...result,
-        filteredObjects: parentObjects,
+        filteredObjects: result.filteredObjects, // Show all objects, all levels
         selectedIds: [] // No auto-selection for planned expenses
       };
     }
