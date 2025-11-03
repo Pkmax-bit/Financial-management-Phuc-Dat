@@ -23,10 +23,13 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Eye
+  Eye,
+  Palette
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
+import BackgroundSettings from './BackgroundSettings'
+import { useBackground } from '@/contexts/BackgroundContext'
 import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
 
 interface LayoutWithSidebarProps {
@@ -54,10 +57,210 @@ export const useSidebar = () => {
   return context
 }
 
+// Helper component to render background based on config
+function BackgroundRenderer() {
+  const { background } = useBackground()
+
+  const getBackgroundStyle = () => {
+    switch (background.type) {
+      case 'diagonal-cross-grid':
+        return {
+          backgroundImage: `
+            linear-gradient(45deg, transparent 49%, #e5e7eb 49%, #e5e7eb 51%, transparent 51%),
+            linear-gradient(-45deg, transparent 49%, #e5e7eb 49%, #e5e7eb 51%, transparent 51%)
+          `,
+          backgroundSize: background.size || '40px 40px',
+          backgroundColor: 'white'
+        }
+      
+      case 'solid-white':
+        return { backgroundColor: 'white' }
+      
+      case 'solid-gray':
+        return { backgroundColor: '#f9fafb' } // gray-50
+      
+      case 'solid-blue':
+        return { backgroundColor: '#eff6ff' } // blue-50
+      
+      case 'dots':
+        return {
+          backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)',
+          backgroundSize: background.size || '20px 20px',
+          backgroundColor: 'white'
+        }
+      
+      case 'dots-large':
+        return {
+          backgroundImage: 'radial-gradient(circle, #e5e7eb 2px, transparent 2px)',
+          backgroundSize: background.size || '30px 30px',
+          backgroundColor: 'white'
+        }
+      
+      case 'dots-small':
+        return {
+          backgroundImage: 'radial-gradient(circle, #e5e7eb 0.5px, transparent 0.5px)',
+          backgroundSize: background.size || '15px 15px',
+          backgroundColor: 'white'
+        }
+      
+      case 'dots-cross':
+        return {
+          backgroundImage: `
+            radial-gradient(circle, #e5e7eb 1px, transparent 1px),
+            radial-gradient(circle, #e5e7eb 1px, transparent 1px)
+          `,
+          backgroundSize: '20px 20px, 40px 40px',
+          backgroundPosition: '0 0, 10px 10px',
+          backgroundColor: 'white'
+        }
+      
+      case 'grid':
+        return {
+          backgroundImage: `
+            linear-gradient(#e5e7eb 1px, transparent 1px),
+            linear-gradient(90deg, #e5e7eb 1px, transparent 1px)
+          `,
+          backgroundSize: background.size || '40px 40px',
+          backgroundColor: 'white'
+        }
+      
+      case 'grid-small':
+        return {
+          backgroundImage: `
+            linear-gradient(#e5e7eb 1px, transparent 1px),
+            linear-gradient(90deg, #e5e7eb 1px, transparent 1px)
+          `,
+          backgroundSize: background.size || '20px 20px',
+          backgroundColor: 'white'
+        }
+      
+      case 'grid-large':
+        return {
+          backgroundImage: `
+            linear-gradient(#e5e7eb 1px, transparent 1px),
+            linear-gradient(90deg, #e5e7eb 1px, transparent 1px)
+          `,
+          backgroundSize: background.size || '60px 60px',
+          backgroundColor: 'white'
+        }
+      
+      case 'grid-thick':
+        return {
+          backgroundImage: `
+            linear-gradient(#e5e7eb 2px, transparent 2px),
+            linear-gradient(90deg, #e5e7eb 2px, transparent 2px)
+          `,
+          backgroundSize: background.size || '40px 40px',
+          backgroundColor: 'white'
+        }
+      
+      case 'grid-thin':
+        return {
+          backgroundImage: `
+            linear-gradient(#e5e7eb 0.5px, transparent 0.5px),
+            linear-gradient(90deg, #e5e7eb 0.5px, transparent 0.5px)
+          `,
+          backgroundSize: background.size || '40px 40px',
+          backgroundColor: 'white'
+        }
+      
+      case 'diagonal-lines':
+        return {
+          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #e5e7eb 10px, #e5e7eb 11px)',
+          backgroundColor: 'white'
+        }
+      
+      case 'vertical-lines':
+        return {
+          backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 39px, #e5e7eb 39px, #e5e7eb 40px)',
+          backgroundColor: 'white'
+        }
+      
+      case 'horizontal-lines':
+        return {
+          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, #e5e7eb 39px, #e5e7eb 40px)',
+          backgroundColor: 'white'
+        }
+      
+      case 'isometric-grid':
+        return {
+          backgroundImage: `
+            linear-gradient(30deg, transparent 0%, transparent 50%, rgba(229, 231, 235, 0.5) 50%, rgba(229, 231, 235, 0.5) 51%, transparent 51%),
+            linear-gradient(-30deg, transparent 0%, transparent 50%, rgba(229, 231, 235, 0.5) 50%, rgba(229, 231, 235, 0.5) 51%, transparent 51%),
+            linear-gradient(90deg, transparent 0%, transparent 50%, rgba(229, 231, 235, 0.3) 50%, rgba(229, 231, 235, 0.3) 51%, transparent 51%)
+          `,
+          backgroundSize: '60px 60px',
+          backgroundColor: 'white'
+        }
+      
+      case 'hexagonal-grid':
+        return {
+          backgroundImage: `
+            linear-gradient(120deg, #e5e7eb 0px, #e5e7eb 1px, transparent 1px, transparent 60px),
+            linear-gradient(60deg, #e5e7eb 0px, #e5e7eb 1px, transparent 1px, transparent 60px),
+            linear-gradient(0deg, #e5e7eb 0px, #e5e7eb 1px, transparent 1px, transparent 60px)
+          `,
+          backgroundSize: '60px 60px',
+          backgroundColor: 'white'
+        }
+      
+      case 'grid-spotlight':
+        return {
+          backgroundImage: `
+            linear-gradient(90deg, rgba(16,185,129,0.25) 1px, transparent 0),
+            linear-gradient(180deg, rgba(16,185,129,0.25) 1px, transparent 0),
+            repeating-linear-gradient(45deg, rgba(16,185,129,0.2) 0 2px, transparent 2px 6px)
+          `,
+          backgroundSize: '24px 24px, 24px 24px, 24px 24px',
+          backgroundColor: 'white'
+        }
+      
+      case 'waves':
+        return {
+          backgroundImage: `
+            repeating-linear-gradient(
+              45deg,
+              transparent,
+              transparent 10px,
+              #e5e7eb 10px,
+              #e5e7eb 11px
+            )
+          `,
+          backgroundColor: 'white'
+        }
+      
+      case 'custom':
+        return background.customImage
+          ? {
+              backgroundImage: `url(${background.customImage})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }
+          : { backgroundColor: 'white' }
+      
+      default:
+        return { backgroundColor: 'white' }
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0"
+      style={{
+        ...getBackgroundStyle(),
+        zIndex: -1,
+        pointerEvents: 'none'
+      }}
+    />
+  )
+}
+
 export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWithSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showBackgroundSettings, setShowBackgroundSettings] = useState(false)
 
   // Get user role and navigation based on role
   const userRole = (user?.role?.toLowerCase() || 'customer') as UserRole
@@ -96,7 +299,10 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
   return (
     <SidebarContext.Provider value={sidebarContextValue}>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen w-full relative">
+        {/* Background Renderer */}
+        <BackgroundRenderer />
+        
         {/* Sidebar */}
         <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ${
           sidebarOpen ? 'w-64' : 'w-0'
@@ -155,8 +361,23 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
               </div>
             ))}
 
-            {/* Support Center - Moved into scrollable area */}
+            {/* Settings - Background */}
             <div className="mt-4 mb-2">
+              <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Cài đặt
+              </div>
+              <button
+                onClick={() => setShowBackgroundSettings(true)}
+                className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50"
+                title="Cài đặt nền"
+              >
+                <Palette className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
+                <span className="truncate">Nền</span>
+              </button>
+            </div>
+
+            {/* Support Center - Moved into scrollable area */}
+            <div className="mt-2 mb-2">
               <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Hỗ trợ
               </div>
@@ -221,11 +442,17 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         </button>
 
         {/* Content Area */}
-        <div className={`transition-all duration-300 ${
+        <div className={`transition-all duration-300 relative z-0 ${
           sidebarOpen ? 'ml-64' : 'ml-0'
         }`}>
           {children}
         </div>
+
+        {/* Background Settings Modal */}
+        <BackgroundSettings
+          isOpen={showBackgroundSettings}
+          onClose={() => setShowBackgroundSettings(false)}
+        />
       </div>
     </SidebarContext.Provider>
   )
