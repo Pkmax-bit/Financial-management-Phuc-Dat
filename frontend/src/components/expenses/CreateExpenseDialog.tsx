@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getExpenseObjectsByRole } from '@/utils/expenseObjectPermissions'
+import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface Employee {
   id: string
@@ -82,6 +83,7 @@ interface CreateExpenseDialogProps {
 }
 
 export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaultParentId, mode = 'create', expense, isLeaf = true }: CreateExpenseDialogProps) {
+  const { hideSidebar } = useSidebar()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [parentExpenses, setParentExpenses] = useState<ParentExpense[]>([])
@@ -109,6 +111,19 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
 
   // Form validation
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Hide sidebar when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      hideSidebar(true)
+    } else {
+      hideSidebar(false)
+    }
+    // Cleanup: restore sidebar when component unmounts
+    return () => {
+      hideSidebar(false)
+    }
+  }, [isOpen, hideSidebar])
 
   useEffect(() => {
     if (isOpen) {

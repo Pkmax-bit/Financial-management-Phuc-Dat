@@ -18,6 +18,7 @@ import {
 import { apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ColumnVisibilityDialog from './ColumnVisibilityDialog'
+import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface Customer {
   id: string
@@ -40,6 +41,14 @@ interface InvoiceItem {
   height?: number | null
   length?: number | null
   depth?: number | null
+  components?: Array<{
+    expense_object_id: string
+    name?: string
+    unit: string
+    unit_price: number
+    quantity: number
+    total_price: number
+  }>
 }
 
 interface Product {
@@ -78,6 +87,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
 }
 
 export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateInvoiceSidebarProps) {
+  const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -139,6 +149,19 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       depth: null
     }
   ])
+
+  // Hide sidebar when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      hideSidebar(true)
+    } else {
+      hideSidebar(false)
+    }
+    // Cleanup: restore sidebar when component unmounts
+    return () => {
+      hideSidebar(false)
+    }
+  }, [isOpen, hideSidebar])
 
   useEffect(() => {
     if (isOpen) {
@@ -448,12 +471,63 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
   const updateItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
     const updatedItems = [...items]
+    const oldItem = { ...updatedItems[index] }
+    const oldQuantity = oldItem.quantity
+    
     updatedItems[index] = { ...updatedItems[index], [field]: value }
+    const curr = updatedItems[index]
     
     // Recalculate total_price for this item
     if (field === 'quantity' || field === 'unit_price') {
       const itemTotal = updatedItems[index].quantity * updatedItems[index].unit_price
       updatedItems[index].total_price = itemTotal
+    }
+    
+    // When quantity changes, adjust components quantity proportionally
+    // Công thức: Khi số lượng sản phẩm tăng thì số lượng vật tư tăng theo tỷ lệ
+    // Ví dụ: Sản phẩm A số lượng 1, vật tư số lượng 1
+    // Khi tăng sản phẩm A lên 2 → số lượng vật tư = 1 × 2 = 2
+    if (field === 'quantity') {
+      const newQuantity = Number(value || 0)
+      const oldQty = Number(oldQuantity || 1)
+      
+      // Adjust components quantity proportionally to product quantity
+      if (oldQty > 0 && newQuantity > 0 && curr.components && Array.isArray(curr.components) && curr.components.length > 0) {
+        // Tính số lượng vật tư cho 1 đơn vị sản phẩm (base quantity per unit)
+        // Công thức: baseQuantity = currentQuantity / oldProductQuantity
+        // Sau đó: newComponentQuantity = baseQuantity × newProductQuantity
+        const updatedComponents = curr.components.map((component: any) => {
+          const currentComponentQuantity = Number(component.quantity || 0)
+          
+          // Tính số lượng vật tư cho 1 đơn vị sản phẩm
+          const baseComponentQuantityPerUnit = currentComponentQuantity / oldQty
+          
+          // Tính số lượng vật tư mới = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm mới
+          const newComponentQuantity = baseComponentQuantityPerUnit * newQuantity
+          const adjustedUnitPrice = Number(component.unit_price || 0)
+          
+          console.log('[Quantity] Adjusting component quantity (Invoice)', {
+            expenseObjectId: component.expense_object_id,
+            name: component.name,
+            oldProductQuantity: oldQty,
+            newProductQuantity: newQuantity,
+            oldComponentQuantity: currentComponentQuantity,
+            baseComponentQuantityPerUnit,
+            newComponentQuantity
+          })
+          
+          return {
+            ...component,
+            // Cập nhật số lượng mới = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm mới
+            quantity: Math.max(0, newComponentQuantity),
+            // Cập nhật thành tiền
+            total_price: Math.max(0, newComponentQuantity) * adjustedUnitPrice
+          }
+        })
+        
+        // Cập nhật components với số lượng mới
+        curr.components = updatedComponents
+      }
     }
     
     setItems(updatedItems)

@@ -45,6 +45,7 @@ interface LayoutWithSidebarProps {
 interface SidebarContextType {
   sidebarOpen: boolean
   toggleSidebar: () => void
+  hideSidebar: (hide: boolean) => void
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
@@ -260,6 +261,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [forceHideSidebar, setForceHideSidebar] = useState(false)
   const [showBackgroundSettings, setShowBackgroundSettings] = useState(false)
 
   // Get user role and navigation based on role
@@ -292,10 +294,18 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     setSidebarOpen(!sidebarOpen)
   }
 
+  const hideSidebar = (hide: boolean) => {
+    setForceHideSidebar(hide)
+  }
+
   const sidebarContextValue: SidebarContextType = {
     sidebarOpen,
-    toggleSidebar
+    toggleSidebar,
+    hideSidebar
   }
+
+  // Sidebar is hidden if forceHideSidebar is true
+  const shouldShowSidebar = sidebarOpen && !forceHideSidebar
 
   return (
     <SidebarContext.Provider value={sidebarContextValue}>
@@ -305,8 +315,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         
         {/* Sidebar */}
         <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ${
-          sidebarOpen ? 'w-64' : 'w-0'
-        } overflow-hidden lg:block ${sidebarOpen ? 'block' : 'hidden lg:block'}`}>
+          shouldShowSidebar ? 'w-64' : 'w-0'
+        } overflow-hidden lg:block ${shouldShowSidebar ? 'block' : 'hidden lg:block'}`}>
           {/* Logo */}
           <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
             <div className="flex items-center space-x-2">
@@ -430,11 +440,11 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         <button
           onClick={toggleSidebar}
           className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 ${
-            sidebarOpen ? 'left-60' : 'left-4'
+            shouldShowSidebar ? 'left-60' : 'left-4'
           } lg:block`}
-          title={sidebarOpen ? 'Đóng sidebar' : 'Mở sidebar'}
+          title={shouldShowSidebar ? 'Đóng sidebar' : 'Mở sidebar'}
         >
-          {sidebarOpen ? (
+          {shouldShowSidebar ? (
             <ChevronLeft className="h-5 w-5 text-gray-600" />
           ) : (
             <ChevronRight className="h-5 w-5 text-gray-600" />
@@ -443,7 +453,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
         {/* Content Area */}
         <div className={`transition-all duration-300 relative z-0 ${
-          sidebarOpen ? 'ml-64' : 'ml-0'
+          shouldShowSidebar ? 'ml-64' : 'ml-0'
         }`}>
           {children}
         </div>

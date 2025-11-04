@@ -20,6 +20,7 @@ import {
 import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ColumnVisibilityDialog from './ColumnVisibilityDialog'
+import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface Customer {
   id: string
@@ -107,6 +108,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
 }
 
 export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateQuoteSidebarProps) {
+  const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -122,6 +124,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [showColumnDialog, setShowColumnDialog] = useState(false)
   const [productSearch, setProductSearch] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [showVariantDialog, setShowVariantDialog] = useState(false)
+  const [selectedProductVariants, setSelectedProductVariants] = useState<Product[]>([])
+  const [pendingProductClick, setPendingProductClick] = useState<Product | null>(null)
   const [selectedProject, setSelectedProject] = useState<any>(null)
   const [editingCell, setEditingCell] = useState<{ index: number; field: string } | null>(null)
   const [autoCalcDimensions, setAutoCalcDimensions] = useState(true)
@@ -285,6 +290,58 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
            (product.category || '').toLowerCase().includes(searchTerm)
   })
 
+  // Helper function to extract base product name (remove size/dimension info)
+  // Example: "Cửa 4 cánh ngang 2 cao 2" → "Cửa 4 cánh"
+  // Example: "Cửa 4 cánh ngang 3 cao 2" → "Cửa 4 cánh"
+  const getBaseProductName = (productName: string): string => {
+    // Remove common size patterns: "ngang X", "cao X", "dài X", "rộng X", "sâu X"
+    let baseName = productName
+      .replace(/\s+ngang\s+\d+/gi, '')
+      .replace(/\s+cao\s+\d+/gi, '')
+      .replace(/\s+dài\s+\d+/gi, '')
+      .replace(/\s+rộng\s+\d+/gi, '')
+      .replace(/\s+sâu\s+\d+/gi, '')
+      .replace(/\s+\d+x\d+/gi, '') // Remove patterns like "2x2", "3x2"
+      .replace(/\s+\d+\s*x\s*\d+/gi, '') // Remove patterns like "2 x 2", "3 x 2"
+      .trim()
+    
+    // If after removing size info, name is too short, use original name
+    if (baseName.length < 3) {
+      return productName
+    }
+    
+    return baseName
+  }
+
+  // Group products by base name
+  const groupProductsByName = (products: Product[]): Map<string, Product[]> => {
+    const grouped = new Map<string, Product[]>()
+    products.forEach(product => {
+      const baseName = getBaseProductName(product.name)
+      if (!grouped.has(baseName)) {
+        grouped.set(baseName, [])
+      }
+      grouped.get(baseName)!.push(product)
+    })
+    return grouped
+  }
+
+  // Handle product click - check if has variants
+  const handleProductClick = (product: Product) => {
+    const baseName = getBaseProductName(product.name)
+    const variants = filteredProducts.filter(p => getBaseProductName(p.name) === baseName)
+    
+    if (variants.length > 1) {
+      // Has multiple variants, show dialog
+      setSelectedProductVariants(variants)
+      setPendingProductClick(product)
+      setShowVariantDialog(true)
+    } else {
+      // Single product, select directly
+      selectProduct(product)
+    }
+  }
+
   // Calculate total amount and check budget - using state to avoid initialization issues
   const [totalAmount, setTotalAmount] = useState(0)
   const [isOverBudget, setIsOverBudget] = useState(false)
@@ -347,6 +404,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   // Keep latest items snapshot for post-update reads
   const itemsRef = useRef<QuoteItem[]>([])
   useEffect(() => { itemsRef.current = items }, [items])
+
+  // Hide sidebar when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      hideSidebar(true)
+    } else {
+      hideSidebar(false)
+    }
+    // Cleanup: restore sidebar when component unmounts
+    return () => {
+      hideSidebar(false)
+    }
+  }, [isOpen, hideSidebar])
 
   // Shared components schema for header/body alignment: union across all items' components
   const headerComponents = (() => {
@@ -956,9 +1026,32 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             if (applicableRules.length === 0) return component
 
             // Apply adjustments (multiple rules can stack)
-            const originalQuantity = Number(component.quantity || 0)
+            // Luôn tính từ baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm) × số lượng sản phẩm hiện tại
+            // để tránh cộng dồn khi bấm "Áp dụng" nhiều lần
+            // baseline_quantity là số lượng vật tư cho 1 đơn vị sản phẩm (từ product)
+            // Cần nhân với số lượng sản phẩm hiện tại để có số lượng vật tư cơ sở
+            const currentProductQuantity = Number(item.quantity || 1)
+            
+            // Lấy baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm)
+            // Nếu không có, tính từ quantity hiện tại chia cho số lượng sản phẩm
+            const baselineQuantityPerUnit = component.baseline_quantity != null 
+              ? Number(component.baseline_quantity) 
+              : (Number(component.quantity || 0) / currentProductQuantity)
+            
+            // Tính số lượng vật tư cơ sở = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm hiện tại
+            const baselineQuantity = baselineQuantityPerUnit * currentProductQuantity
+            const originalQuantity = baselineQuantity
             let adjustedQuantity = originalQuantity
             let adjustedUnitPrice = Number(component.unit_price || 0)
+            
+            console.log('[Adjust] Using baseline quantity', {
+              expenseObjectId,
+              currentQuantity: Number(component.quantity || 0),
+              baselineQuantityPerUnit,
+              currentProductQuantity,
+              baselineQuantity,
+              hasBaseline: component.baseline_quantity != null
+            })
             
             // Track total adjustment percentage for max limit
             let totalAdjustmentPercentage = 0
@@ -1151,8 +1244,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     const heightMm = curr.height != null && isFinite(Number(curr.height)) ? Number(curr.height) : null
 
     // When quantity changes, adjust area and volume proportionally (if baseline exists)
+    // Also adjust components quantity proportionally
     if (field === 'quantity') {
       const newQuantity = Number(value || 0)
+      const oldQty = Number(oldQuantity || 1)
       
       // Adjust area proportionally to quantity (if baseline_area exists)
       // area = baseline_area * quantity (e.g., if quantity x2, area x2)
@@ -1174,6 +1269,48 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           curr.volume = roundedVolume
           autoVolumeChanged = true
         }
+      }
+      
+      // Adjust components quantity proportionally to product quantity
+      // Công thức: Khi số lượng sản phẩm tăng thì số lượng vật tư tăng theo tỷ lệ
+      // Ví dụ: Sản phẩm A số lượng 1, vật tư số lượng 1
+      // Khi tăng sản phẩm A lên 2 → số lượng vật tư = 1 × 2 = 2
+      // QUAN TRỌNG: Luôn tính từ baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm) để tránh cộng dồn
+      if (oldQty > 0 && newQuantity > 0 && curr.components && Array.isArray(curr.components) && curr.components.length > 0) {
+        const updatedComponents = curr.components.map((component: any) => {
+          // Lấy baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm)
+          // Nếu chưa có baseline_quantity, tính từ quantity hiện tại chia cho số lượng sản phẩm cũ
+          const baselineQuantityPerUnit = component.baseline_quantity != null 
+            ? Number(component.baseline_quantity) 
+            : Number(component.quantity || 0) / oldQty
+          
+          // Tính số lượng vật tư mới = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm mới
+          const newComponentQuantity = baselineQuantityPerUnit * newQuantity
+          const adjustedUnitPrice = Number(component.unit_price || 0)
+          
+          console.log('[Quantity] Adjusting component quantity from baseline', {
+            expenseObjectId: component.expense_object_id,
+            name: component.name,
+            oldProductQuantity: oldQty,
+            newProductQuantity: newQuantity,
+            baselineQuantityPerUnit,
+            oldComponentQuantity: Number(component.quantity || 0),
+            newComponentQuantity
+          })
+          
+          return {
+            ...component,
+            // Giữ nguyên baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm)
+            baseline_quantity: baselineQuantityPerUnit,
+            // Cập nhật số lượng mới = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm mới
+            quantity: Math.max(0, newComponentQuantity),
+            // Cập nhật thành tiền
+            total_price: Math.max(0, newComponentQuantity) * adjustedUnitPrice
+          }
+        })
+        
+        // Cập nhật components với số lượng mới
+        curr.components = updatedComponents
       }
     }
 
@@ -1452,14 +1589,20 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             component_unit_price: cPrice,
             component_quantity: cQty,
             component_total_price: cQty * cPrice,
-            components: components.map((c: any) => ({
-              expense_object_id: String(c.expense_object_id || ''),
-              name: compNameMap[String(c.expense_object_id)] || String(c.expense_object_id || ''),
-              unit: c.unit || '',
-              unit_price: Number(c.unit_price || 0),
-              quantity: Number(c.quantity || 0),
-              total_price: Number(c.quantity || 0) * Number(c.unit_price || 0)
-            }))
+            components: components.map((c: any) => {
+              const qty = Number(c.quantity || 0)
+              return {
+                expense_object_id: String(c.expense_object_id || ''),
+                name: compNameMap[String(c.expense_object_id)] || String(c.expense_object_id || ''),
+                unit: c.unit || '',
+                unit_price: Number(c.unit_price || 0),
+                quantity: qty,
+                total_price: qty * Number(c.unit_price || 0),
+                // Lưu baseline_quantity (số lượng ban đầu từ product) để tính lại từ baseline mỗi lần áp dụng
+                // Đảm bảo không cộng dồn khi bấm "Áp dụng" nhiều lần
+                baseline_quantity: qty
+              }
+            })
           }
           setItems(updatedItems)
         }
@@ -2584,10 +2727,17 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                     {category}
                                   </div>
                                   <button
-                                    onClick={() => selectProduct(product)}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleProductClick(product)
+                                    }}
                                     className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
                                   >
-                                    Chọn sản phẩm này
+                                    {(() => {
+                                      const baseName = getBaseProductName(product.name)
+                                      const variants = filteredProducts.filter(p => getBaseProductName(p.name) === baseName)
+                                      return variants.length > 1 ? `Chọn biến thể (${variants.length})` : 'Chọn sản phẩm này'
+                                    })()}
                                   </button>
                                 </div>
                                 <div className="col-span-1">
@@ -2820,6 +2970,127 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         onToggleColumn={toggleColumn}
         onReset={resetColumns}
       />
+      
+      {/* Product Variant Selection Dialog */}
+      {showVariantDialog && selectedProductVariants.length > 0 && (
+        <div className="fixed inset-0 z-70 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Chọn biến thể sản phẩm
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Có {selectedProductVariants.length} biến thể của "{selectedProductVariants.length > 0 ? getBaseProductName(selectedProductVariants[0].name) : ''}"
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowVariantDialog(false)
+                  setSelectedProductVariants([])
+                  setPendingProductClick(null)
+                }}
+                className="p-2 hover:bg-gray-200 rounded-md text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-3">
+                {selectedProductVariants.map((variant) => (
+                  <div
+                    key={variant.id}
+                    className="p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md"
+                    onClick={() => {
+                      selectProduct(variant)
+                      setShowVariantDialog(false)
+                      setSelectedProductVariants([])
+                      setPendingProductClick(null)
+                    }}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 text-base mb-2">
+                          {variant.name}
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-500">Đơn vị:</span>
+                            <span className="ml-2 font-medium text-gray-900">
+                              {variant.unit || 'Chưa có'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Đơn giá:</span>
+                            <span className="ml-2 font-medium text-green-600">
+                              {variant.unit_price ? formatCurrency(variant.unit_price) : 'Chưa có'}
+                            </span>
+                          </div>
+                          {variant.area && (
+                            <div>
+                              <span className="text-gray-500">Diện tích:</span>
+                              <span className="ml-2 font-medium text-gray-900">
+                                {variant.area} m²
+                              </span>
+                            </div>
+                          )}
+                          {variant.volume && (
+                            <div>
+                              <span className="text-gray-500">Thể tích:</span>
+                              <span className="ml-2 font-medium text-gray-900">
+                                {variant.volume} m³
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {(variant.height || variant.length || variant.depth) && (
+                          <div className="mt-2 text-sm text-gray-600">
+                            <span className="font-medium">Kích thước:</span>
+                            {variant.height && <span className="ml-2">Cao: {variant.height} cm</span>}
+                            {variant.length && <span className="ml-2">Dài: {variant.length} cm</span>}
+                            {variant.depth && <span className="ml-2">Sâu: {variant.depth} cm</span>}
+                          </div>
+                        )}
+                        {variant.description && (
+                          <p className="mt-2 text-sm text-gray-600">
+                            {variant.description}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          selectProduct(variant)
+                          setShowVariantDialog(false)
+                          setSelectedProductVariants([])
+                          setPendingProductClick(null)
+                        }}
+                        className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Chọn
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="p-4 border-t bg-gray-50 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowVariantDialog(false)
+                  setSelectedProductVariants([])
+                  setPendingProductClick(null)
+                }}
+                className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Rules Loaded Dialog */}
       {showRulesDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
