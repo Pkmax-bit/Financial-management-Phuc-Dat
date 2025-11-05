@@ -1590,6 +1590,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             const updatedItems = [...items]
             const newItem = {
               ...updatedItems[selectedItemIndex],
+              product_service_id: product.id, // Lưu id của sản phẩm
               name_product: product.name,
               description: product.description || '',
               unit: product.unit || '',
@@ -1634,6 +1635,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           updatedItems[selectedItemIndex] = {
             ...current,
             // keep base product values
+            product_service_id: product.id, // Lưu id của sản phẩm
             name_product: product.name,
             description: product.description || current.description,
             unit: product.unit || current.unit,
@@ -1766,6 +1768,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
           return {
             quote_id: quote.id,
+            product_service_id: item.product_service_id || null, // Lưu id của sản phẩm
             name_product: item.name_product,
             description: item.description,
             quantity: item.quantity,
@@ -3028,6 +3031,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         if (insertIdx !== -1) {
                           const newItem = {
                             ...newItems[insertIdx],
+                            product_service_id: p.id, // Lưu id của sản phẩm
                             name_product: p.name,
                             description: p.description || '',
                             quantity: newItems[insertIdx].quantity || 1,
@@ -3048,6 +3052,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           insertIdx = findEmptyFrom(insertIdx + 1)
                         } else {
                           const newItem = {
+                            product_service_id: p.id, // Lưu id của sản phẩm
                             name_product: p.name,
                             description: p.description || '',
                             quantity: 1,
@@ -3077,6 +3082,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       if (insertIdx !== -1) {
                         const newItem = {
                           ...newItems[insertIdx],
+                          product_service_id: p.id, // Lưu id của sản phẩm
                           name_product: p.name,
                           description: p.description || '',
                           quantity: newItems[insertIdx].quantity || 1,
@@ -3111,6 +3117,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         insertIdx = findEmptyFrom(insertIdx + 1)
                       } else {
                         const newItem = {
+                          product_service_id: p.id, // Lưu id của sản phẩm
                           name_product: p.name,
                           description: p.description || '',
                           quantity: 1,

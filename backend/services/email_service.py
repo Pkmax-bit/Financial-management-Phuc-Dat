@@ -130,21 +130,40 @@ class EmailService:
                 # Create simple HTML email body with quote details
             quote_items_html = ""
             if quote_items:
-                # Get category names for items if needed
+                # Get category names for items from product_service_id -> products -> product_categories
                 category_map = {}
+                product_category_map = {}  # Map product_id -> category_id
+                supabase = get_supabase_client()
                 try:
-                    supabase = get_supabase_client()
-                    category_ids = [item.get('product_category_id') for item in quote_items if item.get('product_category_id')]
-                    if category_ids:
-                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
-                        if categories_result.data:
-                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
-                except Exception:
+                    # Get product_service_ids from quote_items
+                    product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
+                    if product_ids:
+                        print(f"[Email Debug] Fetching categories for {len(product_ids)} products")
+                        # Get products with their category_id
+                        products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
+                        if products_result.data:
+                            print(f"[Email Debug] Found {len(products_result.data)} products")
+                            # Map product_id -> category_id
+                            product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
+                            print(f"[Email Debug] product_category_map: {product_category_map}")
+                            # Get unique category_ids
+                            category_ids = list(set([cat_id for cat_id in product_category_map.values() if cat_id]))
+                            if category_ids:
+                                print(f"[Email Debug] Fetching category names for {len(category_ids)} categories")
+                                # Get category names
+                                categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
+                                if categories_result.data:
+                                    # Map category_id -> category_name
+                                    category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
+                                    print(f"[Email Debug] category_map: {category_map}")
+                except Exception as e:
+                    print(f"Error fetching category names from product_service_id: {e}")
+                    import traceback
+                    traceback.print_exc()
                     pass
                 
                 quote_items_html = """
                 <div style=\"margin: 20px 0;\">
-                    <h3 style=\"margin: 0 0 15px 0; color: #333;\">Chi tiết sản phẩm/dịch vụ</h3>
                     <table style=\"width: 100%; border-collapse: collapse; border: 1px solid #ddd;\">
                         <thead>
                             <tr style=\"background: #1e40af; color: #fff;\">
@@ -156,6 +175,7 @@ class EmailService:
                                 <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\">KHỐI LƯỢNG (m)</th>
                                 <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">ĐƠN GIÁ</th>
                                 <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">THÀNH TIỀN</th>
+                                <th style=\"padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;\">GHI CHÚ</th>
                             </tr>
                             <tr style=\"background: #1e40af; color: #fff;\">
                                 <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\"></th>
@@ -168,17 +188,56 @@ class EmailService:
                                 <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\"></th>
                                 <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\"></th>
                                 <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\"></th>
+                                <th style=\"padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;\"></th>
                             </tr>
                         </thead>
                         <tbody>
                 """
                 
                 for idx, item in enumerate(quote_items, 1):
+                    # Lấy category_name từ product_service_id -> products -> product_categories
                     category_name = ''
-                    if item.get('product_category_id'):
-                        category_name = category_map.get(item.get('product_category_id'), '')
-                    if not category_name and item.get('category_name'):
-                        category_name = item.get('category_name', '')
+                    # Ưu tiên category_name đã được map sẵn từ router (nếu có)
+                    category_name = item.get('category_name', '')
+                    
+                    # Nếu chưa có, lấy từ product_service_id sử dụng product_category_map đã tạo sẵn
+                    if not category_name:
+                        product_service_id = item.get('product_service_id')
+                        if product_service_id:
+                            if product_service_id in product_category_map:
+                                category_id = product_category_map[product_service_id]
+                                if category_id and category_id in category_map:
+                                    category_name = category_map[category_id]
+                                    print(f"[Email Debug] Item {idx}: Found category_name '{category_name}' from product_service_id {product_service_id}")
+                                elif category_id:
+                                    # Fallback: query trực tiếp nếu chưa có trong category_map
+                                    try:
+                                        cat_result = supabase.table("product_categories").select("name").eq("id", category_id).single().execute()
+                                        if cat_result.data:
+                                            category_name = cat_result.data.get('name', '')
+                                            # Cache vào category_map
+                                            category_map[category_id] = category_name
+                                            print(f"[Email Debug] Item {idx}: Found category_name '{category_name}' from direct query")
+                                    except Exception as e:
+                                        print(f"[Email Debug] Item {idx}: Error querying category: {e}")
+                            else:
+                                print(f"[Email Debug] Item {idx}: product_service_id {product_service_id} not found in product_category_map")
+                    
+                    # Fallback: nếu vẫn chưa có, thử lấy từ product_category_id (backward compatibility)
+                    if not category_name:
+                        product_category_id = item.get('product_category_id')
+                        if product_category_id:
+                            if product_category_id in category_map:
+                                category_name = category_map[product_category_id]
+                            else:
+                                try:
+                                    cat_result = supabase.table("product_categories").select("name").eq("id", product_category_id).single().execute()
+                                    if cat_result.data:
+                                        category_name = cat_result.data.get('name', '')
+                                        # Cache vào category_map
+                                        category_map[product_category_id] = category_name
+                                except Exception:
+                                    pass
                     
                     length = item.get('length') or ''
                     depth = item.get('depth') or ''
@@ -201,10 +260,17 @@ class EmailService:
                     elif item.get('volume'):
                         quantity_display = item.get('volume')
                     
+                    # Format total_price - if it's "TẶNG" or 0, show "TẶNG"
+                    total_price_display = item.get('total_price', 0)
+                    if total_price_display == 0 or str(total_price_display).upper() == 'TẶNG':
+                        total_price_display = 'TẶNG'
+                    else:
+                        total_price_display = format_currency(total_price_display)
+                    
                     quote_items_html += f"""
                             <tr>
                                 <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{idx}</td>
-                                <td style=\"padding: 8px; text-align: left; border: 1px solid #ddd;\">{category_name or '—'}</td>
+                                <td style=\"padding: 8px; text-align: left; border: 1px solid #ddd;\">{category_name or ''}</td>
                                 <td style=\"padding: 8px; text-align: left; border: 1px solid #ddd;\">
                                     <div style=\"font-weight:600;\">{item.get('name_product', '')}</div>
                                     {f"<div style='font-size:12px;color:#666;margin-top:4px;'>{item.get('description','')}</div>" if (item.get('description')) else ''}
@@ -215,7 +281,8 @@ class EmailService:
                                 <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{format_dimension(height)}</td>
                                 <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{format_dimension(quantity_display)}</td>
                                 <td style=\"padding: 8px; text-align: right; border: 1px solid #ddd;\">{format_currency(item.get('unit_price', 0))}</td>
-                                <td style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">{format_currency(item.get('total_price', 0))}</td>
+                                <td style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">{total_price_display}</td>
+                                <td style=\"padding: 8px; text-align: left; border: 1px solid #ddd;\"></td>
                             </tr>
                     """
                 
@@ -225,16 +292,37 @@ class EmailService:
                 </div>
                 """
             
+            # Calculate total product amount (sum of all total_price from quote_items)
+            total_product_amount = 0
+            if quote_items:
+                for item in quote_items:
+                    total_price = item.get('total_price', 0)
+                    # Ignore "TẶNG" items (0 or string "TẶNG")
+                    if isinstance(total_price, (int, float)) and total_price > 0:
+                        total_product_amount += total_price
+            
+            # Calculate total and subtotal
+            total_amount = quote_data.get('total_amount', total_product_amount)
+            subtotal = quote_data.get('subtotal', total_product_amount)
+            discount_amount = quote_data.get('discount_amount', 0)
+            
+            # Function to convert number to Vietnamese words (simplified)
+            def number_to_words(num):
+                # Simplified version - can be enhanced
+                if num == 0:
+                    return "Không"
+                # For now, return formatted number
+                return f"{num:,.0f}"
+            
             html_body = f"""
             <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px;">
-                <div style="border: 1px solid #ddd;">
-                    <!-- Header (giống mẫu hình) -->
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5;">
+                <div style="background: white; border: 1px solid #ddd; padding: 0;">
+                    <!-- Header -->
                     <div style="padding: 12px 20px 0 20px; border-bottom: 1px solid #ddd;">
                         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                             <tr>
                                 <td style="width:40%; vertical-align:middle; padding:10px 0;">
-                                    <!-- Logo công ty -->
                                     <div style="display:inline-block;">
                                         <img src="cid:company_logo" alt="PHÚC ĐẠT" style="height:64px; display:block;">
                                         <div style="font-size:12px; color:#1f2937; margin-top:6px; letter-spacing:1px;">KẾT NỐI KHÔNG GIAN</div>
@@ -256,7 +344,7 @@ class EmailService:
                         <div style="text-align:center; padding: 8px 0 16px 0;">
                             <div style="font-size:20px; font-weight:800; letter-spacing:1px;">BẢNG BÁO GIÁ</div>
                             <div style="font-size:12px; color:#374151; margin-top:6px;">
-                                Công ty TNHH Nhôm Kính Phúc Đạt xin chân thành cám ơn Quý khách đã quan tâm đến dịch vụ và sản phẩm của công ty.
+                                Công ty TNHH Nhôm Kính Phúc Đạt xin chân thành cảm ơn Quý khách đã quan tâm đến dịch vụ và sản phẩm của công ty.
                             </div>
                             <div style="font-size:12px; color:#374151;">
                                 Phúc Đạt xin gửi đến Quý khách bảng báo giá khối lượng công trình như sau:
@@ -268,13 +356,14 @@ class EmailService:
                             <tr>
                                 <td style="font-size:13px; color:#111; font-weight:600; padding:6px 0;">
                                     Khách Hàng: <span style="text-transform:uppercase;">{customer_name}</span>
+                                    {f' - {quote_data.get("customer_phone", "")}' if quote_data.get('customer_phone') else ''}
                                 </td>
                             </tr>
                             {f'''<tr><td style="font-size:12px; color:#374151; padding:2px 0;">Địa chỉ: {quote_data.get('customer_address','')}</td></tr>''' if quote_data.get('customer_address') else ''}
                             <tr>
                                 <td style="font-size:12px; color:#111; font-weight:600; padding:6px 0; text-align:right;">
-                                    Nhân viên phụ trách: {employee_display or '—'}
-                                    {f'&nbsp;&nbsp; SDT: {employee_phone}' if employee_phone else ''}
+                                    Kĩ Thuật Phụ Trách: {employee_name or '—'}
+                                    {f'&nbsp;&nbsp; SĐT: {employee_phone}' if employee_phone else ''}
                                 </td>
                             </tr>
                         </table>
@@ -282,66 +371,75 @@ class EmailService:
                     
                     <!-- Content -->
                     <div style="padding: 20px;">
-                        <!-- Quote Info -->
-                        <div style="margin-bottom: 20px;">
-                            <h3 style="margin: 0 0 15px 0; color: #333;">Thông tin báo giá</h3>
+                        {quote_items_html}
+                        
+                        <!-- Tổng hạng mục -->
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                            <tr style="background: #ffd700;">
+                                <td colspan="10" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #ddd;">TỔNG HẠNG MỤC</td>
+                                <td style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #ddd;">{format_currency(total_product_amount)}</td>
+                                <td style="padding: 10px; border: 1px solid #ddd;"></td>
+                            </tr>
+                            {f'''
+                            <tr style="background: #add8e6;">
+                                <td colspan="10" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #ddd;">CHIẾT KHẤU {quote_data.get("discount_percentage", 0)}% KHÁCH THANH TOÁN TIỀN MẶT</td>
+                                <td style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #ddd;">-{format_currency(discount_amount)}</td>
+                                <td style="padding: 10px; border: 1px solid #ddd;"></td>
+                            </tr>
+                            <tr style="background: #ffd700;">
+                                <td colspan="10" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #ddd;">TỔNG HẠNG MỤC</td>
+                                <td style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #ddd;">{format_currency(total_amount)}</td>
+                                <td style="padding: 10px; border: 1px solid #ddd;"></td>
+                            </tr>
+                            ''' if discount_amount > 0 else ''}
+                        </table>
+                        
+                        <!-- Giá thành tạm tính -->
+                        <div style="margin: 20px 0; padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
+                            <div style="font-size:14px; font-weight:bold; color:#333;">
+                                Giá thành tạm tính : {number_to_words(total_product_amount)} đồng.
+                            </div>
+                        </div>
+                        
+                        <!-- Phương thức thanh toán -->
+                        <div style="margin: 20px 0;">
+                            <div style="text-align:center; font-size:16px; font-weight:bold; color:#dc3545; margin-bottom:10px;">PHƯƠNG THỨC THANH TOÁN</div>
                             <table style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="padding: 5px 0; font-weight: bold;">Số báo giá:</td>
-                                    <td style="padding: 5px 0;">{quote_data['quote_number']}</td>
+                                <tr style="background: #ffd700;">
+                                    <td style="padding: 10px; border: 1px solid #ddd; font-weight:bold;">CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D</td>
+                                    <td style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight:bold;">1,000,000</td>
+                                    <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight:bold;">ĐÃ NHẬN</td>
                                 </tr>
-                                <tr>
-                                    <td style="padding: 5px 0; font-weight: bold;">Ngày phát hành:</td>
-                                    <td style="padding: 5px 0;">{quote_data.get('issue_date', 'N/A')}</td>
+                                <tr style="background: #ffd700;">
+                                    <td style="padding: 10px; border: 1px solid #ddd; font-weight:bold;">CỌC ĐỢT 2: 50% KÍ HỢP ĐỒNG, RA ĐƠN SẢN XUẤT</td>
+                                    <td style="padding: 10px; text-align: right; border: 1px solid #ddd;"></td>
+                                    <td style="padding: 10px; text-align: center; border: 1px solid #ddd;"></td>
                                 </tr>
-                                <tr>
-                                    <td style="padding: 5px 0; font-weight: bold;">Hiệu lực đến:</td>
-                                    <td style="padding: 5px 0;">{quote_data.get('valid_until', 'N/A')}</td>
-                                </tr>
-                                {f'''
-                                <tr>
-                                    <td style="padding: 5px 0; font-weight: bold;">Dự án:</td>
-                                    <td style="padding: 5px 0;">{quote_data.get('project_name')}</td>
-                                </tr>
-                                ''' if quote_data.get('project_name') else ''}
-                                <tr>
-                                    <td style="padding: 5px 0; font-weight: bold;">Tổng giá trị:</td>
-                                    <td style="padding: 5px 0; font-size: 18px; font-weight: bold;">{format_currency(quote_data.get('total_amount', 0))}</td>
+                                <tr style="background: #ffd700;">
+                                    <td style="padding: 10px; border: 1px solid #ddd; font-weight:bold;">CÒN LẠI : KHI BÀN GIAO VÀ KIỂM TRA NGHIỆM THU CÔNG TRÌNH</td>
+                                    <td style="padding: 10px; text-align: right; border: 1px solid #ddd;"></td>
+                                    <td style="padding: 10px; text-align: center; border: 1px solid #ddd;"></td>
                                 </tr>
                             </table>
                         </div>
                         
-                        {quote_items_html}
-                        
-                        <!-- Terms -->
+                        <!-- Ghi chú -->
                         <div style="margin: 20px 0;">
-                            <h3 style="margin: 0 0 10px 0; color: #333;">Điều khoản và điều kiện</h3>
-                            <p style="margin: 0; padding: 10px; border: 1px solid #ddd;">
-                                {quote_data.get('terms', 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.')}
-                            </p>
+                            <div style="font-size:16px; font-weight:bold; color:#333; margin-bottom:10px;">GHI CHÚ</div>
+                            <div style="font-size:12px; color:#333; line-height:1.8;">
+                                <p style="margin:5px 0;">• Nếu phụ kiện, thiết bị của khách hàng mà CTy lắp sẽ tính công 200k/1 bộ</p>
+                                <p style="margin:5px 0;">• Giá đã bao gồm nhân công lắp đặt trọn gói trong khu vực TPHCM</p>
+                                <p style="margin:5px 0;">• Giá chưa bao gồm Thuế GTGT 10%</p>
+                                <p style="margin:5px 0;">• Thời gian lắp đặt từ 7 - 9 ngày, không tính chủ nhật hoặc ngày Lễ</p>
+                                <p style="margin:5px 0;">• Bản vẽ 3D mang tính chất minh họa (giống thực tế 80% - 90%)</p>
+                                <p style="margin:5px 0;">• Khách hàng sẽ kiểm tra lại thông tin sau khi lắp đặt hoàn thiện và bàn giao</p>
+                                
+                                <div style="margin-top:15px;">
+                                    <p style="margin:5px 0; font-weight:bold;">* Thông tin tài khoản: CÔNG TY TNHH NHÔM KÍNH PHÚC ĐẠT : STK: 197877019 - Tại Ngân Hàng TMCP Á Châu (ACB) - PGD Gò Mây.</p>
+                                    <p style="margin:5px 0;">Nội dung chuyển khoản: Tên khách hàng, địa chỉ công trình.</p>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <!-- Notes -->
-                        {f'''
-                        <div style="margin: 20px 0;">
-                            <h3 style="margin: 0 0 10px 0; color: #333;">Ghi chú</h3>
-                            <p style="margin: 0; padding: 10px; border: 1px solid #ddd;">
-                                {quote_data.get("notes", "")}
-                            </p>
-                        </div>
-                        ''' if quote_data.get('notes') else ''}
-                        
-                        
-                    </div>
-                    
-                    <!-- Footer -->
-                    <div style="padding: 20px; border-top: 1px solid #ddd; text-align: center;">
-                        <p style="margin: 0; color: #666;">
-                            Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với chúng tôi.
-                        </p>
-                        <p style="margin: 10px 0 0 0; color: #333; font-weight: bold;">
-                            Trân trọng,<br>Đội ngũ bán hàng
-                        </p>
                     </div>
                 </div>
             </body>

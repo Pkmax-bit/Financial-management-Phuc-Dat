@@ -4327,18 +4327,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   </div>
                 <div className="p-4 border-t border-gray-200">
                   <div className="flex items-center justify-between mb-2">
-                    <button onClick={addRow} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Thêm dòng</button>
+                  <button onClick={addRow} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Thêm dòng</button>
                     <div className="flex flex-col items-end gap-1">
                       {selectedExpenseObjectIds.length > 0 && (
                         <div className="text-sm text-gray-700">
                           Tổng chi phí: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</span>
                         </div>
                       )}
-                      <div className="text-sm text-gray-700">
-                        Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
+                  <div className="text-sm text-gray-700">
+                    Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
                       </div>
                     </div>
-                  </div>
+                </div>
                 </div>
             </div>
 

@@ -491,15 +491,53 @@ async def approve_quote(
                     
                     # Send email notification to employee
                     try:
-                        # Get quote items for email with category information
-                        quote_items_result = supabase.table("quote_items").select("*, product_categories(name)").eq("quote_id", quote_id).execute()
+                        # Get quote items for email
+                        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
                         quote_items = quote_items_result.data if quote_items_result.data else []
-                        # Flatten category name if present
+                        
+                        # Get category names from product_service_id -> products -> product_categories
+                        category_map = {}
+                        product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
+                        if product_ids:
+                            try:
+                                # Get products with their category_id
+                                products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
+                                if products_result.data:
+                                    # Map product_id -> category_id
+                                    product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
+                                    # Get unique category_ids
+                                    category_ids = list(set([cat_id for cat_id in product_category_map.values() if cat_id]))
+                                    if category_ids:
+                                        # Get category names
+                                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
+                                        if categories_result.data:
+                                            # Map category_id -> category_name
+                                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
+                                            
+                                            # Add category_name to each item based on product_service_id
+                                            for item in quote_items:
+                                                product_id = item.get('product_service_id')
+                                                if product_id and product_id in product_category_map:
+                                                    category_id = product_category_map[product_id]
+                                                    if category_id and category_id in category_map:
+                                                        item['category_name'] = category_map[category_id]
+                            except Exception as e:
+                                print(f"Error fetching category names from product_service_id: {e}")
+                                pass
+                        
+                        # Fallback: if category_name not set, try to get from product_category_id (backward compatibility)
                         for item in quote_items:
-                            if item.get('product_categories') and isinstance(item.get('product_categories'), list) and len(item.get('product_categories', [])) > 0:
-                                item['category_name'] = item['product_categories'][0].get('name', '')
-                            elif item.get('product_categories') and isinstance(item.get('product_categories'), dict):
-                                item['category_name'] = item['product_categories'].get('name', '')
+                            if not item.get('category_name') and item.get('product_category_id'):
+                                # Try to get from product_category_id if not already set
+                                if item.get('product_category_id') not in category_map:
+                                    try:
+                                        cat_result = supabase.table("product_categories").select("name").eq("id", item.get('product_category_id')).single().execute()
+                                        if cat_result.data:
+                                            category_map[item.get('product_category_id')] = cat_result.data.get('name', '')
+                                    except Exception:
+                                        pass
+                                if item.get('product_category_id') in category_map:
+                                    item['category_name'] = category_map[item.get('product_category_id')]
                         
                         # Send email to employee
                         await email_service.send_quote_approved_notification_email(
@@ -597,15 +635,54 @@ async def send_quote_to_customer(
                 
                 if customer_email:
                     try:
-                        # Get quote items for email with category information
-                        quote_items_result = supabase.table("quote_items").select("*, product_categories(name)").eq("quote_id", quote_id).execute()
+                        # Get quote items for email
+                        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
                         quote_items = quote_items_result.data if quote_items_result.data else []
-                        # Flatten category name if present
+                        
+                        # Get category names from product_service_id -> products -> product_categories
+                        category_map = {}
+                        product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
+                        if product_ids:
+                            try:
+                                # Get products with their category_id
+                                products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
+                                if products_result.data:
+                                    # Map product_id -> category_id
+                                    product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
+                                    # Get unique category_ids
+                                    category_ids = list(set([cat_id for cat_id in product_category_map.values() if cat_id]))
+                                    if category_ids:
+                                        # Get category names
+                                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
+                                        if categories_result.data:
+                                            # Map category_id -> category_name
+                                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
+                                            
+                                            # Add category_name to each item based on product_service_id
+                                            for item in quote_items:
+                                                product_id = item.get('product_service_id')
+                                                if product_id and product_id in product_category_map:
+                                                    category_id = product_category_map[product_id]
+                                                    if category_id and category_id in category_map:
+                                                        item['category_name'] = category_map[category_id]
+                            except Exception as e:
+                                print(f"Error fetching category names from product_service_id: {e}")
+                                pass
+                        
+                        # Fallback: if category_name not set, try to get from product_category_id (backward compatibility)
                         for item in quote_items:
-                            if item.get('product_categories') and isinstance(item.get('product_categories'), list) and len(item.get('product_categories', [])) > 0:
-                                item['category_name'] = item['product_categories'][0].get('name', '')
-                            elif item.get('product_categories') and isinstance(item.get('product_categories'), dict):
-                                item['category_name'] = item['product_categories'].get('name', '')
+                            if not item.get('category_name') and item.get('product_category_id'):
+                                # Try to get from product_category_id if not already set
+                                if item.get('product_category_id') not in category_map:
+                                    try:
+                                        cat_result = supabase.table("product_categories").select("name").eq("id", item.get('product_category_id')).single().execute()
+                                        if cat_result.data:
+                                            category_map[item.get('product_category_id')] = cat_result.data.get('name', '')
+                                    except Exception:
+                                        pass
+                                if item.get('product_category_id') in category_map:
+                                    item['category_name'] = category_map[item.get('product_category_id')]
+                        
                         # Get employee in charge (prefer employee_in_charge_id, fallback created_by)
                         employee_name = None
                         employee_phone = None
