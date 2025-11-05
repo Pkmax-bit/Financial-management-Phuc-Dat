@@ -4,7 +4,7 @@ Comprehensive sales management with quotes, invoices, sales receipts, and paymen
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, date, timedelta
 import uuid
 from pydantic import BaseModel
@@ -513,7 +513,6 @@ async def approve_quote(
                                         if categories_result.data:
                                             # Map category_id -> category_name
                                             category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
-                                            
                                             # Add category_name to each item based on product_service_id
                                             for item in quote_items:
                                                 product_id = item.get('product_service_id')
@@ -584,10 +583,276 @@ async def approve_quote(
             detail=f"Failed to approve quote: {str(e)}"
         )
 
+@router.get("/quotes/{quote_id}/email-logs")
+async def get_quote_email_logs(
+    quote_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get email logs for a quote"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get email logs for this quote
+        logs_result = supabase.table("email_logs").select("*").eq("entity_type", "quote").eq("entity_id", quote_id).order("sent_at", desc=True).execute()
+        
+        return {"logs": logs_result.data if logs_result.data else []}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get email logs: {str(e)}"
+        )
+
+@router.get("/quotes/{quote_id}/preview")
+async def preview_quote_email(
+    quote_id: str,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Preview quote email HTML before sending"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get quote
+        quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        if not quote_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Quote not found"
+            )
+        
+        quote = quote_result.data[0]
+        
+        # Get customer information
+        customer_name = ""
+        customer_email = ""
+        customer_phone = ""
+        customer_address = ""
+        if quote.get("customer_id"):
+            customer_result = supabase.table("customers").select("*").eq("id", quote.get("customer_id")).single().execute()
+            if customer_result.data:
+                customer = customer_result.data
+                customer_name = customer.get("name", "")
+                customer_email = customer.get("email", "")
+                customer_phone = customer.get("phone", "")
+                customer_address = customer.get("address", "")
+        
+        # Get quote items
+        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+        quote_items = quote_items_result.data if quote_items_result.data else []
+        
+        # Get category names from product_service_id -> products -> product_categories
+        category_map = {}
+        product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
+        if product_ids:
+            try:
+                products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
+                if products_result.data:
+                    product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
+                    category_ids = list(set([cat_id for cat_id in product_category_map.values() if cat_id]))
+                    if category_ids:
+                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
+                        if categories_result.data:
+                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
+                            for item in quote_items:
+                                product_id = item.get('product_service_id')
+                                if product_id and product_id in product_category_map:
+                                    category_id = product_category_map[product_id]
+                                    if category_id and category_id in category_map:
+                                        item['category_name'] = category_map[category_id]
+            except Exception as e:
+                print(f"Error fetching category names: {e}")
+        
+        # Get employee information
+        employee_name = None
+        employee_phone = None
+        emp_id = quote.get("employee_in_charge_id") or quote.get("created_by")
+        if emp_id:
+            try:
+                emp_res = supabase.table("employees").select("first_name, last_name, full_name, phone").eq("id", emp_id).single().execute()
+                if emp_res.data:
+                    emp = emp_res.data
+                    employee_name = emp.get("full_name") or f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+                    employee_phone = emp.get("phone")
+            except Exception:
+                pass
+        
+        # Add customer info to quote data
+        quote_data = {
+            **quote,
+            "customer_name": customer_name,
+            "customer_email": customer_email,
+            "customer_phone": customer_phone,
+            "customer_address": customer_address
+        }
+        
+        # Check for draft email edits
+        draft_custom_payment_terms = None
+        draft_additional_notes = None
+        try:
+            draft_result = supabase.table("email_logs").select("*").eq("entity_type", "quote").eq("entity_id", quote_id).eq("status", "draft").order("edited_at", desc=True).limit(1).execute()
+            if draft_result.data and len(draft_result.data) > 0:
+                draft = draft_result.data[0]
+                draft_custom_payment_terms = draft.get("custom_payment_terms")
+                # Handle cases where JSONB is returned as a JSON string
+                try:
+                    if isinstance(draft_custom_payment_terms, str):
+                        import json as _json
+                        draft_custom_payment_terms = _json.loads(draft_custom_payment_terms)
+                except Exception:
+                    pass
+                draft_additional_notes = draft.get("additional_notes")
+                print(f"📝 Found draft: custom_payment_terms={draft_custom_payment_terms}, additional_notes={draft_additional_notes}")
+        except Exception as e:
+            print(f"Error fetching draft: {e}")
+        
+        # Generate HTML
+        html_content = email_service.generate_quote_email_html(
+            quote_data=quote_data,
+            customer_name=customer_name,
+            employee_name=employee_name,
+            employee_phone=employee_phone,
+            quote_items=quote_items,
+            custom_payment_terms=draft_custom_payment_terms,
+            additional_notes=draft_additional_notes
+        )
+        
+        return {
+            "html": html_content,
+            "draft": {
+                "custom_payment_terms": draft_custom_payment_terms,
+                "additional_notes": draft_additional_notes
+            } if (draft_custom_payment_terms or draft_additional_notes) else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to preview quote email: {str(e)}"
+        )
+
+class PaymentTermItem(BaseModel):
+    description: str
+    amount: Optional[str] = None
+    received: bool = False
+
+class QuoteSendRequest(BaseModel):
+    custom_payment_terms: Optional[List[PaymentTermItem]] = None
+    additional_notes: Optional[str] = None
+    raw_html: Optional[str] = None
+
+@router.post("/quotes/{quote_id}/email-draft")
+async def save_quote_email_draft(
+    quote_id: str,
+    request: QuoteSendRequest,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Save draft email edits for a quote (without sending)"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get quote
+        quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        if not quote_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Quote not found"
+            )
+        
+        quote = quote_result.data[0]
+        
+        # Get customer information
+        customer_email = None
+        customer_name = ""
+        if quote.get("customer_id"):
+            customer_result = supabase.table("customers").select("*").eq("id", quote.get("customer_id")).single().execute()
+            if customer_result.data:
+                customer_email = customer_result.data.get("email")
+                customer_name = customer_result.data.get("name", "")
+        
+        # Prepare log data
+        log_data = {
+            "to_email": customer_email or "",
+            "subject": f"Báo giá {quote.get('quote_number', '')} - {customer_name}",
+            "body": f"Email báo giá cho quote {quote_id}",
+            "status": "draft",
+            "entity_type": "quote",
+            "entity_id": quote_id,
+            "edited_at": datetime.utcnow().isoformat(),
+            "edited_by": current_user.id
+        }
+        
+        # Add custom payment terms if provided
+        if request.custom_payment_terms:
+            try:
+                payment_terms_list = []
+                for term in request.custom_payment_terms:
+                    if hasattr(term, 'model_dump'):
+                        payment_terms_list.append(term.model_dump())
+                    elif hasattr(term, 'dict'):
+                        payment_terms_list.append(term.dict())
+                    elif isinstance(term, dict):
+                        payment_terms_list.append(term)
+                    else:
+                        payment_terms_list.append({
+                            "description": getattr(term, 'description', ''),
+                            "amount": getattr(term, 'amount', ''),
+                            "received": getattr(term, 'received', False)
+                        })
+                log_data["custom_payment_terms"] = payment_terms_list
+                print(f"✅ Saved draft custom_payment_terms: {payment_terms_list}")
+            except Exception as e:
+                print(f"❌ Error converting payment terms: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Add additional notes if provided
+        if request.additional_notes:
+            log_data["additional_notes"] = request.additional_notes
+            print(f"✅ Saved draft additional_notes: {request.additional_notes}")
+        
+        print(f"📝 Saving email draft with data: {log_data}")
+        
+        # Check if draft already exists for this quote
+        existing_draft = supabase.table("email_logs").select("*").eq("entity_type", "quote").eq("entity_id", quote_id).eq("status", "draft").order("edited_at", desc=True).limit(1).execute()
+        
+        if existing_draft.data and len(existing_draft.data) > 0:
+            # Update existing draft
+            draft_id = existing_draft.data[0]["id"]
+            result = supabase.table("email_logs").update(log_data).eq("id", draft_id).execute()
+            print(f"✅ Updated existing draft: {draft_id}")
+        else:
+            # Create new draft
+            result = supabase.table("email_logs").insert(log_data).execute()
+            print(f"✅ Created new draft")
+        
+        if result.data:
+            return {
+                "message": "Email draft saved successfully",
+                "draft": result.data[0] if isinstance(result.data, list) else result.data
+            }
+        
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to save email draft"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error saving email draft: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save email draft: {str(e)}"
+        )
+
 @router.post("/quotes/{quote_id}/send")
 async def send_quote_to_customer(
     quote_id: str,
     background_tasks: BackgroundTasks,
+    request: Optional[QuoteSendRequest] = None,
     current_user: User = Depends(require_manager_or_admin)
 ):
     """Send quote to customer via email"""
@@ -657,7 +922,6 @@ async def send_quote_to_customer(
                                         if categories_result.data:
                                             # Map category_id -> category_name
                                             category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
-                                            
                                             # Add category_name to each item based on product_service_id
                                             for item in quote_items:
                                                 product_id = item.get('product_service_id')
@@ -697,7 +961,93 @@ async def send_quote_to_customer(
                             except Exception:
                                 pass
                         
-                        # Send email in background
+                        # Prepare custom content: prioritize email_logs (draft > latest sent), then fallback to request body
+                        custom_payment_terms = None
+                        additional_notes = None
+                        
+                        try:
+                            # 1) Try latest draft first
+                            draft_res = (
+                                supabase
+                                .table("email_logs")
+                                .select("*")
+                                .eq("entity_type", "quote")
+                                .eq("entity_id", quote_id)
+                                .eq("status", "draft")
+                                .order("edited_at", desc=True)
+                                .limit(1)
+                                .execute()
+                            )
+                            if draft_res.data and len(draft_res.data) > 0:
+                                draft = draft_res.data[0]
+                                # Parse JSON string to list if needed
+                                draft_cpt = draft.get("custom_payment_terms")
+                                try:
+                                    if isinstance(draft_cpt, str):
+                                        import json as _json
+                                        draft_cpt = _json.loads(draft_cpt)
+                                except Exception:
+                                    pass
+                                # Get custom_payment_terms from draft (even if empty list/null)
+                                if draft_cpt is not None:
+                                    custom_payment_terms = draft_cpt if isinstance(draft_cpt, list) else None
+                                
+                                # Get additional_notes from draft (even if empty/null)
+                                draft_additional_notes = draft.get("additional_notes")
+                                if draft_additional_notes is not None:
+                                    additional_notes = draft_additional_notes if isinstance(draft_additional_notes, str) else None
+                            
+                            # 2) If not found in draft, try latest sent log
+                            if custom_payment_terms is None or additional_notes is None:
+                                latest_log = (
+                                    supabase
+                                    .table("email_logs")
+                                    .select("*")
+                                    .eq("entity_type", "quote")
+                                    .eq("entity_id", quote_id)
+                                    .order("edited_at", desc=True)
+                                    .limit(1)
+                                    .execute()
+                                )
+                                if latest_log.data and len(latest_log.data) > 0:
+                                    log = latest_log.data[0]
+                                    # Parse JSON string to list if needed
+                                    log_cpt = log.get("custom_payment_terms")
+                                    try:
+                                        if isinstance(log_cpt, str):
+                                            import json as _json
+                                            log_cpt = _json.loads(log_cpt)
+                                    except Exception:
+                                        pass
+                                    # Get custom_payment_terms from latest log (even if empty list/null)
+                                    if log_cpt is not None and custom_payment_terms is None:
+                                        custom_payment_terms = log_cpt if isinstance(log_cpt, list) else None
+                                    
+                                    # Get additional_notes from latest log (even if empty/null)
+                                    log_additional_notes = log.get("additional_notes")
+                                    if log_additional_notes is not None and additional_notes is None:
+                                        additional_notes = log_additional_notes if isinstance(log_additional_notes, str) else None
+                            
+                            # 3) Fallback to request body if not found in email_logs
+                            if custom_payment_terms is None and request and request.custom_payment_terms:
+                                custom_payment_terms = request.custom_payment_terms
+                            
+                            if additional_notes is None and request and request.additional_notes and request.additional_notes.strip():
+                                additional_notes = request.additional_notes
+                                
+                        except Exception as _e:
+                            print(f"⚠️ Error loading email customizations from email_logs: {_e}")
+                            import traceback
+                            traceback.print_exc()
+                            # Fallback to request body on error
+                            if request:
+                                if custom_payment_terms is None:
+                                    custom_payment_terms = request.custom_payment_terms if request.custom_payment_terms else None
+                                if additional_notes is None:
+                                    additional_notes = request.additional_notes if (request.additional_notes and request.additional_notes.strip()) else None
+
+                        print(f"📧 Final email customizations - payment_terms: {custom_payment_terms}, additional_notes: {additional_notes}")
+                        
                         background_tasks.add_task(
                             email_service.send_quote_email,
                             {
@@ -708,8 +1058,70 @@ async def send_quote_to_customer(
                             },
                             customer_email,
                             customer_name,
-                            quote_items
+                            quote_items,
+                            custom_payment_terms,
+                            additional_notes,
+                            request.raw_html if (request and request.raw_html) else None
                         )
+                        
+                        # Save email log with custom content
+                        try:
+                            log_data = {
+                                "to_email": customer_email,
+                                "subject": f"Báo giá {quote_result.data[0].get('quote_number', '')} - {customer_name}",
+                                # Save the exact HTML if provided, else a short note
+                                "body": request.raw_html if (request and request.raw_html) else f"Email báo giá cho quote {quote_id}",
+                                "status": "sent",
+                                "entity_type": "quote",
+                                "entity_id": quote_id,
+                                "sent_at": datetime.utcnow().isoformat(),
+                                "edited_at": datetime.utcnow().isoformat(),
+                                "edited_by": current_user.id
+                            }
+                            
+                            # Always save custom_payment_terms (even if null/empty) - loaded from email_logs or request
+                            if custom_payment_terms is not None:
+                                # Convert Pydantic models to dict for JSONB storage
+                                try:
+                                    payment_terms_list = []
+                                    for term in custom_payment_terms:
+                                        if hasattr(term, 'model_dump'):
+                                            payment_terms_list.append(term.model_dump())
+                                        elif hasattr(term, 'dict'):
+                                            payment_terms_list.append(term.dict())
+                                        elif isinstance(term, dict):
+                                            payment_terms_list.append(term)
+                                        else:
+                                            payment_terms_list.append({
+                                                "description": getattr(term, 'description', ''),
+                                                "amount": getattr(term, 'amount', ''),
+                                                "received": getattr(term, 'received', False)
+                                            })
+                                    log_data["custom_payment_terms"] = payment_terms_list
+                                    print(f"✅ Saved custom_payment_terms: {payment_terms_list}")
+                                except Exception as e:
+                                    print(f"❌ Error converting payment terms: {e}")
+                                    import traceback
+                                    traceback.print_exc()
+                            else:
+                                # Explicitly set to null if not found
+                                log_data["custom_payment_terms"] = None
+                                print(f"📝 Saved custom_payment_terms as null (not found in email_logs or request)")
+                            
+                            # Always save additional_notes (even if null/empty) - loaded from email_logs or request
+                            if additional_notes is not None:
+                                log_data["additional_notes"] = additional_notes
+                                print(f"✅ Saved additional_notes: {additional_notes}")
+                            else:
+                                # Explicitly set to null if not found
+                                log_data["additional_notes"] = None
+                                print(f"📝 Saved additional_notes as null (not found in email_logs or request)")
+                            
+                            print(f"📝 Saving email log with data: {log_data}")
+                            supabase.table("email_logs").insert(log_data).execute()
+                            print("✅ Email log saved successfully")
+                        except Exception as log_error:
+                            print(f"Failed to save email log: {log_error}")
                         email_sent = True
                         print(f"Quote email queued for {customer_email}")
                     except Exception as e:

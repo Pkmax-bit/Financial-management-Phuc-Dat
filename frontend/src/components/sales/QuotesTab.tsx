@@ -17,9 +17,12 @@ import {
   HelpCircle,
   X,
   Package,
-  CheckCircle2
+  CheckCircle2,
+  Mail
 } from 'lucide-react'
 import CreateQuoteSidebarFullscreen from './CreateQuoteSidebarFullscreen'
+import QuoteEmailPreviewModal from './QuoteEmailPreviewModal'
+import QuoteEmailLogsModal from './QuoteEmailLogsModal'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
@@ -69,6 +72,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [filter, setFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null)
+  const [showEmailLogsModal, setShowEmailLogsModal] = useState(false)
+  const [emailLogsQuoteId, setEmailLogsQuoteId] = useState<string | null>(null)
   const [showConversionSuccess, setShowConversionSuccess] = useState(false)
   const [conversionData, setConversionData] = useState<{
     invoiceNumber: string
@@ -142,8 +149,27 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   }
 
   const sendQuote = async (quoteId: string) => {
+    // Show preview modal first
+    setPreviewQuoteId(quoteId)
+    setShowPreviewModal(true)
+  }
+
+  const confirmSendQuote = async (customData?: {
+    paymentTerms?: Array<{
+      description: string
+      amount: string
+      received: boolean
+    }>
+    additionalNotes?: string
+    rawHtml?: string
+  }) => {
+    if (!previewQuoteId) return
+    
     try {
-      console.log('🔍 Sending quote email:', quoteId)
+      console.log('🔍 Sending quote email:', previewQuoteId, customData)
+      
+      // Close preview modal
+      setShowPreviewModal(false)
       
       // Show loading state
       const loadingMessage = document.createElement('div')
@@ -164,13 +190,28 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       `
       document.body.appendChild(loadingMessage)
       
+      // Prepare request body
+      const requestBody: any = {}
+      if (customData?.paymentTerms && Array.isArray(customData.paymentTerms) && customData.paymentTerms.length > 0) {
+        requestBody.custom_payment_terms = customData.paymentTerms
+      }
+      if (customData?.additionalNotes && customData.additionalNotes.trim()) {
+        requestBody.additional_notes = customData.additionalNotes
+      }
+      if (customData?.rawHtml && customData.rawHtml.trim()) {
+        requestBody.raw_html = customData.rawHtml
+      }
+      
+      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2))
+      
       // Call API to send quote email
-      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/send`, {
+      const response = await fetch(`http://localhost:8000/api/sales/quotes/${previewQuoteId}/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        }
+        },
+        body: Object.keys(requestBody).length > 0 ? JSON.stringify(requestBody) : '{}'
       })
       
       // Remove loading message
@@ -183,6 +224,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       
       const result = await response.json()
       console.log('🔍 Quote email sent successfully:', result)
+      
+      // Reset preview state
+      setPreviewQuoteId(null)
       
       // Show success notification with email details
       const successMessage = document.createElement('div')
@@ -774,6 +818,19 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <Eye className="h-4 w-4" />
                     </button>
                     
+                    {(quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'accepted') && (
+                      <button 
+                        onClick={() => {
+                          setEmailLogsQuoteId(quote.id)
+                          setShowEmailLogsModal(true)
+                        }}
+                        className="text-black hover:text-blue-600" 
+                        title="Xem lịch sử email"
+                      >
+                        <Mail className="h-4 w-4" />
+                      </button>
+                    )}
+                    
                     {quote.status === 'draft' && (
                       <>
                         <button 
@@ -842,6 +899,25 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         onSuccess={() => {
           fetchQuotes()
         }}
+      />
+
+      <QuoteEmailPreviewModal
+        isOpen={showPreviewModal}
+        onClose={() => {
+          setShowPreviewModal(false)
+          setPreviewQuoteId(null)
+        }}
+        quoteId={previewQuoteId || ''}
+        onConfirmSend={confirmSendQuote}
+      />
+
+      <QuoteEmailLogsModal
+        isOpen={showEmailLogsModal}
+        onClose={() => {
+          setShowEmailLogsModal(false)
+          setEmailLogsQuoteId(null)
+        }}
+        quoteId={emailLogsQuoteId || ''}
       />
 
       {/* Help Sidebar */}
