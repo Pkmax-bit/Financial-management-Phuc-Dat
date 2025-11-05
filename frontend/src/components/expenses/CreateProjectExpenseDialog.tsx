@@ -30,6 +30,7 @@ import ExpenseObjectMultiSelectorEnhanced from '@/components/ExpenseObjectMultiS
 import ExpenseSummaryDisplay from '@/components/ExpenseSummaryDisplay'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
 import ExpenseColumnVisibilityDialog from './ExpenseColumnVisibilityDialog'
+import { useSidebar } from '@/components/LayoutWithSidebar'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Project {
@@ -56,6 +57,20 @@ interface CreateProjectExpenseDialogProps {
 }
 
 export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId }: CreateProjectExpenseDialogProps) {
+  const { hideSidebar } = useSidebar()
+  
+  // Hide sidebar when dialog opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      hideSidebar(true)
+    } else {
+      hideSidebar(false)
+    }
+    // Cleanup: restore sidebar when component unmounts
+    return () => {
+      hideSidebar(false)
+    }
+  }, [isOpen, hideSidebar])
   
   // Function hiển thị thông báo đẹp
   const showNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
@@ -2295,6 +2310,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         const success = await updateExistingExpense(expenseData)
         if (success) {
           alert('Cập nhật chi phí thành công!')
+          hideSidebar(true) // Ensure sidebar is hidden
           onSuccess()
           onClose()
           // Reset state
@@ -2434,6 +2450,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           
       // Show success notification and close dialog
       alert('Tạo chi phí dự kiến thành công!')
+      hideSidebar(true) // Ensure sidebar is hidden
       onSuccess()
       onClose()
       resetForm()
@@ -2545,6 +2562,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         }
         setDirectObjectTotals({})
         alert(`Tạo thành công ${createdExpenses.length} chi phí thực tế!`)
+        hideSidebar(true) // Ensure sidebar is hidden
         onSuccess()
         onClose()
         resetForm()
@@ -2697,6 +2715,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       
       // Show success notification and close dialog
       alert(`Tạo thành công ${createdExpenses.length} chi phí thực tế!`)
+      hideSidebar(true) // Ensure sidebar is hidden
       onSuccess()
       onClose()
       resetForm()
@@ -2989,6 +3008,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       // Removed success notification
       
       console.log('🔄 Calling onSuccess callback...')
+      hideSidebar(true) // Ensure sidebar is hidden
       onSuccess()
       onClose()
       resetForm()
@@ -3316,6 +3336,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       alert('Tạo chi phí đối tượng thành công!')
       
       console.log('🔄 Calling onSuccess callback...')
+      hideSidebar(true) // Ensure sidebar is hidden
       onSuccess()
       onClose()
       resetForm()
@@ -4304,11 +4325,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </tfoot>
                   </table>
                   </div>
-                <div className="p-4 border-t border-gray-200 flex items-center justify-between">
-                  <button onClick={addRow} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Thêm dòng</button>
-                  <div className="text-sm text-gray-700">
-                    Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
-                </div>
+                <div className="p-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <button onClick={addRow} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Thêm dòng</button>
+                    <div className="flex flex-col items-end gap-1">
+                      {selectedExpenseObjectIds.length > 0 && (
+                        <div className="text-sm text-gray-700">
+                          Tổng chi phí: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</span>
+                        </div>
+                      )}
+                      <div className="text-sm text-gray-700">
+                        Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
             </div>
 
@@ -4787,12 +4817,6 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
             >
               Hủy
-            </button>
-            <button
-              onClick={testSaveData}
-              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-transparent rounded-md"
-            >
-              🧪 Test Save
             </button>
             <button
               onClick={handleSubmit}

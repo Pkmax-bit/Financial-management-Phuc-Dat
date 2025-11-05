@@ -285,341 +285,27 @@ export default function ExpenseSummaryDisplay({
   }, [selectedObjectIds, expenseObjects])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Grand Total */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Calculator className="w-6 h-6 text-blue-600" />
-            <h3 className="text-lg font-semibold text-blue-800">Tổng chi phí</h3>
+          <div className="flex items-center space-x-2">
+            <Calculator className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-semibold text-blue-800">Tổng chi phí</h3>
           </div>
-          <div className="text-2xl font-bold text-blue-900">
+          <div className="text-lg font-bold text-blue-900">
             {formatCurrency(grandTotal)}
-          </div>
-        </div>
-        <div className="mt-3 text-sm text-blue-700">
-          Hiển thị đầy đủ các cấp cha khi chọn đối tượng con
-        </div>
-        <div className="mt-2 text-xs text-blue-600">
-          💡 Các đối tượng có cùng cha sẽ có cùng màu sắc để dễ phân biệt
-        </div>
-        <div className="mt-1 text-xs text-blue-500">
-          📋 Chi tiết hóa đơn chỉ hiển thị đối tượng được chọn trực tiếp
-        </div>
-      </div>
-
-      {/* Invoice Details - Only Leaf Objects */}
-      {leafObjects.length > 0 && (
-        <div className="space-y-4">
-          <h4 className="text-lg font-semibold text-gray-800 flex items-center space-x-2">
-            <DollarSign className="w-5 h-5 text-green-600" />
-            <span>Chi tiết hóa đơn</span>
-            <span className="text-sm text-gray-500 font-normal">(Chỉ hiển thị đối tượng được chọn trực tiếp)</span>
-          </h4>
-          <div className="grid gap-3">
-            {leafObjects.map(obj => {
-              const colorScheme = getParentBasedColor(obj, obj.level || 1)
-              return (
-                <div key={obj.id} className={`border rounded-lg p-4 ${colorScheme.bg} ${colorScheme.border} shadow-sm`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-lg ${colorScheme.accent}`}>
-                        {getRoleIcon(obj.role)}
-                      </div>
-                      <div>
-                        <h5 className={`font-medium ${colorScheme.text}`}>
-                          {obj.name}
-                        </h5>
-                        {obj.description && (
-                          <p className="text-sm text-gray-500">{obj.description}</p>
-                        )}
-                        <div className="flex items-center space-x-2 mt-1">
-                          <span className={`px-2 py-1 rounded-full text-xs border ${getRoleColor(obj.role)}`}>
-                            {obj.role?.replace('_', ' ')}
-                          </span>
-                          {obj.level !== undefined && obj.level !== null && (
-                            <span className={`px-2 py-1 rounded-full text-xs ${getLevelColor(obj.level)}`}>
-                              Cấp {obj.level}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-semibold ${colorScheme.text}`}>
-                        {formatCurrency(expenseAmounts[obj.id] || 0)}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Số liệu trực tiếp
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Hierarchy Overview */}
-      {selectedObjects.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center space-x-2">
-            <Building2 className="w-5 h-5 text-gray-600" />
-            <span>Tổng quan phân cấp</span>
-          </h4>
-          <div className="space-y-2 text-sm">
-            {selectedObjects.map(obj => {
-              const parents = []
-              let current = obj
-              while (current.parent_id) {
-                const parent = expenseObjects.find(p => p.id === current.parent_id)
-                if (parent) {
-                  parents.unshift(parent)
-                  current = parent
-                } else {
-                  break
-                }
-              }
-              
-              return (
-                <div key={obj.id} className="flex items-center space-x-2 text-gray-600">
-                  <span className="font-medium text-gray-800">{obj.name}</span>
-                  {parents.length > 0 && (
-                    <>
-                      <span>←</span>
-                      <span className="text-gray-500">
-                        {parents.map(p => p.name).join(' ← ')}
-                      </span>
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Level 1 - Root Objects */}
-      {level1Objects.length > 0 && (
-        <div className="space-y-4">
-          <h4 className="text-lg font-semibold text-gray-800 flex items-center space-x-2">
-            <Building2 className="w-5 h-5 text-purple-600" />
-            <span>Cấp 1 - Tổng hợp</span>
-          </h4>
-          <div className="grid gap-3">
-            {level1Objects.map(obj => {
-              const isDirectlySelected = selectedObjects.some(selected => selected.id === obj.id)
-              const colorScheme = getParentBasedColor(obj, 1)
-              return (
-                <div key={obj.id} className={`border rounded-lg p-4 ${
-                  isDirectlySelected 
-                    ? `${colorScheme.bg} ${colorScheme.border} shadow-md` 
-                    : `${colorScheme.bg} ${colorScheme.border}`
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-lg ${colorScheme.accent}`}>
-                        {getRoleIcon(obj.role)}
-                      </div>
-                      <div>
-                        <h5 className={`font-medium ${
-                          isDirectlySelected ? colorScheme.text : colorScheme.text
-                        }`}>
-                          {obj.name}
-                          {isDirectlySelected && (
-                            <span className={`ml-2 text-xs ${colorScheme.accent} ${colorScheme.text} px-2 py-1 rounded-full`}>
-                              Đã chọn
-                            </span>
-                          )}
-                        </h5>
-                        {obj.description && (
-                          <p className="text-sm text-gray-500">{obj.description}</p>
-                        )}
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm border ${getRoleColor(obj.role)}`}>
-                        {obj.role?.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-semibold ${colorScheme.text}`}>
-                        {formatCurrency(calculatedTotals.level1[obj.id] || 0)}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {(() => {
-                          const children = level2Objects.filter(child => child.parent_id === obj.id)
-                          if (children.length === 1) {
-                            return `Từ 1 cấp 2 (trực tiếp)`
-                          } else {
-                            return `Tổng từ ${children.length} cấp 2`
-                          }
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Level 2 - Material Categories */}
-      {level2Objects.length > 0 && (
-        <div className="space-y-4">
-          <h4 className="text-lg font-semibold text-gray-800 flex items-center space-x-2">
-            <Package className="w-5 h-5 text-blue-600" />
-            <span>Cấp 2 - Loại vật liệu</span>
-          </h4>
-          <div className="grid gap-3">
-            {level2Objects.map(obj => {
-              const isDirectlySelected = selectedObjects.some(selected => selected.id === obj.id)
-              const colorScheme = getParentBasedColor(obj, 2)
-              return (
-                <div key={obj.id} className={`border rounded-lg p-4 ${
-                  isDirectlySelected 
-                    ? `${colorScheme.bg} ${colorScheme.border} shadow-md` 
-                    : `${colorScheme.bg} ${colorScheme.border}`
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-lg ${colorScheme.accent}`}>
-                        {getRoleIcon(obj.role)}
-                      </div>
-                      <div>
-                        <h5 className={`font-medium ${colorScheme.text}`}>
-                          {obj.name}
-                          {isDirectlySelected && (
-                            <span className={`ml-2 text-xs ${colorScheme.accent} ${colorScheme.text} px-2 py-1 rounded-full`}>
-                              Đã chọn
-                            </span>
-                          )}
-                        </h5>
-                        {obj.description && (
-                          <p className="text-sm text-gray-500">{obj.description}</p>
-                        )}
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm border ${getRoleColor(obj.role)}`}>
-                        {obj.role?.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-semibold ${colorScheme.text}`}>
-                        {formatCurrency(calculatedTotals.level2[obj.id] || 0)}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {(() => {
-                          const children = level3Objects.filter(child => child.parent_id === obj.id)
-                          if (children.length === 1) {
-                            return `Từ 1 cấp 3 (trực tiếp)`
-                          } else {
-                            return `Tổng từ ${children.length} cấp 3`
-                          }
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Level 3 - Specific Suppliers */}
-      {level3Objects.length > 0 && (
-        <div className="space-y-4">
-          <h4 className="text-lg font-semibold text-gray-800 flex items-center space-x-2">
-            <Truck className="w-5 h-5 text-green-600" />
-            <span>Cấp 3 - Nhà cung cấp cụ thể</span>
-          </h4>
-          <div className="grid gap-3">
-            {level3Objects.map(obj => {
-              const isDirectlySelected = selectedObjects.some(selected => selected.id === obj.id)
-              const colorScheme = getParentBasedColor(obj, 3)
-              return (
-                <div key={obj.id} className={`border rounded-lg p-4 ${
-                  isDirectlySelected 
-                    ? `${colorScheme.bg} ${colorScheme.border} shadow-md` 
-                    : `${colorScheme.bg} ${colorScheme.border}`
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-lg ${colorScheme.accent}`}>
-                        {getRoleIcon(obj.role)}
-                      </div>
-                      <div>
-                        <h5 className={`font-medium ${colorScheme.text}`}>
-                          {obj.name}
-                          {isDirectlySelected && (
-                            <span className={`ml-2 text-xs ${colorScheme.accent} ${colorScheme.text} px-2 py-1 rounded-full`}>
-                              Đã chọn
-                            </span>
-                          )}
-                        </h5>
-                        {obj.description && (
-                          <p className="text-sm text-gray-500">{obj.description}</p>
-                        )}
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm border ${getRoleColor(obj.role)}`}>
-                        {obj.role?.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-semibold ${colorScheme.text}`}>
-                        {formatCurrency(calculatedTotals.level3[obj.id] || 0)}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Số liệu trực tiếp
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Summary Table */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-          <DollarSign className="w-5 h-5 text-gray-600" />
-          <span>Tóm tắt tính toán</span>
-        </h4>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Tổng cấp 3 (trực tiếp):</span>
-            <span className="font-medium">
-              {formatCurrency(Object.values(calculatedTotals.level3).reduce((sum, amount) => sum + amount, 0))}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Tổng cấp 2 (từ cấp 3):</span>
-            <span className="font-medium">
-              {formatCurrency(Object.values(calculatedTotals.level2).reduce((sum, amount) => sum + amount, 0))}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Tổng cấp 1 (từ cấp 2):</span>
-            <span className="font-medium">
-              {formatCurrency(Object.values(calculatedTotals.level1).reduce((sum, amount) => sum + amount, 0))}
-            </span>
-          </div>
-          <div className="border-t border-gray-300 pt-2 flex justify-between font-semibold">
-            <span>Tổng cộng:</span>
-            <span className="text-blue-600">{formatCurrency(grandTotal)}</span>
           </div>
         </div>
       </div>
 
       {/* Object Cost Summary */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-          <Calculator className="w-5 h-5 text-green-600" />
+      <div className="bg-white border border-gray-200 rounded-lg p-2">
+        <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center space-x-1">
+          <Calculator className="w-4 h-4 text-green-600" />
           <span>Tổng chi phí theo đối tượng</span>
         </h4>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {/* Level 1 Objects */}
           {level1Objects.map(obj => {
             const amount = calculatedTotals.level1[obj.id] || 0
@@ -627,22 +313,22 @@ export default function ExpenseSummaryDisplay({
             const colorScheme = getParentBasedColor(obj, 1)
             
             return (
-              <div key={obj.id} className={`p-3 rounded-lg border ${colorScheme.bg} ${colorScheme.border}`}>
+              <div key={obj.id} className={`p-2 rounded-lg border ${colorScheme.bg} ${colorScheme.border}`}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${colorScheme.accent}`}>
+                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                    <div className={`p-1 rounded ${colorScheme.accent} flex-shrink-0`}>
                       {getRoleIcon(obj.role)}
                     </div>
-                    <div>
-                      <h5 className={`font-medium ${colorScheme.text}`}>{obj.name}</h5>
-                      <p className="text-sm text-gray-500">Cấp 1 - Tổng hợp</p>
+                    <div className="min-w-0 flex-1">
+                      <h5 className={`text-sm font-medium ${colorScheme.text} truncate`}>{obj.name}</h5>
+                      <p className="text-xs text-gray-500">Cấp 1 - Tổng hợp</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`text-lg font-semibold ${colorScheme.text}`}>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <div className={`text-sm font-semibold ${colorScheme.text}`}>
                       {formatCurrency(amount)}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-xs text-gray-500">
                       {percentage.toFixed(1)}%
                     </div>
                   </div>
@@ -658,22 +344,22 @@ export default function ExpenseSummaryDisplay({
             const colorScheme = getParentBasedColor(obj, 2)
             
             return (
-              <div key={obj.id} className={`p-3 rounded-lg border ${colorScheme.bg} ${colorScheme.border}`}>
+              <div key={obj.id} className={`p-2 rounded-lg border ${colorScheme.bg} ${colorScheme.border} ml-4`}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${colorScheme.accent}`}>
+                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                    <div className={`p-1 rounded ${colorScheme.accent} flex-shrink-0`}>
                       {getRoleIcon(obj.role)}
                     </div>
-                    <div>
-                      <h5 className={`font-medium ${colorScheme.text}`}>{obj.name}</h5>
-                      <p className="text-sm text-gray-500">Cấp 2 - Loại vật liệu</p>
+                    <div className="min-w-0 flex-1">
+                      <h5 className={`text-sm font-medium ${colorScheme.text} truncate`}>{obj.name}</h5>
+                      <p className="text-xs text-gray-500">Cấp 2 - Loại vật liệu</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`text-lg font-semibold ${colorScheme.text}`}>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <div className={`text-sm font-semibold ${colorScheme.text}`}>
                       {formatCurrency(amount)}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-xs text-gray-500">
                       {percentage.toFixed(1)}%
                     </div>
                   </div>
@@ -689,22 +375,22 @@ export default function ExpenseSummaryDisplay({
             const colorScheme = getParentBasedColor(obj, 3)
             
             return (
-              <div key={obj.id} className={`p-3 rounded-lg border ${colorScheme.bg} ${colorScheme.border}`}>
+              <div key={obj.id} className={`p-2 rounded-lg border ${colorScheme.bg} ${colorScheme.border} ml-8`}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${colorScheme.accent}`}>
+                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                    <div className={`p-1 rounded ${colorScheme.accent} flex-shrink-0`}>
                       {getRoleIcon(obj.role)}
                     </div>
-                    <div>
-                      <h5 className={`font-medium ${colorScheme.text}`}>{obj.name}</h5>
-                      <p className="text-sm text-gray-500">Cấp 3 - Nhà cung cấp cụ thể</p>
+                    <div className="min-w-0 flex-1">
+                      <h5 className={`text-sm font-medium ${colorScheme.text} truncate`}>{obj.name}</h5>
+                      <p className="text-xs text-gray-500">Cấp 3 - Nhà cung cấp cụ thể</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`text-lg font-semibold ${colorScheme.text}`}>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <div className={`text-sm font-semibold ${colorScheme.text}`}>
                       {formatCurrency(amount)}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-xs text-gray-500">
                       {percentage.toFixed(1)}%
                     </div>
                   </div>
@@ -714,22 +400,22 @@ export default function ExpenseSummaryDisplay({
           })}
 
           {/* Total */}
-          <div className="border-t border-gray-300 pt-3 mt-4">
+          <div className="border-t border-gray-300 pt-2 mt-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 rounded-lg bg-blue-100">
-                  <Calculator className="w-5 h-5 text-blue-600" />
+              <div className="flex items-center space-x-2">
+                <div className="p-1 rounded bg-blue-100 flex-shrink-0">
+                  <Calculator className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
-                  <h5 className="font-semibold text-gray-900">Tổng cộng</h5>
-                  <p className="text-sm text-gray-500">Tất cả đối tượng</p>
+                  <h5 className="text-sm font-semibold text-gray-900">Tổng cộng</h5>
+                  <p className="text-xs text-gray-500">Tất cả đối tượng</p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-xl font-bold text-blue-600">
+              <div className="text-right flex-shrink-0 ml-2">
+                <div className="text-base font-bold text-blue-600">
                   {formatCurrency(grandTotal)}
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-xs text-gray-500">
                   100.0%
                 </div>
               </div>
