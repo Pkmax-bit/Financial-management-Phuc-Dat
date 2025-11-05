@@ -130,43 +130,92 @@ class EmailService:
                 # Create simple HTML email body with quote details
             quote_items_html = ""
             if quote_items:
+                # Get category names for items if needed
+                category_map = {}
+                try:
+                    supabase = get_supabase_client()
+                    category_ids = [item.get('product_category_id') for item in quote_items if item.get('product_category_id')]
+                    if category_ids:
+                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
+                        if categories_result.data:
+                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
+                except Exception:
+                    pass
+                
                 quote_items_html = """
                 <div style=\"margin: 20px 0;\">
                     <h3 style=\"margin: 0 0 15px 0; color: #333;\">Chi tiết sản phẩm/dịch vụ</h3>
                     <table style=\"width: 100%; border-collapse: collapse; border: 1px solid #ddd;\">
                         <thead>
-                            <tr style=\"background: #f5f5f5;\">
-                                <th style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">Tên sản phẩm</th>
-                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">SL</th>
-                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Đơn vị</th>
-                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Dài</th>
-                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Rộng</th>
-                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Sâu</th>
-                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Diện tích</th>
-                                <th style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">Thể tích</th>
-                                <th style=\"padding: 10px; text-align: right; border: 1px solid #ddd;\">Đơn giá</th>
-                                <th style=\"padding: 10px; text-align: right; border: 1px solid #ddd;\">Thành tiền</th>
+                            <tr style=\"background: #1e40af; color: #fff;\">
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\">STT</th>
+                                <th style=\"padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;\">HẠNG MỤC</th>
+                                <th style=\"padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;\">MÔ TẢ CHI TIẾT</th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\">ĐVT</th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\" colspan=\"3\">QUY CÁCH</th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\">KHỐI LƯỢNG (m)</th>
+                                <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">ĐƠN GIÁ</th>
+                                <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">THÀNH TIỀN</th>
+                            </tr>
+                            <tr style=\"background: #1e40af; color: #fff;\">
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\"></th>
+                                <th style=\"padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;\"></th>
+                                <th style=\"padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;\"></th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\"></th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\">NGANG (m)</th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\">SÂU (m)</th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\">CAO (m)</th>
+                                <th style=\"padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;\"></th>
+                                <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\"></th>
+                                <th style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\"></th>
                             </tr>
                         </thead>
                         <tbody>
                 """
                 
-                for item in quote_items:
+                for idx, item in enumerate(quote_items, 1):
+                    category_name = ''
+                    if item.get('product_category_id'):
+                        category_name = category_map.get(item.get('product_category_id'), '')
+                    if not category_name and item.get('category_name'):
+                        category_name = item.get('category_name', '')
+                    
+                    length = item.get('length') or ''
+                    depth = item.get('depth') or ''
+                    height = item.get('height') or ''
+                    
+                    # Format dimensions
+                    def format_dimension(val):
+                        if val is None or val == '':
+                            return ''
+                        try:
+                            num_val = float(val)
+                            return f'{num_val:.2f}' if num_val != 0 else ''
+                        except:
+                            return str(val) if val else ''
+                    
+                    quantity_display = item.get('quantity', 0)
+                    # Try to use area or volume if available
+                    if item.get('area'):
+                        quantity_display = item.get('area')
+                    elif item.get('volume'):
+                        quantity_display = item.get('volume')
+                    
                     quote_items_html += f"""
                             <tr>
-                                <td style=\"padding: 10px; border: 1px solid #ddd;\">
+                                <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{idx}</td>
+                                <td style=\"padding: 8px; text-align: left; border: 1px solid #ddd;\">{category_name or '—'}</td>
+                                <td style=\"padding: 8px; text-align: left; border: 1px solid #ddd;\">
                                     <div style=\"font-weight:600;\">{item.get('name_product', '')}</div>
                                     {f"<div style='font-size:12px;color:#666;margin-top:4px;'>{item.get('description','')}</div>" if (item.get('description')) else ''}
                                 </td>
-                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('quantity', 0)}</td>
-                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('unit', '')}</td>
-                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('length', '')}</td>
-                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('height', '')}</td>
-                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('depth', '')}</td>
-                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('area', '')}</td>
-                                <td style=\"padding: 10px; text-align: center; border: 1px solid #ddd;\">{item.get('volume', '')}</td>
-                                <td style=\"padding: 10px; text-align: right; border: 1px solid #ddd;\">{format_currency(item.get('unit_price', 0))}</td>
-                                <td style=\"padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">{format_currency(item.get('total_price', 0))}</td>
+                                <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{item.get('unit', '')}</td>
+                                <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{format_dimension(length)}</td>
+                                <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{format_dimension(depth)}</td>
+                                <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{format_dimension(height)}</td>
+                                <td style=\"padding: 8px; text-align: center; border: 1px solid #ddd;\">{format_dimension(quantity_display)}</td>
+                                <td style=\"padding: 8px; text-align: right; border: 1px solid #ddd;\">{format_currency(item.get('unit_price', 0))}</td>
+                                <td style=\"padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;\">{format_currency(item.get('total_price', 0))}</td>
                             </tr>
                     """
                 

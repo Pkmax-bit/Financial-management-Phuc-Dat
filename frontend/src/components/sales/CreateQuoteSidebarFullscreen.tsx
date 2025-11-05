@@ -15,7 +15,8 @@ import {
   Send,
   Package,
   Search,
-  Eye
+  Eye,
+  AlertTriangle
 } from 'lucide-react'
 import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -142,6 +143,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const adjustmentTimersRef = useRef<Map<string, any>>(new Map())
   const [showRulesDialog, setShowRulesDialog] = useState(false)
   const [manualAdjusting, setManualAdjusting] = useState(false)
+  const [showProfitWarningDialog, setShowProfitWarningDialog] = useState(false)
+  const [lowProfitItems, setLowProfitItems] = useState<Array<{ name: string; percentage: number }>>([])
 
   const manualAdjustAll = async () => {
     try {
@@ -823,18 +826,15 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   }
 
   const computeItemTotal = (item: QuoteItem): number => {
-    const unitPrice = Number(item.unit_price || 0)
+    const unitPrice = Number(item.unit_price || 0) // Đơn giá / m²
+    const areaVal = item.area != null ? Number(item.area) : null // Diện tích (m²)
+    // Thành tiền = (Đơn giá / m²) × Diện tích (m²) nếu có diện tích
+    if (areaVal != null && isFinite(areaVal) && areaVal >= 0) {
+      return Math.round(unitPrice * areaVal * 100) / 100 // Round to 2 decimal places
+    }
+    // Nếu không có diện tích, fallback về đơn giá × số lượng
     const quantity = Number(item.quantity || 0)
-    const areaVal = item.area != null ? Number(item.area) : null
-    const baselineAreaVal = item.baseline_area != null ? Number(item.baseline_area) : null
-    if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
-      // area already reflects total area; do not multiply by quantity again
-      return unitPrice * areaVal
-    }
-    if (baselineAreaVal != null && isFinite(baselineAreaVal) && baselineAreaVal > 0) {
-      return unitPrice * quantity * baselineAreaVal
-    }
-    return unitPrice * quantity
+    return Math.round(unitPrice * quantity * 100) / 100 // Round to 2 decimal places
   }
 
   const addItem = () => {
@@ -1395,12 +1395,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             if (curr.baseline_area == null) {
               curr.baseline_area = baselineAreaPerUnit
             }
+            // Recalculate total_price after auto area update
+            updatedItems[index].total_price = computeItemTotal(updatedItems[index])
           }
         } else {
           // If one dim missing, clear auto area (but only if not manual)
           if (curr.area != null) {
             curr.area = null
             autoAreaChanged = true
+            // Recalculate total_price after clearing area
+            updatedItems[index].total_price = computeItemTotal(updatedItems[index])
           }
         }
       }
@@ -1678,28 +1682,34 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     })
   }
 
-  const handleSubmit = async () => {
+  // Hàm kiểm tra tỷ lệ lợi nhuận thấp
+  const checkLowProfitItems = (): Array<{ name: string; percentage: number }> => {
+    const lowProfit: Array<{ name: string; percentage: number }> = []
+    
+    items.forEach((item) => {
+      const components = Array.isArray(item.components) ? item.components : []
+      const materialCost = components.reduce((sum, comp) => sum + (Number(comp.total_price) || 0), 0)
+      const productPrice = Number(item.total_price) || 0
+      const itemProfit = productPrice - materialCost
+      const itemProfitPercentage = productPrice > 0 ? (itemProfit / productPrice) * 100 : 0
+      
+      // Kiểm tra nếu tỷ lệ lợi nhuận < 10%
+      if (itemProfitPercentage < 10) {
+        lowProfit.push({
+          name: item.name_product || item.description || 'Sản phẩm không tên',
+          percentage: itemProfitPercentage
+        })
+      }
+    })
+    
+    return lowProfit
+  }
+
+  // Hàm thực hiện tạo báo giá (tách ra để có thể gọi lại sau khi cảnh báo)
+  const doCreateQuote = async () => {
     setSubmitting(true)
     
     try {
-      // Validate required fields
-      if (!formData.quote_number.trim()) {
-        throw new Error('Vui lòng nhập số báo giá')
-      }
-      if (!formData.customer_id) {
-        throw new Error('Vui lòng chọn khách hàng')
-      }
-      if (!formData.valid_until) {
-        throw new Error('Vui lòng chọn ngày hết hạn')
-      }
-      if (items.length === 0 || items.every(item => !item.name_product.trim())) {
-        throw new Error('Vui lòng thêm ít nhất một sản phẩm')
-      }
-      // Dimensions are optional - allow null values for length and depth
-      if (!formData.created_by) {
-        throw new Error('Vui lòng chọn nhân viên tạo báo giá')
-      }
-      
       // Use created_by from form selection
       const created_by = formData.created_by || null
       
@@ -1819,11 +1829,51 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       onSuccess()
       onClose()
       resetForm()
+      setShowProfitWarningDialog(false)
+      setLowProfitItems([])
     } catch (error) {
       console.error('Error creating quote:', error)
       alert('Có lỗi xảy ra khi tạo báo giá: ' + (error as Error).message)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    try {
+      // Validate required fields
+      if (!formData.quote_number.trim()) {
+        throw new Error('Vui lòng nhập số báo giá')
+      }
+      if (!formData.customer_id) {
+        throw new Error('Vui lòng chọn khách hàng')
+      }
+      if (!formData.valid_until) {
+        throw new Error('Vui lòng chọn ngày hết hạn')
+      }
+      if (items.length === 0 || items.every(item => !item.name_product.trim())) {
+        throw new Error('Vui lòng thêm ít nhất một sản phẩm')
+      }
+      // Dimensions are optional - allow null values for length and depth
+      if (!formData.created_by) {
+        throw new Error('Vui lòng chọn nhân viên tạo báo giá')
+      }
+      
+      // Kiểm tra tỷ lệ lợi nhuận thấp
+      const lowProfit = checkLowProfitItems()
+      
+      if (lowProfit.length > 0) {
+        // Hiển thị dialog cảnh báo
+        setLowProfitItems(lowProfit)
+        setShowProfitWarningDialog(true)
+        return // Dừng lại, không tạo báo giá
+      }
+      
+      // Nếu không có cảnh báo, tiếp tục tạo báo giá
+      await doCreateQuote()
+    } catch (error) {
+      console.error('Error validating quote:', error)
+      alert('Có lỗi xảy ra: ' + (error as Error).message)
     }
   }
 
@@ -1879,6 +1929,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       style: 'currency',
       currency: 'VND'
     }).format(amount)
+  }
+
+  // Hàm xác định màu cảnh báo cho tỷ lệ lợi nhuận
+  const getProfitPercentageColor = (percentage: number): string => {
+    if (percentage < 0) {
+      return 'text-red-600' // Âm: màu đỏ
+    } else if (percentage < 10) {
+      return 'text-red-600' // Dưới 10%: màu đỏ
+    } else if (percentage < 15) {
+      return 'text-yellow-600' // Dưới 15%: màu vàng
+    } else {
+      return 'text-green-600' // >= 15%: màu xanh lá
+    }
   }
 
   const EditableNumberCell = ({
@@ -2539,9 +2602,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-700">Tỷ lệ lợi nhuận:</span>
-                                <span className={`font-semibold ${
-                                  profitPercentage >= 0 ? 'text-green-600' : 'text-red-600'
-                                }`}>
+                                <span className={`font-semibold ${getProfitPercentageColor(profitPercentage)}`}>
                                   {profitPercentage.toFixed(2)}%
                                 </span>
                               </div>
@@ -2588,9 +2649,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                           </div>
                                           <div>
                                             <span>Tỷ lệ: </span>
-                                            <span className={`font-semibold ${
-                                              itemProfitPercentage >= 0 ? 'text-green-600' : 'text-red-600'
-                                            }`}>
+                                            <span className={`font-semibold ${getProfitPercentageColor(itemProfitPercentage)}`}>
                                               {itemProfitPercentage.toFixed(2)}%
                                             </span>
                                           </div>
@@ -2702,6 +2761,62 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           </div>
         </div>
       </div>
+
+      {/* Profit Warning Dialog */}
+      {showProfitWarningDialog && (
+        <div className="fixed inset-0 z-70 bg-black/30 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-2xl w-full max-w-md mx-4 border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Cảnh báo tỷ lệ lợi nhuận</h3>
+                  <p className="text-sm text-gray-600">Có sản phẩm có tỷ lệ lợi nhuận dưới 10%</p>
+                </div>
+              </div>
+              
+              <div className="mb-4 max-h-60 overflow-y-auto">
+                <div className="space-y-2">
+                  {lowProfitItems.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-red-50/80 border border-red-200 rounded-md backdrop-blur-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">{item.name}</span>
+                        <span className={`text-sm font-semibold ${getProfitPercentageColor(item.percentage)}`}>
+                          {item.percentage.toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowProfitWarningDialog(false)
+                    setLowProfitItems([])
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 bg-white/80 backdrop-blur-sm"
+                >
+                  Đóng
+                </button>
+                <button
+                  onClick={() => {
+                    setShowProfitWarningDialog(false)
+                    doCreateQuote()
+                  }}
+                  disabled={submitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {submitting ? 'Đang tạo...' : 'Tạo'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Product Selection Modal */}
       {showProductModal && (
@@ -2911,14 +3026,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       if (components.length === 0) {
                         // fallback to single product row
                         if (insertIdx !== -1) {
-                          newItems[insertIdx] = {
+                          const newItem = {
                             ...newItems[insertIdx],
                             name_product: p.name,
                             description: p.description || '',
                             quantity: newItems[insertIdx].quantity || 1,
                             unit: p.unit || '',
                             unit_price: p.unit_price || 0,
-                            total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0),
+                            total_price: 0, // Will compute below
                             product_category_id: p.category_id || null,
                             area: p.area ?? null,
                             baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
@@ -2928,15 +3043,17 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             length: p.length ?? null,
                             depth: p.depth ?? null
                           }
+                          newItem.total_price = computeItemTotal(newItem as QuoteItem)
+                          newItems[insertIdx] = newItem
                           insertIdx = findEmptyFrom(insertIdx + 1)
                         } else {
-                          newItems.push({
+                          const newItem = {
                             name_product: p.name,
                             description: p.description || '',
                             quantity: 1,
                             unit: p.unit || '',
                             unit_price: p.unit_price || 0,
-                            total_price: (p.unit_price || 0),
+                            total_price: 0, // Will compute below
                             product_category_id: p.category_id || null,
                             area: p.area ?? null,
                             baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
@@ -2945,7 +3062,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             height: p.height ?? null,
                             length: p.length ?? null,
                             depth: p.depth ?? null
-                          })
+                          } as QuoteItem
+                          newItem.total_price = computeItemTotal(newItem)
+                          newItems.push(newItem)
                         }
                         continue
                       }
@@ -2956,14 +3075,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       const up = Number(first.unit_price || 0)
                       const compName = nameMap[String(first.expense_object_id)] || String(first.expense_object_id || '')
                       if (insertIdx !== -1) {
-                        newItems[insertIdx] = {
+                        const newItem = {
                           ...newItems[insertIdx],
                           name_product: p.name,
                           description: p.description || '',
                           quantity: newItems[insertIdx].quantity || 1,
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
-                          total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0),
+                          total_price: 0, // Will compute below
                           product_category_id: p.category_id || null,
                           area: p.area ?? null,
                           baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
@@ -2986,16 +3105,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             quantity: Number(c.quantity || 0),
                             total_price: Number(c.quantity || 0) * Number(c.unit_price || 0)
                           }))
-                        }
+                        } as QuoteItem
+                        newItem.total_price = computeItemTotal(newItem)
+                        newItems[insertIdx] = newItem
                         insertIdx = findEmptyFrom(insertIdx + 1)
                       } else {
-                        newItems.push({
+                        const newItem = {
                           name_product: p.name,
                           description: p.description || '',
                           quantity: 1,
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
-                          total_price: (p.unit_price || 0),
+                          total_price: 0, // Will compute below
                           product_category_id: p.category_id || null,
                           area: p.area ?? null,
                           baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
@@ -3018,7 +3139,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             quantity: Number(c.quantity || 0),
                             total_price: Number(c.quantity || 0) * Number(c.unit_price || 0)
                           }))
-                        })
+                        } as QuoteItem
+                        newItem.total_price = computeItemTotal(newItem)
+                        newItems.push(newItem)
                       }
                     }
                     setItems(newItems)

@@ -491,9 +491,15 @@ async def approve_quote(
                     
                     # Send email notification to employee
                     try:
-                        # Get quote items for email
-                        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+                        # Get quote items for email with category information
+                        quote_items_result = supabase.table("quote_items").select("*, product_categories(name)").eq("quote_id", quote_id).execute()
                         quote_items = quote_items_result.data if quote_items_result.data else []
+                        # Flatten category name if present
+                        for item in quote_items:
+                            if item.get('product_categories') and isinstance(item.get('product_categories'), list) and len(item.get('product_categories', [])) > 0:
+                                item['category_name'] = item['product_categories'][0].get('name', '')
+                            elif item.get('product_categories') and isinstance(item.get('product_categories'), dict):
+                                item['category_name'] = item['product_categories'].get('name', '')
                         
                         # Send email to employee
                         await email_service.send_quote_approved_notification_email(
@@ -591,9 +597,15 @@ async def send_quote_to_customer(
                 
                 if customer_email:
                     try:
-                        # Get quote items for email
-                        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+                        # Get quote items for email with category information
+                        quote_items_result = supabase.table("quote_items").select("*, product_categories(name)").eq("quote_id", quote_id).execute()
                         quote_items = quote_items_result.data if quote_items_result.data else []
+                        # Flatten category name if present
+                        for item in quote_items:
+                            if item.get('product_categories') and isinstance(item.get('product_categories'), list) and len(item.get('product_categories', [])) > 0:
+                                item['category_name'] = item['product_categories'][0].get('name', '')
+                            elif item.get('product_categories') and isinstance(item.get('product_categories'), dict):
+                                item['category_name'] = item['product_categories'].get('name', '')
                         # Get employee in charge (prefer employee_in_charge_id, fallback created_by)
                         employee_name = None
                         employee_phone = None

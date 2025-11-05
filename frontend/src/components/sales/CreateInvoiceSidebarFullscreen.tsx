@@ -478,9 +478,19 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     const curr = updatedItems[index]
     
     // Recalculate total_price for this item
-    if (field === 'quantity' || field === 'unit_price') {
-      const itemTotal = updatedItems[index].quantity * updatedItems[index].unit_price
-      updatedItems[index].total_price = itemTotal
+    // Thành tiền = (Đơn giá / m²) × Diện tích (m²) nếu có diện tích, nếu không thì đơn giá × số lượng
+    if (field === 'quantity' || field === 'unit_price' || field === 'area') {
+      const unitPrice = Number(updatedItems[index].unit_price || 0) // Đơn giá / m²
+      const areaVal = updatedItems[index].area != null ? Number(updatedItems[index].area) : null // Diện tích (m²)
+      
+      if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+        // Có diện tích: thành tiền = (Đơn giá / m²) × Diện tích (m²)
+        updatedItems[index].total_price = unitPrice * areaVal
+      } else {
+        // Không có diện tích: thành tiền = đơn giá × số lượng
+        const quantity = Number(updatedItems[index].quantity || 0)
+        updatedItems[index].total_price = unitPrice * quantity
+      }
     }
     
     // When quantity changes, adjust components quantity proportionally
@@ -556,7 +566,15 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         description: product.description || '',
         unit: product.unit || '',
         unit_price: product.unit_price || 0,
-        total_price: updatedItems[selectedItemIndex].quantity * (product.unit_price || 0),
+        total_price: (() => {
+          const unitPrice = product.unit_price || 0 // Đơn giá / m²
+          const areaVal = product.area != null ? Number(product.area) : null // Diện tích (m²)
+          // Thành tiền = (Đơn giá / m²) × Diện tích (m²) nếu có diện tích, nếu không thì đơn giá × số lượng
+          if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+            return unitPrice * areaVal
+          }
+          return updatedItems[selectedItemIndex].quantity * unitPrice
+        })(),
         area: product.area !== undefined ? product.area : null,
         volume: product.volume !== undefined ? product.volume : null,
         height: product.height !== undefined ? product.height : null,
@@ -889,9 +907,9 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                     {visibleColumns.description && <div>Mô tả</div>}
                     {visibleColumns.quantity && <div>Số lượng</div>}
                     {visibleColumns.unit && <div>Đơn vị</div>}
-                    {visibleColumns.unit_price && <div>Đơn giá</div>}
+                    {visibleColumns.unit_price && <div>Đơn giá / m²</div>}
                     {visibleColumns.total_price && <div>Thành tiền</div>}
-                    {visibleColumns.area && <div>Diện tích</div>}
+                    {visibleColumns.area && <div>Diện tích (m²)</div>}
                     {visibleColumns.volume && <div>Thể tích</div>}
                     {visibleColumns.height && <div>Cao</div>}
                     {visibleColumns.length && <div>Dài</div>}
