@@ -70,6 +70,7 @@ interface QuoteItem {
     quantity: number
     total_price: number
   }>
+  product_category_id?: string | null
 }
 
 interface Product {
@@ -79,6 +80,7 @@ interface Product {
   unit?: string
   unit_price?: number
   category?: string
+  category_id?: string | null
   area?: number | null
   volume?: number | null
   height?: number | null
@@ -567,7 +569,22 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           quantity,
           unit: c.unit || '',
           unit_price,
-          total_price: quantity * unit_price,
+          total_price: computeItemTotal({
+            expense_object_id: String(c.expense_object_id || ''),
+            name_product: nameMap[String(c.expense_object_id)] || String(c.expense_object_id || ''),
+            description: '',
+            quantity,
+            unit: c.unit || '',
+            unit_price,
+            total_price: 0,
+            area: null,
+            baseline_area: null,
+            volume: null,
+            baseline_volume: null,
+            height: null,
+            length: null,
+            depth: null
+          } as any),
           area: null,
           volume: null,
           height: null,
@@ -713,6 +730,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           unit: product.unit || 'cái',
           unit_price: product.price || 0,
           category: getCategoryDisplayName(product.product_categories?.name) || 'Khác',
+          category_id: product.category_id || null,
           area: product.area !== undefined ? product.area : null,
           volume: product.volume !== undefined ? product.volume : null,
           height: product.height !== undefined ? product.height : null,
@@ -802,6 +820,21 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       tax_amount, 
       total_amount 
     }))
+  }
+
+  const computeItemTotal = (item: QuoteItem): number => {
+    const unitPrice = Number(item.unit_price || 0)
+    const quantity = Number(item.quantity || 0)
+    const areaVal = item.area != null ? Number(item.area) : null
+    const baselineAreaVal = item.baseline_area != null ? Number(item.baseline_area) : null
+    if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+      // area already reflects total area; do not multiply by quantity again
+      return unitPrice * areaVal
+    }
+    if (baselineAreaVal != null && isFinite(baselineAreaVal) && baselineAreaVal > 0) {
+      return unitPrice * quantity * baselineAreaVal
+    }
+    return unitPrice * quantity
   }
 
   const addItem = () => {
@@ -1010,13 +1043,37 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             })
 
             // Find applicable rules using the new checkRuleApplicable function
+            const prodCatId = (item as any).product_category_id || null
             const applicableRules = rules.filter((rule: any) => {
+              // Category constraint: if rule has allowed_category_ids, product must belong to one of them
+              const allowedCats = Array.isArray(rule.allowed_category_ids) ? rule.allowed_category_ids : null
+              if (allowedCats && allowedCats.length > 0) {
+                // Rule có giới hạn category, chỉ áp dụng cho sản phẩm thuộc category đó
+                if (!prodCatId || !allowedCats.includes(prodCatId)) {
+                  console.log('[Adjust] Rule skipped due to category mismatch', {
+                    ruleId: rule.id || 'unknown',
+                    ruleName: rule.name,
+                    allowedCategories: allowedCats,
+                    productCategoryId: prodCatId
+                  })
+                  return false
+                }
+                console.log('[Adjust] Rule category match', {
+                  ruleId: rule.id || 'unknown',
+                  ruleName: rule.name,
+                  productCategoryId: prodCatId,
+                  allowedCategories: allowedCats
+                })
+              }
               const isApplicable = checkRuleApplicable(rule, changeDirection, changePercentage, changeAbsolute)
               if (isApplicable) {
                 console.log('[Adjust] Rule applicable', { 
-                  ruleId: rule.id || 'unknown', 
+                  ruleId: rule.id || 'unknown',
+                  ruleName: rule.name,
                   changeDirection: rule.change_direction, 
                   adjustmentValue: rule.adjustment_value,
+                  productCategoryId: prodCatId,
+                  allowedCategories: allowedCats,
                   isInverse: rule.change_direction === 'decrease' && Number(rule.adjustment_value || 0) < 0
                 })
               }
@@ -1158,9 +1215,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         components: adjustedComponents
       }
 
-      // Recalculate item total_price from quantity * unit_price (NOT from components)
-      // total_price should always be the product price, not the material cost
-      updatedItems[itemIndex].total_price = updatedItems[itemIndex].quantity * updatedItems[itemIndex].unit_price
+      // Recalculate item total_price using unit price × quantity × area logic
+      updatedItems[itemIndex].total_price = computeItemTotal(updatedItems[itemIndex])
 
       setItems(updatedItems)
       // Sync snapshot immediately so subsequent applies in the same tick see latest state
@@ -1229,9 +1285,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
     
     // Recalculate total_price for this item
-    if (field === 'quantity' || field === 'unit_price') {
-      const itemTotal = updatedItems[index].quantity * updatedItems[index].unit_price
-      updatedItems[index].total_price = itemTotal
+    if (field === 'quantity' || field === 'unit_price' || field === 'area') {
+      updatedItems[index].total_price = computeItemTotal(updatedItems[index])
     }
 
     // Auto-calc area (m²) and volume (m³) from dimensions (length, depth, height in mm)
@@ -1259,6 +1314,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           autoAreaChanged = true
         }
       }
+      // After auto area update, refresh total
+      updatedItems[index].total_price = computeItemTotal(updatedItems[index])
       
       // Adjust volume proportionally to quantity (if baseline_volume exists)
       // volume = baseline_volume * quantity (e.g., if quantity x2, volume x2)
@@ -1491,9 +1548,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (idx >= 0) comps[idx] = comp
     else comps.push(comp)
     ;(updated[itemIndex] as any).components = comps
-    // Recalculate item total_price from quantity * unit_price (NOT from components)
-    // total_price should always be the product price, not the material cost
-    updated[itemIndex].total_price = updated[itemIndex].quantity * updated[itemIndex].unit_price
+    // Recalculate item total_price using unit price × quantity × area logic
+    updated[itemIndex].total_price = computeItemTotal(updated[itemIndex])
     setItems(updated)
   }
 
@@ -1534,7 +1590,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               description: product.description || '',
               unit: product.unit || '',
               unit_price: (product as any).unit_price || 0,
-              total_price: updatedItems[selectedItemIndex].quantity * ((product as any).unit_price || 0),
+              total_price: 0, // will compute below after area fields are set
               area: (product as any).area ?? null,
               baseline_area: (product as any).area ?? (((product as any).length != null && (product as any).height != null) ? (((Number((product as any).length) * Number((product as any).height)) / 1_000_000)) : null),
               volume: (product as any).volume ?? null,
@@ -1543,6 +1599,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               length: (product as any).length ?? null,
               depth: (product as any).depth ?? null
             }
+            newItem.total_price = computeItemTotal({
+              ...newItem,
+              total_price: 0
+            } as any)
             updatedItems[selectedItemIndex] = newItem
             setItems(updatedItems)
           }
@@ -1574,7 +1634,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             description: product.description || current.description,
             unit: product.unit || current.unit,
             unit_price: (product as any).unit_price ?? current.unit_price,
-            total_price: current.quantity * ((product as any).unit_price ?? current.unit_price),
+            total_price: 0, // compute after area fields below
             area: (product as any).area ?? current.area ?? null,
             baseline_area: (product as any).area ?? current.baseline_area ?? (((product as any).length != null && (product as any).height != null) ? (((Number((product as any).length) * Number((product as any).height)) / 1_000_000)) : current.baseline_area ?? null),
             volume: (product as any).volume ?? current.volume ?? null,
@@ -1604,6 +1664,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               }
             })
           }
+          updatedItems[selectedItemIndex].total_price = computeItemTotal(updatedItems[selectedItemIndex] as any)
           setItems(updatedItems)
         }
       } catch (_) {
@@ -2121,7 +2182,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       {visibleColumns.description && <div>Mô tả</div>}
                       {visibleColumns.quantity && <div className="text-right">Số lượng</div>}
                       {visibleColumns.unit && <div className="text-center">Đơn vị</div>}
-                      {visibleColumns.unit_price && <div className="text-right">Đơn giá</div>}
+                      {visibleColumns.unit_price && <div className="text-right">Đơn giá / m²</div>}
                       {visibleColumns.total_price && <div className="text-right">Thành tiền</div>}
                       {visibleColumns.area && <div>Diện tích (m²)</div>}
                       {visibleColumns.volume && <div>Thể tích (m³)</div>}
@@ -2253,14 +2314,23 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           )}
                           {visibleColumns.area && (
                             <div>
-                              <div
-                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-gray-50"
-                                title={item.length != null && item.height != null ? `${formatNumber(((Number(item.length) || 0) * (Number(item.height) || 0) * (Number(item.quantity) || 1)) / 1_000_000)} m² (đã nhân với số lượng)` : 'Nhập Dài và Cao để tự tính'}
-                              >
-                                {item.length != null && item.height != null
-                                  ? `${formatNumber(((Number(item.length) || 0) * (Number(item.height) || 0) * (Number(item.quantity) || 1)) / 1_000_000)} m²`
-                                  : item.area != null ? `${formatNumber(item.area)} m²` : ''}
-                              </div>
+                              <EditableNumberCell
+                                value={(() => {
+                                  if (item.area != null) return Number(item.area)
+                                  if (item.length != null && item.height != null) {
+                                    return ((Number(item.length) || 0) * (Number(item.height) || 0) * (Number(item.quantity) || 1)) / 1_000_000
+                                  }
+                                  return null
+                                })()}
+                                onChange={(v) => updateItem(index, 'area', v == null ? null : Number(v))}
+                                format="number"
+                                step={0.000001}
+                                min={0}
+                                placeholder="m²"
+                                index={index}
+                                field={'area'}
+                                commitOnChange
+                              />
                             </div>
                           )}
                           {visibleColumns.volume && (
@@ -2765,9 +2835,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                     <div className="text-xs space-y-1">
                                       {product.area && <div>📐 Diện tích: {product.area} m²</div>}
                                       {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
-                                      {product.height && <div>📏 Cao: {product.height} cm</div>}
-                                      {product.length && <div>📏 Dài: {product.length} cm</div>}
-                                      {product.depth && <div>📏 Sâu: {product.depth} cm</div>}
+                                      {product.height && <div>📏 Cao: {product.height} mm</div>}
+                                      {product.length && <div>📏 Dài: {product.length} mm</div>}
+                                      {product.depth && <div>📏 Sâu: {product.depth} mm</div>}
                                       {!product.area && !product.volume && !product.height && !product.length && !product.depth && 
                                         <div className="text-gray-400">Chưa có kích thước</div>
                                       }
@@ -2808,7 +2878,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     const productIds = chosen.map(p => p.id)
                     const { data: prods } = await supabase
                       .from('products')
-                      .select('id, name, description, unit, price, area, volume, height, length, depth, product_components')
+                      .select('id, name, description, unit, price, category_id, area, volume, height, length, depth, product_components')
                       .in('id', productIds)
 
                     const byId: Record<string, any> = {}
@@ -2849,6 +2919,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             unit: p.unit || '',
                             unit_price: p.unit_price || 0,
                             total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0),
+                            product_category_id: p.category_id || null,
                             area: p.area ?? null,
                             baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
                             volume: p.volume ?? null,
@@ -2866,6 +2937,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             unit: p.unit || '',
                             unit_price: p.unit_price || 0,
                             total_price: (p.unit_price || 0),
+                            product_category_id: p.category_id || null,
                             area: p.area ?? null,
                             baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
                             volume: p.volume ?? null,
@@ -2892,6 +2964,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
                           total_price: (newItems[insertIdx].quantity || 1) * (p.unit_price || 0),
+                          product_category_id: p.category_id || null,
                           area: p.area ?? null,
                           baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
                           volume: p.volume ?? null,
@@ -2923,6 +2996,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           unit: p.unit || '',
                           unit_price: p.unit_price || 0,
                           total_price: (p.unit_price || 0),
+                          product_category_id: p.category_id || null,
                           area: p.area ?? null,
                           baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
                           volume: p.volume ?? null,
@@ -3047,9 +3121,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         {(variant.height || variant.length || variant.depth) && (
                           <div className="mt-2 text-sm text-gray-600">
                             <span className="font-medium">Kích thước:</span>
-                            {variant.height && <span className="ml-2">Cao: {variant.height} cm</span>}
-                            {variant.length && <span className="ml-2">Dài: {variant.length} cm</span>}
-                            {variant.depth && <span className="ml-2">Sâu: {variant.depth} cm</span>}
+                            {variant.height && <span className="ml-2">Cao: {variant.height} mm</span>}
+                            {variant.length && <span className="ml-2">Dài: {variant.length} mm</span>}
+                            {variant.depth && <span className="ml-2">Sâu: {variant.depth} mm</span>}
                           </div>
                         )}
                         {variant.description && (

@@ -29,6 +29,7 @@ interface RuleRow {
   is_active: boolean
   max_adjustment_percentage?: number | null
   max_adjustment_value?: number | null
+  allowed_category_ids?: string[] | null
 }
 
 function Input({ className = '', ...props }: any) {
@@ -45,6 +46,8 @@ export default function MaterialAdjustmentRulesTab() {
   const [saving, setSaving] = useState(false)
   const [rules, setRules] = useState<RuleRow[]>([])
   const [expenseObjects, setExpenseObjects] = useState<ExpenseObjectOption[]>([])
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
+  const [categorySearch, setCategorySearch] = useState('')
   const [search, setSearch] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
@@ -98,6 +101,14 @@ export default function MaterialAdjustmentRulesTab() {
         .order('name')
       setExpenseObjects(exp || [])
 
+      // Load product categories for multi-select
+      const { data: cats } = await supabase
+        .from('product_categories')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
+      setCategories(cats || [])
+
       // Load rules
       const { data: rows } = await supabase
         .from('material_adjustment_rules')
@@ -117,7 +128,8 @@ export default function MaterialAdjustmentRulesTab() {
         description: r.description || '',
         is_active: !!r.is_active,
         max_adjustment_percentage: r.max_adjustment_percentage != null ? Number(r.max_adjustment_percentage) : null,
-        max_adjustment_value: r.max_adjustment_value != null ? Number(r.max_adjustment_value) : null
+        max_adjustment_value: r.max_adjustment_value != null ? Number(r.max_adjustment_value) : null,
+        allowed_category_ids: Array.isArray(r.allowed_category_ids) ? r.allowed_category_ids : null
       })))
     } catch (e) {
       console.error('Failed to load adjustment rules:', e)
@@ -143,7 +155,8 @@ export default function MaterialAdjustmentRulesTab() {
         priority: 100,
         name: '',
         description: '',
-        is_active: true
+        is_active: true,
+        allowed_category_ids: null
       },
       ...prev
     ]))
@@ -173,7 +186,8 @@ export default function MaterialAdjustmentRulesTab() {
         description: row.description || null,
         is_active: row.is_active,
         max_adjustment_percentage: row.max_adjustment_percentage != null ? row.max_adjustment_percentage : null,
-        max_adjustment_value: row.max_adjustment_value != null ? row.max_adjustment_value : null
+        max_adjustment_value: row.max_adjustment_value != null ? row.max_adjustment_value : null,
+        allowed_category_ids: row.allowed_category_ids && row.allowed_category_ids.length > 0 ? row.allowed_category_ids : null
       }
 
       if (row.id) {
@@ -260,6 +274,7 @@ export default function MaterialAdjustmentRulesTab() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-3 py-2 text-left font-medium text-black">Vật tư</th>
+              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 220 }}>Loại sản phẩm</th>
               <th className="px-3 py-2 text-left font-medium text-black">Kích thước</th>
               <th className="px-3 py-2 text-left font-medium text-black">Loại thay đổi</th>
               <th className="px-3 py-2 text-right font-medium text-black">Ngưỡng</th>
@@ -306,6 +321,75 @@ export default function MaterialAdjustmentRulesTab() {
                         </select>
                       ) : (
                         <span className="text-black">{expenseObjects.find(o => o.id === row.expense_object_id)?.name || row.expense_object_id}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {isEditing ? (
+                        <div className="w-[320px] border border-gray-300 rounded-md p-2 bg-white">
+                          <div className="mb-2">
+                            <input
+                              className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-black"
+                              placeholder="Tìm loại sản phẩm..."
+                              value={categorySearch}
+                              onChange={(e) => setCategorySearch(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mb-2 text-xs">
+                            <button
+                              type="button"
+                              className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-50"
+                              onClick={() => {
+                                const all = categories.map(c => c.id)
+                                const updated = [...rules]
+                                updated[idx] = { ...row, allowed_category_ids: all }
+                                setRules(updated)
+                              }}
+                            >Chọn tất cả</button>
+                            <button
+                              type="button"
+                              className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-50"
+                              onClick={() => {
+                                const updated = [...rules]
+                                updated[idx] = { ...row, allowed_category_ids: null }
+                                setRules(updated)
+                              }}
+                            >Bỏ chọn</button>
+                          </div>
+                          <div className="max-h-40 overflow-auto border border-gray-200 rounded">
+                            {(categories
+                              .filter(c => c.name.toLowerCase().includes(categorySearch.trim().toLowerCase()))
+                            ).map(c => {
+                              const checked = !!row.allowed_category_ids?.includes(c.id)
+                              return (
+                                <label key={c.id} className="flex items-center gap-2 px-2 py-1 text-sm text-black hover:bg-gray-50 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      const curr = new Set(row.allowed_category_ids || [])
+                                      if (e.target.checked) curr.add(c.id)
+                                      else curr.delete(c.id)
+                                      const next = Array.from(curr)
+                                      const updated = [...rules]
+                                      updated[idx] = { ...row, allowed_category_ids: next.length > 0 ? next : null }
+                                      setRules(updated)
+                                    }}
+                                  />
+                                  <span>{c.name}</span>
+                                </label>
+                              )
+                            })}
+                            {categories.filter(c => c.name.toLowerCase().includes(categorySearch.trim().toLowerCase())).length === 0 && (
+                              <div className="px-2 py-2 text-xs text-gray-500">Không tìm thấy loại phù hợp</div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-black">
+                          {row.allowed_category_ids && row.allowed_category_ids.length > 0
+                            ? row.allowed_category_ids.map(id => categories.find(c => c.id === id)?.name || id).join(', ')
+                            : 'Tất cả'}
+                        </span>
                       )}
                     </td>
                     <td className="px-3 py-2">

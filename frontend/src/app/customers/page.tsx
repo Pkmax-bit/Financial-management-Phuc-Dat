@@ -359,6 +359,26 @@ export default function CustomersPage() {
     }
   }
 
+  const togglePotentialCustomer = async (customer: Customer) => {
+    try {
+      const newStatus = customer.status === 'prospect' ? 'active' : 'prospect'
+      await customerApi.updateCustomer(customer.id, { status: newStatus })
+      setNotice({ 
+        type: 'success', 
+        text: newStatus === 'prospect' 
+          ? 'Đã đánh dấu khách hàng tiềm năng' 
+          : 'Đã bỏ đánh dấu khách hàng tiềm năng' 
+      })
+      await fetchCustomers()
+      // Auto-hide notice after 3 seconds
+      setTimeout(() => setNotice(null), 3000)
+    } catch (err: unknown) {
+      setNotice({ type: 'error', text: (err as Error)?.message || 'Không thể cập nhật trạng thái' })
+      // Auto-hide error notice after 5 seconds
+      setTimeout(() => setNotice(null), 5000)
+    }
+  }
+
   const filteredCustomers = customers.filter((customer: unknown) => {
     const c = customer as { name?: string; email?: string; phone?: string }
     const term = searchTerm.toLowerCase()
@@ -595,6 +615,44 @@ export default function CustomersPage() {
             </div>
           )}
 
+          {/* Notice Message */}
+          {notice && (
+            <div className={`mb-6 border rounded-lg p-4 ${
+              notice.type === 'success' 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-red-50 border-red-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    {notice.type === 'success' ? (
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-400" />
+                    )}
+                  </div>
+                  <div className="ml-3">
+                    <p className={`text-sm ${
+                      notice.type === 'success' ? 'text-green-700' : 'text-red-700'
+                    }`}>
+                      {notice.text}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setNotice(null)}
+                  className={`ml-4 ${
+                    notice.type === 'success' 
+                      ? 'text-green-600 hover:text-green-500' 
+                      : 'text-red-600 hover:text-red-500'
+                  }`}
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6">
             <div className="bg-white rounded-lg shadow p-6">
@@ -750,6 +808,9 @@ export default function CustomersPage() {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                         TRẠNG THÁI
                       </th>
+                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-black uppercase tracking-wider">
+                        TIỀM NĂNG
+                      </th>
                       <th scope="col" className="relative px-6 py-3">
                         <span className="sr-only">Hành động</span>
                       </th>
@@ -808,6 +869,24 @@ export default function CustomersPage() {
                             {customer.status === 'active' ? 'Hoạt động' :
                              customer.status === 'inactive' ? 'Ngừng hoạt động' : 'Tiềm năng'}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              togglePotentialCustomer(customer)
+                            }}
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            title={customer.status === 'prospect' ? 'Bỏ đánh dấu khách hàng tiềm năng' : 'Đánh dấu khách hàng tiềm năng'}
+                          >
+                            <Star 
+                              className={`h-5 w-5 ${
+                                customer.status === 'prospect' 
+                                  ? 'fill-yellow-400 text-yellow-400' 
+                                  : 'text-gray-300 hover:text-yellow-400'
+                              } transition-colors`} 
+                            />
+                          </button>
                         </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center space-x-2">

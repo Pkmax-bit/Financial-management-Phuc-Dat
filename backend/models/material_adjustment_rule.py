@@ -4,7 +4,7 @@ Models cho quy tắc điều chỉnh vật tư khi thay đổi kích thước/s�
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
@@ -48,6 +48,8 @@ class MaterialAdjustmentRuleBase(BaseModel):
     is_active: bool = Field(True, description="Trạng thái hoạt động")
     max_adjustment_percentage: Optional[float] = Field(None, description="Giới hạn tối đa cho điều chỉnh phần trăm (ví dụ: 30 cho tối đa 30%)")
     max_adjustment_value: Optional[float] = Field(None, description="Giới hạn tối đa cho điều chỉnh tuyệt đối (cho adjustment_type = absolute)")
+    # Danh sách loại sản phẩm (category_id) được phép áp dụng quy tắc. Nếu bỏ trống, áp dụng cho mọi loại
+    allowed_category_ids: Optional[List[str]] = Field(None, description="Danh sách ID loại sản phẩm áp dụng")
 
 class MaterialAdjustmentRuleCreate(MaterialAdjustmentRuleBase):
     """Model để tạo quy tắc mới"""
@@ -68,6 +70,7 @@ class MaterialAdjustmentRuleUpdate(BaseModel):
     is_active: Optional[bool] = None
     max_adjustment_percentage: Optional[float] = None
     max_adjustment_value: Optional[float] = None
+    allowed_category_ids: Optional[List[str]] = None
 
 class MaterialAdjustmentRule(MaterialAdjustmentRuleBase):
     """Model đầy đủ cho quy tắc điều chỉnh vật tư"""

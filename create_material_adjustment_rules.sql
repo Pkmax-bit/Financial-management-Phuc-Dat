@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS material_adjustment_rules (
   -- Rule name/description
   name TEXT,
   description TEXT,
+
+  -- Restrict application to selected product categories (nullable = applies to all)
+  allowed_category_ids UUID[] NULL,
   
   -- Status
   is_active BOOLEAN DEFAULT TRUE,
@@ -62,6 +65,7 @@ COMMENT ON COLUMN material_adjustment_rules.change_value IS 'Giá trị ngưỡn
 COMMENT ON COLUMN material_adjustment_rules.adjustment_type IS 'Loại điều chỉnh: percentage hoặc absolute';
 COMMENT ON COLUMN material_adjustment_rules.adjustment_value IS 'Giá trị điều chỉnh (ví dụ: 5 cho tăng 5%, -2 cho giảm 2%)';
 COMMENT ON COLUMN material_adjustment_rules.priority IS 'Độ ưu tiên áp dụng quy tắc (số nhỏ hơn = ưu tiên cao hơn)';
+COMMENT ON COLUMN material_adjustment_rules.allowed_category_ids IS 'Danh sách ID loại sản phẩm được phép áp dụng quy tắc (NULL = tất cả)';
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_material_adjustment_rules_updated_at()

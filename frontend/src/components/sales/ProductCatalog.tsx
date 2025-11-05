@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import ProductExcelImport from './ProductExcelImport'
 
 type ProductItem = {
   id: string
@@ -22,6 +23,11 @@ type ProductItem = {
 type Category = { id: string; name: string }
 
 const formatNumber = (value: number): string => new Intl.NumberFormat('vi-VN').format(value)
+const toDecimalString = (value: number | null | undefined, maxFractionDigits = 6): string => {
+  if (value == null || !isFinite(Number(value))) return ''
+  const fixed = Number(value).toFixed(maxFractionDigits)
+  return fixed.replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1')
+}
 
 export default function ProductCatalog() {
   const [items, setItems] = useState<ProductItem[]>([])
@@ -126,11 +132,18 @@ export default function ProductCatalog() {
     setEditPrice(formatNumber(Number(p.price) || 0))
     setEditUnit(p.unit)
     setEditDesc(p.description || '')
-    setEditArea(p.area ? formatNumber(p.area) : '')
-    setEditVolume(p.volume ? formatNumber(p.volume) : '')
-    setEditHeight(p.height ? formatNumber(p.height) : '')
-    setEditLength(p.length ? formatNumber(p.length) : '')
-    setEditDepth(p.depth ? formatNumber(p.depth) : '')
+    // Prefer recomputing area/volume from mm dimensions when available to avoid stale/wrong DB values
+    const h = p.height != null ? Number(p.height) : null
+    const l = p.length != null ? Number(p.length) : null
+    const d = p.depth != null ? Number(p.depth) : null
+    const computedArea = (h != null && l != null) ? Number(((l/1000) * (h/1000)).toFixed(6)) : null
+    const computedVolume = (h != null && l != null && d != null) ? Number(((l/1000) * (h/1000) * (d/1000)).toFixed(9)) : null
+    setEditArea(toDecimalString(computedArea ?? p.area, 6))
+    setEditVolume(toDecimalString(computedVolume ?? p.volume, 9))
+    // Load mm fields as plain digits (no thousand separators) to avoid mis-parsing like 2.800
+    setEditHeight(p.height != null ? String(Number(p.height)) : '')
+    setEditLength(p.length != null ? String(Number(p.length)) : '')
+    setEditDepth(p.depth != null ? String(Number(p.depth)) : '')
     const comps = Array.isArray((p as any).product_components) ? (p as any).product_components : []
     setEditComponents(comps.map((c: any) => ({ expense_object_id: String(c.expense_object_id || ''), unit: c.unit || '', unit_price: Number(c.unit_price || 0), quantity: Number(c.quantity || 0) })))
   }
@@ -145,21 +158,54 @@ export default function ProductCatalog() {
     return clean ? parseFloat(clean) : null
   }
 
+  // Recompute area (m²) in realtime from mm inputs in edit modal
+  useEffect(() => {
+    if (!editing) return
+    const l = parseNumber(editLength)
+    const h = parseNumber(editHeight)
+    if (l != null && h != null) {
+      const a = Number(((l / 1000) * (h / 1000)).toFixed(6))
+      setEditArea(toDecimalString(a, 6))
+    }
+  }, [editLength, editHeight, editing])
+
+  // Recompute volume (m³) in realtime from mm inputs in edit modal
+  useEffect(() => {
+    if (!editing) return
+    const l = parseNumber(editLength)
+    const h = parseNumber(editHeight)
+    const d = parseNumber(editDepth)
+    if (l != null && h != null && d != null) {
+      const v = Number(((l / 1000) * (h / 1000) * (d / 1000)).toFixed(9))
+      setEditVolume(toDecimalString(v, 9))
+    }
+  }, [editLength, editHeight, editDepth, editing])
+
   const saveEdit = async () => {
     if (!editing) return
     try {
       setSaving(true)
+      // Parse numbers from inputs
+      const priceNum = parseCurrency(editPrice)
+      const areaNum = parseNumber(editArea)
+      const volumeNum = parseNumber(editVolume)
+      const heightNum = parseNumber(editHeight)
+      const lengthNum = parseNumber(editLength)
+      const depthNum = parseNumber(editDepth)
+      // Derive area/volume from mm dimensions if present to ensure correctness
+      const derivedArea = (lengthNum != null && heightNum != null) ? Number(((lengthNum/1000) * (heightNum/1000)).toFixed(6)) : areaNum
+      const derivedVolume = (lengthNum != null && heightNum != null && depthNum != null) ? Number(((lengthNum/1000) * (heightNum/1000) * (depthNum/1000)).toFixed(9)) : volumeNum
       const upd = {
         name: editName.trim() || editing.name,
         category_id: editCat || null,
-        price: parseCurrency(editPrice),
+        price: priceNum,
         unit: editUnit.trim() || 'cái',
         description: editDesc.trim() || null,
-        area: parseNumber(editArea),
-        volume: parseNumber(editVolume),
-        height: parseNumber(editHeight),
-        length: parseNumber(editLength),
-        depth: parseNumber(editDepth),
+        area: derivedArea,
+        volume: derivedVolume,
+        height: heightNum,
+        length: lengthNum,
+        depth: depthNum,
         product_components: editComponents.filter(r => r.expense_object_id).map(r => ({
           expense_object_id: r.expense_object_id,
           unit: r.unit || null,
@@ -199,7 +245,10 @@ export default function ProductCatalog() {
     <div className="mt-4 bg-white border border-gray-200 rounded-lg">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-gray-900">Danh sách sản phẩm</h4>
-        <div className="text-xs text-gray-600">{items.length} mục</div>
+        <div className="flex items-center gap-3">
+          <ProductExcelImport onImportSuccess={load} />
+          <div className="text-xs text-gray-600">{items.length} mục</div>
+        </div>
       </div>
       <div className="overflow-x-auto">
         {loading ? (
@@ -242,12 +291,13 @@ export default function ProductCatalog() {
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold w-56">Tên</th>
                           <th className="px-3 py-2 text-right font-semibold w-24">Đơn giá</th>
+                          <th className="px-3 py-2 text-right font-semibold w-28">Thành tiền</th>
                           <th className="px-3 py-2 text-left font-semibold w-20">Đơn vị</th>
                           <th className="px-3 py-2 text-right font-semibold w-24">Diện tích</th>
                           <th className="px-3 py-2 text-right font-semibold w-24">Thể tích</th>
-                          <th className="px-3 py-2 text-right font-semibold w-24">Cao</th>
-                          <th className="px-3 py-2 text-right font-semibold w-24">Dài</th>
-                          <th className="px-3 py-2 text-right font-semibold w-24">Sâu</th>
+                          <th className="px-3 py-2 text-right font-semibold w-24">Cao (mm)</th>
+                          <th className="px-3 py-2 text-right font-semibold w-24">Dài (mm)</th>
+                          <th className="px-3 py-2 text-right font-semibold w-24">Sâu (mm)</th>
                           <th className="px-3 py-2 text-left font-semibold w-56">Vật tư</th>
                           <th className="px-3 py-2 text-left font-semibold w-24">Trạng thái</th>
                           <th className="px-3 py-2 text-right font-semibold w-24">Thao tác</th>
@@ -258,12 +308,15 @@ export default function ProductCatalog() {
                           <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium text-gray-900">{p.name}</td>
                             <td className="px-3 py-2 text-right">{formatNumber(Number(p.price) || 0)}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                              {p.area != null ? formatNumber((Number(p.price) || 0) * (Number(p.area) || 0)) : '-'}
+                            </td>
                             <td className="px-3 py-2">{p.unit}</td>
                             <td className="px-3 py-2 text-right">{p.area ? `${formatNumber(p.area)} m²` : '-'}</td>
                             <td className="px-3 py-2 text-right">{p.volume ? `${formatNumber(p.volume)} m³` : '-'}</td>
-                            <td className="px-3 py-2 text-right">{p.height ? `${formatNumber(p.height)} cm` : '-'}</td>
-                            <td className="px-3 py-2 text-right">{p.length ? `${formatNumber(p.length)} cm` : '-'}</td>
-                            <td className="px-3 py-2 text-right">{p.depth ? `${formatNumber(p.depth)} cm` : '-'}</td>
+                            <td className="px-3 py-2 text-right">{p.height ? `${formatNumber(p.height)} mm` : '-'}</td>
+                            <td className="px-3 py-2 text-right">{p.length ? `${formatNumber(p.length)} mm` : '-'}</td>
+                            <td className="px-3 py-2 text-right">{p.depth ? `${formatNumber(p.depth)} mm` : '-'}</td>
                             <td className="px-3 py-2">
                               <div className="text-xs text-gray-700 space-y-1">
                                 {Array.isArray((p as any).product_components) && (p as any).product_components.length > 0 ? (
@@ -372,6 +425,20 @@ export default function ProductCatalog() {
                   </div>
                 </div>
 
+                {/* Thành tiền (Đơn giá × Diện tích) */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                  <div className="md:col-span-4">
+                    <label className="block text-sm font-medium text-gray-900 mb-1">Thành tiền (ĐG × DT)</label>
+                    <div className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-right text-gray-900 bg-gray-50">
+                      {(() => {
+                        const priceNum = parseCurrency(editPrice)
+                        const areaNum = (() => { const s = editArea; const normalized = s.replace(/,/g, '.'); const clean = normalized.replace(/[^\d.]/g, ''); return clean ? parseFloat(clean) : 0 })()
+                        return (areaNum || 0) > 0 ? formatNumber(priceNum * areaNum) : '-'
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Kích thước */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-sm font-semibold text-gray-900 mb-3">Kích thước</h4>
@@ -397,7 +464,7 @@ export default function ProductCatalog() {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-900 mb-1">Chiều cao (cm)</label>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Chiều cao (mm)</label>
                       <input
                         type="text"
                         value={editHeight}
@@ -407,7 +474,7 @@ export default function ProductCatalog() {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-900 mb-1">Dài (cm)</label>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Dài (mm)</label>
                       <input
                         type="text"
                         value={editLength}
@@ -417,7 +484,7 @@ export default function ProductCatalog() {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-900 mb-1">Sâu (cm)</label>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Sâu (mm)</label>
                       <input
                         type="text"
                         value={editDepth}

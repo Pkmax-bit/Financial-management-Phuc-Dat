@@ -14,10 +14,12 @@ import {
   CreditCard,
   FileText,
   Eye,
-  Filter
+  Filter,
+  Star
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Customer } from '@/types'
+import { customerApi } from '@/lib/api'
 
 interface CustomersTabProps {
   searchTerm: string
@@ -165,6 +167,18 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
   const handleCreateInvoice = (customerId: string) => {
     console.log('Create invoice for customer:', customerId)
     // Navigate to create invoice with pre-selected customer
+  }
+
+  const togglePotentialCustomer = async (customer: Customer) => {
+    try {
+      const newStatus = customer.status === 'prospect' ? 'active' : 'prospect'
+      await customerApi.updateCustomer(customer.id, { status: newStatus })
+      // Refresh customers list
+      await fetchCustomers()
+    } catch (err: unknown) {
+      console.error('Error toggling potential customer:', err)
+      alert((err as Error)?.message || 'Không thể cập nhật trạng thái')
+    }
   }
 
   // Filter and sort customers
@@ -333,6 +347,9 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                 <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Trạng thái
                 </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-black uppercase tracking-wider">
+                  Tiềm năng
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                   Hành động
                 </th>
@@ -405,6 +422,24 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(customer.status)}`}>
                       {getStatusLabel(customer.status)}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        togglePotentialCustomer(customer)
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                      title={customer.status === 'prospect' ? 'Bỏ đánh dấu khách hàng tiềm năng' : 'Đánh dấu khách hàng tiềm năng'}
+                    >
+                      <Star 
+                        className={`h-5 w-5 ${
+                          customer.status === 'prospect' 
+                            ? 'fill-yellow-400 text-yellow-400' 
+                            : 'text-gray-300 hover:text-yellow-400'
+                        } transition-colors`} 
+                      />
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     <div className="flex space-x-2">

@@ -58,6 +58,9 @@ async def get_material_adjustment_rules(
                 name=row.get("name"),
                 description=row.get("description"),
                 is_active=row["is_active"],
+                max_adjustment_percentage=row.get("max_adjustment_percentage"),
+                max_adjustment_value=row.get("max_adjustment_value"),
+                allowed_category_ids=row.get("allowed_category_ids"),
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
                 created_by=str(row["created_by"]) if row.get("created_by") else None
@@ -105,6 +108,9 @@ async def get_material_adjustment_rule(
             name=row.get("name"),
             description=row.get("description"),
             is_active=row["is_active"],
+            max_adjustment_percentage=row.get("max_adjustment_percentage"),
+            max_adjustment_value=row.get("max_adjustment_value"),
+            allowed_category_ids=row.get("allowed_category_ids"),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             created_by=str(row["created_by"]) if row.get("created_by") else None
@@ -162,6 +168,9 @@ async def create_material_adjustment_rule(
             name=row.get("name"),
             description=row.get("description"),
             is_active=row["is_active"],
+            max_adjustment_percentage=row.get("max_adjustment_percentage"),
+            max_adjustment_value=row.get("max_adjustment_value"),
+            allowed_category_ids=row.get("allowed_category_ids"),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             created_by=str(row["created_by"]) if row.get("created_by") else None

@@ -4282,11 +4282,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                             </tr>
                             {selectedExpenseObjectIds.length > 0 && (
                             <tr className="bg-gray-50">
-                              <td className="px-3 py-2 text-left font-semibold bg-gray-50 sticky left-0 z-10" colSpan={totalColSpan}>Tổng chi phí</td>
-                              <td className="px-3 py-2 text-right font-semibold">
+                              <td className="px-3 py-1.5 text-left text-xs font-medium bg-gray-50 sticky left-0 z-10" colSpan={totalColSpan}>Tổng chi phí</td>
+                              <td className="px-3 py-1.5 text-right text-xs font-medium">
                                 {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
                               </td>
-                              <td className="px-3 py-2"></td>
+                              <td className="px-3 py-1.5"></td>
                             </tr>
                             )}
                             {selectedExpenseObjectIds.length > 0 && (
@@ -4382,15 +4382,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           })()
                         )}
                       </div>
-                      <div className="text-sm text-gray-600">Tổng chi phí</div>
+                      <div className="text-xs text-gray-600">Tổng chi phí</div>
                     </div>
                   </div>
                   
                   {/* Breakdown chi tiết các đối tượng con */}
                   {selectedExpenseObjectIds.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-300">
-                      <div className="text-sm text-black font-medium mb-2">📋 Chi tiết các đối tượng chi phí con:</div>
-                      <div className="space-y-2">
+                    <div className="mt-2 pt-2 border-t border-gray-300">
+                      <div className="text-xs text-black font-medium mb-1.5">📋 Chi tiết các đối tượng chi phí con:</div>
+                      <div className="space-y-1.5">
                         {selectedExpenseObjectIds.map((id) => {
                           const expenseObject = expenseObjectsOptions.find(o => o.id === id)
                           const totalAmount = directObjectTotals[id] || expenseObjectTotals[id] || 0
@@ -4403,24 +4403,24 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           const percentage = parentTotal > 0 ? (totalAmount / parentTotal * 100) : 0
                           
                           return (
-                            <div key={id} className="flex items-center justify-between text-sm py-2 px-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-3 h-3 rounded-full bg-gray-600"></div>
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-black font-medium">{expenseObject?.name || 'Đối tượng'}</span>
-                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                            <div key={id} className="flex items-center justify-between text-xs py-1.5 px-2 bg-gray-50 rounded border border-gray-200">
+                              <div className="flex items-center space-x-2">
+                                <div className="w-2 h-2 rounded-full bg-gray-600"></div>
+                                <div className="flex items-center space-x-1.5">
+                                  <span className="text-black font-medium text-xs">{expenseObject?.name || 'Đối tượng'}</span>
+                                  <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
                                     {expenseObject?.level || 2}
                                   </span>
                                 </div>
                               </div>
-                              <div className="flex items-center space-x-4">
+                              <div className="flex items-center space-x-3">
                                 <div className="text-right">
                                   <div className="text-gray-600 text-xs">Tỷ lệ</div>
-                                  <div className="font-medium text-black">{percentage.toFixed(1)}%</div>
+                                  <div className="font-medium text-black text-xs">{percentage.toFixed(1)}%</div>
                                 </div>
                                 <div className="text-right">
                                   <div className="text-gray-600 text-xs">Số tiền</div>
-                                  <div className="font-bold text-black">
+                                  <div className="font-medium text-black text-xs">
                                     {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}
                                   </div>
                                 </div>
@@ -4520,18 +4520,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   
                   {/* Hiển thị chi phí đối tượng cha cho Supplier */}
                   {userRole === 'Supplier' && category === 'actual' && workshopParentObject && (
-                    <div className="border-t-2 border-gray-400 pt-3 mt-3 bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-3 h-3 rounded-full bg-gray-600"></div>
-                          <span className="text-black font-bold text-base">{workshopParentObject.name} (Tổng)</span>
-                          <span className="text-xs text-gray-700 bg-gray-200 px-2 py-1 rounded-full">
+                    <div className="border-t border-gray-300 pt-2 mt-2 bg-gray-50 rounded-lg p-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-1.5">
+                          <div className="w-2 h-2 rounded-full bg-gray-600"></div>
+                          <span className="text-black font-medium text-xs">{workshopParentObject.name} (Tổng)</span>
+                          <span className="text-xs text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded-full">
                             Cha = Tổng các con
                           </span>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <span className="text-black font-medium">100.0%</span>
-                          <span className="font-bold text-black text-lg">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-black text-xs">100.0%</span>
+                          <span className="font-medium text-black text-sm">
                             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
                               (() => {
                                 const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
@@ -4543,22 +4543,22 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           </span>
                         </div>
                       </div>
-                      <div className="text-xs text-gray-600 mt-1 italic">
+                      <div className="text-xs text-gray-500 mt-0.5 italic">
                         Tổng chi phí đối tượng cha = Tổng các chi phí đối tượng con
                       </div>
                     </div>
                   )}
                   
                   {/* Total Summary */}
-                  <div className="border-t border-gray-300 pt-1 mt-2">
-                    <div className="flex items-center justify-between text-sm font-bold">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 rounded-full bg-gray-600"></div>
-                        <span className="text-black">Tổng cộng</span>
+                  <div className="border-t border-gray-300 pt-1 mt-1.5">
+                    <div className="flex items-center justify-between text-xs font-medium">
+                      <div className="flex items-center space-x-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
+                        <span className="text-black text-xs">Tổng cộng</span>
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-black font-bold">100.0%</span>
-                        <span className="font-bold text-black">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-black text-xs">100.0%</span>
+                        <span className="font-medium text-black text-sm">
                           {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
                             (() => {
                               const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
@@ -4573,20 +4573,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     
                     {/* Hiển thị tổng đối tượng cha = tổng đối tượng con */}
                     {workshopParentObject && selectedExpenseObjectIds.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-gray-200">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-                            <span className="text-black font-medium">🏢 Tổng cấp cha = 📋 Tổng cấp con</span>
+                      <div className="mt-1.5 pt-1.5 border-t border-gray-200">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center space-x-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                            <span className="text-black text-xs">🏢 Tổng cấp cha = 📋 Tổng cấp con</span>
                           </div>
-                          <div className="flex items-center space-x-3">
+                          <div className="flex items-center space-x-2">
                             <div className="flex items-center space-x-1 text-xs">
                               <span className="text-blue-600">🏢</span>
                               <span className="text-gray-600">Cha =</span>
                               <span className="text-green-600">📋</span>
                               <span className="text-gray-600">Con</span>
                             </div>
-                            <span className="font-semibold text-black">
+                            <span className="font-medium text-black text-xs">
                               {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
                                 (() => {
                                   const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
@@ -4598,7 +4598,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                             </span>
                           </div>
                         </div>
-                        <div className="mt-1 text-xs text-gray-600">
+                        <div className="mt-0.5 text-xs text-gray-500">
                           <span className="font-medium text-black">{workshopParentObject.name}</span> = Tổng các đối tượng con
                         </div>
                       </div>

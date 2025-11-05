@@ -9,6 +9,12 @@ type Category = {
 }
 
 const formatNumber = (value: number): string => new Intl.NumberFormat('vi-VN').format(value)
+// Format decimal for inputs (non-locale, keeps '.' as decimal, trims trailing zeros)
+const formatDecimal = (value: number, maxFractionDigits = 6): string => {
+  if (!isFinite(value)) return ''
+  const fixed = value.toFixed(maxFractionDigits)
+  return fixed.replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1')
+}
 // Parse Vietnamese currency-like input: remove all non-digits so '1.000.000' -> '1000000'
 const parseCurrency = (s: string): number => {
   const clean = s.replace(/[^\d]/g, '')
@@ -114,14 +120,16 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
 
   // Parse number for dimension fields (similar to price but allows decimals)
   const parseNumber = (s: string): number | null => {
-    const clean = s.replace(/[^\d.]/g, '')
+    const normalized = s.replace(/,/g, '.')
+    const clean = normalized.replace(/[^\d.]/g, '')
     return clean ? parseFloat(clean) : null
   }
 
   const onDimensionChange = (val: string, setter: (val: number | null) => void, displaySetter: (val: string) => void) => {
     const num = parseNumber(val)
     setter(num)
-    displaySetter(num ? formatNumber(num) : val)
+    // Keep user's raw input (no thousand separators) to avoid showing 2.800 for 2800
+    displaySetter(val)
   }
 
   // Auto-calculate area/volume with inputs in mm
@@ -129,17 +137,19 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
   // volume (m³) = (length_mm/1000) × (height_mm/1000) × (depth_mm/1000)
   useEffect(() => {
     if (length != null && height != null) {
-      const a = Number((((length / 1000) * (height / 1000))).toFixed(6))
-      setArea(a)
-      setAreaDisplay(formatNumber(a))
+      const a = (length / 1000) * (height / 1000)
+      const rounded = Number(a.toFixed(6))
+      setArea(rounded)
+      setAreaDisplay(formatDecimal(rounded, 6))
     }
   }, [length, height])
 
   useEffect(() => {
     if (length != null && height != null && depth != null) {
-      const v = Number((((length / 1000) * (height / 1000) * (depth / 1000))).toFixed(6))
-      setVolume(v)
-      setVolumeDisplay(formatNumber(v))
+      const v = (length / 1000) * (height / 1000) * (depth / 1000)
+      const rounded = Number(v.toFixed(9))
+      setVolume(rounded)
+      setVolumeDisplay(formatDecimal(rounded, 9))
     }
   }, [length, height, depth])
 
@@ -300,6 +310,12 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
             inputMode="numeric"
             autoComplete="off"
           />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-900 mb-1">Thành tiền (ĐG × DT)</label>
+          <div className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-right text-gray-900 bg-gray-50">
+            {area != null ? formatNumber((Number(price) || 0) * (Number(area) || 0)) : '-'}
+          </div>
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-900 mb-1">Đơn vị</label>

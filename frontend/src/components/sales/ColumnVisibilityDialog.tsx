@@ -16,7 +16,7 @@ const COLUMN_LABELS = {
   description: 'Mô tả',
   quantity: 'Số lượng',
   unit: 'Đơn vị',
-  unit_price: 'Đơn giá',
+  unit_price: 'Đơn giá / m²',
   total_price: 'Thành tiền',
   area: 'Diện tích',
   volume: 'Thể tích',

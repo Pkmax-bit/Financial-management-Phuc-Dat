@@ -17,7 +17,8 @@ class MaterialAdjustmentService:
         expense_object_id: str,
         dimension_type: str,
         old_value: Optional[float],
-        new_value: float
+        new_value: float,
+        product_category_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Lấy các quy tắc áp dụng được dựa trên thay đổi kích thước/số lượng
@@ -27,6 +28,7 @@ class MaterialAdjustmentService:
             dimension_type: Loại kích thước (area, volume, height, length, depth, quantity)
             old_value: Giá trị cũ
             new_value: Giá trị mới
+            product_category_id: ID loại sản phẩm (để kiểm tra allowed_category_ids)
             
         Returns:
             Danh sách quy tắc áp dụng được, đã sắp xếp theo priority
@@ -59,6 +61,14 @@ class MaterialAdjustmentService:
             
             applicable_rules = []
             for rule in result.data:
+                # Kiểm tra allowed_category_ids: nếu rule có allowed_category_ids, 
+                # sản phẩm phải thuộc một trong các category đó
+                allowed_category_ids = rule.get("allowed_category_ids")
+                if allowed_category_ids and isinstance(allowed_category_ids, list) and len(allowed_category_ids) > 0:
+                    # Rule có giới hạn category, kiểm tra product_category_id
+                    if not product_category_id or product_category_id not in allowed_category_ids:
+                        continue  # Skip rule này vì không khớp category
+                
                 rule_change_direction = rule.get("change_direction", "increase")
                 
                 # Kiểm tra hướng thay đổi có khớp không
