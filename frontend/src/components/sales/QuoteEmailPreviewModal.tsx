@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Send, Loader2, Edit2, Save, Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Send, Loader2, Edit2, Save, Plus, Trash2, Upload, Image as ImageIcon } from 'lucide-react'
 
 interface PaymentTermItem {
   description: string
@@ -16,6 +16,18 @@ interface QuoteEmailPreviewModalProps {
   onConfirmSend: (customData?: {
     paymentTerms?: PaymentTermItem[]
     additionalNotes?: string
+    defaultNotes?: string[]
+    companyName?: string
+    companyShowroom?: string
+    companyFactory?: string
+    companyWebsite?: string
+    companyHotline?: string
+    companyLogoUrl?: string
+    companyLogoBase64?: string
+    bankAccountName?: string
+    bankAccountNumber?: string
+    bankName?: string
+    bankBranch?: string
     rawHtml?: string
   }) => void
 }
@@ -37,6 +49,31 @@ export default function QuoteEmailPreviewModal({
   ])
   const [additionalNotes, setAdditionalNotes] = useState('')
   const [originalHtml, setOriginalHtml] = useState<string>('')
+  
+  // Default notes (GHI CHÚ section)
+  const [defaultNotes, setDefaultNotes] = useState<string[]>([
+    'Nếu phụ kiện, thiết bị của khách hàng mà CTy lắp sẽ tính công 200k/1 bộ',
+    'Giá đã bao gồm nhân công lắp đặt trọn gói trong khu vực TPHCM',
+    'Giá chưa bao gồm Thuế GTGT 10%',
+    'Thời gian lắp đặt từ 7 - 9 ngày, không tính chủ nhật hoặc ngày Lễ',
+    'Bản vẽ 3D mang tính chất minh họa (giống thực tế 80% - 90%)',
+    'Khách hàng sẽ kiểm tra lại thông tin sau khi lắp đặt hoàn thiện và bàn giao'
+  ])
+  
+  // Company info fields
+  const [companyName, setCompanyName] = useState('')
+  const [companyShowroom, setCompanyShowroom] = useState('')
+  const [companyFactory, setCompanyFactory] = useState('')
+  const [companyWebsite, setCompanyWebsite] = useState('')
+  const [companyHotline, setCompanyHotline] = useState('')
+  const [companyLogoUrl, setCompanyLogoUrl] = useState('')
+  const [companyLogoBase64, setCompanyLogoBase64] = useState('')
+  
+  // Bank info fields
+  const [bankAccountName, setBankAccountName] = useState('')
+  const [bankAccountNumber, setBankAccountNumber] = useState('')
+  const [bankName, setBankName] = useState('')
+  const [bankBranch, setBankBranch] = useState('')
 
   // Update preview HTML when payment terms change
   const updatePreviewWithPaymentTerms = (html: string): string => {
@@ -133,20 +170,150 @@ export default function QuoteEmailPreviewModal({
     return updatedHtml
   }
 
+  // Ref to store debounce timer
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Function to load default logo
+  const loadDefaultLogo = async () => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+      
+      // Call API to get default logo as base64
+      const response = await fetch(`http://localhost:8000/api/sales/default-logo`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const blob = await response.blob()
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setCompanyLogoBase64(reader.result as string)
+          setCompanyLogoUrl('')
+        }
+        reader.readAsDataURL(blob)
+      }
+    } catch (err) {
+      console.error('Error loading default logo:', err)
+    }
+  }
+
   useEffect(() => {
     if (isOpen && quoteId) {
       fetchPreview()
     }
   }, [isOpen, quoteId])
 
-  // Update preview when payment terms or additional notes change during editing
-  useEffect(() => {
-    if (isEditing && originalHtml) {
-      let updated = updatePreviewWithPaymentTerms(originalHtml)
-      updated = updatePreviewWithAdditionalNotes(updated)
-      setHtmlContent(updated)
+  // Function to fetch preview with current form data
+  const fetchPreviewWithCurrentData = async () => {
+    if (!quoteId || !isOpen) return
+    
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+
+      // Prepare request body with current form data
+      const requestBody: any = {}
+      
+      // Always send payment terms (even if empty, backend will use defaults)
+      if (paymentTerms && Array.isArray(paymentTerms)) {
+        requestBody.custom_payment_terms = paymentTerms
+      } else {
+        // Send default payment terms if empty
+        requestBody.custom_payment_terms = [
+          { description: 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', amount: '', received: false },
+          { description: 'CỌC ĐỢT 2: 50% KÍ HỢP ĐỒNG, RA ĐƠN SẢN XUẤT', amount: '', received: false },
+          { description: 'CÒN LẠI : KHI BÀN GIAO VÀ KIỂM TRA NGHIỆM THU CÔNG TRÌNH', amount: '', received: false }
+        ]
+      }
+      if (additionalNotes && additionalNotes.trim()) {
+        requestBody.additional_notes = additionalNotes.trim()
+      }
+      if (defaultNotes && defaultNotes.length > 0) {
+        requestBody.default_notes = defaultNotes.filter(note => note && note.trim())
+      }
+      if (companyName) requestBody.company_name = companyName
+      if (companyShowroom) requestBody.company_showroom = companyShowroom
+      if (companyFactory) requestBody.company_factory = companyFactory
+      if (companyWebsite) requestBody.company_website = companyWebsite
+      if (companyHotline) requestBody.company_hotline = companyHotline
+      if (companyLogoUrl) requestBody.company_logo_url = companyLogoUrl
+      if (companyLogoBase64) requestBody.company_logo_base64 = companyLogoBase64
+      if (bankAccountName) requestBody.bank_account_name = bankAccountName
+      if (bankAccountNumber) requestBody.bank_account_number = bankAccountNumber
+      if (bankName) requestBody.bank_name = bankName
+      if (bankBranch) requestBody.bank_branch = bankBranch
+
+      // Call preview API with POST to send current data
+      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      if (!response.ok) {
+        console.error('Failed to update preview')
+        return
+      }
+
+      const result = await response.json()
+      
+      // Replace logo src for preview
+      let html = result.html
+      html = html.replace(/cid:company_logo/g, 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjMyIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5MT0dPPC90ZXh0Pgo8L3N2Zz4=')
+      html = html.replace(/color:\s*#333/g, 'color: #000000')
+      html = html.replace(/color:\s*#111/g, 'color: #000000')
+      html = html.replace(/color:\s*#374151/g, 'color: #000000')
+      
+      setHtmlContent(html)
+    } catch (err) {
+      console.error('Error updating preview:', err)
     }
-  }, [paymentTerms, additionalNotes, isEditing, originalHtml])
+  }
+
+  // Update preview immediately when form fields change (only frontend, no backend sync)
+  useEffect(() => {
+    if (!isOpen || !originalHtml) return
+    
+    // Update HTML directly on frontend for instant feedback (no backend call)
+    let updatedHtml = originalHtml
+    
+    // Update payment terms directly in HTML
+    if (paymentTerms && paymentTerms.length > 0) {
+      updatedHtml = updatePreviewWithPaymentTerms(updatedHtml)
+    }
+    
+    // Update additional notes directly in HTML
+    if (additionalNotes) {
+      updatedHtml = updatePreviewWithAdditionalNotes(updatedHtml)
+    }
+    
+    // Update preview immediately with direct HTML update (no backend sync)
+    setHtmlContent(updatedHtml)
+  }, [
+    paymentTerms, 
+    additionalNotes,
+    isOpen,
+    originalHtml
+  ])
 
   const fetchPreview = async () => {
     setLoading(true)
@@ -176,16 +343,56 @@ export default function QuoteEmailPreviewModal({
 
       const result = await response.json()
       
-      // Load draft data if available
-      if (result.draft) {
-        if (result.draft.custom_payment_terms && Array.isArray(result.draft.custom_payment_terms)) {
-          setPaymentTerms(result.draft.custom_payment_terms)
-          console.log('📝 Loaded draft payment terms:', result.draft.custom_payment_terms)
+      // Load customization data if available
+      if (result.customization) {
+        const customization = result.customization
+        
+        // Payment terms
+        if (customization.custom_payment_terms && Array.isArray(customization.custom_payment_terms)) {
+          setPaymentTerms(customization.custom_payment_terms)
+          console.log('📝 Loaded customization payment terms:', customization.custom_payment_terms)
         }
-        if (result.draft.additional_notes) {
-          setAdditionalNotes(result.draft.additional_notes)
-          console.log('📝 Loaded draft additional notes:', result.draft.additional_notes)
+        
+        // Additional notes
+        if (customization.additional_notes) {
+          setAdditionalNotes(customization.additional_notes)
+          console.log('📝 Loaded customization additional notes:', customization.additional_notes)
         }
+        
+        // Default notes (GHI CHÚ section) - load from company_info JSONB
+        if (customization.company_info) {
+          try {
+            const companyInfo = typeof customization.company_info === 'string' 
+              ? JSON.parse(customization.company_info) 
+              : customization.company_info
+            if (companyInfo && companyInfo.default_notes && Array.isArray(companyInfo.default_notes)) {
+              setDefaultNotes(companyInfo.default_notes)
+              console.log('📝 Loaded customization default notes:', companyInfo.default_notes)
+            }
+          } catch (e) {
+            console.error('Error parsing company_info:', e)
+          }
+        }
+        
+        // Company info
+        if (customization.company_name) setCompanyName(customization.company_name)
+        if (customization.company_showroom) setCompanyShowroom(customization.company_showroom)
+        if (customization.company_factory) setCompanyFactory(customization.company_factory)
+        if (customization.company_website) setCompanyWebsite(customization.company_website)
+        if (customization.company_hotline) setCompanyHotline(customization.company_hotline)
+        if (customization.company_logo_url) setCompanyLogoUrl(customization.company_logo_url)
+        if (customization.company_logo_base64) setCompanyLogoBase64(customization.company_logo_base64)
+        
+        // Load default logo if no logo is set
+        if (!customization.company_logo_url && !customization.company_logo_base64) {
+          loadDefaultLogo()
+        }
+        
+        // Bank info
+        if (customization.bank_account_name) setBankAccountName(customization.bank_account_name)
+        if (customization.bank_account_number) setBankAccountNumber(customization.bank_account_number)
+        if (customization.bank_name) setBankName(customization.bank_name)
+        if (customization.bank_branch) setBankBranch(customization.bank_branch)
       }
       
       // Replace logo src for preview (use placeholder or base64)
@@ -214,14 +421,14 @@ export default function QuoteEmailPreviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-7xl max-h-[95vh] flex flex-col">
+      <div className="bg-white shadow-xl w-full h-full flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Xem trước & Chỉnh sửa email báo giá</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={async () => {
-                if (isEditing) {
+                // Always save when clicking save button
                   // Update preview before saving
                   if (originalHtml) {
                     let updatedHtml = updatePreviewWithPaymentTerms(originalHtml)
@@ -243,14 +450,38 @@ export default function QuoteEmailPreviewModal({
                     const session = await supabase.auth.getSession()
                     const token = session.data.session?.access_token
                     
-                    // Prepare request body
+                    // Prepare request body with all customization fields
                     const requestBody: any = {}
+                    
+                    // Payment terms
                     if (paymentTerms && paymentTerms.length > 0) {
                       requestBody.custom_payment_terms = paymentTerms
                     }
+                    
+                    // Additional notes
                     if (additionalNotes && additionalNotes.trim()) {
                       requestBody.additional_notes = additionalNotes.trim()
                     }
+                    
+                    // Default notes (GHI CHÚ section)
+                    if (defaultNotes && defaultNotes.length > 0) {
+                      requestBody.default_notes = defaultNotes.filter(note => note && note.trim())
+                    }
+                    
+                    // Company info
+                    if (companyName) requestBody.company_name = companyName
+                    if (companyShowroom) requestBody.company_showroom = companyShowroom
+                    if (companyFactory) requestBody.company_factory = companyFactory
+                    if (companyWebsite) requestBody.company_website = companyWebsite
+                    if (companyHotline) requestBody.company_hotline = companyHotline
+                    if (companyLogoUrl) requestBody.company_logo_url = companyLogoUrl
+                    if (companyLogoBase64) requestBody.company_logo_base64 = companyLogoBase64
+                    
+                    // Bank info
+                    if (bankAccountName) requestBody.bank_account_name = bankAccountName
+                    if (bankAccountNumber) requestBody.bank_account_number = bankAccountNumber
+                    if (bankName) requestBody.bank_name = bankName
+                    if (bankBranch) requestBody.bank_branch = bankBranch
                     
                     console.log('📝 Saving email draft:', requestBody)
                     
@@ -280,23 +511,12 @@ export default function QuoteEmailPreviewModal({
                   } finally {
                     setLoading(false)
                   }
-                }
-                setIsEditing(!isEditing)
               }}
               className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
-              {isEditing ? (
-                <>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {loading ? 'Đang lưu...' : 'Lưu chỉnh sửa'}
-                </>
-              ) : (
-                <>
-                  <Edit2 className="w-4 h-4" />
-                  Chỉnh sửa
-                </>
-              )}
             </button>
             <button
               onClick={onClose}
@@ -308,7 +528,7 @@ export default function QuoteEmailPreviewModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-4 bg-gray-50">
+        <div className="flex-1 overflow-hidden flex flex-col bg-gray-50">
           {loading && (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -332,9 +552,243 @@ export default function QuoteEmailPreviewModal({
           )}
 
           {!loading && !error && (
-            <div style={{ maxWidth: '900px', margin: '0 auto' }} className="space-y-4">
+            <div className="flex gap-4 h-full flex-1 overflow-hidden">
+              {/* Left side: Email Preview */}
+              <div className="flex-1 overflow-auto pr-4 p-4">
+                {htmlContent && (
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: htmlContent }}
+                      className="email-preview"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Right side: Edit Forms (always visible) */}
+              <div className="w-[450px] flex-shrink-0 overflow-y-auto p-4 space-y-4 bg-gray-50 border-l border-gray-200">
+                {/* Reset to Default Button */}
+                <div className="bg-white rounded-lg shadow-sm p-4 border border-orange-200">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      // Reset all fields to default
+                      setCompanyName('')
+                      setCompanyShowroom('')
+                      setCompanyFactory('')
+                      setCompanyWebsite('')
+                      setCompanyHotline('')
+                      setCompanyLogoUrl('')
+                      setCompanyLogoBase64('')
+                      setBankAccountName('')
+                      setBankAccountNumber('')
+                      setBankName('')
+                      setBankBranch('')
+                      setAdditionalNotes('')
+                      setDefaultNotes([
+                        'Nếu phụ kiện, thiết bị của khách hàng mà CTy lắp sẽ tính công 200k/1 bộ',
+                        'Giá đã bao gồm nhân công lắp đặt trọn gói trong khu vực TPHCM',
+                        'Giá chưa bao gồm Thuế GTGT 10%',
+                        'Thời gian lắp đặt từ 7 - 9 ngày, không tính chủ nhật hoặc ngày Lễ',
+                        'Bản vẽ 3D mang tính chất minh họa (giống thực tế 80% - 90%)',
+                        'Khách hàng sẽ kiểm tra lại thông tin sau khi lắp đặt hoàn thiện và bàn giao'
+                      ])
+                      setPaymentTerms([
+                        { description: 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', amount: '', received: false },
+                        { description: 'CỌC ĐỢT 2: 50% KÍ HỢP ĐỒNG, RA ĐƠN SẢN XUẤT', amount: '', received: false },
+                        { description: 'CÒN LẠI : KHI BÀN GIAO VÀ KIỂM TRA NGHIỆM THU CÔNG TRÌNH', amount: '', received: false }
+                      ])
+                      
+                      // Load default logo
+                      await loadDefaultLogo()
+                      
+                      // Reload preview from backend
+                      await fetchPreview()
+                    }}
+                    className="w-full px-4 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-300 rounded-lg hover:bg-orange-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Quay về mặc định
+                  </button>
+                </div>
+
+                {/* Company Info Editor */}
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin công ty</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tên công ty</label>
+                      <input
+                        type="text"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                        placeholder="Công Ty TNHH Nhôm Kính Phúc Đạt"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ Showroom</label>
+                      <input
+                        type="text"
+                        value={companyShowroom}
+                        onChange={(e) => setCompanyShowroom(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                        placeholder="480/3 Tân Kỳ Tân Quý, P. Sơn Kỳ, Q. Tân Phú, TP.HCM"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ Xưởng sản xuất</label>
+                      <input
+                        type="text"
+                        value={companyFactory}
+                        onChange={(e) => setCompanyFactory(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                        placeholder="334/6A Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                        <input
+                          type="text"
+                          value={companyWebsite}
+                          onChange={(e) => setCompanyWebsite(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                          placeholder="https://www.kinhphucdat.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Hotline</label>
+                        <input
+                          type="text"
+                          value={companyHotline}
+                          onChange={(e) => setCompanyHotline(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                          placeholder="0901.116.118"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Logo</label>
+                      <div className="space-y-3">
+                        {/* Logo Preview */}
+                        {(companyLogoBase64 || companyLogoUrl) && (
+                          <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <img 
+                              src={companyLogoBase64 || companyLogoUrl} 
+                              alt="Company Logo" 
+                              className="h-16 w-auto object-contain border border-gray-300 rounded"
+                              onError={(e) => {
+                                // Fallback nếu không load được
+                                e.currentTarget.style.display = 'none'
+                              }}
+                            />
+                            <div className="flex-1">
+                              <p className="text-xs text-gray-600">
+                                {companyLogoBase64 ? 'Logo (Base64)' : 'Logo (URL)'}
+                              </p>
+                              <button
+                                onClick={() => {
+                                  setCompanyLogoBase64('')
+                                  setCompanyLogoUrl('')
+                                }}
+                                className="mt-1 text-xs text-red-600 hover:text-red-800"
+                              >
+                                Xóa logo
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Upload File */}
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-2">Tải lên logo từ file:</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                const reader = new FileReader()
+                                reader.onloadend = () => {
+                                  const base64String = reader.result as string
+                                  setCompanyLogoBase64(base64String)
+                                  setCompanyLogoUrl('') // Clear URL khi upload file
+                                }
+                                reader.readAsDataURL(file)
+                              }
+                            }}
+                            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          />
+                        </div>
+                        
+                        {/* Logo URL */}
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-2">Hoặc nhập URL logo:</label>
+                          <input
+                            type="text"
+                            value={companyLogoUrl}
+                            onChange={(e) => {
+                              setCompanyLogoUrl(e.target.value)
+                              setCompanyLogoBase64('') // Clear base64 khi nhập URL
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black text-sm"
+                            placeholder="https://example.com/logo.png"
+                          />
+                        </div>
+                        
+                        {/* Default Logo Button */}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            // Load default logo from backend
+                            try {
+                              const { createClient } = await import('@supabase/supabase-js')
+                              const supabase = createClient(
+                                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                              )
+                              
+                              const session = await supabase.auth.getSession()
+                              const token = session.data.session?.access_token
+                              
+                              // Call API to get default logo as base64
+                              const response = await fetch(`http://localhost:8000/api/sales/default-logo`, {
+                                method: 'GET',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`
+                                }
+                              })
+                              
+                              if (response.ok) {
+                                const blob = await response.blob()
+                                const reader = new FileReader()
+                                reader.onloadend = () => {
+                                  setCompanyLogoBase64(reader.result as string)
+                                  setCompanyLogoUrl('')
+                                }
+                                reader.readAsDataURL(blob)
+                              } else {
+                                // Fallback: Set default path
+                                setCompanyLogoUrl('C:\\Projects\\Financial-management-PhucDat\\image\\logo_phucdat.jpg')
+                              }
+                            } catch (err) {
+                              console.error('Error loading default logo:', err)
+                              // Fallback: Set default path
+                              setCompanyLogoUrl('C:\\Projects\\Financial-management-PhucDat\\image\\logo_phucdat.jpg')
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                          Sử dụng logo mặc định
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+
               {/* Editable Payment Terms */}
-              {isEditing && (
                 <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Chỉnh sửa phương thức thanh toán</h3>
@@ -419,22 +873,103 @@ export default function QuoteEmailPreviewModal({
                     </table>
                   </div>
                 </div>
-              )}
 
-              {/* Email Preview */}
-              {htmlContent && (
-                <div 
-                  className="bg-white rounded-lg shadow-sm p-4"
-                >
-                  <div 
-                    dangerouslySetInnerHTML={{ __html: htmlContent }}
-                    className="email-preview"
+                {/* Bank Info Editor */}
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Thông tin tài khoản ngân hàng</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tên chủ tài khoản</label>
+                      <input
+                        type="text"
+                        value={bankAccountName}
+                        onChange={(e) => setBankAccountName(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                        placeholder="CÔNG TY TNHH NHÔM KÍNH PHÚC ĐẠT"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Số tài khoản</label>
+                      <input
+                        type="text"
+                        value={bankAccountNumber}
+                        onChange={(e) => setBankAccountNumber(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                        placeholder="197877019"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tên ngân hàng</label>
+                        <input
+                          type="text"
+                          value={bankName}
+                          onChange={(e) => setBankName(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                          placeholder="Ngân Hàng TMCP Á Châu (ACB)"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Chi nhánh</label>
+                        <input
+                          type="text"
+                          value={bankBranch}
+                          onChange={(e) => setBankBranch(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                          placeholder="PGD Gò Mây"
                   />
                 </div>
-              )}
+                    </div>
+                  </div>
+                  </div>
+
+                {/* Default Notes Editor (GHI CHÚ section) */}
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Chỉnh sửa GHI CHÚ</h3>
+                      <button
+                        onClick={() => {
+                          setDefaultNotes([...defaultNotes, ''])
+                        }}
+                        className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Thêm ghi chú
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {defaultNotes.map((note, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="text-gray-500 text-sm w-6">•</span>
+                          <input
+                            type="text"
+                            value={note}
+                            onChange={(e) => {
+                              const newNotes = [...defaultNotes]
+                              newNotes[index] = e.target.value
+                              setDefaultNotes(newNotes)
+                            }}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black text-sm"
+                            placeholder="Nhập ghi chú..."
+                          />
+                          <button
+                            onClick={() => {
+                              if (defaultNotes.length > 1) {
+                                setDefaultNotes(defaultNotes.filter((_, i) => i !== index))
+                              }
+                            }}
+                            disabled={defaultNotes.length === 1}
+                            className="p-1.5 text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            title="Xóa ghi chú"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
               {/* Additional Notes Editor */}
-              {isEditing && (
                 <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Thêm ghi chú trước khi gửi</h3>
                   <textarea
@@ -444,7 +979,7 @@ export default function QuoteEmailPreviewModal({
                     placeholder="Nhập thêm ghi chú hoặc thông tin bổ sung sẽ được thêm vào email..."
                   />
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
@@ -459,16 +994,22 @@ export default function QuoteEmailPreviewModal({
           </button>
           <button
             onClick={() => {
-              // Require saving edits before sending
-              if (isEditing) {
-                alert('Vui lòng lưu chỉnh sửa trước khi gửi email.');
-                return;
-              }
-              
-              // Send with current data and the exact preview HTML
+              // Send with all current customization data
               onConfirmSend({
                 paymentTerms,
                 additionalNotes,
+                defaultNotes: defaultNotes.filter(note => note && note.trim()),
+                companyName,
+                companyShowroom,
+                companyFactory,
+                companyWebsite,
+                companyHotline,
+                companyLogoUrl,
+                companyLogoBase64,
+                bankAccountName,
+                bankAccountNumber,
+                bankName,
+                bankBranch,
                 rawHtml: htmlContent
               })
             }}

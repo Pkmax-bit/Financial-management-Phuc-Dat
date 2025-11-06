@@ -74,7 +74,15 @@ class EmailService:
         
         return f'''<div style="margin-top:15px;"><div style="font-size:16px; font-weight:bold; color:#000000; margin-bottom:10px;">Thông tin bổ sung:</div><div style="font-size:12px; color:#000000; line-height:1.8;">{bullet_points}</div></div>'''
     
-    def generate_quote_email_html(self, quote_data: Dict[str, Any], customer_name: str, employee_name: str = None, employee_phone: str = None, quote_items: list = None, custom_payment_terms: list = None, additional_notes: str = None) -> str:
+    def _format_default_notes(self, default_notes: list) -> str:
+        """Format default notes as bullet points for GHI CHÚ section"""
+        if not default_notes or not isinstance(default_notes, list):
+            return ''
+        
+        bullet_points = ''.join([f'<p style="margin:5px 0;">• {note}</p>' for note in default_notes if note and note.strip()])
+        return bullet_points
+    
+    def generate_quote_email_html(self, quote_data: Dict[str, Any], customer_name: str, employee_name: str = None, employee_phone: str = None, quote_items: list = None, custom_payment_terms: list = None, additional_notes: str = None, company_info: Dict[str, Any] = None, bank_info: Dict[str, Any] = None, default_notes: list = None) -> str:
         """Generate HTML content for quote email (for preview or sending)"""
         # Format currency
         def format_currency(amount):
@@ -248,9 +256,9 @@ class EmailService:
                 return "Không"
             return f"{num:,.0f}"
         
-        # Generate payment terms HTML
+        # Generate payment terms HTML - Always show payment terms section
         payment_terms_html = ""
-        if custom_payment_terms and isinstance(custom_payment_terms, list):
+        if custom_payment_terms and isinstance(custom_payment_terms, list) and len(custom_payment_terms) > 0:
             for term in custom_payment_terms:
                 description = term.get('description', '') if isinstance(term, dict) else ''
                 amount = term.get('amount', '') if isinstance(term, dict) else ''
@@ -263,7 +271,9 @@ class EmailService:
                                     <td style="padding: 10px; text-align: center; border: 1px solid #000; color:#000000;">{received_text}</td>
                                 </tr>
                                 """
-        else:
+        
+        # Always show default payment terms if custom_payment_terms is empty or None
+        if not payment_terms_html:
             # Default payment terms
             default_terms = [
                 {'description': 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', 'amount': '', 'received': False},
@@ -279,8 +289,25 @@ class EmailService:
                                 </tr>
                                 """
         
-        # Replace logo src for preview (use base64 or placeholder)
-        logo_src = "cid:company_logo"  # For email, use cid:company_logo; for preview, could use base64
+        # Get company info from customization or use defaults
+        company_name_display = (company_info.get("company_name") if company_info else None) or "Công Ty TNHH Nhôm Kính Phúc Đạt"
+        company_showroom = (company_info.get("company_showroom") if company_info else None) or "480/3 Tân Kỳ Tân Quý, P. Sơn Kỳ, Q. Tân Phú, TP.HCM"
+        company_factory = (company_info.get("company_factory") if company_info else None) or "334/6A Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú"
+        company_website = (company_info.get("company_website") if company_info else None) or "https://www.kinhphucdat.com"
+        company_hotline = (company_info.get("company_hotline") if company_info else None) or "0901.116.118"
+        
+        # Logo handling
+        logo_src = "cid:company_logo"  # For email, use cid:company_logo
+        if company_info and company_info.get("company_logo_base64"):
+            logo_src = company_info.get("company_logo_base64")
+        elif company_info and company_info.get("company_logo_url"):
+            logo_src = company_info.get("company_logo_url")
+        
+        # Get bank info from customization or use defaults
+        bank_account_name = (bank_info.get("bank_account_name") if bank_info else None) or "CÔNG TY TNHH NHÔM KÍNH PHÚC ĐẠT"
+        bank_account_number = (bank_info.get("bank_account_number") if bank_info else None) or "197877019"
+        bank_name = (bank_info.get("bank_name") if bank_info else None) or "Ngân Hàng TMCP Á Châu (ACB)"
+        bank_branch = (bank_info.get("bank_branch") if bank_info else None) or "PGD Gò Mây"
         
         # Make all text colors black for better readability
         # This will be applied in the HTML template
@@ -300,12 +327,12 @@ class EmailService:
                                 </div>
                             </td>
                             <td style="width:60%; text-align:right; vertical-align:middle; padding:10px 0;">
-                                <div style="font-size:13px; color:#000000; font-weight:600;">Công Ty TNHH Nhôm Kính Phúc Đạt</div>
-                                <div style="font-size:12px; color:#000000; margin-top:4px;">Showroom: 480/3 Tân Kỳ Tân Quý, P. Sơn Kỳ, Q. Tân Phú, TP.HCM</div>
-                                <div style="font-size:12px; color:#000000;">Xưởng sản xuất: 334/6A Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú</div>
+                                <div style="font-size:13px; color:#000000; font-weight:600;">{company_name_display}</div>
+                                <div style="font-size:12px; color:#000000; margin-top:4px;">Showroom: {company_showroom}</div>
+                                <div style="font-size:12px; color:#000000;">Xưởng sản xuất: {company_factory}</div>
                                 <div style="font-size:12px; color:#000000;">
-                                    <a href="https://www.kinhphucdat.com" style="color:#2563eb; text-decoration:none;">www.kinhphucdat.com</a>
-                                    <span style="color:#000000;"> | Hotline: 0901.116.118</span>
+                                    {f'<a href="{company_website}" style="color:#2563eb; text-decoration:none;">{company_website.replace("https://", "").replace("http://", "")}</a>' if company_website else ''}
+                                    {f'<span style="color:#000000;"> | Hotline: {company_hotline}</span>' if company_hotline else ''}
                                 </div>
                             </td>
                         </tr>
@@ -393,17 +420,19 @@ class EmailService:
                     <div style="margin: 20px 0;">
                         <div style="font-size:16px; font-weight:bold; color:#000000; margin-bottom:10px;">GHI CHÚ</div>
                         <div style="font-size:12px; color:#000000; line-height:1.8;">
+                            {self._format_default_notes(default_notes) if default_notes else '''
                             <p style="margin:5px 0;">• Nếu phụ kiện, thiết bị của khách hàng mà CTy lắp sẽ tính công 200k/1 bộ</p>
                             <p style="margin:5px 0;">• Giá đã bao gồm nhân công lắp đặt trọn gói trong khu vực TPHCM</p>
                             <p style="margin:5px 0;">• Giá chưa bao gồm Thuế GTGT 10%</p>
                             <p style="margin:5px 0;">• Thời gian lắp đặt từ 7 - 9 ngày, không tính chủ nhật hoặc ngày Lễ</p>
                             <p style="margin:5px 0;">• Bản vẽ 3D mang tính chất minh họa (giống thực tế 80% - 90%)</p>
                             <p style="margin:5px 0;">• Khách hàng sẽ kiểm tra lại thông tin sau khi lắp đặt hoàn thiện và bàn giao</p>
+                            '''}
                             
                             {additional_notes_html}
                             
                             <div style="margin-top:15px;">
-                                <p style="margin:5px 0; font-weight:bold; color:#000000;">* Thông tin tài khoản: CÔNG TY TNHH NHÔM KÍNH PHÚC ĐẠT : STK: 197877019 - Tại Ngân Hàng TMCP Á Châu (ACB) - PGD Gò Mây.</p>
+                                <p style="margin:5px 0; font-weight:bold; color:#000000;">* Thông tin tài khoản: {bank_account_name} : STK: {bank_account_number} - Tại {bank_name} - {bank_branch}.</p>
                                 <p style="margin:5px 0; color:#000000;">Nội dung chuyển khoản: Tên khách hàng, địa chỉ công trình.</p>
                             </div>
                         </div>
@@ -416,7 +445,7 @@ class EmailService:
         
         return html_body
 
-    async def send_quote_email(self, quote_data: Dict[str, Any], customer_email: str, customer_name: str, quote_items: list = None, custom_payment_terms: list = None, additional_notes: str = None, prepared_html: str | None = None) -> bool:
+    async def send_quote_email(self, quote_data: Dict[str, Any], customer_email: str, customer_name: str, quote_items: list = None, custom_payment_terms: list = None, additional_notes: str = None, prepared_html: str | None = None, company_info: Dict[str, Any] = None, bank_info: Dict[str, Any] = None, default_notes: list = None) -> bool:
         """Send quote email to customer"""
         try:
             if not self.smtp_username or not self.smtp_password:
@@ -479,7 +508,7 @@ class EmailService:
             
             # Prefer regenerated HTML when there are custom edits so they are guaranteed to appear
             # Only fall back to prepared_html when there are no custom overrides
-            if (custom_payment_terms or (additional_notes and additional_notes.strip())):
+            if (custom_payment_terms or (additional_notes and additional_notes.strip()) or company_info or bank_info or default_notes):
                 html_body = self.generate_quote_email_html(
                     quote_data=quote_data,
                     customer_name=customer_name,
@@ -487,7 +516,10 @@ class EmailService:
                     employee_phone=employee_phone,
                     quote_items=quote_items,
                     custom_payment_terms=custom_payment_terms,
-                    additional_notes=additional_notes
+                    additional_notes=additional_notes,
+                    company_info=company_info,
+                    bank_info=bank_info,
+                    default_notes=default_notes
                 )
             else:
                 # Use prepared HTML if provided, but inject additional notes if available and not present
@@ -517,7 +549,10 @@ class EmailService:
                         employee_phone=employee_phone,
                         quote_items=quote_items,
                         custom_payment_terms=custom_payment_terms,
-                        additional_notes=additional_notes
+                        additional_notes=additional_notes,
+                        company_info=company_info,
+                        bank_info=bank_info,
+                        default_notes=default_notes
                     )
             
             # Ensure additional notes are present in HTML if available
@@ -735,9 +770,9 @@ class EmailService:
                 # For now, return formatted number
                 return f"{num:,.0f}"
             
-            # Generate payment terms HTML
+            # Generate payment terms HTML - Always show payment terms section
             payment_terms_html = ""
-            if custom_payment_terms and isinstance(custom_payment_terms, list):
+            if custom_payment_terms and isinstance(custom_payment_terms, list) and len(custom_payment_terms) > 0:
                 for term in custom_payment_terms:
                     description = term.get('description', '') if isinstance(term, dict) else ''
                     amount = term.get('amount', '') if isinstance(term, dict) else ''
@@ -750,7 +785,9 @@ class EmailService:
                                         <td style="padding: 10px; text-align: center; border: 1px solid #000; color:#000000;">{received_text}</td>
                                     </tr>
                                     """
-            else:
+            
+            # Always show default payment terms if custom_payment_terms is empty or None
+            if not payment_terms_html:
                 # Default payment terms
                 default_terms = [
                     {'description': 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', 'amount': '', 'received': False},

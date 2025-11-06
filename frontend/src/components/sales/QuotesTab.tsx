@@ -161,6 +161,18 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       received: boolean
     }>
     additionalNotes?: string
+    defaultNotes?: string[]
+    companyName?: string
+    companyShowroom?: string
+    companyFactory?: string
+    companyWebsite?: string
+    companyHotline?: string
+    companyLogoUrl?: string
+    companyLogoBase64?: string
+    bankAccountName?: string
+    bankAccountNumber?: string
+    bankName?: string
+    bankBranch?: string
     rawHtml?: string
   }) => {
     if (!previewQuoteId) return
@@ -190,14 +202,40 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       `
       document.body.appendChild(loadingMessage)
       
-      // Prepare request body
+      // Prepare request body with all customization data
       const requestBody: any = {}
+      
+      // Payment terms
       if (customData?.paymentTerms && Array.isArray(customData.paymentTerms) && customData.paymentTerms.length > 0) {
         requestBody.custom_payment_terms = customData.paymentTerms
       }
+      
+      // Additional notes
       if (customData?.additionalNotes && customData.additionalNotes.trim()) {
         requestBody.additional_notes = customData.additionalNotes
       }
+      
+      // Default notes
+      if (customData?.defaultNotes && Array.isArray(customData.defaultNotes) && customData.defaultNotes.length > 0) {
+        requestBody.default_notes = customData.defaultNotes.filter(note => note && note.trim())
+      }
+      
+      // Company info
+      if (customData?.companyName) requestBody.company_name = customData.companyName
+      if (customData?.companyShowroom) requestBody.company_showroom = customData.companyShowroom
+      if (customData?.companyFactory) requestBody.company_factory = customData.companyFactory
+      if (customData?.companyWebsite) requestBody.company_website = customData.companyWebsite
+      if (customData?.companyHotline) requestBody.company_hotline = customData.companyHotline
+      if (customData?.companyLogoUrl) requestBody.company_logo_url = customData.companyLogoUrl
+      if (customData?.companyLogoBase64) requestBody.company_logo_base64 = customData.companyLogoBase64
+      
+      // Bank info
+      if (customData?.bankAccountName) requestBody.bank_account_name = customData.bankAccountName
+      if (customData?.bankAccountNumber) requestBody.bank_account_number = customData.bankAccountNumber
+      if (customData?.bankName) requestBody.bank_name = customData.bankName
+      if (customData?.bankBranch) requestBody.bank_branch = customData.bankBranch
+      
+      // Raw HTML (exact preview HTML)
       if (customData?.rawHtml && customData.rawHtml.trim()) {
         requestBody.raw_html = customData.rawHtml
       }

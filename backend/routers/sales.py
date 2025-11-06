@@ -4,7 +4,7 @@ Comprehensive sales management with quotes, invoices, sales receipts, and paymen
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 import uuid
 from pydantic import BaseModel
@@ -79,6 +79,37 @@ async def validate_project_for_sales(
 # QUOTES MANAGEMENT - Báo giá
 # ============================================================================
 
+# Pydantic models for quote email customization
+class PaymentTermItem(BaseModel):
+    description: str
+    amount: str
+    received: bool
+
+class QuoteSendRequest(BaseModel):
+    # Payment terms
+    custom_payment_terms: Optional[List[PaymentTermItem]] = None
+    additional_notes: Optional[str] = None
+    default_notes: Optional[List[str]] = None
+    
+    # Company info
+    company_name: Optional[str] = None
+    company_showroom: Optional[str] = None
+    company_factory: Optional[str] = None
+    company_website: Optional[str] = None
+    company_hotline: Optional[str] = None
+    company_logo_url: Optional[str] = None
+    company_logo_base64: Optional[str] = None
+    company_info: Optional[Dict[str, Any]] = None
+    
+    # Bank info
+    bank_account_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None
+    bank_account_info: Optional[Dict[str, Any]] = None
+    
+    # Raw HTML
+    raw_html: Optional[str] = None
 
 @router.get("/quotes", response_model=List[Quote])
 async def get_quotes(
@@ -602,12 +633,52 @@ async def get_quote_email_logs(
             detail=f"Failed to get email logs: {str(e)}"
         )
 
-@router.get("/quotes/{quote_id}/preview")
-async def preview_quote_email(
-    quote_id: str,
+@router.get("/default-logo")
+async def get_default_logo(
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Preview quote email HTML before sending"""
+    """Get default company logo file"""
+    from fastapi.responses import FileResponse
+    import os
+    
+    try:
+        # Use same logo path as email_service
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        logo_path = os.path.join(project_root, 'image', 'logo_phucdat.jpg')
+        
+        # Try different extensions
+        if not os.path.exists(logo_path):
+            for ext in ['.jpg', '.png', '.jpeg', '.svg']:
+                logo_path_with_ext = os.path.join(project_root, 'image', f'logo_phucdat{ext}')
+                if os.path.exists(logo_path_with_ext):
+                    logo_path = logo_path_with_ext
+                    break
+        
+        if os.path.exists(logo_path):
+            return FileResponse(
+                logo_path,
+                media_type="image/jpeg",
+                filename="logo_phucdat.jpg"
+            )
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Logo file not found at {logo_path}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load logo: {str(e)}"
+        )
+
+@router.get("/quotes/{quote_id}/preview")
+@router.post("/quotes/{quote_id}/preview")
+async def preview_quote_email(
+    quote_id: str,
+    request: Optional[QuoteSendRequest] = None,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Preview quote email HTML before sending (GET for load, POST for preview with custom data)"""
     try:
         supabase = get_supabase_client()
         
@@ -684,43 +755,166 @@ async def preview_quote_email(
             "customer_address": customer_address
         }
         
-        # Check for draft email edits
-        draft_custom_payment_terms = None
-        draft_additional_notes = None
+        # Check for active email customization
+        customization = None
         try:
-            draft_result = supabase.table("email_logs").select("*").eq("entity_type", "quote").eq("entity_id", quote_id).eq("status", "draft").order("edited_at", desc=True).limit(1).execute()
-            if draft_result.data and len(draft_result.data) > 0:
-                draft = draft_result.data[0]
-                draft_custom_payment_terms = draft.get("custom_payment_terms")
-                # Handle cases where JSONB is returned as a JSON string
-                try:
-                    if isinstance(draft_custom_payment_terms, str):
-                        import json as _json
-                        draft_custom_payment_terms = _json.loads(draft_custom_payment_terms)
-                except Exception:
-                    pass
-                draft_additional_notes = draft.get("additional_notes")
-                print(f"📝 Found draft: custom_payment_terms={draft_custom_payment_terms}, additional_notes={draft_additional_notes}")
+            customization_result = supabase.table("email_customizations").select("*").eq("quote_id", quote_id).eq("is_active", True).order("version", desc=True).limit(1).execute()
+            if customization_result.data and len(customization_result.data) > 0:
+                customization = customization_result.data[0]
+                print(f"📝 Found active customization version {customization.get('version')}")
         except Exception as e:
-            print(f"Error fetching draft: {e}")
+            print(f"Error fetching customization: {e}")
         
-        # Generate HTML
+        # Extract customization data
+        custom_payment_terms = None
+        additional_notes = None
+        default_notes = None
+        company_info = {}
+        bank_info = {}
+        
+        # If request body provided (POST), use it for preview, otherwise use saved customization
+        if request:
+            # Use request data for preview
+            if request.custom_payment_terms is not None:
+                # Always use request payment terms if provided (even if empty list)
+                custom_payment_terms = request.custom_payment_terms if isinstance(request.custom_payment_terms, list) else None
+            if request.additional_notes:
+                additional_notes = request.additional_notes
+            if request.default_notes:
+                default_notes = request.default_notes
+            
+            # Company info from request
+            if request.company_name:
+                company_info["company_name"] = request.company_name
+            if request.company_showroom:
+                company_info["company_showroom"] = request.company_showroom
+            if request.company_factory:
+                company_info["company_factory"] = request.company_factory
+            if request.company_website:
+                company_info["company_website"] = request.company_website
+            if request.company_hotline:
+                company_info["company_hotline"] = request.company_hotline
+            if request.company_logo_url:
+                company_info["company_logo_url"] = request.company_logo_url
+            if request.company_logo_base64:
+                company_info["company_logo_base64"] = request.company_logo_base64
+            if request.company_info:
+                if isinstance(request.company_info, dict):
+                    company_info.update(request.company_info)
+            
+            # Bank info from request
+            if request.bank_account_name:
+                bank_info["bank_account_name"] = request.bank_account_name
+            if request.bank_account_number:
+                bank_info["bank_account_number"] = request.bank_account_number
+            if request.bank_name:
+                bank_info["bank_name"] = request.bank_name
+            if request.bank_branch:
+                bank_info["bank_branch"] = request.bank_branch
+            if request.bank_account_info:
+                if isinstance(request.bank_account_info, dict):
+                    bank_info.update(request.bank_account_info)
+        
+        # Fallback to saved customization if no request data (for GET requests)
+        if not request and customization:
+            # Payment terms - only if not set from request
+            if custom_payment_terms is None:
+                cpt = customization.get("custom_payment_terms")
+                if isinstance(cpt, str):
+                    try:
+                        import json as _json
+                        cpt = _json.loads(cpt)
+                    except Exception:
+                        pass
+                if cpt is not None:
+                    custom_payment_terms = cpt if isinstance(cpt, list) else None
+            
+            # Additional notes - only if not set from request
+            if additional_notes is None:
+                additional_notes = customization.get("additional_notes")
+            
+            # Default notes (GHI CHÚ section) - load from company_info JSONB - only if not set from request
+            if default_notes is None:
+                company_info_json = customization.get("company_info")
+                if company_info_json:
+                    if isinstance(company_info_json, str):
+                        try:
+                            import json as _json
+                            company_info_json = _json.loads(company_info_json)
+                        except Exception:
+                            pass
+                    if isinstance(company_info_json, dict):
+                        default_notes = company_info_json.get("default_notes")
+            
+            # Company info - only if not set from request
+            if not company_info.get("company_name") and customization.get("company_name"):
+                company_info["company_name"] = customization.get("company_name")
+            if not company_info.get("company_showroom") and customization.get("company_showroom"):
+                company_info["company_showroom"] = customization.get("company_showroom")
+            if not company_info.get("company_factory") and customization.get("company_factory"):
+                company_info["company_factory"] = customization.get("company_factory")
+            if not company_info.get("company_website") and customization.get("company_website"):
+                company_info["company_website"] = customization.get("company_website")
+            if not company_info.get("company_hotline") and customization.get("company_hotline"):
+                company_info["company_hotline"] = customization.get("company_hotline")
+            if not company_info.get("company_logo_url") and customization.get("company_logo_url"):
+                company_info["company_logo_url"] = customization.get("company_logo_url")
+            if not company_info.get("company_logo_base64") and customization.get("company_logo_base64"):
+                company_info["company_logo_base64"] = customization.get("company_logo_base64")
+            if customization.get("company_info"):
+                company_info_json = customization.get("company_info")
+                if isinstance(company_info_json, str):
+                    try:
+                        import json as _json
+                        company_info_json = _json.loads(company_info_json)
+                    except Exception:
+                        pass
+                if isinstance(company_info_json, dict):
+                    # Merge but don't override existing keys from request
+                    for key, value in company_info_json.items():
+                        if key != "default_notes" and key not in company_info:
+                            company_info[key] = value
+            
+            # Bank info - only if not set from request
+            if not bank_info.get("bank_account_name") and customization.get("bank_account_name"):
+                bank_info["bank_account_name"] = customization.get("bank_account_name")
+            if not bank_info.get("bank_account_number") and customization.get("bank_account_number"):
+                bank_info["bank_account_number"] = customization.get("bank_account_number")
+            if not bank_info.get("bank_name") and customization.get("bank_name"):
+                bank_info["bank_name"] = customization.get("bank_name")
+            if not bank_info.get("bank_branch") and customization.get("bank_branch"):
+                bank_info["bank_branch"] = customization.get("bank_branch")
+            if customization.get("bank_account_info"):
+                bank_info_json = customization.get("bank_account_info")
+                if isinstance(bank_info_json, str):
+                    try:
+                        import json as _json
+                        bank_info_json = _json.loads(bank_info_json)
+                    except Exception:
+                        pass
+                if isinstance(bank_info_json, dict):
+                    # Merge but don't override existing keys from request
+                    for key, value in bank_info_json.items():
+                        if key not in bank_info:
+                            bank_info[key] = value
+        
+        # Generate HTML (will be updated to use company_info and bank_info)
         html_content = email_service.generate_quote_email_html(
             quote_data=quote_data,
             customer_name=customer_name,
             employee_name=employee_name,
             employee_phone=employee_phone,
             quote_items=quote_items,
-            custom_payment_terms=draft_custom_payment_terms,
-            additional_notes=draft_additional_notes
+            custom_payment_terms=custom_payment_terms,
+            additional_notes=additional_notes,
+            company_info=company_info if company_info else None,
+            bank_info=bank_info if bank_info else None,
+            default_notes=default_notes
         )
         
         return {
             "html": html_content,
-            "draft": {
-                "custom_payment_terms": draft_custom_payment_terms,
-                "additional_notes": draft_additional_notes
-            } if (draft_custom_payment_terms or draft_additional_notes) else None
+            "customization": customization if customization else None
         }
         
     except HTTPException:
@@ -731,23 +925,13 @@ async def preview_quote_email(
             detail=f"Failed to preview quote email: {str(e)}"
         )
 
-class PaymentTermItem(BaseModel):
-    description: str
-    amount: Optional[str] = None
-    received: bool = False
-
-class QuoteSendRequest(BaseModel):
-    custom_payment_terms: Optional[List[PaymentTermItem]] = None
-    additional_notes: Optional[str] = None
-    raw_html: Optional[str] = None
-
 @router.post("/quotes/{quote_id}/email-draft")
 async def save_quote_email_draft(
     quote_id: str,
     request: QuoteSendRequest,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Save draft email edits for a quote (without sending)"""
+    """Save draft email edits for a quote (without sending) - using email_customizations table"""
     try:
         supabase = get_supabase_client()
         
@@ -761,29 +945,55 @@ async def save_quote_email_draft(
         
         quote = quote_result.data[0]
         
-        # Get customer information
-        customer_email = None
-        customer_name = ""
-        if quote.get("customer_id"):
-            customer_result = supabase.table("customers").select("*").eq("id", quote.get("customer_id")).single().execute()
-            if customer_result.data:
-                customer_email = customer_result.data.get("email")
-                customer_name = customer_result.data.get("name", "")
+        # Get current active customization to determine next version
+        existing_active = supabase.table("email_customizations").select("*").eq("quote_id", quote_id).eq("is_active", True).order("version", desc=True).limit(1).execute()
         
-        # Prepare log data
-        log_data = {
-            "to_email": customer_email or "",
-            "subject": f"Báo giá {quote.get('quote_number', '')} - {customer_name}",
-            "body": f"Email báo giá cho quote {quote_id}",
-            "status": "draft",
-            "entity_type": "quote",
-            "entity_id": quote_id,
+        next_version = 1
+        if existing_active.data and len(existing_active.data) > 0:
+            next_version = (existing_active.data[0].get("version", 0) or 0) + 1
+        
+        # Prepare customization data
+        customization_data = {
+            "quote_id": quote_id,
+            "version": next_version,
+            "is_active": True,
+            "edited_by_user_id": current_user.id,
             "edited_at": datetime.utcnow().isoformat(),
-            "edited_by": current_user.id
+            "updated_at": datetime.utcnow().isoformat()
         }
         
-        # Add custom payment terms if provided
-        if request.custom_payment_terms:
+        # Company info fields
+        if request.company_name is not None:
+            customization_data["company_name"] = request.company_name
+        if request.company_showroom is not None:
+            customization_data["company_showroom"] = request.company_showroom
+        if request.company_factory is not None:
+            customization_data["company_factory"] = request.company_factory
+        if request.company_website is not None:
+            customization_data["company_website"] = request.company_website
+        if request.company_hotline is not None:
+            customization_data["company_hotline"] = request.company_hotline
+        if request.company_logo_url is not None:
+            customization_data["company_logo_url"] = request.company_logo_url
+        if request.company_logo_base64 is not None:
+            customization_data["company_logo_base64"] = request.company_logo_base64
+        if request.company_info is not None:
+            customization_data["company_info"] = request.company_info
+        
+        # Bank info fields
+        if request.bank_account_name is not None:
+            customization_data["bank_account_name"] = request.bank_account_name
+        if request.bank_account_number is not None:
+            customization_data["bank_account_number"] = request.bank_account_number
+        if request.bank_name is not None:
+            customization_data["bank_name"] = request.bank_name
+        if request.bank_branch is not None:
+            customization_data["bank_branch"] = request.bank_branch
+        if request.bank_account_info is not None:
+            customization_data["bank_account_info"] = request.bank_account_info
+        
+        # Custom payment terms
+        if request.custom_payment_terms is not None:
             try:
                 payment_terms_list = []
                 for term in request.custom_payment_terms:
@@ -799,53 +1009,62 @@ async def save_quote_email_draft(
                             "amount": getattr(term, 'amount', ''),
                             "received": getattr(term, 'received', False)
                         })
-                log_data["custom_payment_terms"] = payment_terms_list
+                customization_data["custom_payment_terms"] = payment_terms_list
                 print(f"✅ Saved draft custom_payment_terms: {payment_terms_list}")
             except Exception as e:
                 print(f"❌ Error converting payment terms: {e}")
                 import traceback
                 traceback.print_exc()
         
-        # Add additional notes if provided
-        if request.additional_notes:
-            log_data["additional_notes"] = request.additional_notes
-            print(f"✅ Saved draft additional_notes: {request.additional_notes}")
+        # Additional notes
+        if request.additional_notes is not None:
+            customization_data["additional_notes"] = request.additional_notes
         
-        print(f"📝 Saving email draft with data: {log_data}")
+        # Default notes (GHI CHÚ section) - store in company_info JSONB
+        if request.default_notes is not None:
+            # Store default_notes in company_info JSONB field
+            if "company_info" not in customization_data or customization_data["company_info"] is None:
+                customization_data["company_info"] = {}
+            if not isinstance(customization_data["company_info"], dict):
+                customization_data["company_info"] = {}
+            if isinstance(customization_data["company_info"], dict):
+                customization_data["company_info"]["default_notes"] = request.default_notes
         
-        # Check if draft already exists for this quote
-        existing_draft = supabase.table("email_logs").select("*").eq("entity_type", "quote").eq("entity_id", quote_id).eq("status", "draft").order("edited_at", desc=True).limit(1).execute()
+        # Raw HTML
+        if request.raw_html is not None:
+            customization_data["raw_html"] = request.raw_html
         
-        if existing_draft.data and len(existing_draft.data) > 0:
-            # Update existing draft
-            draft_id = existing_draft.data[0]["id"]
-            result = supabase.table("email_logs").update(log_data).eq("id", draft_id).execute()
-            print(f"✅ Updated existing draft: {draft_id}")
-        else:
-            # Create new draft
-            result = supabase.table("email_logs").insert(log_data).execute()
-            print(f"✅ Created new draft")
+        print(f"📝 Saving email customization with data: {customization_data}")
+        
+        # Deactivate existing active customizations (trigger will handle this, but we do it explicitly)
+        if existing_active.data and len(existing_active.data) > 0:
+            for existing in existing_active.data:
+                supabase.table("email_customizations").update({"is_active": False}).eq("id", existing["id"]).execute()
+        
+        # Create new customization
+        result = supabase.table("email_customizations").insert(customization_data).execute()
+        print(f"✅ Created new email customization version {next_version}")
         
         if result.data:
             return {
-                "message": "Email draft saved successfully",
-                "draft": result.data[0] if isinstance(result.data, list) else result.data
+                "message": "Email customization saved successfully",
+                "customization": result.data[0] if isinstance(result.data, list) else result.data
             }
         
         raise HTTPException(
             status_code=400,
-            detail="Failed to save email draft"
+            detail="Failed to save email customization"
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error saving email draft: {e}")
+        print(f"❌ Error saving email customization: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save email draft: {str(e)}"
+            detail=f"Failed to save email customization: {str(e)}"
         )
 
 @router.post("/quotes/{quote_id}/send")
@@ -961,82 +1180,149 @@ async def send_quote_to_customer(
                             except Exception:
                                 pass
                         
-                        # Prepare custom content: prioritize email_logs (draft > latest sent), then fallback to request body
+                        # Prepare custom content: load from email_customizations (active), then fallback to request body
                         custom_payment_terms = None
                         additional_notes = None
+                        default_notes = None
+                        company_info = {}
+                        bank_info = {}
                         
                         try:
-                            # 1) Try latest draft first
-                            draft_res = (
+                            # Load active customization from email_customizations
+                            customization_res = (
                                 supabase
-                                .table("email_logs")
+                                .table("email_customizations")
                                 .select("*")
-                                .eq("entity_type", "quote")
-                                .eq("entity_id", quote_id)
-                                .eq("status", "draft")
-                                .order("edited_at", desc=True)
+                                .eq("quote_id", quote_id)
+                                .eq("is_active", True)
+                                .order("version", desc=True)
                                 .limit(1)
                                 .execute()
                             )
-                            if draft_res.data and len(draft_res.data) > 0:
-                                draft = draft_res.data[0]
-                                # Parse JSON string to list if needed
-                                draft_cpt = draft.get("custom_payment_terms")
-                                try:
-                                    if isinstance(draft_cpt, str):
-                                        import json as _json
-                                        draft_cpt = _json.loads(draft_cpt)
-                                except Exception:
-                                    pass
-                                # Get custom_payment_terms from draft (even if empty list/null)
-                                if draft_cpt is not None:
-                                    custom_payment_terms = draft_cpt if isinstance(draft_cpt, list) else None
-                                
-                                # Get additional_notes from draft (even if empty/null)
-                                draft_additional_notes = draft.get("additional_notes")
-                                if draft_additional_notes is not None:
-                                    additional_notes = draft_additional_notes if isinstance(draft_additional_notes, str) else None
                             
-                            # 2) If not found in draft, try latest sent log
-                            if custom_payment_terms is None or additional_notes is None:
-                                latest_log = (
-                                    supabase
-                                    .table("email_logs")
-                                    .select("*")
-                                    .eq("entity_type", "quote")
-                                    .eq("entity_id", quote_id)
-                                    .order("edited_at", desc=True)
-                                    .limit(1)
-                                    .execute()
-                                )
-                                if latest_log.data and len(latest_log.data) > 0:
-                                    log = latest_log.data[0]
-                                    # Parse JSON string to list if needed
-                                    log_cpt = log.get("custom_payment_terms")
+                            if customization_res.data and len(customization_res.data) > 0:
+                                customization = customization_res.data[0]
+                                
+                                # Payment terms
+                                cpt = customization.get("custom_payment_terms")
+                                if isinstance(cpt, str):
                                     try:
-                                        if isinstance(log_cpt, str):
-                                            import json as _json
-                                            log_cpt = _json.loads(log_cpt)
+                                        import json as _json
+                                        cpt = _json.loads(cpt)
                                     except Exception:
                                         pass
-                                    # Get custom_payment_terms from latest log (even if empty list/null)
-                                    if log_cpt is not None and custom_payment_terms is None:
-                                        custom_payment_terms = log_cpt if isinstance(log_cpt, list) else None
-                                    
-                                    # Get additional_notes from latest log (even if empty/null)
-                                    log_additional_notes = log.get("additional_notes")
-                                    if log_additional_notes is not None and additional_notes is None:
-                                        additional_notes = log_additional_notes if isinstance(log_additional_notes, str) else None
+                                if cpt is not None:
+                                    custom_payment_terms = cpt if isinstance(cpt, list) else None
+                                
+                                # Additional notes
+                                if customization.get("additional_notes") is not None:
+                                    additional_notes = customization.get("additional_notes")
+                                
+                                # Default notes (GHI CHÚ section) - load from company_info JSONB
+                                if customization.get("company_info"):
+                                    ci = customization.get("company_info")
+                                    if isinstance(ci, str):
+                                        try:
+                                            import json as _json
+                                            ci = _json.loads(ci)
+                                        except Exception:
+                                            pass
+                                    if isinstance(ci, dict):
+                                        dn = ci.get("default_notes")
+                                        if dn and isinstance(dn, list):
+                                            default_notes = dn
+                                
+                                # Company info
+                                if customization.get("company_name"):
+                                    company_info["company_name"] = customization.get("company_name")
+                                if customization.get("company_showroom"):
+                                    company_info["company_showroom"] = customization.get("company_showroom")
+                                if customization.get("company_factory"):
+                                    company_info["company_factory"] = customization.get("company_factory")
+                                if customization.get("company_website"):
+                                    company_info["company_website"] = customization.get("company_website")
+                                if customization.get("company_hotline"):
+                                    company_info["company_hotline"] = customization.get("company_hotline")
+                                if customization.get("company_logo_url"):
+                                    company_info["company_logo_url"] = customization.get("company_logo_url")
+                                if customization.get("company_logo_base64"):
+                                    company_info["company_logo_base64"] = customization.get("company_logo_base64")
+                                if customization.get("company_info"):
+                                    ci = customization.get("company_info")
+                                    if isinstance(ci, str):
+                                        try:
+                                            import json as _json
+                                            ci = _json.loads(ci)
+                                        except Exception:
+                                            pass
+                                    if isinstance(ci, dict):
+                                        company_info.update(ci)
+                                
+                                # Bank info
+                                if customization.get("bank_account_name"):
+                                    bank_info["bank_account_name"] = customization.get("bank_account_name")
+                                if customization.get("bank_account_number"):
+                                    bank_info["bank_account_number"] = customization.get("bank_account_number")
+                                if customization.get("bank_name"):
+                                    bank_info["bank_name"] = customization.get("bank_name")
+                                if customization.get("bank_branch"):
+                                    bank_info["bank_branch"] = customization.get("bank_branch")
+                                if customization.get("bank_account_info"):
+                                    bi = customization.get("bank_account_info")
+                                    if isinstance(bi, str):
+                                        try:
+                                            import json as _json
+                                            bi = _json.loads(bi)
+                                        except Exception:
+                                            pass
+                                    if isinstance(bi, dict):
+                                        bank_info.update(bi)
                             
-                            # 3) Fallback to request body if not found in email_logs
+                            # Fallback to request body if not found in email_customizations
                             if custom_payment_terms is None and request and request.custom_payment_terms:
                                 custom_payment_terms = request.custom_payment_terms
                             
                             if additional_notes is None and request and request.additional_notes and request.additional_notes.strip():
                                 additional_notes = request.additional_notes
+                            
+                            if default_notes is None and request and request.default_notes:
+                                default_notes = request.default_notes
+                            
+                            # Override with request company info if provided
+                            if request:
+                                if request.company_name is not None:
+                                    company_info["company_name"] = request.company_name
+                                if request.company_showroom is not None:
+                                    company_info["company_showroom"] = request.company_showroom
+                                if request.company_factory is not None:
+                                    company_info["company_factory"] = request.company_factory
+                                if request.company_website is not None:
+                                    company_info["company_website"] = request.company_website
+                                if request.company_hotline is not None:
+                                    company_info["company_hotline"] = request.company_hotline
+                                if request.company_logo_url is not None:
+                                    company_info["company_logo_url"] = request.company_logo_url
+                                if request.company_logo_base64 is not None:
+                                    company_info["company_logo_base64"] = request.company_logo_base64
+                                if request.company_info is not None:
+                                    if isinstance(request.company_info, dict):
+                                        company_info.update(request.company_info)
+                                
+                                # Override with request bank info if provided
+                                if request.bank_account_name is not None:
+                                    bank_info["bank_account_name"] = request.bank_account_name
+                                if request.bank_account_number is not None:
+                                    bank_info["bank_account_number"] = request.bank_account_number
+                                if request.bank_name is not None:
+                                    bank_info["bank_name"] = request.bank_name
+                                if request.bank_branch is not None:
+                                    bank_info["bank_branch"] = request.bank_branch
+                                if request.bank_account_info is not None:
+                                    if isinstance(request.bank_account_info, dict):
+                                        bank_info.update(request.bank_account_info)
                                 
                         except Exception as _e:
-                            print(f"⚠️ Error loading email customizations from email_logs: {_e}")
+                            print(f"⚠️ Error loading email customizations from email_customizations: {_e}")
                             import traceback
                             traceback.print_exc()
                             # Fallback to request body on error
@@ -1046,22 +1332,45 @@ async def send_quote_to_customer(
                                 if additional_notes is None:
                                     additional_notes = request.additional_notes if (request.additional_notes and request.additional_notes.strip()) else None
 
-                        print(f"📧 Final email customizations - payment_terms: {custom_payment_terms}, additional_notes: {additional_notes}")
+                        print(f"📧 Final email customizations - payment_terms: {custom_payment_terms}, additional_notes: {additional_notes}, company_info: {company_info}, bank_info: {bank_info}")
                         
-                        background_tasks.add_task(
-                            email_service.send_quote_email,
-                            {
+                        # Build quote data with customization info
+                        quote_data_with_custom = {
                                 **quote_result.data[0],
                                 **({"project_name": project_name} if project_name else {}),
                                 **({"employee_in_charge_name": employee_name} if employee_name else {}),
                                 **({"employee_in_charge_phone": employee_phone} if employee_phone else {})
-                            },
+                        }
+                        
+                        # Generate HTML with customization data
+                        html_content = email_service.generate_quote_email_html(
+                            quote_data=quote_data_with_custom,
+                            customer_name=customer_name,
+                            employee_name=employee_name,
+                            employee_phone=employee_phone,
+                            quote_items=quote_items,
+                            custom_payment_terms=custom_payment_terms,
+                            additional_notes=additional_notes,
+                            company_info=company_info if company_info else None,
+                            bank_info=bank_info if bank_info else None,
+                            default_notes=default_notes
+                        )
+                        
+                        # Use raw_html if provided, otherwise use generated HTML
+                        final_html = request.raw_html if (request and request.raw_html) else html_content
+                        
+                        background_tasks.add_task(
+                            email_service.send_quote_email,
+                            quote_data_with_custom,
                             customer_email,
                             customer_name,
                             quote_items,
                             custom_payment_terms,
                             additional_notes,
-                            request.raw_html if (request and request.raw_html) else None
+                            final_html,
+                            company_info if company_info else None,
+                            bank_info if bank_info else None,
+                            default_notes
                         )
                         
                         # Save email log with custom content
