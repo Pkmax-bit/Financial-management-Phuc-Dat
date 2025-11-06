@@ -898,19 +898,31 @@ async def preview_quote_email(
                         if key not in bank_info:
                             bank_info[key] = value
         
-        # Generate HTML (will be updated to use company_info and bank_info)
-        html_content = email_service.generate_quote_email_html(
-            quote_data=quote_data,
-            customer_name=customer_name,
-            employee_name=employee_name,
-            employee_phone=employee_phone,
-            quote_items=quote_items,
-            custom_payment_terms=custom_payment_terms,
-            additional_notes=additional_notes,
-            company_info=company_info if company_info else None,
-            bank_info=bank_info if bank_info else None,
-            default_notes=default_notes
-        )
+        # Use raw_html: priority: request.raw_html > customization.raw_html > generated HTML
+        html_content = None
+        if request and request.raw_html:
+            # Use raw_html from request (highest priority)
+            html_content = request.raw_html
+            print(f"📝 Using raw_html from request")
+        elif customization and customization.get("raw_html"):
+            # Use raw_html from email_customizations table
+            html_content = customization.get("raw_html")
+            print(f"📝 Using raw_html from email_customizations table")
+        else:
+            # Generate HTML (will be updated to use company_info and bank_info)
+            html_content = email_service.generate_quote_email_html(
+                quote_data=quote_data,
+                customer_name=customer_name,
+                employee_name=employee_name,
+                employee_phone=employee_phone,
+                quote_items=quote_items,
+                custom_payment_terms=custom_payment_terms,
+                additional_notes=additional_notes,
+                company_info=company_info if company_info else None,
+                bank_info=bank_info if bank_info else None,
+                default_notes=default_notes
+            )
+            print(f"📝 Generated HTML from template")
         
         return {
             "html": html_content,
@@ -1342,22 +1354,31 @@ async def send_quote_to_customer(
                                 **({"employee_in_charge_phone": employee_phone} if employee_phone else {})
                         }
                         
-                        # Generate HTML with customization data
-                        html_content = email_service.generate_quote_email_html(
-                            quote_data=quote_data_with_custom,
-                            customer_name=customer_name,
-                            employee_name=employee_name,
-                            employee_phone=employee_phone,
-                            quote_items=quote_items,
-                            custom_payment_terms=custom_payment_terms,
-                            additional_notes=additional_notes,
-                            company_info=company_info if company_info else None,
-                            bank_info=bank_info if bank_info else None,
-                            default_notes=default_notes
-                        )
-                        
-                        # Use raw_html if provided, otherwise use generated HTML
-                        final_html = request.raw_html if (request and request.raw_html) else html_content
+                        # Determine final HTML: priority: request.raw_html > customization.raw_html > generated HTML
+                        final_html = None
+                        if request and request.raw_html:
+                            # Use raw_html from request (highest priority)
+                            final_html = request.raw_html
+                            print(f"📝 Using raw_html from request")
+                        elif customization and customization.get("raw_html"):
+                            # Use raw_html from email_customizations table
+                            final_html = customization.get("raw_html")
+                            print(f"📝 Using raw_html from email_customizations table")
+                        else:
+                            # Generate HTML with customization data
+                            final_html = email_service.generate_quote_email_html(
+                                quote_data=quote_data_with_custom,
+                                customer_name=customer_name,
+                                employee_name=employee_name,
+                                employee_phone=employee_phone,
+                                quote_items=quote_items,
+                                custom_payment_terms=custom_payment_terms,
+                                additional_notes=additional_notes,
+                                company_info=company_info if company_info else None,
+                                bank_info=bank_info if bank_info else None,
+                                default_notes=default_notes
+                            )
+                            print(f"📝 Generated HTML from template")
                         
                         background_tasks.add_task(
                             email_service.send_quote_email,
@@ -1379,7 +1400,7 @@ async def send_quote_to_customer(
                                 "to_email": customer_email,
                                 "subject": f"Báo giá {quote_result.data[0].get('quote_number', '')} - {customer_name}",
                                 # Save the exact HTML if provided, else a short note
-                                "body": request.raw_html if (request and request.raw_html) else f"Email báo giá cho quote {quote_id}",
+                                "body": final_html if final_html else f"Email báo giá cho quote {quote_id}",
                                 "status": "sent",
                                 "entity_type": "quote",
                                 "entity_id": quote_id,
