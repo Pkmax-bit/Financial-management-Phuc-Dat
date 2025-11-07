@@ -452,30 +452,33 @@ class EmailService:
                 print("Email credentials not configured, skipping email send")
                 return False
                 
-            # Resolve employee in charge from ID if needed
+            # Resolve employee in charge from created_by -> employees -> users
             employee_name = quote_data.get('employee_in_charge_name')
             employee_phone = quote_data.get('employee_in_charge_phone')
             emp_id = quote_data.get('employee_in_charge_id') or quote_data.get('created_by')
-            if not employee_name:
+            
+            # Always try to get employee name from database if not provided or empty
+            if not employee_name or not employee_name.strip():
                 try:
                     if emp_id:
                         supabase = get_supabase_client()
-                        # Step 1: read employee basic fields including user_id
+                        # Step 1: Get employee info including user_id
                         emp_res = (
                             supabase
                             .table('employees')
-                            .select('id, user_id, full_name, first_name, last_name, phone')
+                            .select('id, user_id, first_name, last_name, phone')
                             .eq('id', emp_id)
                             .single()
                             .execute()
                         )
                         if emp_res.data:
                             emp = emp_res.data
-                            employee_phone = emp.get('phone')
-                            # Candidate names from employees table
-                            candidate_name = emp.get('full_name') or f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
-                            # Step 2: prefer users.full_name if available
-                            user_full_name = None
+                            if not employee_phone:
+                                employee_phone = emp.get('phone')
+                            # Candidate name from employees table (first_name + last_name)
+                            candidate_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+                            
+                            # Step 2: Prefer users.full_name if available
                             user_id = emp.get('user_id')
                             if user_id:
                                 try:
@@ -488,11 +491,16 @@ class EmailService:
                                         .execute()
                                     )
                                     if user_res.data and user_res.data.get('full_name'):
-                                        user_full_name = user_res.data.get('full_name')
-                                except Exception:
-                                    pass
-                            employee_name = user_full_name or candidate_name or None
-                except Exception:
+                                        employee_name = user_res.data.get('full_name')
+                                    else:
+                                        employee_name = candidate_name if candidate_name else None
+                                except Exception as e:
+                                    print(f"Error fetching user full_name: {e}")
+                                    employee_name = candidate_name if candidate_name else None
+                            else:
+                                employee_name = candidate_name if candidate_name else None
+                except Exception as e:
+                    print(f"Error fetching employee info: {e}")
                     pass
 
             # Build display string: prefer "<id> - <name>", fallback id only

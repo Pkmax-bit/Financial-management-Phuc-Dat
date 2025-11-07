@@ -117,6 +117,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       console.log('🔍 Fetching quotes from database...')
       
       // Use Supabase directly to get quotes with employee in charge info
+      // Get both employee_in_charge_id and created_by employee info
       const { data: quotes, error } = await supabase
         .from('quotes')
         .select(`
@@ -124,6 +125,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           customers:customer_id(name, email),
           projects:project_id(name, project_code),
           employee_in_charge:employee_in_charge_id(
+            id,
+            first_name,
+            last_name,
+            user_id,
+            users!employees_user_id_fkey(full_name)
+          ),
+          created_by_employee:created_by(
             id,
             first_name,
             last_name,
@@ -142,11 +150,16 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       // Transform to include customer_name, project fields, and employee in charge name
       const transformed = (quotes || []).map((q: any) => {
         // Get employee in charge name from users table via employees
+        // Priority: employee_in_charge_id -> created_by
         let employeeInChargeName = null
-        if (q.employee_in_charge) {
-          const emp = q.employee_in_charge
+        let emp = q.employee_in_charge || q.created_by_employee
+        
+        if (emp) {
+          // Try to get from users table first (via user_id)
           const usersRel = emp.users
           const userFullName = Array.isArray(usersRel) ? usersRel[0]?.full_name : usersRel?.full_name
+          
+          // Fallback to first_name + last_name from employees
           employeeInChargeName = userFullName || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || null
         }
         

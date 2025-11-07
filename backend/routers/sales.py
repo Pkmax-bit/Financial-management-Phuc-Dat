@@ -713,18 +713,35 @@ async def preview_quote_email(
             except Exception as e:
                 print(f"Error fetching category names: {e}")
         
-        # Get employee information
+        # Get employee information from created_by -> employees -> users
         employee_name = None
         employee_phone = None
         emp_id = quote.get("employee_in_charge_id") or quote.get("created_by")
         if emp_id:
             try:
-                emp_res = supabase.table("employees").select("first_name, last_name, full_name, phone").eq("id", emp_id).single().execute()
+                # Step 1: Get employee info including user_id
+                emp_res = supabase.table("employees").select("id, user_id, first_name, last_name, phone").eq("id", emp_id).single().execute()
                 if emp_res.data:
                     emp = emp_res.data
-                    employee_name = emp.get("full_name") or f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
                     employee_phone = emp.get("phone")
-            except Exception:
+                    # Candidate name from employees table (first_name + last_name)
+                    candidate_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+                    
+                    # Step 2: Prefer users.full_name if available
+                    user_id = emp.get("user_id")
+                    if user_id:
+                        try:
+                            user_res = supabase.table("users").select("full_name").eq("id", user_id).single().execute()
+                            if user_res.data and user_res.data.get("full_name"):
+                                employee_name = user_res.data.get("full_name")
+                            else:
+                                employee_name = candidate_name
+                        except Exception:
+                            employee_name = candidate_name
+                    else:
+                        employee_name = candidate_name
+            except Exception as e:
+                print(f"Error fetching employee info: {e}")
                 pass
         
         # Add customer info to quote data
@@ -1159,18 +1176,35 @@ async def send_quote_to_customer(
                                 if item.get('product_category_id') in category_map:
                                     item['category_name'] = category_map[item.get('product_category_id')]
                         
-                        # Get employee in charge (prefer employee_in_charge_id, fallback created_by)
+                        # Get employee in charge from created_by -> employees -> users
                         employee_name = None
                         employee_phone = None
                         emp_id = quote_result.data[0].get("employee_in_charge_id") or quote_result.data[0].get("created_by")
                         if emp_id:
                             try:
-                                emp_res = supabase.table("employees").select("first_name, last_name, full_name, phone").eq("id", emp_id).single().execute()
+                                # Step 1: Get employee info including user_id
+                                emp_res = supabase.table("employees").select("id, user_id, first_name, last_name, phone").eq("id", emp_id).single().execute()
                                 if emp_res.data:
                                     emp = emp_res.data
-                                    employee_name = emp.get("full_name") or f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
                                     employee_phone = emp.get("phone")
-                            except Exception:
+                                    # Candidate name from employees table (first_name + last_name)
+                                    candidate_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+                                    
+                                    # Step 2: Prefer users.full_name if available
+                                    user_id = emp.get("user_id")
+                                    if user_id:
+                                        try:
+                                            user_res = supabase.table("users").select("full_name").eq("id", user_id).single().execute()
+                                            if user_res.data and user_res.data.get("full_name"):
+                                                employee_name = user_res.data.get("full_name")
+                                            else:
+                                                employee_name = candidate_name
+                                        except Exception:
+                                            employee_name = candidate_name
+                                    else:
+                                        employee_name = candidate_name
+                            except Exception as e:
+                                print(f"Error fetching employee info: {e}")
                                 pass
                         
                         # Prepare custom content: load from email_customizations (active), then fallback to request body
