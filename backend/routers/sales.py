@@ -614,25 +614,6 @@ async def approve_quote(
             detail=f"Failed to approve quote: {str(e)}"
         )
 
-@router.get("/quotes/{quote_id}/email-logs")
-async def get_quote_email_logs(
-    quote_id: str,
-    current_user: User = Depends(get_current_user)
-):
-    """Get email logs for a quote"""
-    try:
-        supabase = get_supabase_client()
-        
-        # Get email logs for this quote
-        logs_result = supabase.table("email_logs").select("*").eq("entity_type", "quote").eq("entity_id", quote_id).order("sent_at", desc=True).execute()
-        
-        return {"logs": logs_result.data if logs_result.data else []}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get email logs: {str(e)}"
-        )
-
 @router.get("/default-logo")
 async def get_default_logo(
     current_user: User = Depends(require_manager_or_admin)

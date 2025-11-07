@@ -17,12 +17,10 @@ import {
   HelpCircle,
   X,
   Package,
-  CheckCircle2,
-  Mail
+  CheckCircle2
 } from 'lucide-react'
 import CreateQuoteSidebarFullscreen from './CreateQuoteSidebarFullscreen'
 import QuoteEmailPreviewModal from './QuoteEmailPreviewModal'
-import QuoteEmailLogsModal from './QuoteEmailLogsModal'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { getApiEndpoint } from '@/lib/apiUrl'
@@ -77,9 +75,6 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null)
-  const [showEmailLogsModal, setShowEmailLogsModal] = useState(false)
-  const [emailLogsQuoteId, setEmailLogsQuoteId] = useState<string | null>(null)
-  const [autoOpenLatestEmailLog, setAutoOpenLatestEmailLog] = useState(false)
   const [showConversionSuccess, setShowConversionSuccess] = useState(false)
   const [conversionData, setConversionData] = useState<{
     invoiceNumber: string
@@ -897,33 +892,11 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       className="text-black hover:text-black" 
                       title="Xem chi tiết"
                       onClick={() => {
-                        if (quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'accepted') {
-                          // For sent/viewed/accepted, show the latest sent email content
-                          setEmailLogsQuoteId(quote.id)
-                          setAutoOpenLatestEmailLog(true)
-                          setShowEmailLogsModal(true)
-                        } else {
-                          // Default behavior: open quote detail page
-                          window.open(`/sales/quotes/${quote.id}`, '_blank')
-                        }
+                        window.open(`/sales/quotes/${quote.id}`, '_blank')
                       }}
                     >
                       <Eye className="h-4 w-4" />
                     </button>
-                    
-                    {(quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'accepted') && (
-                      <button 
-                        onClick={() => {
-                          setEmailLogsQuoteId(quote.id)
-                          setAutoOpenLatestEmailLog(false)
-                          setShowEmailLogsModal(true)
-                        }}
-                        className="text-black hover:text-blue-600" 
-                        title="Xem lịch sử email"
-                      >
-                        <Mail className="h-4 w-4" />
-                      </button>
-                    )}
                     
                     <>
                       <button 
@@ -1001,17 +974,6 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         }}
         quoteId={previewQuoteId || ''}
         onConfirmSend={confirmSendQuote}
-      />
-
-      <QuoteEmailLogsModal
-        isOpen={showEmailLogsModal}
-        onClose={() => {
-          setShowEmailLogsModal(false)
-          setEmailLogsQuoteId(null)
-          setAutoOpenLatestEmailLog(false)
-        }}
-        quoteId={emailLogsQuoteId || ''}
-        autoOpenLatest={autoOpenLatestEmailLog}
       />
 
       {/* Help Sidebar */}
