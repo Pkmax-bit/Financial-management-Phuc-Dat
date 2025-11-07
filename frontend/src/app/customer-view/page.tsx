@@ -106,7 +106,7 @@ export default function CustomerViewPage() {
   const fetchCustomers = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint('/api/customers')
+      const response = await fetch(getApiEndpoint('/api/customers'))
       if (response.ok) {
         const data = await response.json()
         setCustomers(data)
@@ -150,7 +150,7 @@ export default function CustomerViewPage() {
     if (!selectedCustomer) return
 
     try {
-      const response = await fetch(getApiEndpoint(`/api/customers/${selectedCustomer.id}/projects`)
+      const response = await fetch(getApiEndpoint(`/api/customers/${selectedCustomer.id}/projects`))
       if (response.ok) {
         const data = await response.json()
         setProjects(data)
@@ -196,7 +196,7 @@ export default function CustomerViewPage() {
     if (!selectedCustomer) return
 
     try {
-      const response = await fetch(getApiEndpoint(`/api/customers/${selectedCustomer.id}/timeline`)
+      const response = await fetch(getApiEndpoint(`/api/customers/${selectedCustomer.id}/timeline`))
       if (response.ok) {
         const data = await response.json()
         setTimelineEntries(data)

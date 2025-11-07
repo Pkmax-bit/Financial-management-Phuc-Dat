@@ -61,7 +61,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
   const fetchProductsServices = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint('/api/products-services')
+      const response = await fetch(getApiEndpoint('/api/products-services'))
       if (response.ok) {
         const data = await response.json()
         setItems(data)

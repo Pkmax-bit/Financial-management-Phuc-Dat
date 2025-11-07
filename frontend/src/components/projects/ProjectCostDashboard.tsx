@@ -54,7 +54,7 @@ export default function ProjectCostDashboard({ projectId, projectName, projectCo
   const fetchProjectCosts = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/costs`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/costs`))
       const data = await response.json()
       
       if (data.success) {

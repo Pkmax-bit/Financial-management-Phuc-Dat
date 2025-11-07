@@ -49,7 +49,7 @@ export default function ReactionButton({
 
   const loadEmotionTypes = async () => {
     try {
-      const response = await fetch(getApiEndpoint('/api/emotions-comments/emotion-types');
+      const response = await fetch(getApiEndpoint('/api/emotions-comments/emotion-types'))
       if (response.ok) {
         const data = await response.json();
         setEmotionTypes(data);
@@ -62,7 +62,7 @@ export default function ReactionButton({
   const loadReactions = async () => {
     try {
       setLoading(true);
-      const response = await fetch(getApiEndpoint(`/api/emotions-comments/comments/${entityType}/${entityId}`);
+      const response = await fetch(getApiEndpoint(`/api/emotions-comments/comments/${entityType}/${entityId}`))
       if (response.ok) {
         const data = await response.json();
         // Aggregate reactions from all comments

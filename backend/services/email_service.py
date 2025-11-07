@@ -4,6 +4,8 @@ Email service for sending quotes and invoices to customers
 
 import smtplib
 import os
+import base64
+import io
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -28,6 +30,40 @@ class EmailService:
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             self.logo_path = os.path.join(project_root, 'image', 'logo_phucdat.jpg')
 
+    def _resize_image(self, image_data: bytes, max_width: int = 300, max_height: int = 100) -> bytes:
+        """Resize image if too large. Returns resized image bytes or original if resize fails."""
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(image_data))
+            
+            # Get original dimensions
+            width, height = img.size
+            
+            # Resize if too large
+            if width > max_width or height > max_height:
+                # Calculate new dimensions maintaining aspect ratio
+                ratio = min(max_width / width, max_height / height)
+                new_width = int(width * ratio)
+                new_height = int(height * ratio)
+                
+                # Resize image
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                
+                # Convert back to bytes
+                output = io.BytesIO()
+                # Preserve format if possible, otherwise use JPEG
+                if img.format and img.format in ['PNG', 'JPEG', 'JPG']:
+                    img.save(output, format=img.format, quality=90, optimize=True)
+                else:
+                    img.save(output, format='JPEG', quality=90, optimize=True)
+                return output.getvalue()
+            
+            return image_data
+        except Exception as e:
+            # If resize fails, return original
+            print(f"Warning: Failed to resize image: {e}")
+            return image_data
+
     def _attach_company_logo(self, msg: MIMEMultipart) -> str | None:
         """Attach company logo inline and return its content-id.
         Returns 'company_logo' if attached successfully, otherwise None.
@@ -35,7 +71,10 @@ class EmailService:
         try:
             if os.path.exists(self.logo_path):
                 with open(self.logo_path, 'rb') as f:
-                    img = MIMEImage(f.read())
+                    img_data = f.read()
+                    # Resize if too large (max 300x100 for email)
+                    img_data = self._resize_image(img_data, max_width=300, max_height=100)
+                    img = MIMEImage(img_data)
                     img.add_header('Content-ID', '<company_logo>')
                     img.add_header('Content-Disposition', 'inline', filename='logo_phucdat.jpg')
                     msg.attach(img)
@@ -296,12 +335,9 @@ class EmailService:
         company_website = (company_info.get("company_website") if company_info else None) or "https://www.kinhphucdat.com"
         company_hotline = (company_info.get("company_hotline") if company_info else None) or "0901.116.118"
         
-        # Logo handling
-        logo_src = "cid:company_logo"  # For email, use cid:company_logo
-        if company_info and company_info.get("company_logo_base64"):
-            logo_src = company_info.get("company_logo_base64")
-        elif company_info and company_info.get("company_logo_url"):
-            logo_src = company_info.get("company_logo_url")
+        # Logo handling - always use CID for email (will be attached when sending)
+        # This ensures logo is properly attached as inline image with Content-ID
+        logo_src = "cid:company_logo"  # For email, always use cid:company_logo
         
         # Get bank info from customization or use defaults
         bank_account_name = (bank_info.get("bank_account_name") if bank_info else None) or "CÔNG TY TNHH NHÔM KÍNH PHÚC ĐẠT"
@@ -322,7 +358,7 @@ class EmailService:
                         <tr>
                             <td style="width:40%; vertical-align:middle; padding:10px 0;">
                                 <div style="display:inline-block;">
-                                    <img src="{logo_src}" alt="PHÚC ĐẠT" style="height:64px; display:block;">
+                                    <img src="{logo_src}" alt="PHÚC ĐẠT" style="max-width:300px; max-height:100px; height:auto; width:auto; display:block; object-fit:contain;">
                                     <div style="font-size:12px; color:#000000; margin-top:6px; letter-spacing:1px;">KẾT NỐI KHÔNG GIAN</div>
                                 </div>
                             </td>
@@ -445,7 +481,7 @@ class EmailService:
         
         return html_body
 
-    async def send_quote_email(self, quote_data: Dict[str, Any], customer_email: str, customer_name: str, quote_items: list = None, custom_payment_terms: list = None, additional_notes: str = None, prepared_html: str | None = None, company_info: Dict[str, Any] = None, bank_info: Dict[str, Any] = None, default_notes: list = None) -> bool:
+    async def send_quote_email(self, quote_data: Dict[str, Any], customer_email: str, customer_name: str, quote_items: list = None, custom_payment_terms: list = None, additional_notes: str = None, prepared_html: str | None = None, company_info: Dict[str, Any] = None, bank_info: Dict[str, Any] = None, default_notes: list = None, attachments: list = None) -> bool:
         """Send quote email to customer"""
         try:
             if not self.smtp_username or not self.smtp_password:
@@ -519,6 +555,28 @@ class EmailService:
             if prepared_html and prepared_html.strip():
                 html_body = prepared_html.strip()
                 print(f"📝 Using prepared_html (raw_html from email_customizations)")
+                
+                # Replace logo in prepared_html if needed
+                if company_info and company_info.get("company_logo_base64"):
+                    # Replace any base64 logo with CID
+                    base64_data = company_info.get("company_logo_base64")
+                    import re
+                    if base64_data.startswith('data:image'):
+                        html_body = re.sub(re.escape(base64_data), 'cid:company_logo', html_body)
+                    else:
+                        patterns = [
+                            f'data:image/[^;]+;base64,{re.escape(base64_data)}',
+                            re.escape(base64_data),
+                        ]
+                        for pattern in patterns:
+                            html_body = re.sub(pattern, 'cid:company_logo', html_body)
+                    print(f"📷 Replaced base64 logo with CID in prepared_html")
+                elif company_info and company_info.get("company_logo_url"):
+                    # Replace URL logo with CID
+                    logo_url = company_info.get("company_logo_url")
+                    html_body = html_body.replace(logo_url, 'cid:company_logo')
+                    print(f"📷 Replaced URL logo with CID in prepared_html")
+                
                 # Inject additional notes if available and not present
                 try:
                     if additional_notes and ('Thông tin bổ sung' not in html_body):
@@ -601,6 +659,53 @@ class EmailService:
             Đội ngũ bán hàng
             """
             
+            # Handle logo in HTML - ensure it uses CID for email attachment
+            # Replace any base64 logo or URL logo with CID reference
+            import re
+            logo_should_attach = False
+            
+            # First, ensure HTML uses CID for logo
+            if 'cid:company_logo' not in html_body:
+                # Try to replace any logo reference with CID
+                if company_info and company_info.get("company_logo_base64"):
+                    # Replace base64 logo with CID
+                    base64_data = company_info.get("company_logo_base64")
+                    # Pattern to match data:image/...;base64,... or just the base64 string
+                    if base64_data.startswith('data:image'):
+                        # Full data URI
+                        html_body = re.sub(re.escape(base64_data), 'cid:company_logo', html_body)
+                    else:
+                        # Just base64 string, might be in src="data:image/...;base64,{base64_data}"
+                        # Try to find it in various formats
+                        patterns = [
+                            f'data:image/[^;]+;base64,{re.escape(base64_data)}',
+                            re.escape(base64_data),
+                        ]
+                        for pattern in patterns:
+                            html_body = re.sub(pattern, 'cid:company_logo', html_body)
+                    logo_should_attach = True
+                    print(f"📷 Replaced base64 logo with CID in HTML")
+                elif company_info and company_info.get("company_logo_url"):
+                    # Replace URL logo with CID
+                    logo_url = company_info.get("company_logo_url")
+                    html_body = html_body.replace(logo_url, 'cid:company_logo')
+                    logo_should_attach = False  # URL logo won't be attached, use default
+                    print(f"📷 Replaced URL logo with CID in HTML")
+            
+            # Check if CID is now in HTML
+            if 'cid:company_logo' in html_body:
+                logo_should_attach = True
+                print(f"📷 HTML uses CID, will attach logo")
+            else:
+                print(f"⚠️ Warning: CID not found in HTML after replacement")
+                # Force add CID if we have logo to attach
+                if company_info and company_info.get("company_logo_base64"):
+                    # Try to find img tag and replace src
+                    html_body = re.sub(r'<img[^>]*src=["\'][^"\']*["\']', r'<img src="cid:company_logo"', html_body, count=1)
+                    if 'cid:company_logo' in html_body:
+                        logo_should_attach = True
+                        print(f"📷 Force added CID to HTML")
+            
             # Create message
             # Root related (for inline images)
             msg = MIMEMultipart('related')
@@ -614,8 +719,77 @@ class EmailService:
             alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
             alt.attach(MIMEText(html_body, 'html', 'utf-8'))
             msg.attach(alt)
-            self._attach_company_logo(msg)
+            
+            # Attach logo if HTML references CID or if we have logo to attach
+            if 'cid:company_logo' in html_body or (company_info and company_info.get("company_logo_base64")):
+                if company_info and company_info.get("company_logo_base64"):
+                    # Attach base64 logo (resized)
+                    try:
+                        # Extract base64 data (remove data:image/...;base64, prefix if present)
+                        base64_data = company_info.get("company_logo_base64")
+                        if ',' in base64_data:
+                            base64_data = base64_data.split(',', 1)[1]
+                        
+                        # Decode base64 to bytes
+                        img_bytes = base64.b64decode(base64_data)
+                        
+                        # Resize if too large
+                        img_bytes = self._resize_image(img_bytes, max_width=300, max_height=100)
+                        
+                        # Attach as inline image
+                        img = MIMEImage(img_bytes)
+                        img.add_header('Content-ID', '<company_logo>')
+                        img.add_header('Content-Disposition', 'inline', filename='company_logo.jpg')
+                        msg.attach(img)
+                        print(f"✅ Attached base64 logo (resized) with CID: company_logo")
+                    except Exception as e:
+                        print(f"⚠️ Failed to attach base64 logo: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Fallback to default logo
+                        self._attach_company_logo(msg)
+                else:
+                    # Use default logo from file
+                    logo_attached = self._attach_company_logo(msg)
+                    if logo_attached:
+                        print(f"✅ Attached default logo with CID: company_logo")
+                    else:
+                        print(f"⚠️ Failed to attach default logo")
+            else:
+                print(f"ℹ️ No CID reference in HTML and no logo to attach, skipping logo attachment")
 
+            # Attach file attachments if provided
+            if attachments and isinstance(attachments, list):
+                for attachment in attachments:
+                    try:
+                        # Get attachment data
+                        file_name = attachment.get('name', 'attachment')
+                        file_content = attachment.get('content', '')
+                        mime_type = attachment.get('mimeType', 'application/octet-stream')
+                        
+                        if file_content:
+                            # Decode base64 content
+                            file_bytes = base64.b64decode(file_content)
+                            
+                            # Create MIME attachment
+                            if mime_type.startswith('image/'):
+                                # For images, use MIMEImage
+                                attachment_part = MIMEImage(file_bytes, _subtype=mime_type.split('/')[-1])
+                            elif mime_type == 'application/pdf':
+                                # For PDF, use MIMEApplication
+                                attachment_part = MIMEApplication(file_bytes, _subtype='pdf')
+                            else:
+                                # For other files, use MIMEApplication with appropriate subtype
+                                attachment_part = MIMEApplication(file_bytes, _subtype=mime_type.split('/')[-1] if '/' in mime_type else 'octet-stream')
+                            
+                            attachment_part.add_header('Content-Disposition', 'attachment', filename=file_name)
+                            msg.attach(attachment_part)
+                            print(f"✅ Attached file: {file_name} ({len(file_bytes)} bytes)")
+                    except Exception as e:
+                        print(f"⚠️ Failed to attach file {attachment.get('name', 'unknown')}: {e}")
+                        import traceback
+                        traceback.print_exc()
+            
             # Try attach PDF version of the quote
             try:
                 pdf_bytes = self._html_to_pdf_bytes(html_body)

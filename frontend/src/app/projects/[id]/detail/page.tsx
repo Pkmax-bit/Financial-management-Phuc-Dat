@@ -146,7 +146,7 @@ export default function ProjectDetailPage() {
   const fetchProject = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`))
       
       if (response.ok) {
         const data = await response.json()

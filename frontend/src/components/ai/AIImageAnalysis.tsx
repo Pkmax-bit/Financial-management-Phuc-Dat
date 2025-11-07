@@ -107,7 +107,7 @@ export default function AIImageAnalysis() {
 
   const loadAllProjects = async () => {
     try {
-      const response = await fetch(getApiEndpoint('/api/projects')
+      const response = await fetch(getApiEndpoint('/api/projects'))
       if (response.ok) {
         const data = await response.json()
         // API returns { success: true, projects: [...], total: number }

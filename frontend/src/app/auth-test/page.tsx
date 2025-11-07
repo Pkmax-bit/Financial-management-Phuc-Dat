@@ -45,7 +45,7 @@ export default function AuthTestPage() {
   const testPublicAPI = async () => {
     setLoading(true)
     try {
-      const response = await fetch(getApiEndpoint('/api/auth-test/public')
+      const response = await fetch(getApiEndpoint('/api/auth-test/public'))
       const data = await response.json()
       setTestResult(`Public API Success: ${JSON.stringify(data, null, 2)}`)
     } catch (error: unknown) {

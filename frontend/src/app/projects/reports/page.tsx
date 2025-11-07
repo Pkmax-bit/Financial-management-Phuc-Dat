@@ -79,7 +79,7 @@ export default function ProjectReportsPage() {
       params.append('sort_by', sortBy);
       params.append('sort_order', sortOrder);
 
-      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability?${params}`);
+      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability?${params}`))
       if (response.ok) {
         const data = await response.json();
         setProjects(data);
@@ -96,7 +96,7 @@ export default function ProjectReportsPage() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.append('status', statusFilter);
 
-      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability/summary?${params}`);
+      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability/summary?${params}`))
       if (response.ok) {
         const data = await response.json();
         setSummary(data);

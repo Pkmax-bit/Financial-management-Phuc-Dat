@@ -14,7 +14,7 @@ export default function TestAPIPage() {
     setError(null)
     
     try {
-      const response = await fetch(getApiEndpoint('/api/ai-simple')
+      const response = await fetch(getApiEndpoint('/api/ai-simple'))
       const data = await response.json()
       setResult(data)
     } catch (err) {

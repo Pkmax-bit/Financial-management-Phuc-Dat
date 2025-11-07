@@ -205,6 +205,11 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     bankName?: string
     bankBranch?: string
     rawHtml?: string
+    attachments?: Array<{
+      name: string
+      content: string // base64 encoded file content
+      mimeType: string
+    }>
   }) => {
     if (!previewQuoteId) return
     
@@ -269,6 +274,11 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       // Raw HTML (exact preview HTML)
       if (customData?.rawHtml && customData.rawHtml.trim()) {
         requestBody.raw_html = customData.rawHtml
+      }
+      
+      // File attachments
+      if (customData?.attachments && customData.attachments.length > 0) {
+        requestBody.attachments = customData.attachments
       }
       
       console.log('📤 Request body:', JSON.stringify(requestBody, null, 2))

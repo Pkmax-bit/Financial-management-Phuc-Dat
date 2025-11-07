@@ -82,7 +82,7 @@ export default function AIReceiptUpload({ onExpenseCreated }: AIReceiptUploadPro
 
   const loadAvailableProjects = async () => {
     try {
-      const response = await fetch(getApiEndpoint('/api/projects')
+      const response = await fetch(getApiEndpoint('/api/projects'))
       const projects = await response.json()
       setAvailableProjects(projects.data || [])
     } catch (error) {

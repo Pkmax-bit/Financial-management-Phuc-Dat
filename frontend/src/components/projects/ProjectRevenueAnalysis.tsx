@@ -102,7 +102,7 @@ export default function ProjectRevenueAnalysis({ projectId, projectName }: Proje
   const fetchRevenueData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/revenue-analysis`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/revenue-analysis`))
       if (response.ok) {
         const data = await response.json()
         setRevenueBreakdown(data.breakdown)

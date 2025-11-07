@@ -46,8 +46,8 @@ const ProjectDetail = () => {
     // Fetch project details
     const fetchProject = async () => {
       try {
-        const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`);
-        const data = await response.json();
+        const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`))
+        const data = await response.json()
         setProject(data);
       } catch (error) {
         console.error('Error fetching project:', error);

@@ -29,7 +29,7 @@ export default function CustomerTimelineLandingPage() {
   const fetchAvailableProjects = async () => {
     try {
       setLoadingProjects(true)
-      const response = await fetch(getApiEndpoint('/api/projects/list-ids')
+      const response = await fetch(getApiEndpoint('/api/projects/list-ids'))
       if (response.ok) {
         const data = await response.json()
         setAvailableProjects(data.projects || [])

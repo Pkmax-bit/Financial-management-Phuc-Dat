@@ -74,7 +74,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
 
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${project.id}/financial-summary`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${project.id}/financial-summary`))
       if (response.ok) {
         const data = await response.json()
         setFinancialData(data)

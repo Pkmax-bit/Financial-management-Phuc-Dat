@@ -101,7 +101,7 @@ export default function ProjectCostBreakdown({ projectId, projectName }: Project
   const fetchCostData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/cost-breakdown`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/cost-breakdown`))
       if (response.ok) {
         const data = await response.json()
         setCostBreakdown(data.breakdown)

@@ -45,7 +45,7 @@ export default function AIModelInfoPage() {
   const checkAPIStatus = async () => {
     try {
       setApiStatus('checking')
-      const response = await fetch(getApiEndpoint('/api/ai-simple')
+      const response = await fetch(getApiEndpoint('/api/ai-simple'))
       const data = await response.json()
       
       if (data.success) {

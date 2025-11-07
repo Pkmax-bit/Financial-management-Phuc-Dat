@@ -32,7 +32,7 @@ export default function EmployeeTimelineManagerPage() {
   const loadProjects = async () => {
     setLoading(true)
     try {
-      const res = await fetch(getApiEndpoint('/api/projects')
+      const res = await fetch(getApiEndpoint('/api/projects'))
       const data = await res.json()
       const items: ProjectRef[] = (data.data || data || []).map((p: any) => ({ id: p.id, name: p.name }))
       setProjects(items)

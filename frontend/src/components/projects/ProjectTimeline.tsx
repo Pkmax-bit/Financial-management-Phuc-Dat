@@ -127,7 +127,7 @@ export default function ProjectTimeline({ projectId, projectName, currentUser }:
   const fetchTimelineEntries = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/timeline`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/timeline`))
       
       if (!response.ok) {
         throw new Error('Failed to fetch timeline entries')

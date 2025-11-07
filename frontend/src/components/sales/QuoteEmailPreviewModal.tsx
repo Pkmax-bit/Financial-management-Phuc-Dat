@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Send, Loader2, Edit2, Save, Plus, Trash2, Upload, Image as ImageIcon } from 'lucide-react'
+import { X, Send, Loader2, Edit2, Save, Plus, Trash2, Upload, Image as ImageIcon, File, Paperclip } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface PaymentTermItem {
@@ -30,6 +30,11 @@ interface QuoteEmailPreviewModalProps {
     bankName?: string
     bankBranch?: string
     rawHtml?: string
+    attachments?: Array<{
+      name: string
+      content: string // base64 encoded file content
+      mimeType: string
+    }>
   }) => void
 }
 
@@ -75,6 +80,16 @@ export default function QuoteEmailPreviewModal({
   const [bankAccountNumber, setBankAccountNumber] = useState('')
   const [bankName, setBankName] = useState('')
   const [bankBranch, setBankBranch] = useState('')
+  
+  // File attachments
+  interface FileAttachment {
+    id: string
+    name: string
+    size: number
+    file: File
+    base64?: string
+  }
+  const [attachments, setAttachments] = useState<FileAttachment[]>([])
 
   // Update preview HTML when payment terms change
   const updatePreviewWithPaymentTerms = (html: string): string => {
@@ -586,6 +601,7 @@ export default function QuoteEmailPreviewModal({
                       setBankName('')
                       setBankBranch('')
                       setAdditionalNotes('')
+                      setAttachments([])
                       setDefaultNotes([
                         'Nếu phụ kiện, thiết bị của khách hàng mà CTy lắp sẽ tính công 200k/1 bộ',
                         'Giá đã bao gồm nhân công lắp đặt trọn gói trong khu vực TPHCM',
@@ -710,11 +726,48 @@ export default function QuoteEmailPreviewModal({
                             onChange={(e) => {
                               const file = e.target.files?.[0]
                               if (file) {
+                                // Resize image if too large
+                                const maxWidth = 300 // Max width for logo in email
+                                const maxHeight = 100 // Max height for logo in email
                                 const reader = new FileReader()
                                 reader.onloadend = () => {
-                                  const base64String = reader.result as string
-                                  setCompanyLogoBase64(base64String)
-                                  setCompanyLogoUrl('') // Clear URL khi upload file
+                                  const img = new Image()
+                                  img.onload = () => {
+                                    // Calculate new dimensions
+                                    let width = img.width
+                                    let height = img.height
+                                    
+                                    // Resize if too large
+                                    if (width > maxWidth || height > maxHeight) {
+                                      const ratio = Math.min(maxWidth / width, maxHeight / height)
+                                      width = Math.round(width * ratio)
+                                      height = Math.round(height * ratio)
+                                    }
+                                    
+                                    // Create canvas to resize
+                                    const canvas = document.createElement('canvas')
+                                    canvas.width = width
+                                    canvas.height = height
+                                    const ctx = canvas.getContext('2d')
+                                    if (ctx) {
+                                      ctx.drawImage(img, 0, 0, width, height)
+                                      const resizedBase64 = canvas.toDataURL('image/jpeg', 0.9)
+                                      setCompanyLogoBase64(resizedBase64)
+                                      setCompanyLogoUrl('') // Clear URL khi upload file
+                                    } else {
+                                      // Fallback: use original if canvas not available
+                                      const base64String = reader.result as string
+                                      setCompanyLogoBase64(base64String)
+                                      setCompanyLogoUrl('')
+                                    }
+                                  }
+                                  img.onerror = () => {
+                                    // Fallback: use original if image load fails
+                                    const base64String = reader.result as string
+                                    setCompanyLogoBase64(base64String)
+                                    setCompanyLogoUrl('')
+                                  }
+                                  img.src = reader.result as string
                                 }
                                 reader.readAsDataURL(file)
                               }
@@ -980,6 +1033,99 @@ export default function QuoteEmailPreviewModal({
                     placeholder="Nhập thêm ghi chú hoặc thông tin bổ sung sẽ được thêm vào email..."
                   />
                 </div>
+
+                {/* File Attachments Editor */}
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Paperclip className="w-5 h-5" />
+                    Tài liệu đính kèm
+                  </h3>
+                  <div className="space-y-3">
+                    {/* Upload File */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Thêm file tài liệu:
+                      </label>
+                      <input
+                        type="file"
+                        multiple
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || [])
+                          if (files.length > 0) {
+                            const newAttachments: FileAttachment[] = []
+                            for (const file of files) {
+                              // Convert file to base64
+                              const base64 = await new Promise<string>((resolve, reject) => {
+                                const reader = new FileReader()
+                                reader.onloadend = () => {
+                                  const result = reader.result as string
+                                  // Remove data:...;base64, prefix
+                                  const base64Data = result.split(',')[1] || result
+                                  resolve(base64Data)
+                                }
+                                reader.onerror = reject
+                                reader.readAsDataURL(file)
+                              })
+                              
+                              newAttachments.push({
+                                id: `${Date.now()}-${Math.random()}`,
+                                name: file.name,
+                                size: file.size,
+                                file: file,
+                                base64: base64
+                              })
+                            }
+                            setAttachments([...attachments, ...newAttachments])
+                            // Reset input
+                            e.target.value = ''
+                          }
+                        }}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Có thể chọn nhiều file cùng lúc. File sẽ được đính kèm vào email.
+                      </p>
+                    </div>
+
+                    {/* Attachments List */}
+                    {attachments.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Danh sách file đính kèm ({attachments.length}):
+                        </label>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {attachments.map((attachment) => (
+                            <div
+                              key={attachment.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <File className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {attachment.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {(attachment.size / 1024).toFixed(2)} KB
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setAttachments(attachments.filter(a => a.id !== attachment.id))
+                                }}
+                                className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                title="Xóa file"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -994,7 +1140,20 @@ export default function QuoteEmailPreviewModal({
             Hủy
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
+              // Convert attachments to base64 format for sending
+              const attachmentData = await Promise.all(
+                attachments.map(async (attachment) => {
+                  // Get MIME type from file
+                  const mimeType = attachment.file.type || 'application/octet-stream'
+                  return {
+                    name: attachment.name,
+                    content: attachment.base64 || '',
+                    mimeType: mimeType
+                  }
+                })
+              )
+
               // Send with all current customization data
               onConfirmSend({
                 paymentTerms,
@@ -1011,7 +1170,8 @@ export default function QuoteEmailPreviewModal({
                 bankAccountNumber,
                 bankName,
                 bankBranch,
-                rawHtml: htmlContent
+                rawHtml: htmlContent,
+                attachments: attachmentData.length > 0 ? attachmentData : undefined
               })
             }}
             disabled={loading || !!error}

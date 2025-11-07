@@ -85,6 +85,11 @@ class PaymentTermItem(BaseModel):
     amount: str
     received: bool
 
+class AttachmentItem(BaseModel):
+    name: str
+    content: str  # base64 encoded file content
+    mimeType: str
+
 class QuoteSendRequest(BaseModel):
     # Payment terms
     custom_payment_terms: Optional[List[PaymentTermItem]] = None
@@ -107,6 +112,9 @@ class QuoteSendRequest(BaseModel):
     bank_name: Optional[str] = None
     bank_branch: Optional[str] = None
     bank_account_info: Optional[Dict[str, Any]] = None
+    
+    # File attachments
+    attachments: Optional[List[AttachmentItem]] = None
     
     # Raw HTML
     raw_html: Optional[str] = None
@@ -1395,6 +1403,19 @@ async def send_quote_to_customer(
                             )
                             print(f"📝 Generated HTML from template")
                         
+                        # Prepare attachments from request
+                        attachments_list = None
+                        if request and request.attachments:
+                            # Convert AttachmentItem to dict format
+                            attachments_list = [
+                                {
+                                    'name': att.name,
+                                    'content': att.content,
+                                    'mimeType': att.mimeType
+                                }
+                                for att in request.attachments
+                            ]
+                        
                         background_tasks.add_task(
                             email_service.send_quote_email,
                             quote_data_with_custom,
@@ -1406,7 +1427,8 @@ async def send_quote_to_customer(
                             final_html,
                             company_info if company_info else None,
                             bank_info if bank_info else None,
-                            default_notes
+                            default_notes,
+                            attachments_list
                         )
                         
                         # Save email log with custom content
