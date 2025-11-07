@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Send, Loader2, Edit2, Save, Plus, Trash2, Upload, Image as ImageIcon, File, Paperclip } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
+import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface PaymentTermItem {
   description: string
@@ -90,6 +91,44 @@ export default function QuoteEmailPreviewModal({
     base64?: string
   }
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
+
+  const { hideSidebar } = useSidebar()
+
+  useEffect(() => {
+    if (isOpen) {
+      hideSidebar(true)
+    } else {
+      hideSidebar(false)
+    }
+
+    return () => {
+      hideSidebar(false)
+    }
+  }, [isOpen, hideSidebar])
+
+  const normalizeMeasurementUnits = (html: string): string => {
+    if (!html) return html
+    let updated = html
+
+    // Replace unit labels from meters to millimeters
+    updated = updated.replace(/NGANG\s*\(m\)/g, 'NGANG (mm)')
+    updated = updated.replace(/SÂU\s*\(m\)/g, 'SÂU (mm)')
+    updated = updated.replace(/CAO\s*\(m\)/g, 'CAO (mm)')
+    updated = updated.replace(/KHỐI LƯỢNG\s*\(m\)/g, 'KHỐI LƯỢNG (mm)')
+
+    // Remove trailing zeros in measurement values (e.g., 2000.00 -> 2000)
+    updated = updated.replace(/(\d+)\.(\d+)(?=\s*(mm|m)([^a-zA-Z]|$))/g, (_match, intPart, decimalPart) => {
+      const trimmed = decimalPart.replace(/0+$/, '')
+      return trimmed ? `${intPart}.${trimmed}` : `${intPart}`
+    })
+
+    updated = updated.replace(/(\d+)\.(\d+)(?=<\/td>)/g, (_match, intPart, decimalPart) => {
+      const trimmed = decimalPart.replace(/0+$/, '')
+      return trimmed ? `${intPart}.${trimmed}` : `${intPart}`
+    })
+
+    return updated
+  }
 
   // Update preview HTML when payment terms change
   const updatePreviewWithPaymentTerms = (html: string): string => {
@@ -298,6 +337,7 @@ export default function QuoteEmailPreviewModal({
       html = html.replace(/color:\s*#333/g, 'color: #000000')
       html = html.replace(/color:\s*#111/g, 'color: #000000')
       html = html.replace(/color:\s*#374151/g, 'color: #000000')
+      html = normalizeMeasurementUnits(html)
       
       setHtmlContent(html)
     } catch (err) {
@@ -323,7 +363,7 @@ export default function QuoteEmailPreviewModal({
     }
     
     // Update preview immediately with direct HTML update (no backend sync)
-    setHtmlContent(updatedHtml)
+    setHtmlContent(normalizeMeasurementUnits(updatedHtml))
   }, [
     paymentTerms, 
     additionalNotes,
@@ -421,6 +461,7 @@ export default function QuoteEmailPreviewModal({
       html = html.replace(/color:\s*#333/g, 'color: #000000')
       html = html.replace(/color:\s*#111/g, 'color: #000000')
       html = html.replace(/color:\s*#374151/g, 'color: #000000')
+      html = normalizeMeasurementUnits(html)
       
       // Store original HTML for later updates
       setOriginalHtml(html)
@@ -582,7 +623,7 @@ export default function QuoteEmailPreviewModal({
               </div>
 
               {/* Right side: Edit Forms (always visible) */}
-              <div className="w-[450px] flex-shrink-0 overflow-y-auto p-4 space-y-4 bg-gray-50 border-l border-gray-200">
+              <div className="w-[670px] flex-shrink-0 overflow-y-auto p-4 space-y-4 bg-gray-50 border-l border-gray-200">
                 {/* Reset to Default Button */}
                 <div className="bg-white rounded-lg shadow-sm p-4 border border-orange-200">
                   <button

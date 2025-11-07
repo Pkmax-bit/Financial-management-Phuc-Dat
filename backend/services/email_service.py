@@ -12,6 +12,7 @@ from email.mime.image import MIMEImage
 from email.mime.application import MIMEApplication
 from typing import Dict, Any
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from services.supabase_client import get_supabase_client
 
 class EmailService:
@@ -178,9 +179,9 @@ class EmailService:
                                 <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\"></th>
                                 <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\"></th>
                                 <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\"></th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\">NGANG (m)</th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\">SÂU (m)</th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\">CAO (m)</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">NGANG (mm)</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">SÂU (mm)</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">CAO (mm)</th>
                                 <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\"></th>
                                 <th style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;\"></th>
                                 <th style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;\"></th>
@@ -234,10 +235,19 @@ class EmailService:
                     if val is None or val == '':
                         return ''
                     try:
-                        num_val = float(val)
-                        return f'{num_val:.2f}' if num_val != 0 else ''
-                    except:
-                        return str(val) if val else ''
+                        decimal_val = Decimal(str(val))
+                    except (InvalidOperation, ValueError):
+                        try:
+                            decimal_val = Decimal(float(val))
+                        except Exception:
+                            return str(val) if val else ''
+                    if decimal_val == 0:
+                        return ''
+                    normalized = decimal_val.normalize()
+                    # Convert to string without trailing zeros
+                    formatted = format(normalized, 'f')
+                    formatted = formatted.rstrip('0').rstrip('.') if '.' in formatted else formatted
+                    return formatted
                 
                 quantity_display = item.get('quantity', 0)
                 if item.get('area'):
