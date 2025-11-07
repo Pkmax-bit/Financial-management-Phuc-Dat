@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Edit, Trash2, Calendar, DollarSign, Users, Target, Clock, TrendingUp, BarChart3 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi } from '@/lib/api'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface Project {
   id: string
@@ -73,7 +74,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
 
     try {
       setLoading(true)
-      const response = await fetch(`/api/projects/${project.id}/financial-summary`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${project.id}/financial-summary`)
       if (response.ok) {
         const data = await response.json()
         setFinancialData(data)

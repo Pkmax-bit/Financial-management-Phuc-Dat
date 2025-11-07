@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Calendar, FileText, DollarSign } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface QuoteItem {
   id: string
@@ -33,7 +34,7 @@ export default function QuoteDetailPage() {
         setLoading(true)
         const token = (await supabase.auth.getSession()).data.session?.access_token
         // Fetch quote
-        const qRes = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}`, {
+        const qRes = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}`), {
           headers: { Authorization: `Bearer ${token || ''}` }
         })
         let qData: any
@@ -86,7 +87,7 @@ export default function QuoteDetailPage() {
 
         // Fetch quote items
         try {
-          const iRes = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/items`, {
+          const iRes = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/items`), {
             headers: { Authorization: `Bearer ${token || ''}` }
           })
           if (iRes.ok) {

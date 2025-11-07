@@ -14,6 +14,7 @@ import {
   CheckCircle2
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Quote {
   id: string
@@ -83,7 +84,7 @@ export default function ApproveQuotePage({ params }: ApproveQuotePageProps) {
         throw new Error('Not authenticated')
       }
 
-      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}`, {
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}`), {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
@@ -98,7 +99,7 @@ export default function ApproveQuotePage({ params }: ApproveQuotePageProps) {
       setQuote(quoteData)
 
       // Get quote items
-      const itemsResponse = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/items`, {
+      const itemsResponse = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/items`), {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
@@ -128,7 +129,7 @@ export default function ApproveQuotePage({ params }: ApproveQuotePageProps) {
         throw new Error('Not authenticated')
       }
 
-      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/approve`, {
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/approve`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

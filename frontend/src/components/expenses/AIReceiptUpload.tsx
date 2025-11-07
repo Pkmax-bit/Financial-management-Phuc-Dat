@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Camera, FileText, Loader2, CheckCircle, AlertCircle, X, Save } from 'lucide-react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface AIReceiptUploadProps {
   onExpenseCreated: (expense: any) => void
@@ -81,7 +82,7 @@ export default function AIReceiptUpload({ onExpenseCreated }: AIReceiptUploadPro
 
   const loadAvailableProjects = async () => {
     try {
-      const response = await fetch('/api/projects')
+      const response = await fetch(getApiEndpoint('/api/projects')
       const projects = await response.json()
       setAvailableProjects(projects.data || [])
     } catch (error) {

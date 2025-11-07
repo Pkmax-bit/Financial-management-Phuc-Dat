@@ -25,6 +25,7 @@ import QuoteEmailPreviewModal from './QuoteEmailPreviewModal'
 import QuoteEmailLogsModal from './QuoteEmailLogsModal'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface Quote {
   id: string
@@ -56,6 +57,8 @@ interface Quote {
   accepted_at?: string
   declined_at?: string
   created_by: string
+  employee_in_charge_id?: string
+  employee_in_charge_name?: string
   created_at: string
   updated_at: string
 }
@@ -76,6 +79,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null)
   const [showEmailLogsModal, setShowEmailLogsModal] = useState(false)
   const [emailLogsQuoteId, setEmailLogsQuoteId] = useState<string | null>(null)
+  const [autoOpenLatestEmailLog, setAutoOpenLatestEmailLog] = useState(false)
   const [showConversionSuccess, setShowConversionSuccess] = useState(false)
   const [conversionData, setConversionData] = useState<{
     invoiceNumber: string
@@ -117,13 +121,20 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       setLoading(true)
       console.log('🔍 Fetching quotes from database...')
       
-      // Use Supabase directly to get quotes
+      // Use Supabase directly to get quotes with employee in charge info
       const { data: quotes, error } = await supabase
         .from('quotes')
         .select(`
           *,
           customers:customer_id(name, email),
-          projects:project_id(name, project_code)
+          projects:project_id(name, project_code),
+          employee_in_charge:employee_in_charge_id(
+            id,
+            first_name,
+            last_name,
+            user_id,
+            users!employees_user_id_fkey(full_name)
+          )
         `)
         .order('created_at', { ascending: false })
       
@@ -133,13 +144,25 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       }
       
       console.log('🔍 Quotes data from database:', quotes)
-      // Transform to include customer_name and project fields
-      const transformed = (quotes || []).map((q: any) => ({
-        ...q,
-        customer_name: q.customers?.name,
-        project_name: q.projects?.name,
-        project_code: q.projects?.project_code
-      }))
+      // Transform to include customer_name, project fields, and employee in charge name
+      const transformed = (quotes || []).map((q: any) => {
+        // Get employee in charge name from users table via employees
+        let employeeInChargeName = null
+        if (q.employee_in_charge) {
+          const emp = q.employee_in_charge
+          const usersRel = emp.users
+          const userFullName = Array.isArray(usersRel) ? usersRel[0]?.full_name : usersRel?.full_name
+          employeeInChargeName = userFullName || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || null
+        }
+        
+        return {
+          ...q,
+          customer_name: q.customers?.name,
+          project_name: q.projects?.name,
+          project_code: q.projects?.project_code,
+          employee_in_charge_name: employeeInChargeName
+        }
+      })
       setQuotes(transformed)
     } catch (error) {
       console.error('❌ Error fetching quotes:', error)
@@ -243,7 +266,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       console.log('📤 Request body:', JSON.stringify(requestBody, null, 2))
       
       // Call API to send quote email
-      const response = await fetch(`http://localhost:8000/api/sales/quotes/${previewQuoteId}/send`, {
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${previewQuoteId}/send`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -262,6 +285,22 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       
       const result = await response.json()
       console.log('🔍 Quote email sent successfully:', result)
+      
+      // Optimistically update local list to hide send/edit buttons immediately
+      setQuotes(prev => prev.map(q => q.id === previewQuoteId ? { ...q, status: 'sent' } : q))
+      
+      // Ensure DB reflects the new status for consistency with subsequent fetches
+      try {
+        await supabase
+          .from('quotes')
+          .update({ 
+            status: 'sent',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', previewQuoteId)
+      } catch (e) {
+        console.error('❌ Failed to persist sent status to DB (will still refetch):', e)
+      }
       
       // Reset preview state
       setPreviewQuoteId(null)
@@ -304,7 +343,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         }
       }, 7000)
       
-      fetchQuotes() // Refresh list
+      fetchQuotes() // Refresh list from server to confirm status
     } catch (error) {
       console.error('❌ Error sending quote email:', error)
       
@@ -809,6 +848,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                 Ngày tạo
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+                Nhân viên phụ trách
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                 Thao tác
               </th>
             </tr>
@@ -846,12 +888,25 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                   {formatDate(quote.created_at)}
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  {quote.employee_in_charge_name || 'N/A'}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
                     <button 
                       className="text-black hover:text-black" 
                       title="Xem chi tiết"
-                      onClick={() => window.open(`/sales/quotes/${quote.id}`, '_blank')}
+                      onClick={() => {
+                        if (quote.status === 'sent' || quote.status === 'viewed' || quote.status === 'accepted') {
+                          // For sent/viewed/accepted, show the latest sent email content
+                          setEmailLogsQuoteId(quote.id)
+                          setAutoOpenLatestEmailLog(true)
+                          setShowEmailLogsModal(true)
+                        } else {
+                          // Default behavior: open quote detail page
+                          window.open(`/sales/quotes/${quote.id}`, '_blank')
+                        }
+                      }}
                     >
                       <Eye className="h-4 w-4" />
                     </button>
@@ -860,6 +915,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <button 
                         onClick={() => {
                           setEmailLogsQuoteId(quote.id)
+                          setAutoOpenLatestEmailLog(false)
                           setShowEmailLogsModal(true)
                         }}
                         className="text-black hover:text-blue-600" 
@@ -869,23 +925,21 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       </button>
                     )}
                     
-                    {quote.status === 'draft' && (
-                      <>
-                        <button 
-                          className="text-black hover:text-blue-600" 
-                          title="Chỉnh sửa"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button 
-                          onClick={() => sendQuote(quote.id)}
-                          className="text-black hover:text-green-600" 
-                          title="Gửi báo giá"
-                        >
-                          <Send className="h-4 w-4" />
-                        </button>
-                      </>
-                    )}
+                    <>
+                      <button 
+                        className="text-black hover:text-blue-600" 
+                        title="Chỉnh sửa"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button 
+                        onClick={() => sendQuote(quote.id)}
+                        className="text-black hover:text-green-600" 
+                        title="Gửi báo giá"
+                      >
+                        <Send className="h-4 w-4" />
+                      </button>
+                    </>
                     
                     {(quote.status === 'accepted' || quote.status === 'sent' || quote.status === 'viewed') && quote.status !== 'closed' && quote.status !== 'converted' && (
                       <button 
@@ -954,8 +1008,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         onClose={() => {
           setShowEmailLogsModal(false)
           setEmailLogsQuoteId(null)
+          setAutoOpenLatestEmailLog(false)
         }}
         quoteId={emailLogsQuoteId || ''}
+        autoOpenLatest={autoOpenLatestEmailLog}
       />
 
       {/* Help Sidebar */}

@@ -14,6 +14,7 @@ import {
   Clock
 } from 'lucide-react'
 import { ProjectTeamDialog } from './ProjectTeamDialog'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface TeamMember {
   id: string
@@ -102,7 +103,7 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
   const fetchTeamMembers = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/projects/${projectId}/team`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/team`)
       if (!response.ok) {
         const text = await response.text().catch(() => '')
         throw new Error(text || `Failed to fetch team members (status ${response.status})`)

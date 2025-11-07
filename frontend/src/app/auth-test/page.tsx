@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { apiGet } from '@/lib/api'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 export default function AuthTestPage() {
   const [session, setSession] = useState<unknown>(null)
@@ -44,7 +45,7 @@ export default function AuthTestPage() {
   const testPublicAPI = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/auth-test/public')
+      const response = await fetch(getApiEndpoint('/api/auth-test/public')
       const data = await response.json()
       setTestResult(`Public API Success: ${JSON.stringify(data, null, 2)}`)
     } catch (error: unknown) {

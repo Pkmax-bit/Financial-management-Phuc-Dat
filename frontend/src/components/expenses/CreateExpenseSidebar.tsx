@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Employee {
   id: string
@@ -179,7 +180,7 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
         updated_at: new Date().toISOString()
       }
 
-      const result = await apiPost('http://localhost:8000/api/expenses', expenseData)
+      const result = await apiPost(getApiEndpoint('/api/expenses'), expenseData)
         
       onSuccess()
       onClose()

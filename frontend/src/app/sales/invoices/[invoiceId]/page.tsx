@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Calendar, Receipt, DollarSign } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface InvoiceItem {
   id: string
@@ -33,7 +34,7 @@ export default function InvoiceDetailPage() {
         setLoading(true)
         const token = (await supabase.auth.getSession()).data.session?.access_token
         // Fetch invoice
-        const iRes = await fetch(`http://localhost:8000/api/sales/invoices/${invoiceId}`, {
+        const iRes = await fetch(getApiEndpoint(`/api/sales/invoices/${invoiceId}`), {
           headers: { Authorization: `Bearer ${token || ''}` }
         })
         let inv: any

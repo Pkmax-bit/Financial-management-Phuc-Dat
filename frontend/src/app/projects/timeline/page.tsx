@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Upload, ArrowLeft, Milestone, Database, ChevronDown } from 'lucide-react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface Project {
   id: string
@@ -28,7 +29,7 @@ export default function CustomerTimelineLandingPage() {
   const fetchAvailableProjects = async () => {
     try {
       setLoadingProjects(true)
-      const response = await fetch('/api/projects/list-ids')
+      const response = await fetch(getApiEndpoint('/api/projects/list-ids')
       if (response.ok) {
         const data = await response.json()
         setAvailableProjects(data.projects || [])

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import CreatePaymentModal from './CreatePaymentModal'
 import { apiGet } from '@/lib/api'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Payment {
   id: string
@@ -55,7 +56,7 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
   const fetchPayments = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('http://localhost:8000/api/sales/payments')
+      const data = await apiGet(getApiEndpoint('/api/sales/payments'))
       setPayments(data)
     } catch (error) {
       console.error('Error fetching payments:', error)

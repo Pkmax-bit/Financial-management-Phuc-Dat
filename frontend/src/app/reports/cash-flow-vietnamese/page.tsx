@@ -70,7 +70,7 @@ export default function CashFlowVietnamesePage() {
     setError(null)
     
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
       const response = await fetch(`${apiUrl}/api/reports/financial/cash-flow-vietnamese?start_date=${startDate}&end_date=${endDate}`)
       
       if (!response.ok) {

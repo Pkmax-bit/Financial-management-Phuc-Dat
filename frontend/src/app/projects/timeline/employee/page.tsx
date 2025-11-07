@@ -5,6 +5,7 @@ import { Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ProjectTimeline from '@/components/projects/ProjectTimeline'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface ProjectRef { id: string; name: string }
 
@@ -31,7 +32,7 @@ export default function EmployeeTimelineManagerPage() {
   const loadProjects = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/projects')
+      const res = await fetch(getApiEndpoint('/api/projects')
       const data = await res.json()
       const items: ProjectRef[] = (data.data || data || []).map((p: any) => ({ id: p.id, name: p.name }))
       setProjects(items)

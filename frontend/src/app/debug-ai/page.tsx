@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Upload, TestTube, AlertCircle, CheckCircle } from 'lucide-react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 export default function DebugAIPage() {
   const [testResults, setTestResults] = useState<any>(null)
@@ -13,7 +14,7 @@ export default function DebugAIPage() {
     setError(null)
     
     try {
-      const response = await fetch('/api/test-ai')
+      const response = await fetch(getApiEndpoint('/api/test-ai')
       const data = await response.json()
       setTestResults(data)
     } catch (err) {

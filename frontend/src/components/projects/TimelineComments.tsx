@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { MessageCircle, Send, Trash2, User as UserIcon } from 'lucide-react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface TimelineCommentsProps {
   projectId: string
@@ -36,7 +37,7 @@ export default function TimelineComments({ projectId, entryId, isEmployee = fals
   const fetchComments = async () => {
     try {
       setLoading(true)
-      const res = await fetch(`/api/projects/${projectId}/timeline/${entryId}/comments`)
+      const res = await fetch(getApiEndpoint(`/api/projects/${projectId}/timeline/${entryId}/comments`)
       if (!res.ok) throw new Error('Failed to load comments')
       const data = await res.json()
       setComments(data.comments || [])

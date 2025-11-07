@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, DollarSign, Calculator, CreditCard } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface PaymentModalProps {
   isOpen: boolean
@@ -74,7 +75,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
       if (paymentReference) params.set('payment_reference', paymentReference)
       params.set('payment_date', new Date().toISOString().split('T')[0])
 
-      const response = await fetch(`http://localhost:8000/api/sales/invoices/${invoice.id}/payment?${params.toString()}`, {
+      const response = await fetch(getApiEndpoint(`/api/sales/invoices/${invoice.id}/payment?${params.toString()}`), {
         method: 'PUT',
         headers: {
           ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { X, Send, Loader2, Edit2, Save, Plus, Trash2, Upload, Image as ImageIcon } from 'lucide-react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface PaymentTermItem {
   description: string
@@ -186,7 +187,7 @@ export default function QuoteEmailPreviewModal({
       const token = session.data.session?.access_token
       
       // Call API to get default logo as base64
-      const response = await fetch(`http://localhost:8000/api/sales/default-logo`, {
+      const response = await fetch(getApiEndpoint('/api/sales/default-logo'), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -260,7 +261,7 @@ export default function QuoteEmailPreviewModal({
       if (bankBranch) requestBody.bank_branch = bankBranch
 
       // Call preview API with POST to send current data
-      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/preview`, {
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/preview`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +329,7 @@ export default function QuoteEmailPreviewModal({
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
 
-      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/preview`, {
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/preview`), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -485,7 +486,7 @@ export default function QuoteEmailPreviewModal({
                     
                     console.log('📝 Saving email draft:', requestBody)
                     
-                    const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/email-draft`, {
+                    const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/email-draft`), {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
@@ -753,7 +754,7 @@ export default function QuoteEmailPreviewModal({
                               const token = session.data.session?.access_token
                               
                               // Call API to get default logo as base64
-                              const response = await fetch(`http://localhost:8000/api/sales/default-logo`, {
+                              const response = await fetch(getApiEndpoint('/api/sales/default-logo'), {
                                 method: 'GET',
                                 headers: {
                                   'Authorization': `Bearer ${token}`

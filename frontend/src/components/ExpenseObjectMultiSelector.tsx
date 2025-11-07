@@ -36,7 +36,7 @@ export default function ExpenseObjectMultiSelector({
   const loadExpenseObjects = async () => {
     try {
       setLoading(true)
-      const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const base = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
       try {
         const res = await fetch(`${base}/api/expense-objects/?active_only=true`, { credentials: 'omit' })
         if (res.ok) {

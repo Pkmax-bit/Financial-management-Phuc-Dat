@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Project {
   id: string
@@ -138,7 +139,7 @@ export default function CreateProjectExpenseModal({ isOpen, onClose, onSuccess }
         updated_at: new Date().toISOString()
       }
 
-      const result = await apiPost('http://localhost:8000/api/project-expenses', expenseData)
+      const result = await apiPost(getApiEndpoint('/api/project-expenses'), expenseData)
         
       onSuccess()
       onClose()

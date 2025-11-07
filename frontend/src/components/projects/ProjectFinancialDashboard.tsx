@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 import { 
   DollarSign, 
   TrendingUp, 
@@ -59,7 +60,7 @@ export default function ProjectFinancialDashboard({ projectId, projectName }: Pr
   const fetchFinancialData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/projects/${projectId}/financial-dashboard`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/financial-dashboard`)
       if (response.ok) {
         const data = await response.json()
         setFinancialData(data)

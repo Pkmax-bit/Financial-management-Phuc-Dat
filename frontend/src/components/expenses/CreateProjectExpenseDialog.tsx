@@ -31,7 +31,8 @@ import ExpenseSummaryDisplay from '@/components/ExpenseSummaryDisplay'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
 import ExpenseColumnVisibilityDialog from './ExpenseColumnVisibilityDialog'
 import { useSidebar } from '@/components/LayoutWithSidebar'
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
 
 interface Project {
   id: string
@@ -2435,7 +2436,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         console.log('✅ Planned expense updated successfully')
           } else {
         console.log('📤 Creating new planned expense...')
-            const result = await apiPost('http://localhost:8000/api/project-expenses/quotes', expenseData)
+            const result = await apiPost(getApiEndpoint('/api/project-expenses/quotes'), expenseData)
         console.log('✅ Planned expense created:', result)
       }
       

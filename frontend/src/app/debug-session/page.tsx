@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 export default function DebugSessionPage() {
   const [sessionInfo, setSessionInfo] = useState<unknown>(null)
@@ -53,7 +54,7 @@ export default function DebugSessionPage() {
 
   const testPublicEndpoint = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/employees/public-list')
+      const response = await fetch(getApiEndpoint('/api/employees/public-list'))
       const data = await response.json()
       alert(`Public endpoint test: ${JSON.stringify(data, null, 2)}`)
     } catch (err) {
@@ -71,7 +72,7 @@ export default function DebugSessionPage() {
       // Get full token
       const { data: { session } } = await supabase.auth.getSession()
       
-      const response = await fetch('http://localhost:8000/api/employees', {
+      const response = await fetch(getApiEndpoint('/api/employees'), {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
           'Content-Type': 'application/json'

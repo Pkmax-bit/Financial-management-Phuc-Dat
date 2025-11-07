@@ -1012,7 +1012,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (components.length === 0) return
 
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
       
       // Apply adjustments for each component
       const adjustedComponents = await Promise.all(

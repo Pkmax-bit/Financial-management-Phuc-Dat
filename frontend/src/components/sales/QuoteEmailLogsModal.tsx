@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Mail, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface EmailLog {
   id: string
@@ -11,6 +12,7 @@ interface EmailLog {
   sent_at: string
   error_message?: string
   created_at: string
+  body?: string
   custom_payment_terms?: {
     term1?: string
     term2?: string
@@ -25,12 +27,14 @@ interface QuoteEmailLogsModalProps {
   isOpen: boolean
   onClose: () => void
   quoteId: string
+  autoOpenLatest?: boolean
 }
 
 export default function QuoteEmailLogsModal({
   isOpen,
   onClose,
-  quoteId
+  quoteId,
+  autoOpenLatest
 }: QuoteEmailLogsModalProps) {
   const [logs, setLogs] = useState<EmailLog[]>([])
   const [loading, setLoading] = useState(false)
@@ -56,7 +60,7 @@ export default function QuoteEmailLogsModal({
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
 
-      const response = await fetch(`http://localhost:8000/api/sales/quotes/${quoteId}/email-logs`, {
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/email-logs`), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +74,12 @@ export default function QuoteEmailLogsModal({
       }
 
       const result = await response.json()
-      setLogs(result.logs || [])
+      const fetchedLogs: EmailLog[] = result.logs || []
+      setLogs(fetchedLogs)
+      // Auto open the latest log if requested
+      if (autoOpenLatest && fetchedLogs.length > 0) {
+        setSelectedLog(fetchedLogs[0])
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load email logs')
       console.error('Error fetching email logs:', err)
@@ -125,9 +134,9 @@ export default function QuoteEmailLogsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <Mail className="w-5 h-5" />
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-transparent">
+          <h2 className="text-xl font-semibold text-gray-500 flex items-center gap-2">
+            <Mail className="w-5 h-5 text-gray-400" />
             Lịch sử email đã gửi
           </h2>
           <button
@@ -263,35 +272,47 @@ export default function QuoteEmailLogsModal({
         </div>
       </div>
 
-      {/* Detail Modal */}
+      {/* Detail Modal - Full Screen */}
       {selectedLog && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Chi tiết chỉnh sửa email</h3>
-              <button
-                onClick={() => setSelectedLog(null)}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Email người nhận:</label>
-                  <p className="mt-1 text-sm text-gray-900">{selectedLog.to_email}</p>
+        <div className="fixed inset-0 z-[60] bg-white flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-transparent shadow-sm">
+            <h3 className="text-xl font-semibold text-gray-500">Chi tiết email đã gửi</h3>
+            <button
+              onClick={() => setSelectedLog(null)}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-6">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-gray-200">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Email người nhận:</label>
+                    <p className="mt-2 text-base text-gray-900 font-medium">{selectedLog.to_email}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Tiêu đề:</label>
+                    <p className="mt-2 text-base text-gray-900 font-medium">{selectedLog.subject}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Ngày gửi:</label>
+                    <p className="mt-2 text-base text-gray-900 font-medium">
+                      {formatDate(selectedLog.sent_at || selectedLog.created_at)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Tiêu đề:</label>
-                  <p className="mt-1 text-sm text-gray-900">{selectedLog.subject}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Ngày gửi:</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {formatDate(selectedLog.sent_at || selectedLog.created_at)}
-                  </p>
-                </div>
+                {selectedLog.body && (
+                  <div>
+                    <label className="text-base font-semibold text-gray-700 mb-3 block">Nội dung email đã gửi:</label>
+                    <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                      <div
+                        className="bg-white p-6 min-h-[calc(100vh-400px)] overflow-auto"
+                        dangerouslySetInnerHTML={{ __html: (selectedLog.body || '').replace(/cid:company_logo/g, 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjMyIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5MT0dPPC90ZXh0Pgo8L3N2Zz4=') }}
+                      />
+                    </div>
+                  </div>
+                )}
                 {(selectedLog.custom_payment_terms || selectedLog.additional_notes) && (
                   <>
                     {selectedLog.custom_payment_terms && (
@@ -340,10 +361,10 @@ export default function QuoteEmailLogsModal({
                 )}
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50 sticky bottom-0">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-6 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
                 Đóng
               </button>

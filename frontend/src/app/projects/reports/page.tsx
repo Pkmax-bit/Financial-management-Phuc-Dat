@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, TrendingUp, TrendingDown, DollarSign, Clock, Users, Filter } from 'lucide-react';
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface ProjectProfitability {
   project_id: string;
@@ -78,7 +79,7 @@ export default function ProjectReportsPage() {
       params.append('sort_by', sortBy);
       params.append('sort_order', sortOrder);
 
-      const response = await fetch(`/api/reports/projects/profitability?${params}`);
+      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability?${params}`);
       if (response.ok) {
         const data = await response.json();
         setProjects(data);
@@ -95,7 +96,7 @@ export default function ProjectReportsPage() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.append('status', statusFilter);
 
-      const response = await fetch(`/api/reports/projects/profitability/summary?${params}`);
+      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability/summary?${params}`);
       if (response.ok) {
         const data = await response.json();
         setSummary(data);

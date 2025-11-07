@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import ProjectExpensesTab from '../components/expenses/ProjectExpensesTab';
 import { ProjectTeamTab } from '../components/projects/ProjectTeamTab';
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -45,7 +46,7 @@ const ProjectDetail = () => {
     // Fetch project details
     const fetchProject = async () => {
       try {
-        const response = await fetch(`/api/projects/${projectId}`);
+        const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`);
         const data = await response.json();
         setProject(data);
       } catch (error) {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft, Calculator } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 // Test accounts with different roles - Updated with real accounts
 const testAccounts = [
@@ -124,7 +125,7 @@ export default function LoginPage() {
         try {
           console.log('Trying backend API with:', { email: formData.email, password: formData.password })
           
-          const response = await fetch('http://localhost:8000/api/auth/login', {
+          const response = await fetch(getApiEndpoint('/api/auth/login'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

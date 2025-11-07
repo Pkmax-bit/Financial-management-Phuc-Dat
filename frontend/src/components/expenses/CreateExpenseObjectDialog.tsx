@@ -5,7 +5,7 @@ import { X, Save, AlertCircle, Target, Edit, Trash2, Search, ChevronRight, Chevr
 import { apiGet, apiPost, apiDelete } from '@/lib/api'
 import { getExpenseObjectsByRole } from '@/utils/expenseObjectPermissions'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
 
 interface ExpenseObject {
   id: string

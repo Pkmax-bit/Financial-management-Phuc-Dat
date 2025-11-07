@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Notification {
   id: string
@@ -142,7 +143,7 @@ export default function NotificationsPage() {
 
       // Create notifications for each selected employee
       for (const uid of selectedEmployeeUserIds) {
-        const res = await fetch('http://localhost:8000/api/notifications/notifications', {
+        const res = await fetch(getApiEndpoint('/api/notifications/notifications'), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -166,7 +167,7 @@ export default function NotificationsPage() {
         for (const uid of selectedEmployeeUserIds) {
           const emp = employees.find(e => e.user_id === uid)
           if (emp?.email) {
-            const emailRes = await fetch('http://localhost:8000/api/notifications/notifications/email', {
+            const emailRes = await fetch(getApiEndpoint('/api/notifications/notifications/email'), {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${session.access_token}`,

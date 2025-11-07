@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Edit, DollarSign, Clock, Users, TrendingUp, Calendar, Target } from 'lucide-react';
 import { format } from 'date-fns';
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface Project {
   id: string;
@@ -116,7 +117,7 @@ export default function ProjectDetailPage() {
 
   const fetchProject = async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}`);
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`);
       if (response.ok) {
         const data = await response.json();
         setProject(data);
@@ -128,7 +129,7 @@ export default function ProjectDetailPage() {
 
   const fetchFinancialSummary = async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/financial-summary`);
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/financial-summary`);
       if (response.ok) {
         const data = await response.json();
         setFinancialSummary(data);

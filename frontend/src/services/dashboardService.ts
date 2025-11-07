@@ -79,7 +79,7 @@ export interface PlannerEvent {
  * Dashboard Service Class
  */
 class DashboardService {
-  private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+  private baseUrl = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
 
   /**
    * Get comprehensive dashboard statistics

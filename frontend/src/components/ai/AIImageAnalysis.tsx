@@ -6,6 +6,7 @@ import CameraSetupGuide from './CameraSetupGuide'
 import CameraStatus from './CameraStatus'
 import CameraGuidePopup from './CameraGuidePopup'
 import MobileCamera from './MobileCamera'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface ExpenseItem {
   id: string
@@ -106,7 +107,7 @@ export default function AIImageAnalysis() {
 
   const loadAllProjects = async () => {
     try {
-      const response = await fetch('/api/projects')
+      const response = await fetch(getApiEndpoint('/api/projects')
       if (response.ok) {
         const data = await response.json()
         // API returns { success: true, projects: [...], total: number }

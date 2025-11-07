@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { Upload, FileSpreadsheet, Download, AlertCircle, CheckCircle, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ProductImportPreview from './ProductImportPreview'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface UploadResult {
   success: boolean
@@ -66,7 +67,7 @@ export default function ProductExcelUpload({ onImportComplete }: { onImportCompl
       if (!session) throw new Error('Not authenticated')
 
       // First, get preview data
-      const response = await fetch('http://localhost:8000/api/sales/products/preview-excel', {
+      const response = await fetch(getApiEndpoint('/api/sales/products/preview-excel'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`
@@ -145,7 +146,7 @@ export default function ProductExcelUpload({ onImportComplete }: { onImportCompl
         return
       }
 
-      const response = await fetch('http://localhost:8000/api/sales/products/download-template', {
+      const response = await fetch(getApiEndpoint('/api/sales/products/download-template'), {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
@@ -190,7 +191,7 @@ export default function ProductExcelUpload({ onImportComplete }: { onImportCompl
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Not authenticated')
 
-      const response = await fetch('http://localhost:8000/api/sales/products/import-excel', {
+      const response = await fetch(getApiEndpoint('/api/sales/products/import-excel'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

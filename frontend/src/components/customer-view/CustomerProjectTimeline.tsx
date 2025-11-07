@@ -19,6 +19,7 @@ import {
 import EmotionsComments from '@/components/emotions-comments/EmotionsComments'
 import ReactionButton from '@/components/emotions-comments/ReactionButton'
 import ImageWithReactions from './ImageWithReactions'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface TimelineEntry {
   id: string
@@ -90,7 +91,7 @@ export default function CustomerProjectTimeline({ projectId, projectName }: Cust
   const fetchTimelineEntries = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/projects/${projectId}/timeline`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/timeline`)
       
       if (!response.ok) {
         throw new Error('Failed to fetch timeline entries')

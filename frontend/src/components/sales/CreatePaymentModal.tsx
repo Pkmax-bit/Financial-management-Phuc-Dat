@@ -12,6 +12,7 @@ import {
   CreditCard
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Customer {
   id: string
@@ -73,7 +74,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
   const fetchCustomers = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('http://localhost:8000/api/customers')
+      const data = await apiGet(getApiEndpoint('/api/customers'))
       setCustomers(data)
     } catch (error) {
       console.error('Error fetching customers:', error)
@@ -93,7 +94,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
 
   const generatePaymentNumber = async () => {
     try {
-      const data = await apiGet('http://localhost:8000/api/sales/payments/next-number')
+      const data = await apiGet(getApiEndpoint('/api/sales/payments/next-number'))
       setFormData(prev => ({ ...prev, payment_number: data.payment_number }))
     } catch (error) {
       console.error('Error generating payment number:', error)
@@ -116,7 +117,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
         status: asDraft ? 'pending' : 'completed'
       }
 
-      await apiPost('http://localhost:8000/api/sales/payments', paymentData)
+      await apiPost(getApiEndpoint('/api/sales/payments'), paymentData)
       onSuccess()
     } catch (error) {
       console.error('Error creating payment:', error)

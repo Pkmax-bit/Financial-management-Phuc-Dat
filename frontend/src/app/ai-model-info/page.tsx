@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Brain, Eye, Zap, AlertCircle, CheckCircle, Info } from 'lucide-react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface ModelInfo {
   name: string
@@ -44,7 +45,7 @@ export default function AIModelInfoPage() {
   const checkAPIStatus = async () => {
     try {
       setApiStatus('checking')
-      const response = await fetch('/api/ai-simple')
+      const response = await fetch(getApiEndpoint('/api/ai-simple')
       const data = await response.json()
       
       if (data.success) {

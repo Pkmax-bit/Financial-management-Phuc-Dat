@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPut } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Customer {
   id: string
@@ -290,7 +291,7 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
         status: 'draft' // Keep as draft when editing
       }
 
-      await apiPut(`http://localhost:8000/api/sales/invoices/${invoice.id}`, invoiceData)
+      await apiPut(getApiEndpoint(`/api/sales/invoices/${invoice.id}`), invoiceData)
 
       // Update invoice items in database
       if (items.length > 0) {

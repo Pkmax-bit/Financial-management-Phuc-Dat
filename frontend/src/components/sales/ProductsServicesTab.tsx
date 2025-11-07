@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 import { 
   Package,
   Plus,
@@ -60,7 +61,7 @@ export default function ProductsServicesTab({ searchTerm }: ProductsServicesTabP
   const fetchProductsServices = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/products-services')
+      const response = await fetch(getApiEndpoint('/api/products-services')
       if (response.ok) {
         const data = await response.json()
         setItems(data)

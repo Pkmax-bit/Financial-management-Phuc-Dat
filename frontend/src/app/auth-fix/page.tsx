@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { apiGet } from '@/lib/api'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 export default function AuthFixPage() {
   const [result, setResult] = useState('')
@@ -108,7 +109,7 @@ export default function AuthFixPage() {
       setResult('🔍 Testing public employees endpoint (no auth required)...')
       
       // Test public employees endpoint
-      const response = await fetch('/api/employees/public-list')
+      const response = await fetch(getApiEndpoint('/api/employees/public-list')
       const data = await response.json()
       
       setResult(prev => prev + `\n\n✅ Public Employees: ${JSON.stringify(data, null, 2)}`)

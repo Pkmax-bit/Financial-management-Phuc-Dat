@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getApiEndpoint } from '@/lib/apiUrl'
 import { 
   Search,
   Filter,
@@ -49,7 +50,7 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
   const fetchAllTransactions = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/sales/transactions')
+      const response = await fetch(getApiEndpoint('/api/sales/transactions'))
       if (response.ok) {
         const data = await response.json()
         setTransactions(data)

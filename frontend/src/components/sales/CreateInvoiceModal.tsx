@@ -13,6 +13,7 @@ import {
   Send
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface Customer {
   id: string
@@ -74,7 +75,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
   const fetchCustomers = async () => {
     try {
       setLoading(true)
-      const data = await apiGet('http://localhost:8000/api/customers')
+      const data = await apiGet(getApiEndpoint('/api/customers'))
       setCustomers(data)
     } catch (error) {
       console.error('Error fetching customers:', error)
@@ -142,11 +143,11 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
         status: sendImmediately ? 'sent' : 'draft'
       }
 
-      const result = await apiPost('http://localhost:8000/api/sales/invoices', invoiceData)
+      const result = await apiPost(getApiEndpoint('/api/sales/invoices'), invoiceData)
         
       // If sending immediately, also send the invoice
       if (sendImmediately) {
-        await apiPost(`http://localhost:8000/api/sales/invoices/${result.id}/send`, {})
+        await apiPost(getApiEndpoint(`/api/sales/invoices/${result.id}/send`), {})
       }
 
       onSuccess()

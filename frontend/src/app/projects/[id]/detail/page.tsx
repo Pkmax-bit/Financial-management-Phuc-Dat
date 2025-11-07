@@ -31,6 +31,7 @@ import ProjectTimeline from '@/components/projects/ProjectTimeline'
 import ProjectInvoices from '@/components/projects/ProjectInvoices'
 import ProjectExpenses from '@/components/projects/ProjectExpenses'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface Project {
   id: string
@@ -145,7 +146,7 @@ export default function ProjectDetailPage() {
   const fetchProject = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/projects/${projectId}`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`)
       
       if (response.ok) {
         const data = await response.json()

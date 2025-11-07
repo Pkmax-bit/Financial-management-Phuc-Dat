@@ -39,6 +39,7 @@ import CreateSalesReceiptModal from '@/components/sales/CreateSalesReceiptModal'
 import QuickGuideModal from '@/components/sales/QuickGuideModal'
 import MaterialAdjustmentRulesTab from '@/components/sales/MaterialAdjustmentRulesTab'
 import { apiGet } from '@/lib/api'
+import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
 
 interface User {
   full_name?: string
@@ -118,7 +119,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
       
       // Try authenticated endpoint first
       try {
-        const stats = await apiGet('http://localhost:8000/api/sales/dashboard/stats')
+        const stats = await apiGet(getApiEndpoint('/api/sales/dashboard/stats'))
         setSalesStats(stats)
         console.log('Successfully fetched sales stats via authenticated API')
         return

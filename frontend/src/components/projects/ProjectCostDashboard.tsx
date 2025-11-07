@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, Users, Package, Wrench, AlertCircle, CheckCircle, Clock, Eye, Plus } from 'lucide-react'
 import AIReceiptUpload from '@/components/expenses/AIReceiptUpload'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface ProjectCostDashboardProps {
   projectId: string
@@ -53,7 +54,7 @@ export default function ProjectCostDashboard({ projectId, projectName, projectCo
   const fetchProjectCosts = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/projects/${projectId}/costs`)
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/costs`)
       const data = await response.json()
       
       if (data.success) {

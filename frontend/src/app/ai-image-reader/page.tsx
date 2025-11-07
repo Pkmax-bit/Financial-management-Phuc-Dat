@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Upload, Camera, FileText, Loader2, CheckCircle, AlertCircle, X, Download, Copy, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import CameraGuideButton from '@/components/CameraGuideButton'
+import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface AIAnalysis {
   amount: number
@@ -64,7 +65,7 @@ export default function AIImageReaderPage() {
 
   const loadAvailableProjects = async () => {
     try {
-      const response = await fetch('/api/projects')
+      const response = await fetch(getApiEndpoint('/api/projects')
       const projects = await response.json()
       setAvailableProjects(projects.data || [])
     } catch (error) {
