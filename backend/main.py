@@ -52,7 +52,7 @@ app.add_middleware(
 security = HTTPBearer()
 
 # Health check endpoint
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     """Root endpoint - Health check"""
     return {
@@ -61,7 +61,7 @@ async def root():
         "status": "healthy"
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "financial-management-api"}

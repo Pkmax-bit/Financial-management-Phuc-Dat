@@ -149,6 +149,47 @@ Sau khi deploy, kiểm tra logs không còn lỗi `ImportError`.
 
 ---
 
+## 🔴 Lỗi 5: Bad Gateway / 405 Method Not Allowed
+
+### Triệu chứng:
+```
+Bad Gateway
+405 Method Not Allowed
+INFO:     127.0.0.1:48692 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+```
+
+### Nguyên nhân:
+1. **Render health check**: Render gửi HEAD request đến "/" để health check, nhưng endpoint chỉ hỗ trợ GET
+2. **Service đang sleep**: Render free tier có thể sleep sau 15 phút không hoạt động
+
+### Giải pháp:
+
+1. **Đã được sửa tự động**: File `backend/main.py` đã được cập nhật, thêm HEAD method support cho health check endpoints.
+
+2. **Commit và push code mới**:
+   ```bash
+   git add backend/main.py
+   git commit -m "Add HEAD method support for health check endpoints"
+   git push origin main
+   ```
+
+3. **Nếu vẫn gặp "Bad Gateway"**:
+   - Đợi 30-60 giây và thử lại (service có thể đang wake up)
+   - Kiểm tra logs trong Render Dashboard
+   - Đảm bảo service không bị sleep (free tier sẽ sleep sau 15 phút)
+
+### Kiểm tra:
+- Health check endpoint: `https://your-backend.onrender.com/health`
+- Root endpoint: `https://your-backend.onrender.com/`
+- API docs: `https://your-backend.onrender.com/docs`
+
+### Lưu ý về Render Free Tier:
+- Service có thể sleep sau 15 phút không hoạt động
+- Request đầu tiên sau khi sleep có thể mất 30-60 giây để wake up
+- Nên upgrade lên paid plan cho production
+
+---
+
 ## 📚 Xem Thêm
 
 Xem file `HUONG_DAN_DEPLOY_RENDER.md` để biết hướng dẫn deploy đầy đủ.
