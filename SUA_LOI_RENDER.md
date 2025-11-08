@@ -92,6 +92,35 @@ Sau khi deploy, kiểm tra logs không còn lỗi `ModuleNotFoundError`.
 
 ---
 
+## 🔴 Lỗi 3: ModuleNotFoundError: No module named 'email_validator'
+
+### Triệu chứng:
+```
+ImportError: email-validator is not installed, run `pip install 'pydantic[email]'`
+ModuleNotFoundError: No module named 'email_validator'
+```
+
+### Nguyên nhân:
+Code đang sử dụng `EmailStr` từ Pydantic nhưng package `email-validator` không có trong `requirements.txt`.
+
+### Giải pháp:
+
+1. **Đã được sửa tự động**: File `backend/requirements.txt` đã được cập nhật với `email-validator==2.1.0`
+
+2. **Commit và push code mới**:
+   ```bash
+   git add backend/requirements.txt
+   git commit -m "Add email-validator to requirements.txt"
+   git push origin main
+   ```
+
+3. **Render sẽ tự động deploy lại** với dependencies mới.
+
+### Kiểm tra:
+Sau khi deploy, kiểm tra logs không còn lỗi `email-validator`.
+
+---
+
 ## 📚 Xem Thêm
 
 Xem file `HUONG_DAN_DEPLOY_RENDER.md` để biết hướng dẫn deploy đầy đủ.

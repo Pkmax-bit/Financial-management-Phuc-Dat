@@ -21,6 +21,7 @@ openpyxl==3.1.5
 yagmail==0.15.293
 schedule==1.2.0
 pytz==2023.3
+email-validator==2.1.0
 
 # Development & Testing
 pytest==7.4.3
