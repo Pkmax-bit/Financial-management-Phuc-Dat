@@ -121,6 +121,34 @@ Sau khi deploy, kiểm tra logs không còn lỗi `email-validator`.
 
 ---
 
+## 🔴 Lỗi 4: ImportError: cannot import name 'auth_test' from 'routers'
+
+### Triệu chứng:
+```
+ImportError: cannot import name 'auth_test' from 'routers'
+```
+
+### Nguyên nhân:
+File `auth_test.py` không tồn tại trong thư mục `routers` nhưng vẫn được import trong `main.py`.
+
+### Giải pháp:
+
+1. **Đã được sửa tự động**: File `backend/main.py` đã được cập nhật, xóa import và include_router của `auth_test`.
+
+2. **Commit và push code mới**:
+   ```bash
+   git add backend/main.py
+   git commit -m "Remove auth_test import - file does not exist"
+   git push origin main
+   ```
+
+3. **Render sẽ tự động deploy lại**.
+
+### Kiểm tra:
+Sau khi deploy, kiểm tra logs không còn lỗi `ImportError`.
+
+---
+
 ## 📚 Xem Thêm
 
 Xem file `HUONG_DAN_DEPLOY_RENDER.md` để biết hướng dẫn deploy đầy đủ.
