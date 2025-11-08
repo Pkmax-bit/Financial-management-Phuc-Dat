@@ -5,7 +5,6 @@ Handles login, registration, user management, and role-based access
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
