@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Send, Loader2, Edit2, Save, Plus, Trash2, Upload, Image as ImageIcon, File, Paperclip } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { useSidebar } from '@/components/LayoutWithSidebar'
 
@@ -48,6 +48,7 @@ export default function QuoteEmailPreviewModal({
   const [htmlContent, setHtmlContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermItem[]>([
     { description: 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', amount: '', received: false },
     { description: 'CỌC ĐỢT 2: 50% KÍ HỢP ĐỒNG, RA ĐƠN SẢN XUẤT', amount: '', received: false },
@@ -224,8 +225,11 @@ export default function QuoteEmailPreviewModal({
     return updatedHtml
   }
 
+  // Ref to store debounce timer
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
   // Function to load default logo
-  const loadDefaultLogo = useCallback(async () => {
+  const loadDefaultLogo = async () => {
     try {
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(
@@ -256,116 +260,13 @@ export default function QuoteEmailPreviewModal({
     } catch (err) {
       console.error('Error loading default logo:', err)
     }
-  }, [])
-
-  const fetchPreview = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      
-      const session = await supabase.auth.getSession()
-      const token = session.data.session?.access_token
-
-      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/preview`), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to load preview')
-      }
-
-      const result = await response.json()
-      
-      // Load customization data if available
-      if (result.customization) {
-        const customization = result.customization
-        
-        // Payment terms
-        if (customization.custom_payment_terms && Array.isArray(customization.custom_payment_terms)) {
-          setPaymentTerms(customization.custom_payment_terms)
-          console.log('📝 Loaded customization payment terms:', customization.custom_payment_terms)
-        }
-        
-        // Additional notes
-        if (customization.additional_notes) {
-          setAdditionalNotes(customization.additional_notes)
-          console.log('📝 Loaded customization additional notes:', customization.additional_notes)
-        }
-        
-        // Default notes (GHI CHÚ section) - load from company_info JSONB
-        if (customization.company_info) {
-          try {
-            const companyInfo = typeof customization.company_info === 'string' 
-              ? JSON.parse(customization.company_info) 
-              : customization.company_info
-            if (companyInfo && companyInfo.default_notes && Array.isArray(companyInfo.default_notes)) {
-              setDefaultNotes(companyInfo.default_notes)
-              console.log('📝 Loaded customization default notes:', companyInfo.default_notes)
-            }
-          } catch (e) {
-            console.error('Error parsing company_info:', e)
-          }
-        }
-        
-        // Company info
-        if (customization.company_name) setCompanyName(customization.company_name)
-        if (customization.company_showroom) setCompanyShowroom(customization.company_showroom)
-        if (customization.company_factory) setCompanyFactory(customization.company_factory)
-        if (customization.company_website) setCompanyWebsite(customization.company_website)
-        if (customization.company_hotline) setCompanyHotline(customization.company_hotline)
-        if (customization.company_logo_url) setCompanyLogoUrl(customization.company_logo_url)
-        if (customization.company_logo_base64) setCompanyLogoBase64(customization.company_logo_base64)
-        
-        // Load default logo if no logo is set
-        if (!customization.company_logo_url && !customization.company_logo_base64) {
-          loadDefaultLogo()
-        }
-        
-        // Bank info
-        if (customization.bank_account_name) setBankAccountName(customization.bank_account_name)
-        if (customization.bank_account_number) setBankAccountNumber(customization.bank_account_number)
-        if (customization.bank_name) setBankName(customization.bank_name)
-        if (customization.bank_branch) setBankBranch(customization.bank_branch)
-      }
-      
-      // Replace logo src for preview (use placeholder or base64)
-      // For now, we'll use a placeholder or remove the cid: reference
-      let html = result.html
-      // Replace cid:company_logo with a placeholder or remove it
-      html = html.replace(/cid:company_logo/g, 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjMyIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5MT0dPPC90ZXh0Pgo8L3N2Zz4=')
-      
-      // Make text color black
-      html = html.replace(/color:\s*#333/g, 'color: #000000')
-      html = html.replace(/color:\s*#111/g, 'color: #000000')
-      html = html.replace(/color:\s*#374151/g, 'color: #000000')
-      html = normalizeMeasurementUnits(html)
-      
-      // Store original HTML for later updates
-      setOriginalHtml(html)
-      setHtmlContent(html)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load email preview')
-      console.error('Error fetching preview:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [quoteId, loadDefaultLogo])
+  }
 
   useEffect(() => {
     if (isOpen && quoteId) {
       fetchPreview()
     }
-  }, [isOpen, quoteId, fetchPreview])
+  }, [isOpen, quoteId])
 
   // Function to fetch preview with current form data
   const fetchPreviewWithCurrentData = async () => {
@@ -469,6 +370,109 @@ export default function QuoteEmailPreviewModal({
     isOpen,
     originalHtml
   ])
+
+  const fetchPreview = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token
+
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/preview`), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to load preview')
+      }
+
+      const result = await response.json()
+      
+      // Load customization data if available
+      if (result.customization) {
+        const customization = result.customization
+        
+        // Payment terms
+        if (customization.custom_payment_terms && Array.isArray(customization.custom_payment_terms)) {
+          setPaymentTerms(customization.custom_payment_terms)
+          console.log('📝 Loaded customization payment terms:', customization.custom_payment_terms)
+        }
+        
+        // Additional notes
+        if (customization.additional_notes) {
+          setAdditionalNotes(customization.additional_notes)
+          console.log('📝 Loaded customization additional notes:', customization.additional_notes)
+        }
+        
+        // Default notes (GHI CHÚ section) - load from company_info JSONB
+        if (customization.company_info) {
+          try {
+            const companyInfo = typeof customization.company_info === 'string' 
+              ? JSON.parse(customization.company_info) 
+              : customization.company_info
+            if (companyInfo && companyInfo.default_notes && Array.isArray(companyInfo.default_notes)) {
+              setDefaultNotes(companyInfo.default_notes)
+              console.log('📝 Loaded customization default notes:', companyInfo.default_notes)
+            }
+          } catch (e) {
+            console.error('Error parsing company_info:', e)
+          }
+        }
+        
+        // Company info
+        if (customization.company_name) setCompanyName(customization.company_name)
+        if (customization.company_showroom) setCompanyShowroom(customization.company_showroom)
+        if (customization.company_factory) setCompanyFactory(customization.company_factory)
+        if (customization.company_website) setCompanyWebsite(customization.company_website)
+        if (customization.company_hotline) setCompanyHotline(customization.company_hotline)
+        if (customization.company_logo_url) setCompanyLogoUrl(customization.company_logo_url)
+        if (customization.company_logo_base64) setCompanyLogoBase64(customization.company_logo_base64)
+        
+        // Load default logo if no logo is set
+        if (!customization.company_logo_url && !customization.company_logo_base64) {
+          loadDefaultLogo()
+        }
+        
+        // Bank info
+        if (customization.bank_account_name) setBankAccountName(customization.bank_account_name)
+        if (customization.bank_account_number) setBankAccountNumber(customization.bank_account_number)
+        if (customization.bank_name) setBankName(customization.bank_name)
+        if (customization.bank_branch) setBankBranch(customization.bank_branch)
+      }
+      
+      // Replace logo src for preview (use placeholder or base64)
+      // For now, we'll use a placeholder or remove the cid: reference
+      let html = result.html
+      // Replace cid:company_logo with a placeholder or remove it
+      html = html.replace(/cid:company_logo/g, 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjMyIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5MT0dPPC90ZXh0Pgo8L3N2Zz4=')
+      
+      // Make text color black
+      html = html.replace(/color:\s*#333/g, 'color: #000000')
+      html = html.replace(/color:\s*#111/g, 'color: #000000')
+      html = html.replace(/color:\s*#374151/g, 'color: #000000')
+      html = normalizeMeasurementUnits(html)
+      
+      // Store original HTML for later updates
+      setOriginalHtml(html)
+      setHtmlContent(html)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load email preview')
+      console.error('Error fetching preview:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (!isOpen) return null
 
