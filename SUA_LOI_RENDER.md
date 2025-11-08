@@ -190,6 +190,36 @@ INFO:     127.0.0.1:48692 - "HEAD / HTTP/1.1" 405 Method Not Allowed
 
 ---
 
+## 🔴 Lỗi 6: Module not found: Can't resolve '@/lib/apiUrl' hoặc '@/lib/api'
+
+### Triệu chứng:
+```
+Module not found: Can't resolve '@/lib/apiUrl'
+Module not found: Can't resolve '@/lib/api'
+Failed to compile.
+```
+
+### Nguyên nhân:
+Next.js 15 có thể cần cấu hình webpack để resolve path aliases (`@/*`) trong build time.
+
+### Giải pháp:
+
+1. **Đã được sửa tự động**: File `frontend/next.config.ts` đã được cập nhật, thêm webpack configuration để hỗ trợ path aliases.
+
+2. **Commit và push code mới**:
+   ```bash
+   git add frontend/next.config.ts
+   git commit -m "Add webpack path alias configuration for Next.js 15"
+   git push origin main
+   ```
+
+3. **Render sẽ tự động deploy lại** với cấu hình mới.
+
+### Kiểm tra:
+Sau khi deploy, kiểm tra logs không còn lỗi `Module not found`.
+
+---
+
 ## 📚 Xem Thêm
 
 Xem file `HUONG_DAN_DEPLOY_RENDER.md` để biết hướng dẫn deploy đầy đủ.

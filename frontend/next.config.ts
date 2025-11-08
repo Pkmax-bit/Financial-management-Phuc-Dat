@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   async rewrites() {
@@ -11,7 +12,15 @@ const nextConfig: NextConfig = {
         destination: `${apiUrl}/api/:path*`
       }
     ]
-  }
+  },
+  webpack: (config) => {
+    // Add path alias support for webpack
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, './src'),
+    };
+    return config;
+  },
 };
 
 export default nextConfig;
