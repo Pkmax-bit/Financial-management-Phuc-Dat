@@ -842,8 +842,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         </button>
       </div>
 
-      {/* Quotes Table */}
-      <div className="overflow-x-auto">
+      {/* Desktop Table - Hidden on mobile */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -978,6 +978,112 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               </button>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Mobile Card Layout - Visible on mobile only */}
+      <div className="md:hidden space-y-4 p-4">
+        {filteredQuotes.length === 0 ? (
+          <div className="text-center py-8">
+            <FileText className="mx-auto h-12 w-12 text-black" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có báo giá</h3>
+            <p className="mt-1 text-sm text-black">
+              Bắt đầu bằng cách tạo báo giá mới.
+            </p>
+            <div className="mt-6">
+              <button
+                onClick={onCreateQuote}
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Tạo báo giá đầu tiên
+              </button>
+            </div>
+          </div>
+        ) : (
+          filteredQuotes.map((quote) => (
+            <div key={quote.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+              {/* Card Header */}
+              <div className="flex items-start justify-between mb-3 pb-3 border-b border-gray-200">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {quote.project_name ? (
+                        <>{quote.project_code ? `${quote.project_code} - ` : ''}{quote.project_name}</>
+                      ) : 'Không có dự án'}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-600">#{quote.quote_number}</p>
+                </div>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(quote.status)}`}>
+                  {getStatusText(quote.status)}
+                </span>
+              </div>
+
+              {/* Card Content */}
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Khách hàng:</span>
+                  <span className="font-medium text-gray-900">{quote.customer_name || 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Số tiền:</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(quote.total_amount)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Hạn hiệu lực:</span>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3 text-gray-500" />
+                    <span className="font-medium text-gray-900">{formatDate(quote.valid_until)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Ngày tạo:</span>
+                  <span className="font-medium text-gray-900">{formatDate(quote.created_at)}</span>
+                </div>
+                {quote.employee_in_charge_name && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Nhân viên:</span>
+                    <span className="font-medium text-gray-900">{quote.employee_in_charge_name}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Card Actions */}
+              <div className="mt-4 pt-3 border-t border-gray-200 flex flex-wrap gap-2">
+                <button
+                  onClick={() => window.open(`/sales/quotes/${quote.id}`, '_blank')}
+                  className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  Xem
+                </button>
+                <button
+                  onClick={() => sendQuote(quote.id)}
+                  className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100"
+                >
+                  <Send className="h-3 w-3 mr-1" />
+                  Gửi
+                </button>
+                {(quote.status === 'accepted' || quote.status === 'sent' || quote.status === 'viewed') && quote.status !== 'closed' && quote.status !== 'converted' && (
+                  <button
+                    onClick={() => convertToInvoice(quote.id)}
+                    className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-purple-600 bg-purple-50 rounded-md hover:bg-purple-100"
+                  >
+                    <DollarSign className="h-3 w-3 mr-1" />
+                    Hóa đơn
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteQuote(quote.id)}
+                  className="px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          ))
         )}
       </div>
 
