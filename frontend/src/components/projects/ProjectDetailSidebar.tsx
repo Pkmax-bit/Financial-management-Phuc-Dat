@@ -303,7 +303,8 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
                       ></div>
                     </div>
                     <p className="text-xs text-gray-500 mt-2">
-                      {project.progress < 25 ? 'Dự án mới bắt đầu' :
+                      {project.progress === 0 ? 'Dự án mới bắt đầu - Có thể nhập % để thay đổi tiến độ nhanh' :
+                       project.progress < 25 ? 'Dự án mới bắt đầu' :
                        project.progress < 50 ? 'Đang triển khai' :
                        project.progress < 75 ? 'Tiến triển tốt' :
                        project.progress < 100 ? 'Gần hoàn thành' : 'Đã hoàn thành'}
