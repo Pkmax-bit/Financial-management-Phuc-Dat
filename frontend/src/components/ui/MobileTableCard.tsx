@@ -58,3 +58,4 @@ export function TableCard({ children, className = '', onClick }: TableCardProps)
   )
 }
 
+
