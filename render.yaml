@@ -13,7 +13,7 @@ services:
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11
+        value: 3.11.9
       - key: SUPABASE_URL
         sync: false  # Bạn cần thêm trong Render Dashboard
       - key: SUPABASE_KEY
