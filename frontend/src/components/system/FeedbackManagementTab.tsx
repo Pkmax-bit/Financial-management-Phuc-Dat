@@ -58,10 +58,24 @@ const priorityColors = {
 }
 
 const statusColors = {
-  open: 'bg-green-100 text-green-800',
+  open: 'bg-blue-100 text-blue-800',
   in_progress: 'bg-yellow-100 text-yellow-800',
-  resolved: 'bg-blue-100 text-blue-800',
+  resolved: 'bg-green-100 text-green-800',
   closed: 'bg-gray-100 text-gray-800'
+}
+
+const statusLabels = {
+  open: '🔵 Mở',
+  in_progress: '🟡 Đang xử lý',
+  resolved: '🟢 Đã xử lý',
+  closed: '⚫ Đóng'
+}
+
+const priorityLabels = {
+  low: '🟢 Thấp',
+  medium: '🟡 Trung bình',
+  high: '🟠 Cao',
+  urgent: '🔴 Nghiêm trọng'
 }
 
 export default function FeedbackManagementTab() {
@@ -359,11 +373,11 @@ export default function FeedbackManagementTab() {
                            {categoryLabels[item.category]}
                          </span>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[item.priority]}`}>
-                        {item.priority}
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityColors[item.priority]}`}>
+                        {priorityLabels[item.priority]}
                       </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[item.status]}`}>
-                        {item.status}
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[item.status]}`}>
+                        {statusLabels[item.status]}
                       </span>
                     </div>
 

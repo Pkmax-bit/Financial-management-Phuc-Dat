@@ -202,9 +202,9 @@ export default function SystemFeedbackTab() {
                         it.status === 'resolved' ? 'bg-green-100 text-green-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
-                        {it.status === 'open' ? 'Mở' :
-                         it.status === 'in_progress' ? 'Đang xử lý' :
-                         it.status === 'resolved' ? 'Đã xử lý' : 'Đóng'}
+                        {it.status === 'open' ? '🔵 Mở' :
+                         it.status === 'in_progress' ? '🟡 Đang xử lý' :
+                         it.status === 'resolved' ? '🟢 Đã xử lý' : '⚫ Đóng'}
                       </span>
                     </div>
                     <p className="text-gray-600 text-sm mb-3 line-clamp-2">{it.content}</p>

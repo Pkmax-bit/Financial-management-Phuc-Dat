@@ -20,15 +20,26 @@ export default function SystemFeedbackWrapper() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
-        // Get user role from employees table
-        const { data: employee, error } = await supabase
-          .from('employees')
+        // Get user role from users table first
+        const { data: user, error: userError } = await supabase
+          .from('users')
           .select('role')
-          .eq('user_id', session.user.id)
+          .eq('id', session.user.id)
           .single()
         
-        if (employee?.role) {
-          setUserRole(employee.role as UserRole)
+        if (user?.role) {
+          setUserRole(user.role as UserRole)
+        } else {
+          // Fallback to employees table if not found in users
+          const { data: employee, error } = await supabase
+            .from('employees')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .single()
+          
+          if (employee?.role) {
+            setUserRole(employee.role as UserRole)
+          }
         }
       }
     } catch (error) {

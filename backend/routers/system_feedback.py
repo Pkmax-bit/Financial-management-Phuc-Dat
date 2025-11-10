@@ -29,6 +29,16 @@ async def list_feedback(
     try:
         supabase = get_supabase_client()
         query = supabase.table("system_feedbacks").select("*").order("created_at", desc=True)
+        
+        # Filter by role: admin/manager see all, employee only sees their own
+        user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+        if user_role not in ["admin", "manager"]:
+            # Employee and other roles only see their own feedback
+            query = query.eq("submitted_by", current_user.id)
+            print(f"Filtering feedback for user {current_user.id} with role {user_role}")
+        else:
+            print(f"Admin/Manager {current_user.id} with role {user_role} - showing all feedback")
+        
         if status:
             query = query.eq("status", status)
         if search:
@@ -73,6 +83,23 @@ async def update_feedback(
 ):
     try:
         supabase = get_supabase_client()
+        
+        # Check if feedback exists
+        existing = supabase.table("system_feedbacks").select("*").eq("id", feedback_id).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+        
+        feedback = existing.data[0]
+        
+        # Check permission: admin/manager can update any, employee can only update their own
+        user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+        if user_role not in ["admin", "manager"]:
+            if feedback.get("submitted_by") != current_user.id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You can only update your own feedback"
+                )
+        
         update_data = {k: v for k, v in payload.dict().items() if v is not None}
         update_data["updated_at"] = datetime.utcnow().isoformat()
         result = supabase.table("system_feedbacks").update(update_data).eq("id", feedback_id).execute()

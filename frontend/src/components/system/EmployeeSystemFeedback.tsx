@@ -157,7 +157,7 @@ export default function EmployeeSystemFeedback() {
           </div>
           <div className="flex items-center space-x-3">
             <div className="bg-white rounded-lg px-4 py-2 shadow-sm border">
-              <span className="text-sm text-gray-500">Góp ý của tôi:</span>
+              <span className="text-sm text-gray-500">Tổng số góp ý của tôi:</span>
               <span className="ml-2 font-semibold text-green-600">{items.length}</span>
             </div>
           </div>

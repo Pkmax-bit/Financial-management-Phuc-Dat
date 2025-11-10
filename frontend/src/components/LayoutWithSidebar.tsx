@@ -316,7 +316,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         {/* Sidebar */}
         <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ${
           shouldShowSidebar ? 'w-64' : 'w-0'
-        } overflow-hidden lg:block ${shouldShowSidebar ? 'block' : 'hidden lg:block'}`}>
+        } overflow-hidden ${shouldShowSidebar ? 'block' : 'hidden'}`}>
           {/* Logo */}
           <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
             <div className="flex items-center space-x-2">
@@ -439,9 +439,9 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         {/* Toggle Button */}
         <button
           onClick={toggleSidebar}
-          className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 ${
+          className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 hover:bg-gray-50 ${
             shouldShowSidebar ? 'left-60' : 'left-4'
-          } lg:block`}
+          }`}
           title={shouldShowSidebar ? 'Đóng sidebar' : 'Mở sidebar'}
         >
           {shouldShowSidebar ? (
