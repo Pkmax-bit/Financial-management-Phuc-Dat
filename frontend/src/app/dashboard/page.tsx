@@ -30,7 +30,6 @@ import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import { useDashboard } from '@/hooks/useDashboard'
 import { CashflowWidget, EventsWidget, MonthlyChartWidget } from '@/components/DashboardWidgets'
-import PendingApprovalWidget from '@/components/PendingApprovalWidget'
 
 interface User {
   full_name?: string
@@ -398,13 +397,6 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-
-          {/* Pending Approval Widget for Accountant */}
-          {user?.role === 'accountant' && (
-            <div className="mb-6">
-              <PendingApprovalWidget />
-            </div>
-          )}
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
