@@ -1,0 +1,52 @@
+# Render Blueprint for Financial Management System
+# This file defines both backend and frontend services
+
+services:
+  # Backend API Service
+  - type: web
+    name: financial-management-backend
+    env: python
+    region: singapore  # Hoặc chọn region gần bạn nhất
+    plan: free  # Đổi thành 'starter' nếu muốn instance mạnh hơn
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: SUPABASE_URL
+        sync: false  # Bạn cần thêm trong Render Dashboard
+      - key: SUPABASE_KEY
+        sync: false  # Bạn cần thêm trong Render Dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true  # Auto-generate secret key
+      - key: ENVIRONMENT
+        value: production
+      - key: FRONTEND_URL
+        # Thêm URL frontend sau khi deploy
+        # Ví dụ: https://financial-management-frontend.onrender.com
+        sync: false
+    
+  # Frontend Service
+  - type: web
+    name: financial-management-frontend
+    env: node
+    region: singapore  # Cùng region với backend
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    startCommand: cd frontend && npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 20.x
+      - key: NEXT_PUBLIC_API_URL
+        # Thay YOUR_BACKEND_URL bằng URL backend service
+        # Ví dụ: https://financial-management-backend.onrender.com
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+

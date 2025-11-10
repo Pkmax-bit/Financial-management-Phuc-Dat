@@ -22,27 +22,32 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+# CORS middleware - Dynamic configuration based on environment
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+# Define allowed origins
+if ENVIRONMENT == "production":
+    # Production: Only allow specific frontend domains
+    allowed_origins = [
+        os.getenv("FRONTEND_URL", "https://your-frontend.onrender.com"),
+        "https://financial-management-frontend.onrender.com",
+        # Add your custom domain if you have one
+        # "https://yourdomain.com",
+    ]
+else:
+    # Development: Allow local development origins
+    allowed_origins = [
         "http://localhost:3000", 
         "http://127.0.0.1:3000", 
         "http://localhost:3001", 
         "http://127.0.0.1:3001",
-        # Allow access from other devices on the same network
         "http://0.0.0.0:3000",
         "http://0.0.0.0:3001",
-        # Allow access from any IP on the same network (for development)
-        "http://192.168.*:3000",
-        "http://192.168.*:3001",
-        "http://10.*:3000",
-        "http://10.*:3001",
-        "http://172.16.*:3000",
-        "http://172.16.*:3001",
-        # Allow all origins for development (be careful in production)
-        "*"
-    ],
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins if ENVIRONMENT == "production" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
