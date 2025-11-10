@@ -168,17 +168,50 @@ Mỗi khi bạn push code lên GitHub:
 
 ## 🐛 Troubleshooting
 
-### 1. Frontend không connect được Backend:
+### 1. Lỗi Python Version (Backend build failed):
+**Lỗi:** `The PYTHON_VERSION must provide a major, minor, and patch version, e.g. 3.8.1`
+
+**Nguyên nhân:** Render yêu cầu Python version phải có 3 số (major.minor.patch)
+
+**Giải pháp:**
+```yaml
+# ❌ SAI
+PYTHON_VERSION=3.11
+
+# ✅ ĐÚNG
+PYTHON_VERSION=3.11.9
+```
+
+Đã fix trong commit mới nhất, chỉ cần redeploy hoặc pull code mới.
+
+### 2. Frontend không connect được Backend:
 - Kiểm tra `NEXT_PUBLIC_API_URL` đã đúng backend URL chưa
 - Kiểm tra CORS trong backend (`main.py`) có allow frontend URL chưa
+- Thêm `FRONTEND_URL` vào backend environment variables
 
-### 2. Backend bị sleep (Free plan):
+### 3. Backend bị sleep (Free plan):
 - Dùng [UptimeRobot](https://uptimerobot.com/) để ping backend mỗi 5 phút
-- Hoặc upgrade lên Starter plan
+- Hoặc upgrade lên Starter plan ($7/tháng)
 
-### 3. Build failed:
-- Xem logs trong Render Dashboard
-- Kiểm tra `render.yaml` hoặc Build Command có đúng không
+### 4. Build failed - Module not found:
+**Lỗi:** `Module not found: Can't resolve '@/lib/apiUrl'`
+
+**Nguyên nhân:** File `apiUrl.ts` bị gitignore
+
+**Giải pháp:** Đã fix trong commit `9644f7f`, pull code mới nhất
+
+### 5. CORS Error trong browser:
+**Lỗi:** `Access to fetch at '...' from origin '...' has been blocked by CORS policy`
+
+**Giải pháp:**
+1. Thêm `FRONTEND_URL` vào backend environment variables
+2. Set `ENVIRONMENT=production` trong backend
+3. Redeploy backend service
+
+### 6. Logs và Debug:
+- Vào Render Dashboard → Service → **Logs** tab
+- Xem realtime logs để debug
+- Tìm error messages cụ thể
 
 ---
 
