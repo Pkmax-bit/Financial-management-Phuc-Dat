@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Upload, ArrowLeft, Milestone, Database, ChevronDown } from 'lucide-react'
+import { Search, Upload, Milestone, Database, ChevronDown } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface Project {
@@ -61,19 +61,9 @@ export default function CustomerTimelineLandingPage() {
         {/* Hero */}
         <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-cyan-50 border-b border-gray-200">
           <div className="max-w-5xl mx-auto px-4 py-8">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Xem tiến độ thi công dự án</h1>
-                <p className="text-gray-700 mt-2">Nhập ID dự án để xem timeline, hình ảnh, mô tả và bình luận.</p>
-              </div>
-              <div className="pt-1">
-                <button
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 text-gray-700 bg-white"
-                  onClick={() => router.push('/dashboard')}
-                >
-                  <ArrowLeft className="w-4 h-4" /> Về Dashboard
-                </button>
-              </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Xem tiến độ thi công dự án</h1>
+              <p className="text-gray-700 mt-2">Nhập ID dự án để xem timeline, hình ảnh, mô tả và bình luận.</p>
             </div>
           </div>
         </div>
