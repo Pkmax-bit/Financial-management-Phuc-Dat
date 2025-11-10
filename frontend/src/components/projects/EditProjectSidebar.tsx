@@ -124,20 +124,31 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
       // Try API first, fallback to Supabase
       try {
         const data = await employeeApi.getEmployees()
+        console.log('📋 Employees from API:', data)
         setEmployees(data || [])
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
         
         const { data, error } = await supabase
           .from('employees')
-          .select('id, full_name as name, email')
-          .order('full_name')
+          .select('id, first_name, last_name, email, employee_code')
+          .order('first_name')
 
         if (error) throw error
-        setEmployees(data || [])
+        
+        // Map to Employee format with combined name
+        const mappedEmployees = (data || []).map((emp: any) => ({
+          id: emp.id,
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+          email: emp.email || '',
+          employee_code: emp.employee_code
+        }))
+        
+        console.log('📋 Employees from Supabase:', mappedEmployees)
+        setEmployees(mappedEmployees)
       }
     } catch (error) {
-      console.error('Error fetching employees:', error)
+      console.error('❌ Error fetching employees:', error)
     }
   }
 
@@ -295,7 +306,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
 
               <div>
                 <label className="block text-sm font-semibold text-black mb-2">
-                  Nhân viên *
+                  Nhân viên * {employees.length > 0 && `(${employees.length} nhân viên)`}
                 </label>
                 <select
                   name="manager_id"
@@ -304,13 +315,20 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
                 >
-                  <option value="">Chọn nhân viên</option>
+                  <option value="">
+                    {employees.length === 0 ? 'Đang tải nhân viên...' : 'Chọn nhân viên'}
+                  </option>
                   {employees.map((employee) => (
                     <option key={employee.id} value={employee.id}>
-                      {employee.name}
+                      {employee.name} {employee.email ? `(${employee.email})` : ''}
                     </option>
                   ))}
                 </select>
+                {employees.length === 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Không tìm thấy nhân viên. Kiểm tra console để debug.
+                  </p>
+                )}
               </div>
 
               <div>
