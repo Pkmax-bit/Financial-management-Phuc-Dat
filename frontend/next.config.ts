@@ -29,15 +29,25 @@ const nextConfig: NextConfig = {
       config.resolve.alias = {};
     }
     
+    // Resolve path alias
+    const srcPath = path.resolve(__dirname, './src');
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': path.resolve(__dirname, './src'),
+      '@': srcPath,
     };
     
     // Ensure modules are resolved correctly
     if (!config.resolve.modules) {
       config.resolve.modules = ['node_modules'];
     }
+    
+    // Add extensions for module resolution
+    if (!config.resolve.extensions) {
+      config.resolve.extensions = ['.tsx', '.ts', '.jsx', '.js', '.json'];
+    }
+    
+    // Ensure proper module resolution
+    config.resolve.fullySpecified = false;
     
     // Client-side fallbacks
     if (!isServer) {
