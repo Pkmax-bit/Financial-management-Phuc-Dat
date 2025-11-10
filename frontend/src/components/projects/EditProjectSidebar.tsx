@@ -71,18 +71,18 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
   useEffect(() => {
     if (isOpen && project) {
       setFormData({
-        project_code: project.project_code,
-        name: project.name,
+        project_code: project.project_code || '',
+        name: project.name || '',
         description: project.description || '',
-        customer_id: project.customer_id,
-        manager_id: project.manager_id,
-        start_date: project.start_date,
+        customer_id: project.customer_id || '',
+        manager_id: project.manager_id || '',
+        start_date: project.start_date || '',
         end_date: project.end_date || '',
         budget: project.budget?.toString() || '',
-        status: project.status,
-        priority: project.priority,
-        progress: project.progress,
-        billing_type: project.billing_type,
+        status: project.status || 'planning',
+        priority: project.priority || 'medium',
+        progress: project.progress || 0,
+        billing_type: project.billing_type || 'fixed',
         hourly_rate: project.hourly_rate?.toString() || ''
       })
     }
