@@ -154,6 +154,9 @@ export default function KanbanBoard() {
             : p
         )
       )
+      
+      // Clear any error state on success
+      setError(null)
 
       console.log(`Project ${project.name} moved to ${newStatus}${newStatus === 'completed' ? ' with 100% progress' : ''}`)
     } catch (err) {
@@ -213,12 +216,17 @@ export default function KanbanBoard() {
       // Auto-change status based on progress
       let displayStatus = p.status
       
+      // Don't override manually set statuses (on_hold, cancelled)
+      // These statuses should always be respected
+      if (p.status === 'on_hold' || p.status === 'cancelled') {
+        displayStatus = p.status
+      }
       // If project has progress > 0 and status is planning, show as active
-      if (p.status === 'planning' && p.progress > 0) {
+      else if (p.status === 'planning' && p.progress > 0) {
         displayStatus = 'active'
       }
-      // If project has progress = 100%, show as completed
-      else if (p.progress >= 100 && p.status !== 'cancelled') {
+      // If project has progress = 100%, show as completed (but respect on_hold and cancelled)
+      else if (p.progress >= 100 && p.status !== 'cancelled' && p.status !== 'on_hold') {
         displayStatus = 'completed'
       }
       
