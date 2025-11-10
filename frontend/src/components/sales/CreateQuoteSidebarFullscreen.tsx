@@ -410,6 +410,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const itemsRef = useRef<QuoteItem[]>([])
   useEffect(() => { itemsRef.current = items }, [items])
 
+  // Dispatch event when dialog opens to close project detail sidebar
+  useEffect(() => {
+    if (isOpen) {
+      window.dispatchEvent(new CustomEvent('closeProjectDetailSidebar'))
+    }
+  }, [isOpen])
+
   // Hide sidebar when modal opens/closes
   useEffect(() => {
     if (isOpen) {

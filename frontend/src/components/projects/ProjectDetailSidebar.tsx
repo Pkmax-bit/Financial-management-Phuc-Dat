@@ -89,6 +89,22 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
     }
   }, [isOpen])
 
+  // Listen for events to close sidebar when create quote dialog opens
+  useEffect(() => {
+    const handleCloseSidebar = () => {
+      if (isOpen) {
+        onClose()
+      }
+    }
+
+    // Listen for custom events when create quote dialog opens
+    window.addEventListener('closeProjectDetailSidebar', handleCloseSidebar)
+
+    return () => {
+      window.removeEventListener('closeProjectDetailSidebar', handleCloseSidebar)
+    }
+  }, [isOpen, onClose])
+
   const fetchUser = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()

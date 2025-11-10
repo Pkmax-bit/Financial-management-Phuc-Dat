@@ -62,7 +62,7 @@ interface Quote {
 }
 
 interface QuotesTabProps {
-  searchTerm: string
+  searchTerm?: string
   onCreateQuote: () => void
   shouldOpenCreateModal?: boolean
 }
@@ -82,10 +82,28 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     dueDate: string
     convertedItems: any[]
   } | null>(null)
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
 
   useEffect(() => {
     fetchQuotes()
+    fetchProjects()
   }, [])
+
+  const fetchProjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, project_code')
+        .order('name', { ascending: true })
+      
+      if (error) throw error
+      
+      setProjects(data || [])
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    }
+  }
   // Group quotes by project for display
   const groupedByProject = (() => {
     const groups: Record<string, { key: string; name: string; code?: string; quotes: Quote[] }> = {}
@@ -624,13 +642,15 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   }
 
   const filteredQuotes = quotes.filter(quote => {
-    const matchesSearch = 
+    const matchesSearch = !searchTerm || 
       quote.quote_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (quote.customer_name && quote.customer_name.toLowerCase().includes(searchTerm.toLowerCase()))
     
     const matchesFilter = filter === 'all' || quote.status === filter
+    
+    const matchesProject = selectedProjectId === 'all' || quote.project_id === selectedProjectId
 
-    return matchesSearch && matchesFilter
+    return matchesSearch && matchesFilter && matchesProject
   })
 
   if (loading) {
@@ -789,8 +809,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       </div>
 
       {/* Filters */}
-      <div className="flex items-center justify-between">
-        <div className="flex space-x-2">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex space-x-2 flex-wrap">
           <button
             onClick={() => setFilter('all')}
             className={`px-3 py-1 rounded-md text-sm ${
@@ -831,6 +851,20 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           >
             Đã chấp nhận
           </button>
+          
+          {/* Project Filter */}
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="px-3 py-1 rounded-md text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả dự án</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.project_code ? `${project.project_code} - ` : ''}{project.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button

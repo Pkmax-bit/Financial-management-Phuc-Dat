@@ -518,8 +518,8 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
               </nav>
             </div>
 
-            {/* Search Bar - Only show for non-overview tabs */}
-            {activeTab !== 'overview' && (
+            {/* Search Bar - Only show for non-overview tabs, but hide for quotes and invoices */}
+            {activeTab !== 'overview' && activeTab !== 'quotes' && activeTab !== 'invoices' && (
               <div className="px-6 py-4 border-b border-gray-200">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -528,9 +528,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   <input
                     type="text"
                     placeholder={
-                      activeTab === 'all-sales' ? 'Tìm kiếm tất cả giao dịch...' :
-                      activeTab === 'quotes' ? 'Tìm kiếm báo giá...' : 
-                      activeTab === 'invoices' ? 'Tìm kiếm hóa đơn...' : 
+                      activeTab === 'all-sales' ? 'Tìm kiếm tất cả giao dịch...' : 
                       activeTab === 'customers' ? 'Tìm kiếm khách hàng...' :
                       activeTab === 'variance' ? 'Tìm kiếm dự án chênh lệch...' :
                       'Tìm kiếm...'

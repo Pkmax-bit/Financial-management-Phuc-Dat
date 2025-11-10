@@ -71,7 +71,7 @@ interface Invoice {
 }
 
 interface InvoicesTabProps {
-  searchTerm: string
+  searchTerm?: string
   onCreateInvoice: () => void
   shouldOpenCreateModal?: boolean // Prop to control modal opening from parent
 }
@@ -86,10 +86,28 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null)
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
 
   useEffect(() => {
     fetchInvoices()
+    fetchProjects()
   }, [])
+
+  const fetchProjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, project_code')
+        .order('name', { ascending: true })
+      
+      if (error) throw error
+      
+      setProjects(data || [])
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    }
+  }
 
   useEffect(() => {
     if (shouldOpenCreateModal) {
@@ -461,7 +479,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   }
 
   const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = 
+    const matchesSearch = !searchTerm || 
       invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (invoice.customer_name && invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase()))
     
@@ -471,8 +489,10 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
     } else if (filter !== 'all') {
       matchesFilter = invoice.status === filter || invoice.payment_status === filter
     }
+    
+    const matchesProject = selectedProjectId === 'all' || invoice.project_id === selectedProjectId
 
-    return matchesSearch && matchesFilter
+    return matchesSearch && matchesFilter && matchesProject
   })
 
   if (loading) {
@@ -566,8 +586,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       </div>
 
       {/* Filters */}
-      <div className="flex items-center justify-between">
-        <div className="flex space-x-2">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex space-x-2 flex-wrap">
           <button
             onClick={() => setFilter('all')}
             className={`px-3 py-1 rounded-md text-sm ${
@@ -628,6 +648,20 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           >
             Đã thanh toán
           </button>
+          
+          {/* Project Filter */}
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="px-3 py-1 rounded-md text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả dự án</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.project_code ? `${project.project_code} - ` : ''}{project.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button

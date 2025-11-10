@@ -51,7 +51,7 @@ interface ProjectExpense {
 }
 
 interface ProjectExpensesTabProps {
-  searchTerm: string
+  searchTerm?: string
   onCreateExpense: () => void
 }
 
@@ -354,6 +354,8 @@ const handleApproveExpense = async (expenseId: string) => {
 
   // Define projectsMap at the top of the component after fetching data
   const [projectsMap, setProjectsMap] = useState(new Map())
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [projectsList, setProjectsList] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
 
   // Toggle expand/collapse for parent items
   const toggleExpand = (itemId: string) => {
@@ -476,6 +478,7 @@ const handleApproveExpense = async (expenseId: string) => {
 
       // After fetching projectsRes
       setProjectsMap(new Map(projectsRes.data.map(p => [p.id, p])))
+      setProjectsList(projectsRes.data || [])
 
       const expensesMapped = [
         ...quotesRes.data.map(e => ({
@@ -700,13 +703,16 @@ const handleApproveExpense = async (expenseId: string) => {
   }
 
   const filteredExpenses = expenses.filter(expense => {
-    const matchesSearch = expense.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expense.project_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expense.description.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch = !searchTerm || 
+      expense.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      expense.project_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      expense.description.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesView = viewMode === 'all' || expense.category === viewMode
     
-    return matchesSearch && matchesView
+    const matchesProject = selectedProjectId === 'all' || expense.project_id === selectedProjectId
+    
+    return matchesSearch && matchesView && matchesProject
   })
 
   // Calculate summary statistics
@@ -747,7 +753,7 @@ const handleApproveExpense = async (expenseId: string) => {
     })
   }
 
-  const projectDisplay = formatProjects(expenses)
+  const projectDisplay = formatProjects(selectedProjectId === 'all' ? expenses : expenses.filter(e => e.project_id === selectedProjectId))
 
 return (
   <div className="space-y-6">
@@ -782,38 +788,54 @@ return (
       </button>
     </div>
 
-    {/* View Mode Tabs */}
-    <div className="flex space-x-2">
-      <button
-        onClick={() => setViewMode('all')}
-        className={`px-4 py-2 rounded-lg ${
-          viewMode === 'all' 
-            ? 'bg-blue-100 text-blue-700' 
-            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-        }`}
+    {/* View Mode Tabs and Project Filter */}
+    <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex space-x-2">
+        <button
+          onClick={() => setViewMode('all')}
+          className={`px-4 py-2 rounded-lg ${
+            viewMode === 'all' 
+              ? 'bg-blue-100 text-blue-700' 
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+          }`}
+        >
+          Tất cả
+        </button>
+        <button
+          onClick={() => setViewMode('planned')}
+          className={`px-4 py-2 rounded-lg ${
+            viewMode === 'planned'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+          }`}
+        >
+          Kế hoạch
+        </button>
+        <button
+          onClick={() => setViewMode('actual')}
+          className={`px-4 py-2 rounded-lg ${
+            viewMode === 'actual'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+          }`}
+        >
+          Thực tế
+        </button>
+      </div>
+      
+      {/* Project Filter */}
+      <select
+        value={selectedProjectId}
+        onChange={(e) => setSelectedProjectId(e.target.value)}
+        className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
-        Tất cả
-      </button>
-      <button
-        onClick={() => setViewMode('planned')}
-        className={`px-4 py-2 rounded-lg ${
-          viewMode === 'planned'
-            ? 'bg-blue-100 text-blue-700'
-            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-        }`}
-      >
-        Kế hoạch
-      </button>
-      <button
-        onClick={() => setViewMode('actual')}
-        className={`px-4 py-2 rounded-lg ${
-          viewMode === 'actual'
-            ? 'bg-blue-100 text-blue-700'
-            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-        }`}
-      >
-        Thực tế
-      </button>
+        <option value="all">Tất cả dự án</option>
+        {projectsList.map((project) => (
+          <option key={project.id} value={project.id}>
+            {project.project_code ? `${project.project_code} - ` : ''}{project.name}
+          </option>
+        ))}
+      </select>
     </div>
 
     {/* Summary Cards - Show based on viewMode */}
