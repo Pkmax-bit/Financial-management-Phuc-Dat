@@ -251,53 +251,12 @@ export default function DashboardPage() {
                   )}
 
                   <button
-                    onClick={() => {
-                      console.log('=== DASHBOARD DEBUG INFO ===')
-                      console.log('User:', user)
-                      console.log('Loading:', isLoading)
-                      console.log('Stats:', stats)
-                      console.log('Cashflow:', cashflow)
-                      console.log('Events:', events)
-                      console.log('Has Errors:', hasErrors)
-                      console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-                      console.log('Supabase Anon Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Not set')
-                      console.log('========================')
-                    }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-                  >
-                    <Activity className="h-4 w-4" />
-                    Debug
-                  </button>
-                  
-                  <button
                     onClick={handleManualRefresh}
                     disabled={isLoading}
                     className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                   >
                     <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                     Làm mới
-                  </button>
-
-                  <button
-                    onClick={handleToggleRealtime}
-                    className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
-                      autoRefresh 
-                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                        : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
-                    }`}
-                  >
-                    <Activity className="h-4 w-4" />
-                    {autoRefresh ? 'Tự động' : 'Thủ công'}
-                  </button>
-                  
-                  
-                  
-                  <button
-                    onClick={() => router.push('/support')}
-                    className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2"
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                    Hỗ trợ
                   </button>
                 </div>
               </div>

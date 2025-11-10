@@ -180,13 +180,6 @@ export default function ProjectsPage() {
             Kanban
           </button>
           <button
-            onClick={() => setActiveTab('reports')}
-            className="flex items-center gap-2 px-4 py-2 text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-          >
-            <BarChart3 className="h-4 w-4" />
-            Báo cáo
-          </button>
-          <button
             onClick={handleCreateProject}
             className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl font-medium"
           >

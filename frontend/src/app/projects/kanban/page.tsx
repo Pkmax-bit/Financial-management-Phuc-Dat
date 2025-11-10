@@ -6,11 +6,38 @@ import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
 import KanbanBoard from '@/components/projects/KanbanBoard'
+import ProjectDetailSidebar from '@/components/projects/ProjectDetailSidebar'
+import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
+
+interface Project {
+  id: string
+  project_code: string
+  name: string
+  description?: string
+  customer_id: string
+  customer_name?: string
+  manager_id: string
+  manager_name?: string
+  start_date: string
+  end_date?: string
+  budget?: number
+  actual_cost?: number
+  status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  progress: number
+  billing_type: 'fixed' | 'hourly' | 'milestone'
+  hourly_rate?: number
+  created_at: string
+  updated_at: string
+}
 
 export default function ProjectsKanbanPage() {
   const router = useRouter()
   const [user, setUser] = useState<{ full_name?: string, role?: string, email?: string } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showDetailSidebar, setShowDetailSidebar] = useState(false)
+  const [showEditSidebar, setShowEditSidebar] = useState(false)
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   useEffect(() => {
     checkUser()
@@ -70,9 +97,51 @@ export default function ProjectsKanbanPage() {
         </StickyTopNav>
 
         <div className="px-2 py-6 sm:px-4 lg:px-6 xl:px-8">
-          <KanbanBoard />
+          <KanbanBoard 
+            onViewProject={(project) => {
+              setSelectedProject(project as Project)
+              setShowDetailSidebar(true)
+            }}
+          />
         </div>
       </div>
+
+      {/* Project Detail Sidebar */}
+      <ProjectDetailSidebar
+        isOpen={showDetailSidebar}
+        onClose={() => {
+          setShowDetailSidebar(false)
+          setSelectedProject(null)
+        }}
+        project={selectedProject}
+        onEdit={(project) => {
+          setShowDetailSidebar(false)
+          setSelectedProject(project)
+          setShowEditSidebar(true)
+        }}
+        onDelete={(project) => {
+          setShowDetailSidebar(false)
+          setSelectedProject(null)
+          // Refresh kanban board
+          window.location.reload()
+        }}
+      />
+
+      {/* Edit Project Sidebar */}
+      <EditProjectSidebar
+        isOpen={showEditSidebar}
+        onClose={() => {
+          setShowEditSidebar(false)
+          setSelectedProject(null)
+        }}
+        project={selectedProject}
+        onSuccess={() => {
+          setShowEditSidebar(false)
+          setSelectedProject(null)
+          // Refresh kanban board
+          window.location.reload()
+        }}
+      />
     </LayoutWithSidebar>
   )
 }

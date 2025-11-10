@@ -20,8 +20,7 @@ import {
   XCircle,
   Pause,
   X,
-  Save,
-  BarChart3
+  Save
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi } from '@/lib/api'
@@ -452,7 +451,11 @@ export default function ProjectsTab({
         {sortedProjects.map((project) => {
           const StatusIcon = statusIcons[project.status]
           return (
-             <div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group relative">
+             <div 
+               key={project.id} 
+               onClick={() => onViewProject(project)}
+               className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group relative cursor-pointer"
+             >
                {/* Custom Tooltip */}
                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
                  <div className="text-center">
@@ -494,14 +497,8 @@ export default function ProjectsTab({
                   </div>
                   <div className="flex items-start gap-1.5 flex-shrink-0">
                     <button
-                      onClick={() => window.open(`/projects/${project.id}/detail`, '_blank')}
-                      className="p-1.5 text-black hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 hover:scale-110"
-                      title="Xem chi tiết tài chính"
-                    >
-                      <BarChart3 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setSelectedProjectId(project.id);
                         setSelectedProjectName(project.name);
                         setTeamDialogOpen(true);
@@ -512,14 +509,20 @@ export default function ProjectsTab({
                       <Users className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => onEditProject(project)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditProject(project);
+                      }}
                       className="p-1.5 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Chỉnh sửa dự án"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(project)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(project);
+                      }}
                       className="p-1.5 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
                       title="Xóa dự án"
                     >

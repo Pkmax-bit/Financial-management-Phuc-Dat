@@ -26,7 +26,11 @@ const statusMeta: Record<ProjectStatus, { title: string; colorClass: string }> =
   cancelled: { title: 'Hủy', colorClass: 'bg-red-100 text-red-800' }
 }
 
-export default function KanbanBoard() {
+interface KanbanBoardProps {
+  onViewProject?: (project: ProjectItem) => void
+}
+
+export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -259,7 +263,14 @@ export default function KanbanBoard() {
             colorClass={statusMeta[status].colorClass}
             count={grouped[status].length}
             projects={grouped[status]}
-            onCardClick={(id) => router.push(`/projects/${id}/detail`)}
+            onCardClick={(id) => {
+              const project = projects.find(p => p.id === id)
+              if (project && onViewProject) {
+                onViewProject(project)
+              } else {
+                router.push(`/projects/${id}/detail`)
+              }
+            }}
             onDragStart={handleDragStart}
             onDragOver={(e) => handleDragOver(e, status)}
             onDragLeave={handleDragLeave}
