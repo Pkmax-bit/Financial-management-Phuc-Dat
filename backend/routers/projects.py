@@ -96,6 +96,21 @@ async def get_projects(
             detail=f"Failed to fetch projects: {str(e)}"
         )
 
+@router.get("/list-ids")
+async def get_project_list():
+    """Get simple list of all projects with id, name, description and created_at - no authentication required"""
+    try:
+        supabase = get_supabase_client()
+        result = supabase.table("projects").select("id, name, description, created_at, project_code").order("created_at", desc=True).execute()
+        
+        return {
+            "projects": result.data or [],
+            "count": len(result.data) if result.data else 0
+        }
+    except Exception as e:
+        print(f"Error fetching project list: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/test/{project_id}")
 async def get_project_test(project_id: str):
     """Test endpoint without authentication"""

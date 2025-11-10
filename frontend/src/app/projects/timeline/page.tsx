@@ -8,6 +8,7 @@ import { getApiEndpoint } from '@/lib/apiUrl'
 interface Project {
   id: string
   name: string
+  project_code?: string
   description?: string
   created_at: string
 }
@@ -19,7 +20,7 @@ export default function CustomerTimelineLandingPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [availableProjects, setAvailableProjects] = useState<Project[]>([])
   const [loadingProjects, setLoadingProjects] = useState(false)
-  const [showProjectList, setShowProjectList] = useState(false)
+  const [showProjectList, setShowProjectList] = useState(true)
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -133,27 +134,41 @@ export default function CustomerTimelineLandingPage() {
                       {availableProjects.map((project) => (
                         <div
                           key={project.id}
-                          className="bg-white rounded-lg p-3 border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer"
+                          className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer"
                           onClick={() => handleQuickOpen(project.id)}
                         >
-                          <div className="flex items-start justify-between">
+                          <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900 truncate">
-                                {project.name}
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="text-base font-semibold text-gray-900 truncate">
+                                  {project.name}
+                                </div>
+                                {project.project_code && (
+                                  <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded">
+                                    {project.project_code}
+                                  </span>
+                                )}
                               </div>
                               {project.description && (
-                                <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                <div className="text-sm text-gray-600 mt-1 line-clamp-2">
                                   {project.description}
                                 </div>
                               )}
-                              <div className="text-xs text-gray-400 mt-1">
+                              <div className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                                <span>📅</span>
                                 {new Date(project.created_at).toLocaleDateString('vi-VN')}
                               </div>
                             </div>
-                            <div className="ml-2 flex-shrink-0">
-                              <div className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">
-                                {project.id.substring(0, 8)}...
-                              </div>
+                            <div className="flex-shrink-0">
+                              <button
+                                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleQuickOpen(project.id)
+                                }}
+                              >
+                                Xem timeline →
+                              </button>
                             </div>
                           </div>
                         </div>

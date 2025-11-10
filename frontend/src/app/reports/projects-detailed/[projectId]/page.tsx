@@ -27,6 +27,14 @@ interface ProjectDetail {
   budget: number
 }
 
+interface QuoteLineItem {
+  id: string
+  name_product?: string | null
+  description?: string | null
+  quantity?: number | null
+  unit?: string | null
+}
+
 interface QuoteItem {
   id: string
   quote_number: string
@@ -34,6 +42,15 @@ interface QuoteItem {
   total_amount: number
   status: string
   created_at: string
+  quote_items?: QuoteLineItem[]
+}
+
+interface InvoiceLineItem {
+  id: string
+  name_product?: string
+  description?: string
+  quantity: number
+  unit?: string
 }
 
 interface InvoiceItem {
@@ -45,6 +62,7 @@ interface InvoiceItem {
   payment_status: string
   due_date: string
   created_at: string
+  invoice_items?: InvoiceLineItem[]
 }
 
 interface ExpenseItem {
@@ -148,7 +166,16 @@ export default function ProjectDetailedReportDetailPage() {
       // Fetch quotes (planned revenue - chỉ để so sánh)
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('*')
+        .select(`
+          *,
+          quote_items (
+            id,
+            name_product,
+            description,
+            quantity,
+            unit
+          )
+        `)
         .eq('project_id', projectId)
         .neq('status', 'rejected')
         .order('created_at', { ascending: false })
@@ -158,7 +185,16 @@ export default function ProjectDetailedReportDetailPage() {
       // Fetch invoices (actual revenue - dùng tính lợi nhuận)
       const { data: invoicesData, error: invoicesError } = await supabase
         .from('invoices')
-        .select('*')
+        .select(`
+          *,
+          invoice_items (
+            id,
+            name_product,
+            description,
+            quantity,
+            unit
+          )
+        `)
         .eq('project_id', projectId)
         .in('status', ['sent', 'paid'])  // sent = đã gửi, paid = đã thanh toán
         .order('created_at', { ascending: false })
@@ -704,15 +740,22 @@ export default function ProjectDetailedReportDetailPage() {
     return totals
   }, [expenseQuotes])
 
-  // Combined list of object ids for table
+  // Combined list of object ids for table - only show objects that have expenses
   const combinedObjectIds = useMemo(() => {
-    const ids = new Set<string>([
-      ...Object.keys(plannedByObject || {}),
-      ...Object.keys(expenseByObject || {}),
-      ...Array.from(expenseObjectNames.keys())
-    ])
+    const ids = new Set<string>()
+    // Only include objects that have planned or actual expenses
+    Object.keys(plannedByObject || {}).forEach(id => {
+      if ((plannedByObject[id] || 0) > 0) {
+        ids.add(id)
+      }
+    })
+    Object.keys(expenseByObject || {}).forEach(id => {
+      if ((expenseByObject[id] || 0) > 0) {
+        ids.add(id)
+      }
+    })
     return Array.from(ids)
-  }, [plannedByObject, expenseByObject, expenseObjectNames])
+  }, [plannedByObject, expenseByObject])
 
   const expensePieData = {
     labels: Object.keys(expenseCategories).map(key => {
@@ -745,12 +788,13 @@ export default function ProjectDetailedReportDetailPage() {
     }]
   }
 
-  // Pie chart data for expense objects and profit (show all objects)
+  // Pie chart data for expense objects and profit (only show objects with expenses)
   const expenseObjectsAndProfitPieData = useMemo(() => {
-    const allObjectIds = Array.from(expenseObjectNames.keys())
-    const labels = [...allObjectIds.map(id => expenseObjectNames.get(id) || 'Khác'), 'Lợi nhuận']
+    // Only include objects that have actual expenses
+    const objectIdsWithExpenses = Array.from(expenseObjectNames.keys()).filter(id => (expenseByObject[id] || 0) > 0)
+    const labels = [...objectIdsWithExpenses.map(id => expenseObjectNames.get(id) || 'Khác'), 'Lợi nhuận']
     const values = [
-      ...allObjectIds.map(id => expenseByObject[id] || 0),
+      ...objectIdsWithExpenses.map(id => expenseByObject[id] || 0),
       Math.max(0, actualProfit)
     ]
     const colorsBase = [
@@ -912,6 +956,25 @@ export default function ProjectDetailedReportDetailPage() {
                             <p className="text-sm font-medium text-gray-900">{quote.quote_number}</p>
                             <p className="text-xs text-gray-500">{quote.description || 'Không có mô tả'}</p>
                             <p className="text-xs text-gray-400">{formatDate(quote.created_at)}</p>
+                        {Array.isArray(quote.quote_items) && quote.quote_items.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs font-semibold text-gray-600 mb-1">Sản phẩm</p>
+                            <ul className="space-y-1">
+                              {quote.quote_items.map((item) => (
+                                <li key={item.id} className="flex justify-between items-center text-xs text-gray-600">
+                                  <span className="truncate pr-2">
+                                    {item.name_product || item.description || 'Hạng mục'}
+                                  </span>
+                                  {item.quantity !== null && item.quantity !== undefined && (
+                                    <span className="font-medium text-gray-900">
+                                      {item.quantity}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-blue-600">{formatCurrency(quote.total_amount)}</p>
@@ -1001,13 +1064,25 @@ export default function ProjectDetailedReportDetailPage() {
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {invoices.length > 0 ? (
                       invoices.map((invoice) => (
-                        <div key={invoice.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <div key={invoice.id} className="flex justify-between items-start p-3 bg-gray-50 rounded-lg">
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-900">{invoice.invoice_number}</p>
                             <p className="text-xs text-gray-500">{invoice.description || 'Không có mô tả'}</p>
                             <p className="text-xs text-gray-400">{formatDate(invoice.created_at)}</p>
+                            {invoice.invoice_items && invoice.invoice_items.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <p className="text-xs font-semibold text-gray-700 mb-1">Sản phẩm:</p>
+                                <div className="space-y-1">
+                                  {invoice.invoice_items.map((item) => (
+                                    <div key={item.id} className="text-xs text-gray-600">
+                                      • {item.name_product || item.description || 'Sản phẩm'}: {item.quantity || 0}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right space-y-1">
+                          <div className="text-right space-y-1 ml-4">
                             <p className="text-sm font-semibold text-green-600">{formatCurrency(invoice.total_amount)}</p>
                             <div className="flex flex-col gap-1">
                               <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(invoice.status)}`}>
