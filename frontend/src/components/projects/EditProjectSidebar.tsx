@@ -70,6 +70,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
 
   useEffect(() => {
     if (isOpen && project) {
+      console.log('📝 Loading project data into form:', project)
       setFormData({
         project_code: project.project_code || '',
         name: project.name || '',
@@ -85,6 +86,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
         billing_type: project.billing_type || 'fixed',
         hourly_rate: project.hourly_rate?.toString() || ''
       })
+      console.log('✅ Form data set successfully')
     }
   }, [isOpen, project])
 

@@ -12,10 +12,21 @@ interface ProjectItem {
   id: string
   name: string
   project_code: string
+  description?: string
+  customer_id?: string
   customer_name?: string
+  manager_id?: string
+  start_date?: string
+  end_date?: string
+  budget?: number
+  actual_cost?: number
+  billing_type?: 'fixed' | 'hourly' | 'milestone'
+  hourly_rate?: number
   progress: number
   priority?: 'low' | 'medium' | 'high' | 'urgent'
   status: ProjectStatus
+  created_at?: string
+  updated_at?: string
 }
 
 const statusMeta: Record<ProjectStatus, { title: string; colorClass: string }> = {
@@ -47,7 +58,26 @@ export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
       try {
         const { data, error } = await supabase
           .from('projects')
-          .select('id, name, project_code, status, priority, progress, customers(name)')
+          .select(`
+            id, 
+            name, 
+            project_code, 
+            description,
+            status, 
+            priority, 
+            progress,
+            customer_id,
+            manager_id,
+            start_date,
+            end_date,
+            budget,
+            actual_cost,
+            billing_type,
+            hourly_rate,
+            created_at,
+            updated_at,
+            customers(name)
+          `)
 
         if (error) throw error
 
@@ -55,10 +85,21 @@ export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
           id: p.id,
           name: p.name,
           project_code: p.project_code,
+          description: p.description,
           status: p.status,
           priority: p.priority,
           progress: typeof p.progress === 'number' ? p.progress : Number(p.progress ?? 0),
-          customer_name: p.customers?.name
+          customer_id: p.customer_id,
+          customer_name: p.customers?.name,
+          manager_id: p.manager_id,
+          start_date: p.start_date,
+          end_date: p.end_date,
+          budget: p.budget,
+          actual_cost: p.actual_cost,
+          billing_type: p.billing_type,
+          hourly_rate: p.hourly_rate,
+          created_at: p.created_at,
+          updated_at: p.updated_at
         }))
 
         setProjects(mapped)
