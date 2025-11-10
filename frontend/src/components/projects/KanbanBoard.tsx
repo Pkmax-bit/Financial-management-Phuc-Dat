@@ -16,6 +16,8 @@ interface ProjectItem {
   customer_id?: string
   customer_name?: string
   manager_id?: string
+  manager_name?: string
+  manager_code?: string
   start_date?: string
   end_date?: string
   budget?: number
@@ -76,31 +78,45 @@ export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
             hourly_rate,
             created_at,
             updated_at,
-            customers(name)
+            customers(name),
+            employees!manager_id(
+              id,
+              employee_code,
+              first_name,
+              last_name
+            )
           `)
 
         if (error) throw error
 
-        const mapped: ProjectItem[] = (data || []).map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          project_code: p.project_code,
-          description: p.description,
-          status: p.status,
-          priority: p.priority,
-          progress: typeof p.progress === 'number' ? p.progress : Number(p.progress ?? 0),
-          customer_id: p.customer_id,
-          customer_name: p.customers?.name,
-          manager_id: p.manager_id,
-          start_date: p.start_date,
-          end_date: p.end_date,
-          budget: p.budget,
-          actual_cost: p.actual_cost,
-          billing_type: p.billing_type,
-          hourly_rate: p.hourly_rate,
-          created_at: p.created_at,
-          updated_at: p.updated_at
-        }))
+        const mapped: ProjectItem[] = (data || []).map((p: any) => {
+          // Get manager name from employees table
+          const manager = p.employees
+          const managerName = manager ? `${manager.first_name || ''} ${manager.last_name || ''}`.trim() : undefined
+          
+          return {
+            id: p.id,
+            name: p.name,
+            project_code: p.project_code,
+            description: p.description,
+            status: p.status,
+            priority: p.priority,
+            progress: typeof p.progress === 'number' ? p.progress : Number(p.progress ?? 0),
+            customer_id: p.customer_id,
+            customer_name: p.customers?.name,
+            manager_id: p.manager_id,
+            manager_name: managerName,
+            manager_code: manager?.employee_code,
+            start_date: p.start_date,
+            end_date: p.end_date,
+            budget: p.budget,
+            actual_cost: p.actual_cost,
+            billing_type: p.billing_type,
+            hourly_rate: p.hourly_rate,
+            created_at: p.created_at,
+            updated_at: p.updated_at
+          }
+        })
 
         setProjects(mapped)
       } catch (e: any) {
