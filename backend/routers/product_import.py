@@ -58,7 +58,11 @@ async def preview_products_from_excel(
         if file.filename.endswith('.csv'):
             df = pd.read_csv(io.StringIO(content.decode('utf-8')))
         else:
-            df = pd.read_excel(io.BytesIO(content))
+            # Try to read from "Mẫu sản phẩm" sheet first, fallback to first sheet
+            try:
+                df = pd.read_excel(io.BytesIO(content), sheet_name='Mẫu sản phẩm')
+            except:
+                df = pd.read_excel(io.BytesIO(content))
 
         # Validate required columns
         required_columns = ['name', 'price', 'unit']
@@ -216,8 +220,18 @@ async def import_products_from_excel(
 async def download_excel_template(
     current_user: User = Depends(get_current_user)
 ):
-    """Download Excel template for product import"""
+    """Download Excel template for product import with lookup sheets"""
     try:
+        supabase = get_supabase_client()
+        
+        # Get product categories from database
+        categories_response = supabase.table("product_categories").select("id, name, description").eq("is_active", True).execute()
+        categories_data = categories_response.data if categories_response.data else []
+        
+        # Get expense objects from database
+        expense_objects_response = supabase.table("expense_objects").select("id, name, description, level").eq("is_active", True).execute()
+        expense_objects_data = expense_objects_response.data if expense_objects_response.data else []
+        
         # Create comprehensive template data with realistic examples
         template_data = {
             'name': [
@@ -269,16 +283,16 @@ async def download_excel_template(
                 0.4, 1.8, 0.6, 0.1, 0.2
             ],
             'height': [
-                0.8, 1.1, 2.0, 0.9, 0.6,
-                1.8, 0.8, 0.9, 0.6, 0.02
+                800, 1100, 2000, 900, 600,
+                1800, 800, 900, 600, 20
             ],
             'length': [
-                1.5, 0.6, 1.8, 2.1, 2.0,
-                0.8, 1.8, 2.0, 0.4, 2.0
+                1500, 600, 1800, 2100, 2000,
+                800, 1800, 2000, 400, 2000
             ],
             'depth': [
-                0.8, 0.6, 0.6, 0.9, 1.0,
-                0.3, 0.8, 0.6, 0.4, 2.0
+                800, 600, 600, 900, 1000,
+                300, 800, 600, 400, 2000
             ],
             'category_name': [
                 'Nội thất văn phòng',
@@ -300,7 +314,77 @@ async def download_excel_template(
         # Create Excel file in memory
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Products', index=False)
+            df.to_excel(writer, sheet_name='Mẫu sản phẩm', index=False)
+            
+            # ===== SHEET 2: TRA CỨU NHANH =====
+            # Prepare lookup data for quick reference
+            lookup_rows = []
+            
+            # Add header
+            lookup_rows.append(['=== LOẠI SẢN PHẨM / PRODUCT CATEGORIES ===', '', ''])
+            lookup_rows.append(['Tên loại sản phẩm', 'Mô tả', ''])
+            
+            # Add product categories
+            if categories_data:
+                for cat in categories_data:
+                    lookup_rows.append([
+                        cat.get('name', ''),
+                        cat.get('description', ''),
+                        ''
+                    ])
+            else:
+                # Fallback to sample categories if database is empty
+                sample_categories = [
+                    ['Nội thất văn phòng', 'Bàn ghế, tủ văn phòng', ''],
+                    ['Nội thất phòng khách', 'Sofa, bàn trà, kệ tivi', ''],
+                    ['Nội thất phòng ngủ', 'Giường, tủ quần áo, bàn trang điểm', ''],
+                    ['Nội thất phòng ăn', 'Bàn ăn, ghế ăn, tủ rượu', ''],
+                    ['Nội thất nhà bếp', 'Tủ bếp, bồn rửa, tủ lạnh', ''],
+                    ['Đèn chiếu sáng', 'Đèn chùm, đèn bàn, đèn tường', ''],
+                    ['Thảm và phụ kiện', 'Thảm, rèm cửa, gối trang trí', ''],
+                ]
+                lookup_rows.extend(sample_categories)
+            
+            # Add spacing
+            lookup_rows.append(['', '', ''])
+            lookup_rows.append(['', '', ''])
+            
+            # Add expense objects header
+            lookup_rows.append(['=== ĐỐI TƯỢNG CHI PHÍ / EXPENSE OBJECTS ===', '', ''])
+            lookup_rows.append(['Tên đối tượng chi phí', 'Mô tả', 'Cấp độ'])
+            
+            # Add expense objects
+            if expense_objects_data:
+                for exp_obj in expense_objects_data:
+                    lookup_rows.append([
+                        exp_obj.get('name', ''),
+                        exp_obj.get('description', ''),
+                        f"Cấp {exp_obj.get('level', '')}" if exp_obj.get('level') else ''
+                    ])
+            else:
+                # Fallback to sample expense objects
+                sample_expense_objects = [
+                    ['Vật tư trực tiếp', 'Chi phí vật tư sử dụng trực tiếp cho sản phẩm', 'Cấp 1'],
+                    ['Nhân công trực tiếp', 'Chi phí lao động trực tiếp sản xuất', 'Cấp 1'],
+                    ['Chi phí sản xuất chung', 'Chi phí chung không trực tiếp', 'Cấp 1'],
+                    ['Gỗ nguyên liệu', 'Gỗ các loại dùng cho sản xuất', 'Cấp 2'],
+                    ['Sơn và vecni', 'Vật tư hoàn thiện bề mặt', 'Cấp 2'],
+                    ['Phụ kiện kim loại', 'Tay nắm, bản lề, ốc vít...', 'Cấp 2'],
+                ]
+                lookup_rows.extend(sample_expense_objects)
+            
+            # Add notes
+            lookup_rows.append(['', '', ''])
+            lookup_rows.append(['', '', ''])
+            lookup_rows.append(['=== GHI CHÚ / NOTES ===', '', ''])
+            lookup_rows.append(['1. Loại sản phẩm: Chọn từ danh sách trên hoặc nhập tên mới', '', ''])
+            lookup_rows.append(['2. Nếu nhập loại sản phẩm mới, hệ thống sẽ tự động tạo', '', ''])
+            lookup_rows.append(['3. Đối tượng chi phí: Dùng để phân loại chi phí trong báo cáo', '', ''])
+            lookup_rows.append(['4. Cấp độ: Cấp 1 = cha, Cấp 2 = con, Cấp 3 = con con...', '', ''])
+            
+            # Create lookup DataFrame
+            lookup_df = pd.DataFrame(lookup_rows, columns=['Cột 1', 'Cột 2', 'Cột 3'])
+            lookup_df.to_excel(writer, sheet_name='Tra cứu nhanh', index=False, header=False)
             
             # Add comprehensive instructions sheet
             instructions_data = {
@@ -315,10 +399,10 @@ async def download_excel_template(
                     'Mô tả chi tiết sản phẩm (TÙY CHỌN)',
                     'Diện tích m² (TÙY CHỌN)',
                     'Thể tích m³ (TÙY CHỌN)',
-                    'Chiều cao m (TÙY CHỌN)',
-                    'Chiều dài m (TÙY CHỌN)',
-                    'Chiều sâu m (TÙY CHỌN)',
-                    'Tên hạng mục (TÙY CHỌN)'
+                    'Chiều cao mm (TÙY CHỌN)',
+                    'Chiều dài mm (TÙY CHỌN)',
+                    'Chiều sâu mm (TÙY CHỌN)',
+                    'Tên loại sản phẩm (TÙY CHỌN)'
                 ],
                 'Ví dụ': [
                     'Bàn gỗ cao cấp',
@@ -327,9 +411,9 @@ async def download_excel_template(
                     'Bàn gỗ sồi tự nhiên, chân sắt mạ chrome',
                     '2.5',
                     '0.8',
-                    '0.8',
-                    '1.5',
-                    '0.8',
+                    '800',
+                    '1500',
+                    '800',
                     'Nội thất văn phòng'
                 ],
                 'Ghi chú': [
@@ -339,33 +423,35 @@ async def download_excel_template(
                     'Mô tả chi tiết về sản phẩm',
                     'Số thập phân, đơn vị m²',
                     'Số thập phân, đơn vị m³',
-                    'Số thập phân, đơn vị m',
-                    'Số thập phân, đơn vị m',
-                    'Số thập phân, đơn vị m',
-                    'Tự động tạo hạng mục nếu chưa có'
+                    'Số nguyên, đơn vị mm (milimét)',
+                    'Số nguyên, đơn vị mm (milimét)',
+                    'Số nguyên, đơn vị mm (milimét)',
+                    'Xem sheet "Tra cứu nhanh" để chọn loại sản phẩm'
                 ]
             }
             
             instructions_df = pd.DataFrame(instructions_data)
-            instructions_df.to_excel(writer, sheet_name='Hướng dẫn', index=False)
+            instructions_df.to_excel(writer, sheet_name='Hướng dẫn các cột', index=False)
             
             # Add detailed instructions sheet
             detailed_instructions = {
                 'Bước': [
                     '1. Tải template',
                     '2. Mở file Excel',
-                    '3. Xem sheet "Hướng dẫn"',
-                    '4. Điền thông tin sản phẩm',
-                    '5. Kiểm tra dữ liệu',
-                    '6. Lưu file',
-                    '7. Upload lên hệ thống',
-                    '8. Kiểm tra kết quả'
+                    '3. Xem sheet "Tra cứu nhanh"',
+                    '4. Xem sheet "Hướng dẫn các cột"',
+                    '5. Điền thông tin sản phẩm',
+                    '6. Kiểm tra dữ liệu',
+                    '7. Lưu file',
+                    '8. Upload lên hệ thống',
+                    '9. Kiểm tra kết quả'
                 ],
                 'Hướng dẫn': [
                     'Click nút "Tải template" để tải file mẫu',
                     'Mở file Excel bằng Microsoft Excel hoặc Google Sheets',
-                    'Đọc kỹ hướng dẫn trong sheet "Hướng dẫn"',
-                    'Điền thông tin sản phẩm vào sheet "Products"',
+                    'Xem sheet "Tra cứu nhanh" để biết loại sản phẩm và đối tượng chi phí có sẵn',
+                    'Đọc kỹ hướng dẫn trong sheet "Hướng dẫn các cột"',
+                    'Điền thông tin sản phẩm vào sheet "Mẫu sản phẩm"',
                     'Kiểm tra lại dữ liệu trước khi lưu',
                     'Lưu file với định dạng .xlsx',
                     'Upload file lên hệ thống qua giao diện web',
@@ -376,7 +462,8 @@ async def download_excel_template(
                     'Không thay đổi tên các cột',
                     'Các cột bắt buộc: name, price, unit',
                     'Giá phải là số, không có dấu phẩy',
-                    'Hạng mục sẽ tự động tạo nếu chưa có',
+                    'Loại sản phẩm sẽ tự động tạo nếu chưa có',
+                    'Đối tượng chi phí dùng cho phân loại vật tư',
                     'Kiểm tra kỹ trước khi upload',
                     'Có thể import nhiều lần',
                     'Liên hệ admin nếu có lỗi'
@@ -384,50 +471,7 @@ async def download_excel_template(
             }
             
             detailed_df = pd.DataFrame(detailed_instructions)
-            detailed_df.to_excel(writer, sheet_name='Chi tiết', index=False)
-            
-            # Add sample categories sheet
-            sample_categories = {
-                'Tên hạng mục': [
-                    'Nội thất văn phòng',
-                    'Nội thất phòng khách', 
-                    'Nội thất phòng ngủ',
-                    'Nội thất phòng ăn',
-                    'Nội thất nhà bếp',
-                    'Đèn chiếu sáng',
-                    'Thảm và phụ kiện',
-                    'Đồ điện tử',
-                    'Vật liệu xây dựng',
-                    'Thiết bị văn phòng'
-                ],
-                'Mô tả': [
-                    'Bàn ghế, tủ văn phòng',
-                    'Sofa, bàn trà, kệ tivi',
-                    'Giường, tủ quần áo, bàn trang điểm',
-                    'Bàn ăn, ghế ăn, tủ rượu',
-                    'Tủ bếp, bồn rửa, tủ lạnh',
-                    'Đèn chùm, đèn bàn, đèn tường',
-                    'Thảm, rèm cửa, gối trang trí',
-                    'Tivi, máy tính, điện thoại',
-                    'Gạch, xi măng, sắt thép',
-                    'Máy in, máy fax, điện thoại bàn'
-                ],
-                'Ghi chú': [
-                    'Sử dụng trong văn phòng',
-                    'Dành cho phòng khách',
-                    'Sử dụng trong phòng ngủ',
-                    'Dành cho phòng ăn',
-                    'Sử dụng trong nhà bếp',
-                    'Các loại đèn chiếu sáng',
-                    'Phụ kiện trang trí',
-                    'Thiết bị điện tử',
-                    'Vật liệu xây dựng',
-                    'Thiết bị văn phòng'
-                ]
-            }
-            
-            categories_df = pd.DataFrame(sample_categories)
-            categories_df.to_excel(writer, sheet_name='Hạng mục mẫu', index=False)
+            detailed_df.to_excel(writer, sheet_name='Hướng dẫn chi tiết', index=False)
         
         output.seek(0)
         

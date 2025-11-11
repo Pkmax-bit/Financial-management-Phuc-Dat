@@ -36,6 +36,8 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [filterDepartment, setFilterDepartment] = useState('all')
+  const [departments, setDepartments] = useState<{id: string; name: string; code?: string}[]>([])
   const [sortBy, setSortBy] = useState('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -72,7 +74,8 @@ export default function EmployeesPage() {
         
         if (userData) {
           setUser(userData)
-          // Fetch employees after user is set
+          // Fetch departments and employees after user is set
+          fetchDepartments()
           fetchEmployees()
         } else {
           router.push('/login')
@@ -85,6 +88,48 @@ export default function EmployeesPage() {
       router.push('/login')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchDepartments = async () => {
+    try {
+      console.log('Fetching departments...')
+      
+      // Try API endpoint first
+      try {
+        const response = await fetch('/api/employees/departments/', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log('Departments from API:', data)
+          setDepartments(data || [])
+          return
+        }
+      } catch (apiError) {
+        console.log('API failed, trying direct Supabase query:', apiError)
+      }
+      
+      // Fallback to direct Supabase query without is_active filter
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name, code')
+        .order('name')
+      
+      if (error) {
+        console.error('Supabase query error:', error)
+        throw error
+      }
+      
+      console.log('Departments from Supabase:', data)
+      setDepartments(data || [])
+    } catch (error) {
+      console.error('Error fetching departments:', error)
+      // Set empty array on error
+      setDepartments([])
     }
   }
 
@@ -228,11 +273,14 @@ export default function EmployeesPage() {
       const matchesSearch = searchTerm === '' || 
         employee.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         employee.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (employee.email && employee.email.toLowerCase().includes(searchTerm.toLowerCase()))
+        (employee.email && employee.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (employee.department_name && employee.department_name.toLowerCase().includes(searchTerm.toLowerCase()))
       
       const matchesStatus = filterStatus === 'all' || employee.status === filterStatus
       
-      return matchesSearch && matchesStatus
+      const matchesDepartment = filterDepartment === 'all' || employee.department_id === filterDepartment
+      
+      return matchesSearch && matchesStatus && matchesDepartment
     })
     .sort((a, b) => {
       let aValue, bValue
@@ -313,58 +361,6 @@ export default function EmployeesPage() {
                 </div>
               </div>
               <div className="flex space-x-3">
-                <button
-                  onClick={fetchEmployees}
-                  disabled={loading}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  {loading ? 'Đang tải...' : 'Làm mới'}
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const { data: { user: authUser } } = await supabase.auth.getUser()
-                      
-                      console.log('Debug Info:', {
-                        authUser: authUser?.email || 'No auth user',
-                        userState: (user as { email?: string })?.email || 'No user state'
-                      })
-                      
-                      if (!authUser) {
-                        console.log('Attempting login...')
-                        const loginResult = await supabase.auth.signInWithPassword({
-                          email: 'admin@example.com',
-                          password: 'admin123'
-                        })
-                        
-                        if (loginResult.data.session) {
-                          console.log('Login successful, reloading...')
-                          window.location.reload()
-                        } else {
-                          console.error('Login failed:', loginResult.error?.message)
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Debug error:', error)
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100"
-                >
-                  {user ? 'Debug Auth' : 'Login & Debug'}
-                </button>
-                <button
-                  onClick={fetchEmployees}
-                  disabled={loading}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <svg className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Làm mới
-                </button>
             <button
               onClick={() => setShowCreateDepartmentSidebar(true)}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -497,16 +493,29 @@ export default function EmployeesPage() {
           {/* Filters and Search */}
           <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 flex-1">
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="all">Tất cả trạng thái</option>
                   <option value="active">Hoạt động</option>
                   <option value="inactive">Ngừng hoạt động</option>
                   <option value="terminated">Đã nghỉ việc</option>
+                </select>
+
+                <select
+                  value={filterDepartment}
+                  onChange={(e) => setFilterDepartment(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">Tất cả phòng ban</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name} {dept.code ? `(${dept.code})` : ''}
+                    </option>
+                  ))}
                 </select>
                 
                 <select
@@ -516,7 +525,7 @@ export default function EmployeesPage() {
                     setSortBy(field)
                     setSortOrder(order as 'asc' | 'desc')
                   }}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="name-asc">Tên (A-Z)</option>
                   <option value="name-desc">Tên (Z-A)</option>
@@ -529,16 +538,16 @@ export default function EmployeesPage() {
                 </select>
           </div>
 
-                    <div className="relative">
+                    <div className="relative min-w-[250px]">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-black" />
+                        <Search className="h-5 w-5 text-gray-900" />
                       </div>
                       <input
                         type="text"
-                        placeholder="Tìm kiếm nhân viên..."
+                        placeholder="Tìm tên, email, phòng ban..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       />
                   </div>
                 </div>
