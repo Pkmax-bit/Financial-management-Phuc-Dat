@@ -52,24 +52,33 @@ async def get_employees_public():
     try:
         supabase = get_supabase_client()
         
-        # Get basic employee info without authentication
+        # Get employee info with department and position names
         result = supabase.table("employees").select("""
-            id,
-            employee_code,
-            first_name,
-            last_name,
-            email,
-            status,
-            created_at,
+            *,
+            departments:department_id(id, name, code),
+            positions:position_id(id, name, code),
             users:user_id(role)
-        """).limit(10).execute()
+        """).limit(100).execute()
         
-        return {
-            "message": "Employees fetched successfully (public)",
-            "employees_count": len(result.data) if result.data else 0,
-            "employees": result.data or [],
-            "status": "success"
-        }
+        # Process data to add department_name and position_name
+        processed_employees = []
+        for emp in result.data or []:
+            emp_data = dict(emp)
+            # Add department_name if department exists
+            if emp.get('departments'):
+                emp_data['department_name'] = emp['departments'].get('name')
+            else:
+                emp_data['department_name'] = None
+            
+            # Add position_name if position exists
+            if emp.get('positions'):
+                emp_data['position_name'] = emp['positions'].get('name')
+            else:
+                emp_data['position_name'] = None
+            
+            processed_employees.append(emp_data)
+        
+        return processed_employees
         
     except Exception as e:
         return {
@@ -122,7 +131,7 @@ async def get_positions_public():
             "status": "error"
         }
 
-@router.get("/", response_model=List[Employee])
+@router.get("/")
 async def get_employees(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -131,11 +140,16 @@ async def get_employees(
     status: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all employees with optional filtering"""
+    """Get all employees with optional filtering - returns dict with joined data"""
     try:
         supabase = get_supabase_client()
         
-        query = supabase.table("employees").select("*")
+        # Select with JOIN to get department and position names
+        query = supabase.table("employees").select("""
+            *,
+            departments:department_id(id, name, code),
+            positions:position_id(id, name, code)
+        """)
         
         # Apply filters
         if search:
@@ -150,11 +164,28 @@ async def get_employees(
         # Apply pagination
         result = query.range(skip, skip + limit - 1).execute()
         
-        
         if not result.data:
             return []
+        
+        # Process data to add department_name and position_name
+        processed_employees = []
+        for emp in result.data:
+            emp_data = dict(emp)
+            # Add department_name if department exists
+            if emp.get('departments'):
+                emp_data['department_name'] = emp['departments'].get('name')
+            else:
+                emp_data['department_name'] = None
             
-        return [Employee(**emp) for emp in result.data]
+            # Add position_name if position exists
+            if emp.get('positions'):
+                emp_data['position_name'] = emp['positions'].get('name')
+            else:
+                emp_data['position_name'] = None
+            
+            processed_employees.append(emp_data)
+        
+        return processed_employees
         
     except Exception as e:
         raise HTTPException(

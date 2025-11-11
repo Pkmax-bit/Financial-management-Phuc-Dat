@@ -23,6 +23,8 @@ export interface Employee {
   phone?: string
   department_id?: string
   position_id?: string
+  department_name?: string  // Added for display
+  position_name?: string     // Added for display
   hire_date: string
   salary?: number
   status: 'active' | 'inactive' | 'terminated' | 'on_leave'

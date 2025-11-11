@@ -604,8 +604,8 @@ export default function EmployeesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          <div className="font-medium">{employee.position_id || 'N/A'}</div>
-                          <div className="text-xs text-black">{employee.department_id || 'N/A'}</div>
+                          <div className="font-medium">{employee.position_name || 'Chưa có chức vụ'}</div>
+                          <div className="text-xs text-black">{employee.department_name || 'Chưa có phòng ban'}</div>
                             </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
