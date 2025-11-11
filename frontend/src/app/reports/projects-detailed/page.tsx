@@ -20,6 +20,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
+import * as XLSX from 'xlsx'
 
 interface ProjectSummary {
   id: string
@@ -54,13 +55,15 @@ export default function ProjectsDetailedReportPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [selectedMonth, setSelectedMonth] = useState<string>('all')
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [user, setUser] = useState<any>(null)
   const router = useRouter()
 
   useEffect(() => {
     checkUser()
     fetchProjectsData()
-  }, [])
+  }, [selectedMonth, selectedYear])
 
   const checkUser = async () => {
     try {
@@ -102,12 +105,25 @@ export default function ProjectsDetailedReportPage() {
       // For each project, fetch financial data
       const projectSummaries: ProjectSummary[] = await Promise.all(
         (projectsData || []).map(async (project) => {
-          // Fetch invoices (actual revenue) - Hóa đơn đã phát hành
-          const { data: invoices, error: invoicesError } = await supabase
+          // Build query for invoices with optional month filter
+          let invoicesQuery = supabase
             .from('invoices')
-            .select('total_amount, payment_status')
+            .select('total_amount, payment_status, issue_date')
             .eq('project_id', project.id)
-            .in('status', ['sent', 'paid'])  // sent = đã gửi, paid = đã thanh toán đầy đủ
+            .in('status', ['sent', 'paid'])
+          
+          // Apply month filter if selected
+          if (selectedMonth !== 'all') {
+            const monthNum = parseInt(selectedMonth)
+            const startDate = new Date(selectedYear, monthNum - 1, 1)
+            const endDate = new Date(selectedYear, monthNum, 0, 23, 59, 59)
+            invoicesQuery = invoicesQuery
+              .gte('issue_date', startDate.toISOString())
+              .lte('issue_date', endDate.toISOString())
+          }
+          
+          // Fetch invoices (actual revenue) - Hóa đơn đã phát hành
+          const { data: invoices, error: invoicesError } = await invoicesQuery
           
           // Debug log
           if (invoicesError) {
@@ -121,12 +137,25 @@ export default function ProjectsDetailedReportPage() {
           const unpaidInvoices = invoices?.filter(i => i.payment_status === 'pending').length || 0
           const partialInvoices = invoices?.filter(i => i.payment_status === 'partial').length || 0
 
-          // Fetch project expenses (actual costs) - Chi phí dự án đã duyệt
-          const { data: projectExpenses } = await supabase
+          // Build query for expenses with optional month filter
+          let expensesQuery = supabase
             .from('project_expenses')
-            .select('amount')
+            .select('amount, expense_date')
             .eq('project_id', project.id)
             .eq('status', 'approved')
+          
+          // Apply month filter if selected
+          if (selectedMonth !== 'all') {
+            const monthNum = parseInt(selectedMonth)
+            const startDate = new Date(selectedYear, monthNum - 1, 1)
+            const endDate = new Date(selectedYear, monthNum, 0, 23, 59, 59)
+            expensesQuery = expensesQuery
+              .gte('expense_date', startDate.toISOString())
+              .lte('expense_date', endDate.toISOString())
+          }
+          
+          // Fetch project expenses (actual costs) - Chi phí dự án đã duyệt
+          const { data: projectExpenses } = await expensesQuery
 
           // Calculate totals - Tính toán từ dữ liệu thực tế
           const actual_revenue = invoices?.reduce((sum, i) => sum + (i.total_amount || 0), 0) || 0
@@ -147,7 +176,7 @@ export default function ProjectsDetailedReportPage() {
             id: project.id,
             project_code: project.project_code,
             name: project.name,
-            customer_name: project.customers?.name || 'N/A',
+            customer_name: (Array.isArray(project.customers) ? (project.customers as any[])[0]?.name : (project.customers as any)?.name) || 'N/A',
             status: project.status,
             planned_revenue,
             planned_costs,
@@ -224,6 +253,517 @@ export default function ProjectsDetailedReportPage() {
   const totalActualCosts = filteredProjects.reduce((sum, p) => sum + p.actual_costs, 0)
   const totalActualProfit = filteredProjects.reduce((sum, p) => sum + p.actual_profit, 0)
 
+  const getMonthYearText = () => {
+    if (selectedMonth === 'all') {
+      return `Tất cả tháng năm ${selectedYear}`
+    }
+    const monthNames = [
+      'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+    ]
+    return `${monthNames[parseInt(selectedMonth) - 1]} năm ${selectedYear}`
+  }
+
+  const handleDownloadExcel = async () => {
+    try {
+      // Create workbook
+      const workbook = XLSX.utils.book_new()
+
+      // ===== SHEET 1: TỔNG HỢP =====
+      const summaryData = filteredProjects.map((project, index) => ({
+        'STT': index + 1,
+        'Mã dự án': project.project_code,
+        'Tên dự án': project.name,
+        'Khách hàng': project.customer_name,
+        'Trạng thái': getStatusText(project.status),
+        'Doanh thu thực tế (VND)': project.actual_revenue,
+        'Chi phí thực tế (VND)': project.actual_costs,
+        'Lợi nhuận (VND)': project.actual_profit,
+        'Biên lợi nhuận (%)': Number(project.profit_margin.toFixed(2)),
+        'Số hóa đơn': project.invoice_count,
+        'Số chi phí': project.expense_count
+      }))
+
+      // Add summary row
+      summaryData.push({
+        'STT': 0,
+        'Mã dự án': '',
+        'Tên dự án': 'TỔNG CỘNG',
+        'Khách hàng': '',
+        'Trạng thái': '',
+        'Doanh thu thực tế (VND)': totalActualRevenue,
+        'Chi phí thực tế (VND)': totalActualCosts,
+        'Lợi nhuận (VND)': totalActualProfit,
+        'Biên lợi nhuận (%)': totalActualRevenue > 0 ? Number(((totalActualProfit / totalActualRevenue) * 100).toFixed(2)) : 0,
+        'Số hóa đơn': filteredProjects.reduce((sum, p) => sum + p.invoice_count, 0),
+        'Số chi phí': filteredProjects.reduce((sum, p) => sum + p.expense_count, 0)
+      })
+
+      const summarySheet = XLSX.utils.json_to_sheet(summaryData)
+      summarySheet['!cols'] = [
+        { wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 15 },
+        { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 }
+      ]
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Tổng hợp')
+
+      // Preload expense objects for name lookup
+      const expenseObjectMap = new Map<string, string>()
+      try {
+        const { data: expenseObjects } = await supabase
+          .from('expense_objects')
+          .select('id, name')
+        expenseObjects?.forEach((obj: any) => {
+          if (obj?.id) {
+            expenseObjectMap.set(obj.id, obj.name || '')
+          }
+        })
+      } catch (error) {
+        console.error('Error fetching expense objects for export:', error)
+      }
+
+      const getExpenseObjectName = (id?: string | null) => {
+        if (!id) return 'Khác'
+        return expenseObjectMap.get(id) || 'Khác'
+      }
+
+      // ===== SHEET 2+: CHI TIẾT TỪNG DỰ ÁN =====
+      for (const project of filteredProjects) {
+        // Fetch detailed data for this project
+        const detailData: any[] = []
+
+        // Header section
+        detailData.push({ 'A': 'THÔNG TIN DỰ ÁN', 'B': '', 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': 'Mã dự án:', 'B': project.project_code, 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': 'Tên dự án:', 'B': project.name, 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': 'Khách hàng:', 'B': project.customer_name, 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': 'Trạng thái:', 'B': getStatusText(project.status), 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // Financial Summary
+        detailData.push({ 'A': 'TÓM TẮT TÀI CHÍNH', 'B': 'Kế hoạch', 'C': 'Thực tế', 'D': 'Chênh lệch', 'E': '% Biến động' })
+        detailData.push({ 
+          'A': 'Doanh thu (VND)', 
+          'B': project.planned_revenue,
+          'C': project.actual_revenue,
+          'D': project.actual_revenue - project.planned_revenue,
+          'E': project.planned_revenue > 0 ? `${(((project.actual_revenue - project.planned_revenue) / project.planned_revenue) * 100).toFixed(1)}%` : '0%'
+        })
+        detailData.push({ 
+          'A': 'Chi phí (VND)', 
+          'B': project.planned_costs,
+          'C': project.actual_costs,
+          'D': project.actual_costs - project.planned_costs,
+          'E': project.planned_costs > 0 ? `${(((project.actual_costs - project.planned_costs) / project.planned_costs) * 100).toFixed(1)}%` : '0%'
+        })
+        detailData.push({ 
+          'A': 'Lợi nhuận (VND)', 
+          'B': project.planned_profit,
+          'C': project.actual_profit,
+          'D': project.actual_profit - project.planned_profit,
+          'E': project.planned_profit !== 0 ? `${(((project.actual_profit - project.planned_profit) / Math.abs(project.planned_profit)) * 100).toFixed(1)}%` : '0%'
+        })
+        detailData.push({ 
+          'A': 'Biên lợi nhuận (%)', 
+          'B': project.planned_revenue > 0 ? Number(((project.planned_profit / project.planned_revenue) * 100).toFixed(2)) : 0,
+          'C': Number(project.profit_margin.toFixed(2)),
+          'D': '',
+          'E': ''
+        })
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // ===== KẾ HOẠCH =====
+        detailData.push({ 'A': '========== KẾ HOẠCH - BÁO GIÁ & CHI PHÍ DỰ KIẾN ==========', 'B': '', 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // Fetch Quotes (Báo giá)
+        const { data: quotes } = await supabase
+          .from('quotes')
+          .select(`
+            quote_number,
+            issue_date,
+            total_amount,
+            status,
+            description,
+            quote_items (
+              name_product,
+              description,
+              quantity,
+              unit
+            )
+          `)
+          .eq('project_id', project.id)
+          .order('issue_date', { ascending: false })
+
+        detailData.push({ 'A': 'BÁO GIÁ (DOANH THU DỰ KIẾN)', 'B': '', 'C': '', 'D': '', 'E': '' })
+        if (quotes && quotes.length > 0) {
+          detailData.push({ 'A': 'Số báo giá', 'B': 'Ngày', 'C': 'Tổng tiền (VND)', 'D': 'Trạng thái', 'E': 'Sản phẩm' })
+          for (const quote of quotes) {
+            const items = Array.isArray(quote.quote_items) ? quote.quote_items : []
+            const productsList = items.map((item: any) => {
+              const title = item.name_product || item.description || 'Hạng mục'
+              const quantity = item.quantity ?? item.qty ?? 0
+              const unit = item.unit ? ` ${item.unit}` : ''
+              return `${title} (SL: ${quantity}${unit})`
+            }).join(', ')
+            detailData.push({
+              'A': quote.quote_number,
+              'B': new Date(quote.issue_date).toLocaleDateString('vi-VN'),
+              'C': quote.total_amount,
+              'D': quote.status === 'draft' ? 'Nháp' : quote.status === 'sent' ? 'Đã gửi' : quote.status === 'accepted' ? 'Đã chấp nhận' : getStatusText(quote.status),
+              'E': productsList || 'Không có sản phẩm'
+            })
+          }
+          detailData.push({ 
+            'A': 'TỔNG BÁO GIÁ', 
+            'B': '', 
+            'C': quotes.reduce((sum, q) => sum + (q.total_amount || 0), 0), 
+            'D': `${quotes.length} báo giá`,
+            'E': '' 
+          })
+        } else {
+          detailData.push({ 'A': 'Chưa có báo giá', 'B': '', 'C': '', 'D': '', 'E': '' })
+        }
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // Fetch Quote Expenses (Chi phí dự kiến)
+        const { data: quoteExpenses, error: quoteExpensesError } = await supabase
+          .from('project_expenses_quote')
+          .select('*')
+          .eq('project_id', project.id)
+
+        if (quoteExpensesError) {
+          console.error('Error fetching planned expenses for project', project.project_code, quoteExpensesError)
+        }
+
+        detailData.push({ 'A': 'CHI PHÍ DỰ KIẾN (TỪ BÁO GIÁ)', 'B': '', 'C': '', 'D': '', 'E': '' })
+        if (quoteExpenses && quoteExpenses.length > 0) {
+          detailData.push({ 'A': 'Đối tượng chi phí', 'B': 'Mô tả', 'C': 'Chi tiết vật tư', 'D': 'Thành tiền (VND)', 'E': 'Ngày' })
+          
+          for (const exp of quoteExpenses) {
+            const objectName = getExpenseObjectName(exp.expense_object_id)
+            const dateText = exp.expense_date ? new Date(exp.expense_date).toLocaleDateString('vi-VN') : 'N/A'
+            const itemDetails = Array.isArray(exp.invoice_items)
+              ? exp.invoice_items.map((item: any) => {
+                  const title = item.name_product || item.description || 'Hạng mục'
+                  const quantity = item.quantity ?? item.qty ?? 0
+                  const unit = item.unit ? ` ${item.unit}` : ''
+                  const price = item.unit_price ?? item.price ?? item.unitPrice
+                  const total = item.total_amount ?? item.total ?? item.line_total ?? item.lineTotal
+                  const priceText = price ? `, Đơn giá: ${price}` : ''
+                  const totalText = total ? `, Thành tiền: ${total}` : ''
+                  return `${title} (SL: ${quantity}${unit}${priceText}${totalText})`
+                }).join('; ')
+              : ''
+
+            detailData.push({
+              'A': objectName,
+              'B': exp.description || '',
+              'C': itemDetails || (exp.expense_object_totals ? 'Có phân bổ vật tư' : ''),
+              'D': exp.amount || 0,
+              'E': dateText
+            })
+          }
+          
+          const totalQuoteExpenses = quoteExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0)
+          detailData.push({ 
+            'A': 'TỔNG CHI PHÍ DỰ KIẾN', 
+            'B': '', 
+            'C': '', 
+            'D': totalQuoteExpenses,
+            'E': '' 
+          })
+        } else {
+          detailData.push({ 'A': 'Chưa có chi phí dự kiến', 'B': '', 'C': '', 'D': '', 'E': '' })
+        }
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // ===== THỰC TẾ =====
+        detailData.push({ 'A': '========== THỰC TẾ - HÓA ĐƠN & CHI PHÍ PHÁT SINH ==========', 'B': '', 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // Fetch invoices for this project with items
+        let invoicesQuery = supabase
+          .from('invoices')
+          .select(`
+            invoice_number,
+            issue_date,
+            total_amount,
+            payment_status,
+            status,
+            invoice_items (
+              name_product,
+              description,
+              quantity,
+              unit
+            )
+          `)
+          .eq('project_id', project.id)
+          .in('status', ['sent', 'paid'])
+        
+        if (selectedMonth !== 'all') {
+          const monthNum = parseInt(selectedMonth)
+          const startDate = new Date(selectedYear, monthNum - 1, 1)
+          const endDate = new Date(selectedYear, monthNum, 0, 23, 59, 59)
+          invoicesQuery = invoicesQuery
+            .gte('issue_date', startDate.toISOString())
+            .lte('issue_date', endDate.toISOString())
+        }
+        
+        const { data: invoices } = await invoicesQuery
+
+        // Invoices section
+        detailData.push({ 'A': 'HÓA ĐƠN (DOANH THU THỰC TẾ)', 'B': '', 'C': '', 'D': '', 'E': '' })
+        if (invoices && invoices.length > 0) {
+          detailData.push({ 'A': 'Số HĐ', 'B': 'Ngày phát hành', 'C': 'Số tiền (VND)', 'D': 'Trạng thái TT', 'E': 'Sản phẩm' })
+          for (const inv of invoices) {
+            const items = Array.isArray(inv.invoice_items) ? inv.invoice_items : []
+            const productsList = items.map((item: any) => {
+              const title = item.name_product || item.description || 'Hạng mục'
+              const quantity = item.quantity ?? item.qty ?? 0
+              const unit = item.unit ? ` ${item.unit}` : ''
+              return `${title} (SL: ${quantity}${unit})`
+            }).join(', ')
+            detailData.push({
+              'A': inv.invoice_number,
+              'B': new Date(inv.issue_date).toLocaleDateString('vi-VN'),
+              'C': inv.total_amount,
+              'D': inv.payment_status === 'paid' ? 'Đã thanh toán' : 
+                   inv.payment_status === 'partial' ? 'TT 1 phần' : 'Chưa thanh toán',
+              'E': productsList || 'Không có sản phẩm'
+            })
+          }
+          detailData.push({ 
+            'A': 'TỔNG DOANH THU THỰC TẾ', 
+            'B': '', 
+            'C': invoices.reduce((sum, inv) => sum + inv.total_amount, 0), 
+            'D': `${invoices.length} hóa đơn`,
+            'E': '' 
+          })
+        } else {
+          detailData.push({ 'A': 'Chưa có hóa đơn', 'B': '', 'C': '', 'D': '', 'E': '' })
+        }
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // Fetch expenses for this project with details
+        let expensesQuery = supabase
+          .from('project_expenses')
+          .select('*')
+          .eq('project_id', project.id)
+        
+        if (selectedMonth !== 'all') {
+          const monthNum = parseInt(selectedMonth)
+          const startDate = new Date(selectedYear, monthNum - 1, 1)
+          const endDate = new Date(selectedYear, monthNum, 0, 23, 59, 59)
+          expensesQuery = expensesQuery
+            .gte('expense_date', startDate.toISOString())
+            .lte('expense_date', endDate.toISOString())
+        }
+        
+        const { data: expenses, error: expensesError } = await expensesQuery
+
+        if (expensesError) {
+          console.error('Error fetching actual expenses for project', project.project_code, expensesError)
+        }
+
+        // Expenses section
+        detailData.push({ 'A': 'CHI PHÍ THỰC TẾ (ĐÃ DUYỆT)', 'B': '', 'C': '', 'D': '', 'E': '' })
+        if (expenses && expenses.length > 0) {
+          detailData.push({ 'A': 'Đối tượng chi phí', 'B': 'Mô tả', 'C': 'Chi tiết vật tư', 'D': 'Thành tiền (VND)', 'E': 'Ngày' })
+          
+          for (const exp of expenses) {
+            const objectName = getExpenseObjectName(exp.expense_object_id)
+            const dateText = exp.expense_date ? new Date(exp.expense_date).toLocaleDateString('vi-VN') : 'N/A'
+            const itemDetails = Array.isArray(exp.invoice_items)
+              ? exp.invoice_items.map((item: any) => {
+                  const title = item.name_product || item.description || 'Hạng mục'
+                  const quantity = item.quantity ?? item.qty ?? 0
+                  const unit = item.unit ? ` ${item.unit}` : ''
+                  const price = item.unit_price ?? item.price ?? item.unitPrice
+                  const total = item.total_amount ?? item.total ?? item.line_total ?? item.lineTotal
+                  const priceText = price ? `, Đơn giá: ${price}` : ''
+                  const totalText = total ? `, Thành tiền: ${total}` : ''
+                  return `${title} (SL: ${quantity}${unit}${priceText}${totalText})`
+                }).join('; ')
+              : ''
+
+            detailData.push({
+              'A': objectName,
+              'B': exp.description || '',
+              'C': itemDetails || (exp.expense_object_totals ? 'Có phân bổ vật tư' : ''),
+              'D': exp.amount || 0,
+              'E': dateText
+            })
+          }
+          
+          detailData.push({ 
+            'A': 'TỔNG CHI PHÍ THỰC TẾ', 
+            'B': '', 
+            'C': '', 
+            'D': expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0),
+            'E': '' 
+          })
+        } else {
+          detailData.push({ 'A': 'Chưa có chi phí', 'B': '', 'C': '', 'D': '', 'E': '' })
+        }
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // ===== SO SÁNH CHI PHÍ THEO ĐỐI TƯỢNG =====
+        detailData.push({ 'A': '========== SO SÁNH CHI PHÍ THEO ĐỐI TƯỢNG ==========', 'B': '', 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
+
+        // Aggregate by expense_object
+        const expenseByObject: Record<string, { planned: number; actual: number }> = {}
+        
+        // From Quote Expenses (Kế hoạch)
+        if (quoteExpenses) {
+          for (const exp of quoteExpenses) {
+            let allocated = false
+
+            if (exp.expense_object_totals && typeof exp.expense_object_totals === 'object') {
+              Object.entries(exp.expense_object_totals as Record<string, number>).forEach(([objId, amt]) => {
+                const key = getExpenseObjectName(objId)
+                if (!expenseByObject[key]) {
+                  expenseByObject[key] = { planned: 0, actual: 0 }
+                }
+                expenseByObject[key].planned += Number(amt) || 0
+              })
+              allocated = true
+            }
+
+            if (!allocated && Array.isArray(exp.invoice_items)) {
+              exp.invoice_items.forEach((item: any) => {
+                const lineTotal = Number(item.line_total ?? item.total ?? item.lineTotal ?? item.total_amount) || ((Number(item.unit_price ?? item.price ?? item.unitPrice) || 0) * (Number(item.quantity ?? item.qty) || 0))
+                const componentsPct = item.components_pct || item.componentsPercent || {}
+                if (componentsPct && typeof componentsPct === 'object') {
+                  Object.entries(componentsPct as Record<string, number>).forEach(([objId, pct]) => {
+                    const key = getExpenseObjectName(objId)
+                    if (!expenseByObject[key]) {
+                      expenseByObject[key] = { planned: 0, actual: 0 }
+                    }
+                    expenseByObject[key].planned += Math.round(lineTotal * (Number(pct) || 0) / 100)
+                  })
+                  allocated = true
+                }
+              })
+            }
+
+            if (!allocated) {
+              const key = getExpenseObjectName(exp.expense_object_id)
+              if (!expenseByObject[key]) {
+                expenseByObject[key] = { planned: 0, actual: 0 }
+              }
+              expenseByObject[key].planned += Number(exp.amount) || 0
+            }
+          }
+        }
+
+        // From Project Expenses (Thực tế)
+        if (expenses) {
+          for (const exp of expenses) {
+            let allocated = false
+
+            if (exp.expense_object_totals && typeof exp.expense_object_totals === 'object') {
+              Object.entries(exp.expense_object_totals as Record<string, number>).forEach(([objId, amt]) => {
+                const key = getExpenseObjectName(objId)
+                if (!expenseByObject[key]) {
+                  expenseByObject[key] = { planned: 0, actual: 0 }
+                }
+                expenseByObject[key].actual += Number(amt) || 0
+              })
+              allocated = true
+            }
+
+            if (!allocated && Array.isArray(exp.invoice_items)) {
+              exp.invoice_items.forEach((item: any) => {
+                const lineTotal = Number(item.line_total ?? item.total ?? item.lineTotal ?? item.total_amount) || ((Number(item.unit_price ?? item.price ?? item.unitPrice) || 0) * (Number(item.quantity ?? item.qty) || 0))
+                const componentsPct = item.components_pct || item.componentsPercent || {}
+                if (componentsPct && typeof componentsPct === 'object') {
+                  Object.entries(componentsPct as Record<string, number>).forEach(([objId, pct]) => {
+                    const key = getExpenseObjectName(objId)
+                    if (!expenseByObject[key]) {
+                      expenseByObject[key] = { planned: 0, actual: 0 }
+                    }
+                    expenseByObject[key].actual += Math.round(lineTotal * (Number(pct) || 0) / 100)
+                  })
+                  allocated = true
+                }
+              })
+            }
+
+            if (!allocated) {
+              const key = getExpenseObjectName(exp.expense_object_id)
+              if (!expenseByObject[key]) {
+                expenseByObject[key] = { planned: 0, actual: 0 }
+              }
+              expenseByObject[key].actual += Number(exp.amount) || 0
+            }
+          }
+        }
+
+        detailData.push({ 'A': 'SO SÁNH CHI PHÍ: KẾ HOẠCH VS THỰC TẾ', 'B': '', 'C': '', 'D': '', 'E': '' })
+        if (Object.keys(expenseByObject).length > 0) {
+          detailData.push({ 'A': 'Đối tượng chi phí', 'B': 'Kế hoạch (VND)', 'C': 'Thực tế (VND)', 'D': 'Chênh lệch (VND)', 'E': '% Biến động' })
+          
+          for (const [objName, values] of Object.entries(expenseByObject)) {
+            const diff = values.actual - values.planned
+            const percent = values.planned > 0 ? ((diff / values.planned) * 100).toFixed(1) : '0'
+            detailData.push({
+              'A': objName,
+              'B': values.planned,
+              'C': values.actual,
+              'D': diff,
+              'E': `${percent}%`
+            })
+          }
+          
+          const totalPlanned = Object.values(expenseByObject).reduce((sum: number, v) => sum + v.planned, 0)
+          const totalActual = Object.values(expenseByObject).reduce((sum: number, v) => sum + v.actual, 0)
+          const totalDiff = totalActual - totalPlanned
+          const totalPercent = totalPlanned > 0 ? ((totalDiff / totalPlanned) * 100).toFixed(1) : '0'
+          
+          detailData.push({ 
+            'A': 'TỔNG CỘNG', 
+            'B': totalPlanned,
+            'C': totalActual,
+            'D': totalDiff,
+            'E': `${totalPercent}%`
+          })
+        } else {
+          detailData.push({ 'A': 'Chưa có dữ liệu so sánh', 'B': '', 'C': '', 'D': '', 'E': '' })
+        }
+
+        // Create worksheet for this project
+        const projectSheet = XLSX.utils.json_to_sheet(detailData, { skipHeader: true })
+        projectSheet['!cols'] = [
+          { wch: 30 }, // Column A
+          { wch: 18 }, // Column B
+          { wch: 35 }, // Column C
+          { wch: 20 }, // Column D
+          { wch: 15 }  // Column E
+        ]
+
+        // Sanitize sheet name (remove invalid characters)
+        const sanitizedName = project.project_code.replace(/[:\\\/?*\[\]]/g, '_').substring(0, 31)
+        XLSX.utils.book_append_sheet(workbook, projectSheet, sanitizedName)
+      }
+
+      // Generate filename
+      let fileName: string
+      if (selectedMonth !== 'all') {
+        const monthStr = selectedMonth.padStart(2, '0')
+        fileName = `Bao_cao_du_an_chi_tiet_${selectedYear}_thang_${monthStr}.xlsx`
+      } else {
+        fileName = `Bao_cao_du_an_chi_tiet_${selectedYear}_tat_ca_thang.xlsx`
+      }
+
+      // Download file
+      XLSX.writeFile(workbook, fileName)
+    } catch (error) {
+      console.error('Error downloading Excel:', error)
+      alert('Có lỗi xảy ra khi tải xuống file Excel')
+    }
+  }
+
   return (
     <LayoutWithSidebar user={user} onLogout={handleLogout}>
       <div className="w-full">
@@ -288,33 +828,89 @@ export default function ProjectsDetailedReportPage() {
 
           {/* Filters */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Tìm kiếm dự án..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  />
+            <div className="flex flex-col gap-4">
+              {/* Row 1: Search and Filters */}
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm dự án..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="w-full sm:w-48">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900 font-medium"
+                  >
+                    <option value="all">Tất cả trạng thái</option>
+                    <option value="planning">Lập kế hoạch</option>
+                    <option value="active">Đang hoạt động</option>
+                    <option value="on_hold">Tạm dừng</option>
+                    <option value="completed">Hoàn thành</option>
+                    <option value="cancelled">Đã hủy</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="w-full sm:w-48">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                >
-                  <option value="all">Tất cả trạng thái</option>
-                  <option value="planning">Lập kế hoạch</option>
-                  <option value="active">Đang hoạt động</option>
-                  <option value="on_hold">Tạm dừng</option>
-                  <option value="completed">Hoàn thành</option>
-                  <option value="cancelled">Đã hủy</option>
-                </select>
+              {/* Row 2: Month/Year Selection and Download */}
+              <div className="flex flex-col sm:flex-row gap-4 items-center">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Calendar className="h-5 w-5 text-teal-600" />
+                  <span className="font-medium">Báo cáo theo tháng:</span>
+                </div>
+
+                <div className="w-full sm:w-32">
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900 font-medium"
+                  >
+                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                      <option key={year} value={year}>Năm {year}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="w-full sm:w-40">
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900 font-medium"
+                  >
+                    <option value="all">Tất cả tháng</option>
+                    <option value="1">Tháng 1</option>
+                    <option value="2">Tháng 2</option>
+                    <option value="3">Tháng 3</option>
+                    <option value="4">Tháng 4</option>
+                    <option value="5">Tháng 5</option>
+                    <option value="6">Tháng 6</option>
+                    <option value="7">Tháng 7</option>
+                    <option value="8">Tháng 8</option>
+                    <option value="9">Tháng 9</option>
+                    <option value="10">Tháng 10</option>
+                    <option value="11">Tháng 11</option>
+                    <option value="12">Tháng 12</option>
+                  </select>
+                </div>
+
+                <div className="flex-1 flex justify-end">
+                  <button
+                    onClick={handleDownloadExcel}
+                    disabled={loading || filteredProjects.length === 0}
+                    className="inline-flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    <Download className="h-5 w-5" />
+                    Tải Excel ({getMonthYearText()})
+                  </button>
+                </div>
               </div>
             </div>
           </div>
