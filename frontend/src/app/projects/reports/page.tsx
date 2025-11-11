@@ -47,6 +47,10 @@ interface ProfitabilitySummary {
     customer_id?: string;
     start_date?: string;
     end_date?: string;
+    year?: number | null;
+    month?: number | null;
+    period_start?: string | null;
+    period_end?: string | null;
   };
 }
 
@@ -58,6 +62,21 @@ const statusColors = {
   cancelled: 'bg-red-100 text-red-800'
 };
 
+const monthOptions = [
+  { value: '1', label: 'January' },
+  { value: '2', label: 'February' },
+  { value: '3', label: 'March' },
+  { value: '4', label: 'April' },
+  { value: '5', label: 'May' },
+  { value: '6', label: 'June' },
+  { value: '7', label: 'July' },
+  { value: '8', label: 'August' },
+  { value: '9', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
 export default function ProjectReportsPage() {
   const [projects, setProjects] = useState<ProjectProfitability[]>([]);
   const [summary, setSummary] = useState<ProfitabilitySummary | null>(null);
@@ -66,44 +85,98 @@ export default function ProjectReportsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('profit');
   const [sortOrder, setSortOrder] = useState<string>('desc');
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 6 }, (_, index) => (currentYear - index).toString());
+  const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
-  useEffect(() => {
-    fetchProjectsReport();
-    fetchSummary();
-  }, [statusFilter, sortBy, sortOrder]);
-
-  const fetchProjectsReport = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      params.append('sort_by', sortBy);
-      params.append('sort_order', sortOrder);
-
-      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability?${params}`))
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(data);
-      }
-    } catch (error) {
-      console.error('Error fetching projects report:', error);
-    } finally {
-      setLoading(false);
+  const handleMonthChange = (value: string) => {
+    if (value !== 'all' && selectedYear === 'all') {
+      setSelectedYear(currentYear.toString());
     }
+    setSelectedMonth(value);
   };
 
-  const fetchSummary = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+  const resetPeriodFilters = () => {
+    setSelectedYear('all');
+    setSelectedMonth('all');
+  };
 
-      const response = await fetch(getApiEndpoint(`/api/reports/projects/profitability/summary?${params}`))
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [projectsData, summaryData] = await Promise.all([
+          fetchProjectsReport(),
+          fetchSummary()
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProjects(projectsData);
+        setSummary(summaryData);
+      } catch (error) {
+        console.error('Error loading project reports:', error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Error fetching summary:', error);
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [statusFilter, sortBy, sortOrder, selectedYear, selectedMonth]);
+
+  const fetchProjectsReport = async (): Promise<ProjectProfitability[]> => {
+    const params = new URLSearchParams();
+    if (statusFilter !== 'all') params.append('status', statusFilter);
+    params.append('sort_by', sortBy);
+    params.append('sort_order', sortOrder);
+    if (selectedYear !== 'all') params.append('year', selectedYear);
+    if (selectedMonth !== 'all') params.append('month', selectedMonth);
+
+    const queryString = params.toString();
+    const response = await fetch(
+      getApiEndpoint(
+        `/api/reports/projects/profitability${queryString ? `?${queryString}` : ''}`
+      )
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch projects report');
     }
+
+    const data = await response.json();
+    return data as ProjectProfitability[];
+  };
+
+  const fetchSummary = async (): Promise<ProfitabilitySummary> => {
+    const params = new URLSearchParams();
+    if (statusFilter !== 'all') params.append('status', statusFilter);
+    if (selectedYear !== 'all') params.append('year', selectedYear);
+    if (selectedMonth !== 'all') params.append('month', selectedMonth);
+
+    const queryString = params.toString();
+    const response = await fetch(
+      getApiEndpoint(
+        `/api/reports/projects/profitability/summary${queryString ? `?${queryString}` : ''}`
+      )
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch profitability summary');
+    }
+
+    const data = await response.json();
+    return data as ProfitabilitySummary;
   };
 
   const filteredProjects = projects.filter(project => {
@@ -138,6 +211,48 @@ export default function ProjectReportsPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Project Profitability Reports</h1>
         <p className="text-black">Analyze and compare project profitability across your portfolio</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-black" />
+          <span className="text-sm font-medium text-black">Time Filters</span>
+        </div>
+        <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Year" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Years</SelectItem>
+            {yearOptions.map((year) => (
+              <SelectItem key={year} value={year}>
+                {year}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={selectedMonth} onValueChange={handleMonthChange}>
+          <SelectTrigger className="w-40" disabled={selectedYear === 'all'}>
+            <SelectValue placeholder="Month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Months</SelectItem>
+            {monthOptions.map((month) => (
+              <SelectItem key={month.value} value={month.value}>
+                {month.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          onClick={resetPeriodFilters}
+          disabled={selectedYear === 'all' && selectedMonth === 'all'}
+          className="flex items-center gap-2"
+        >
+          <Filter className="w-4 h-4" />
+          Reset
+        </Button>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">

@@ -28,6 +28,8 @@ interface ProjectSummary {
   name: string
   customer_name: string
   status: string
+  start_date?: string | null
+  end_date?: string | null
   
   // Planned (Kế hoạch)
   planned_revenue: number // From quotes
@@ -95,6 +97,8 @@ export default function ProjectsDetailedReportPage() {
           project_code,
           name,
           status,
+          start_date,
+          end_date,
           budget,
           customers!inner(name)
         `)
@@ -102,9 +106,35 @@ export default function ProjectsDetailedReportPage() {
 
       if (projectsError) throw projectsError
 
+      const periodStart = selectedMonth !== 'all'
+        ? new Date(selectedYear, parseInt(selectedMonth) - 1, 1)
+        : null
+      const periodEnd = selectedMonth !== 'all'
+        ? new Date(selectedYear, parseInt(selectedMonth), 0, 23, 59, 59)
+        : null
+
+      const projectsWithinPeriod = (projectsData || []).filter(project => {
+        if (!periodStart || !periodEnd) {
+          return true
+        }
+
+        const projectStart = project.start_date ? new Date(project.start_date) : null
+        const projectEnd = project.end_date ? new Date(project.end_date) : null
+
+        if (projectStart && projectStart > periodEnd) {
+          return false
+        }
+
+        if (projectEnd && projectEnd < periodStart) {
+          return false
+        }
+
+        return true
+      })
+
       // For each project, fetch financial data
       const projectSummaries: ProjectSummary[] = await Promise.all(
-        (projectsData || []).map(async (project) => {
+        projectsWithinPeriod.map(async (project) => {
           // Build query for invoices with optional month filter
           let invoicesQuery = supabase
             .from('invoices')
@@ -178,6 +208,8 @@ export default function ProjectsDetailedReportPage() {
             name: project.name,
             customer_name: (Array.isArray(project.customers) ? (project.customers as any[])[0]?.name : (project.customers as any)?.name) || 'N/A',
             status: project.status,
+            start_date: project.start_date || null,
+            end_date: project.end_date || null,
             planned_revenue,
             planned_costs,
             actual_revenue,

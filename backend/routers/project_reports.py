@@ -5,7 +5,8 @@ Handles project profitability comparison and financial reporting
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
-from datetime import datetime, date, timedelta
+from datetime import date
+import calendar
 from pydantic import BaseModel
 
 from models.user import User
@@ -48,6 +49,8 @@ async def get_projects_profitability_report(
     customer_id: Optional[str] = Query(None, description="Filter by customer ID"),
     start_date: Optional[date] = Query(None, description="Filter projects started after this date"),
     end_date: Optional[date] = Query(None, description="Filter projects started before this date"),
+    year: Optional[int] = Query(None, description="Filter financials by year"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter financials by month (requires year)"),
     sort_by: str = Query("profit", description="Sort by: profit, profit_margin, income, costs, project_name"),
     sort_order: str = Query("desc", description="Sort order: asc, desc"),
     current_user: User = Depends(get_current_user)
@@ -55,6 +58,24 @@ async def get_projects_profitability_report(
     """Get comprehensive profitability comparison report for all projects"""
     try:
         supabase = get_supabase_client()
+
+        # Determine financial period filters
+        period_start = None
+        period_end = None
+
+        if month and not year:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Year must be provided when filtering by month."
+            )
+
+        if year:
+            if month:
+                period_start = date(year, month, 1)
+                period_end = date(year, month, calendar.monthrange(year, month)[1])
+            else:
+                period_start = date(year, 1, 1)
+                period_end = date(year, 12, 31)
         
         # Build project filters
         project_query = supabase.table("projects").select("*")
@@ -74,6 +95,52 @@ async def get_projects_profitability_report(
         # Get all projects
         projects_result = project_query.execute()
         projects = projects_result.data
+
+        def to_date(value):
+            if not value:
+                return None
+            if isinstance(value, date):
+                return value
+            return date.fromisoformat(str(value)[:10])
+
+        if period_start or period_end:
+            filtered_projects = []
+            for project in projects:
+                project_start = to_date(project.get("start_date"))
+                project_end = to_date(project.get("end_date"))
+
+                if period_end and project_start and project_start > period_end:
+                    continue
+
+                if period_start and project_end and project_end < period_start:
+                    continue
+
+                filtered_projects.append(project)
+
+            projects = filtered_projects
+
+        def to_date(value):
+            if not value:
+                return None
+            if isinstance(value, date):
+                return value
+            return date.fromisoformat(str(value)[:10])
+
+        if period_start or period_end:
+            filtered_projects = []
+            for project in projects:
+                project_start = to_date(project.get("start_date"))
+                project_end = to_date(project.get("end_date"))
+
+                if period_end and project_start and project_start > period_end:
+                    continue
+
+                if period_start and project_end and project_end < period_start:
+                    continue
+
+                filtered_projects.append(project)
+
+            projects = filtered_projects
         
         if not projects:
             return []
@@ -81,11 +148,40 @@ async def get_projects_profitability_report(
         project_ids = [project["id"] for project in projects]
         
         # Get all related financial data
-        invoices = supabase.table("invoices").select("project_id, total_amount, paid_amount").in_("project_id", project_ids).execute()
-        sales_receipts = supabase.table("sales_receipts").select("project_id, total_amount").in_("project_id", project_ids).execute()
-        time_entries = supabase.table("time_entries").select("project_id, hours_worked, hourly_rate").in_("project_id", project_ids).execute()
-        expenses = supabase.table("expenses").select("project_id, amount").in_("project_id", project_ids).execute()
-        bills = supabase.table("bills").select("project_id, amount, paid_amount").in_("project_id", project_ids).execute()
+        invoice_query = supabase.table("invoices").select("project_id, total_amount, paid_amount, issue_date").in_("project_id", project_ids)
+        if period_start:
+            invoice_query = invoice_query.gte("issue_date", period_start.isoformat())
+        if period_end:
+            invoice_query = invoice_query.lte("issue_date", period_end.isoformat())
+        invoices = invoice_query.execute()
+
+        receipts_query = supabase.table("sales_receipts").select("project_id, total_amount, issue_date").in_("project_id", project_ids)
+        if period_start:
+            receipts_query = receipts_query.gte("issue_date", period_start.isoformat())
+        if period_end:
+            receipts_query = receipts_query.lte("issue_date", period_end.isoformat())
+        sales_receipts = receipts_query.execute()
+
+        time_entries_query = supabase.table("time_entries").select("project_id, hours_worked, hourly_rate, entry_date").in_("project_id", project_ids)
+        if period_start:
+            time_entries_query = time_entries_query.gte("entry_date", period_start.isoformat())
+        if period_end:
+            time_entries_query = time_entries_query.lte("entry_date", period_end.isoformat())
+        time_entries = time_entries_query.execute()
+
+        expenses_query = supabase.table("expenses").select("project_id, amount, expense_date").in_("project_id", project_ids)
+        if period_start:
+            expenses_query = expenses_query.gte("expense_date", period_start.isoformat())
+        if period_end:
+            expenses_query = expenses_query.lte("expense_date", period_end.isoformat())
+        expenses = expenses_query.execute()
+
+        bills_query = supabase.table("bills").select("project_id, amount, paid_amount, issue_date").in_("project_id", project_ids)
+        if period_start:
+            bills_query = bills_query.gte("issue_date", period_start.isoformat())
+        if period_end:
+            bills_query = bills_query.lte("issue_date", period_end.isoformat())
+        bills = bills_query.execute()
         
         # Get customer information
         customer_ids = list(set(project["customer_id"] for project in projects if project["customer_id"]))
@@ -160,6 +256,9 @@ async def get_projects_profitability_report(
             
             total_costs = labor_cost + expenses_cost + bills_cost
             
+            if period_start and period_end and total_income == 0 and total_costs == 0:
+                continue
+
             # Calculate profit
             profit = total_income - total_costs
             profit_margin = (profit / total_income * 100) if total_income > 0 else 0
@@ -224,11 +323,30 @@ async def get_projects_profitability_summary(
     customer_id: Optional[str] = Query(None, description="Filter by customer ID"),
     start_date: Optional[date] = Query(None, description="Filter projects started after this date"),
     end_date: Optional[date] = Query(None, description="Filter projects started before this date"),
+    year: Optional[int] = Query(None, description="Filter financials by year"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter financials by month (requires year)"),
     current_user: User = Depends(get_current_user)
 ):
     """Get summary statistics for projects profitability report"""
     try:
         supabase = get_supabase_client()
+
+        period_start = None
+        period_end = None
+
+        if month and not year:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Year must be provided when filtering by month."
+            )
+
+        if year:
+            if month:
+                period_start = date(year, month, 1)
+                period_end = date(year, month, calendar.monthrange(year, month)[1])
+            else:
+                period_start = date(year, 1, 1)
+                period_end = date(year, 12, 31)
         
         # Build project filters
         project_query = supabase.table("projects").select("*")
@@ -263,26 +381,50 @@ async def get_projects_profitability_summary(
         project_ids = [project["id"] for project in projects]
         
         # Get all related financial data
-        invoices = supabase.table("invoices").select("total_amount").in_("project_id", project_ids).execute()
-        sales_receipts = supabase.table("sales_receipts").select("total_amount").in_("project_id", project_ids).execute()
-        time_entries = supabase.table("time_entries").select("hours_worked, hourly_rate").in_("project_id", project_ids).execute()
-        expenses = supabase.table("expenses").select("amount").in_("project_id", project_ids).execute()
-        bills = supabase.table("bills").select("amount").in_("project_id", project_ids).execute()
+        invoice_query = supabase.table("invoices").select("project_id, total_amount, issue_date").in_("project_id", project_ids)
+        if period_start:
+            invoice_query = invoice_query.gte("issue_date", period_start.isoformat())
+        if period_end:
+            invoice_query = invoice_query.lte("issue_date", period_end.isoformat())
+        invoices = invoice_query.execute()
+
+        receipts_query = supabase.table("sales_receipts").select("project_id, total_amount, issue_date").in_("project_id", project_ids)
+        if period_start:
+            receipts_query = receipts_query.gte("issue_date", period_start.isoformat())
+        if period_end:
+            receipts_query = receipts_query.lte("issue_date", period_end.isoformat())
+        sales_receipts = receipts_query.execute()
+
+        time_entries_query = supabase.table("time_entries").select("project_id, hours_worked, hourly_rate, entry_date").in_("project_id", project_ids)
+        if period_start:
+            time_entries_query = time_entries_query.gte("entry_date", period_start.isoformat())
+        if period_end:
+            time_entries_query = time_entries_query.lte("entry_date", period_end.isoformat())
+        time_entries = time_entries_query.execute()
+
+        expenses_query = supabase.table("expenses").select("project_id, amount, expense_date").in_("project_id", project_ids)
+        if period_start:
+            expenses_query = expenses_query.gte("expense_date", period_start.isoformat())
+        if period_end:
+            expenses_query = expenses_query.lte("expense_date", period_end.isoformat())
+        expenses = expenses_query.execute()
+
+        bills_query = supabase.table("bills").select("project_id, amount, issue_date").in_("project_id", project_ids)
+        if period_start:
+            bills_query = bills_query.gte("issue_date", period_start.isoformat())
+        if period_end:
+            bills_query = bills_query.lte("issue_date", period_end.isoformat())
+        bills = bills_query.execute()
         
         # Calculate totals
-        total_income = sum(inv["total_amount"] for inv in invoices.data) + sum(sr["total_amount"] for sr in sales_receipts.data)
-        
-        total_labor_cost = sum(te["hours_worked"] * te["hourly_rate"] for te in time_entries.data if te["hourly_rate"])
-        total_expenses = sum(exp["amount"] for exp in expenses.data)
-        total_bills = sum(bill["amount"] for bill in bills.data)
-        total_costs = total_labor_cost + total_expenses + total_bills
-        
-        total_profit = total_income - total_costs
-        average_profit_margin = (total_profit / total_income * 100) if total_income > 0 else 0
-        
-        # Count profitable vs loss projects
+        total_income = 0.0
+        total_labor_cost = 0.0
+        total_expenses = 0.0
+        total_bills = 0.0
+        total_profit = 0.0
         profitable_projects = 0
         loss_projects = 0
+        included_projects = 0
         
         for project in projects:
             project_id = project["id"]
@@ -300,27 +442,65 @@ async def get_projects_profitability_summary(
             project_bills_cost = sum(bill["amount"] for bill in project_bills)
             project_costs = project_labor_cost + project_expenses_cost + project_bills_cost
             
+            if period_start and period_end and project_income == 0 and project_costs == 0:
+                continue
+
+            included_projects += 1
+            total_income += project_income
+            total_labor_cost += project_labor_cost
+            total_expenses += project_expenses_cost
+            total_bills += project_bills_cost
             project_profit = project_income - project_costs
-            
+            total_profit += project_profit
+
             if project_profit > 0:
                 profitable_projects += 1
             elif project_profit < 0:
                 loss_projects += 1
         
+        if included_projects == 0:
+            return {
+                "total_projects": 0,
+                "total_income": 0,
+                "total_costs": 0,
+                "total_profit": 0,
+                "average_profit_margin": 0,
+                "profitable_projects": 0,
+                "loss_projects": 0,
+                "break_even_projects": 0,
+                "filters_applied": {
+                    "status": status,
+                    "customer_id": customer_id,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "year": year,
+                    "month": month,
+                    "period_start": period_start,
+                    "period_end": period_end
+                }
+            }
+
+        total_costs = total_labor_cost + total_expenses + total_bills
+        average_profit_margin = (total_profit / total_income * 100) if total_income > 0 else 0
+
         return {
-            "total_projects": len(projects),
+            "total_projects": included_projects,
             "total_income": total_income,
             "total_costs": total_costs,
             "total_profit": total_profit,
             "average_profit_margin": round(average_profit_margin, 2),
             "profitable_projects": profitable_projects,
             "loss_projects": loss_projects,
-            "break_even_projects": len(projects) - profitable_projects - loss_projects,
+            "break_even_projects": included_projects - profitable_projects - loss_projects,
             "filters_applied": {
                 "status": status,
                 "customer_id": customer_id,
                 "start_date": start_date,
-                "end_date": end_date
+                "end_date": end_date,
+                "year": year,
+                "month": month,
+                "period_start": period_start,
+                "period_end": period_end
             }
         }
         

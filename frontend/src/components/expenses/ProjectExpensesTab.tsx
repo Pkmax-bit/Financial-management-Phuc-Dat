@@ -131,7 +131,8 @@ const canDelete = (expense: ProjectExpense) => {
   // Planned: only pending can be deleted
   // Actual: can be deleted (for corrections)
   if (expense.category === 'planned') {
-    const canDeletePlanned = expense.status === 'pending'
+    const canDeletePlannedStatuses: Array<ProjectExpense['status']> = ['pending', 'approved']
+    const canDeletePlanned = canDeletePlannedStatuses.includes(expense.status)
     console.log('📋 canDelete planned:', { category: expense.category, status: expense.status, canDelete: canDeletePlanned })
     return canDeletePlanned
   }
@@ -183,7 +184,9 @@ const handleDeleteExpense = async (expenseId: string) => {
   const hasChildren = expenses.some(e => e.id_parent === expenseId)
   
   const confirmMessage = isPlanned 
-    ? 'Bạn có chắc chắn muốn xóa chi phí kế hoạch này?' 
+    ? (expense.status === 'approved'
+        ? 'Chi phí kế hoạch này đã được duyệt. Bạn có chắc chắn muốn xóa?'
+        : 'Bạn có chắc chắn muốn xóa chi phí kế hoạch này?')
     : hasChildren 
       ? 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Xóa cha sẽ xóa tất cả chi phí con. Hành động này không thể hoàn tác!'
       : 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Hành động này không thể hoàn tác!'

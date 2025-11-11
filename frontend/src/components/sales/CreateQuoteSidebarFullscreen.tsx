@@ -37,6 +37,11 @@ interface Employee {
   user_id?: string
 }
 
+const normalizeDateInput = (value: string | null | undefined) => {
+  if (!value) return null
+  return String(value).slice(0, 10)
+}
+
 interface QuoteItem {
   id?: string
   product_service_id?: string
@@ -629,6 +634,29 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   }, [formData.project_id, projects])
 
+  // Autofill issue_date and valid_until based on selected project's timeline
+  useEffect(() => {
+    if (!selectedProject) return
+
+    const projectStart = normalizeDateInput(selectedProject.start_date)
+    const projectEnd = normalizeDateInput(selectedProject.end_date)
+
+    setFormData(prev => {
+      const nextIssue = projectStart ?? prev.issue_date
+      const nextValid = projectEnd ?? prev.valid_until
+
+      if (nextIssue === prev.issue_date && nextValid === prev.valid_until) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        issue_date: nextIssue,
+        valid_until: nextValid
+      }
+    })
+  }, [selectedProject])
+
   // Calculate total amount and budget status
   useEffect(() => {
     const calculatedTotal = formData.subtotal + formData.tax_amount - formData.discount_amount
@@ -687,7 +715,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       // Use Supabase directly to get projects for the customer
       const { data: projects, error } = await supabase
         .from('projects')
-        .select('id, project_code, name, status')
+        .select('id, project_code, name, status, start_date, end_date')
         .eq('customer_id', customerId)
         .in('status', ['planning', 'active'])
         .order('name')
