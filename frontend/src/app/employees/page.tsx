@@ -12,7 +12,8 @@ import {
   Building2,
   Briefcase,
   Mail,
-  DollarSign
+  DollarSign,
+  FileSpreadsheet
 } from 'lucide-react'
 import { Employee } from '@/types'
 import { supabase } from '@/lib/supabase'
@@ -21,6 +22,7 @@ import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import CreateEmployeeModal from '@/components/employees/CreateEmployeeModal'
 import EditEmployeeSidebar from '@/components/employees/EditEmployeeSidebar'
 import EmployeeDetailSidebar from '@/components/employees/EmployeeDetailSidebar'
+import UploadEmployeeExcel from '@/components/employees/UploadEmployeeExcel'
 
 import DepartmentManagerSidebar from '@/components/employees/DepartmentManagerSidebar'
 import CreateDepartmentModalSidebar from '@/components/employees/CreateDepartmentModalSidebar'
@@ -39,6 +41,7 @@ export default function EmployeesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditSidebar, setShowEditSidebar] = useState(false)
   const [showDetailSidebar, setShowDetailSidebar] = useState(false)
+  const [showUploadExcel, setShowUploadExcel] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
 
   const [showPositionManager, setShowPositionManager] = useState(false)
@@ -390,6 +393,13 @@ export default function EmployeesPage() {
               <Briefcase className="h-4 w-4 mr-2" />
               Quản lý chức vụ
                 </button>
+            <button
+              onClick={() => setShowUploadExcel(true)}
+              className="inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100"
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Upload Excel
+            </button>
                   <button 
                   onClick={() => setShowCreateModal(true)}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -791,6 +801,16 @@ export default function EmployeesPage() {
         <PositionManagerSidebar
           isOpen={showPositionManagerSidebar}
           onClose={() => setShowPositionManagerSidebar(false)}
+        />
+      )}
+
+      {/* Upload Excel Modal */}
+      {showUploadExcel && (
+        <UploadEmployeeExcel
+          isOpen={showUploadExcel}
+          onClose={() => setShowUploadExcel(false)}
+          onSuccess={fetchEmployees}
+          currentUser={user}
         />
       )}
     </LayoutWithSidebar>
