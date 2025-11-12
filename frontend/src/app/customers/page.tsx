@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Customer } from '@/types'
 import { 
@@ -37,11 +37,18 @@ import {
   Settings,
   BarChart3,
   PieChart,
-  TrendingDown
+  TrendingDown,
+  CircleHelp
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { customerApi } from '@/lib/api'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+
+const TOUR_STORAGE_KEY = 'customers-page-tour-status-v1'
+const TOUR_COUNTDOWN_SECONDS = 5
+type CustomersShepherdModule = typeof import('shepherd.js')
+type CustomersShepherdType = CustomersShepherdModule & { Tour: new (...args: any[]) => any }
+type CustomersShepherdTour = InstanceType<CustomersShepherdType['Tour']>
 
 interface Transaction {
   id: string
@@ -68,6 +75,14 @@ export default function CustomersPage() {
   const [quickActionType, setQuickActionType] = useState<'invoice' | 'payment' | 'estimate' | 'reminder'>('invoice')
   const [user, setUser] = useState<{ email?: string; full_name?: string; role?: string } | null>(null)
   const router = useRouter()
+  const [showTourCompletionPrompt, setShowTourCompletionPrompt] = useState(false)
+  const [tourCountdown, setTourCountdown] = useState(TOUR_COUNTDOWN_SECONDS)
+  const [isTourRunning, setIsTourRunning] = useState(false)
+  const shepherdRef = useRef<CustomersShepherdType | null>(null)
+  const tourRef = useRef<CustomersShepherdTour | null>(null)
+  const autoStartAttemptedRef = useRef(false)
+  const currentTourModeRef = useRef<'auto' | 'manual'>('manual')
+  const isBrowser = typeof window !== 'undefined'
 
   const defaultCustomerForm = {
     customer_code: '',
@@ -379,15 +394,17 @@ export default function CustomersPage() {
     }
   }
 
-  const filteredCustomers = customers.filter((customer: unknown) => {
-    const c = customer as { name?: string; email?: string; phone?: string }
+  const filteredCustomers = useMemo(() => {
     const term = searchTerm.toLowerCase()
-    const matchesSearch =
-      (c.name || '').toLowerCase().includes(term) ||
-      (c.email || '').toLowerCase().includes(term) ||
-      (c.phone || '').toLowerCase().includes(term)
-    return matchesSearch
-  })
+    return customers.filter((customer: unknown) => {
+      const c = customer as { name?: string; email?: string; phone?: string }
+      const matchesSearch =
+        (c.name || '').toLowerCase().includes(term) ||
+        (c.email || '').toLowerCase().includes(term) ||
+        (c.phone || '').toLowerCase().includes(term)
+      return matchesSearch
+    })
+  }, [customers, searchTerm])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -500,6 +517,320 @@ export default function CustomersPage() {
     return Math.floor(Math.random() * 10000000)
   }
 
+  const handleTourComplete = useCallback(() => {
+    setIsTourRunning(false)
+    setShowDetailModal(false)
+    if (isBrowser) {
+      localStorage.setItem(TOUR_STORAGE_KEY, 'completed')
+    }
+    setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+    setShowTourCompletionPrompt(true)
+  }, [isBrowser])
+
+  const handleTourCancel = useCallback(() => {
+    setIsTourRunning(false)
+    setShowDetailModal(false)
+    if (isBrowser && currentTourModeRef.current === 'auto') {
+      localStorage.setItem(TOUR_STORAGE_KEY, 'dismissed')
+    }
+  }, [isBrowser])
+
+  const startCustomersTour = useCallback(async (options?: { auto?: boolean }) => {
+    if (!isBrowser || !filteredCustomers.length) return
+
+    currentTourModeRef.current = options?.auto ? 'auto' : 'manual'
+
+    if (tourRef.current) {
+      tourRef.current.cancel()
+      tourRef.current = null
+    }
+
+    setShowTourCompletionPrompt(false)
+    setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+
+    const firstCustomer = filteredCustomers[0] as Customer | undefined
+
+    if (!shepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance =
+          (module as unknown as { default?: CustomersShepherdType })?.default ??
+          (module as unknown as CustomersShepherdType)
+        shepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = shepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 15, delay = 120) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="customers-header"]')
+    await waitForElement('[data-tour-id="customers-guide-button"]')
+    await waitForElement('[data-tour-id="customers-add-button"]')
+    await waitForElement('[data-tour-id="customers-stats"]')
+    await waitForElement('[data-tour-id="customers-filters"]')
+    await waitForElement('[data-tour-id="customers-table"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'customers-intro',
+      title: 'Trung tâm Khách hàng',
+      text: 'Trang này giúp bạn quản lý hồ sơ khách hàng, công nợ và các giao dịch đi kèm.',
+      attachTo: { element: '[data-tour-id="customers-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customers-guide-button',
+      title: 'Nút Bắt đầu hướng dẫn',
+      text: 'Bạn có thể khởi chạy lại tour bất cứ lúc nào bằng nút này.',
+      attachTo: { element: '[data-tour-id="customers-guide-button"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customers-create-button',
+      title: 'Tạo khách hàng mới',
+      text: 'Nhấn nút này để mở form tạo khách hàng với mã tự động và các thông tin cần thiết.',
+      attachTo: { element: '[data-tour-id="customers-add-button"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customers-create-modal',
+      title: 'Điền thông tin khách hàng',
+      text: 'Form này hướng dẫn bạn nhập thông tin cơ bản, liên hệ và hạn mức tín dụng. Sau khi lưu, khách hàng sẽ xuất hiện trong danh sách.',
+      attachTo: { element: '[data-tour-id="customers-add-modal"]', on: 'left' },
+      when: {
+        show: async () => {
+          if (!showAddModal) {
+            await openAddModal()
+          }
+          await waitForElement('[data-tour-id="customers-add-modal"]')
+        },
+        hide: () => {
+          setShowAddModal(false)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: async () => {
+            await waitForElement('[data-tour-id="customers-add-button"]')
+            tour.back()
+          },
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: async () => {
+            setShowAddModal(false)
+            await new Promise((resolve) => setTimeout(resolve, 200))
+            tour.next()
+          }
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customers-stats',
+      title: 'Tổng quan nhanh',
+      text: 'Các thẻ thống kê giúp bạn nắm nhanh tình trạng khách hàng và doanh thu.',
+      attachTo: { element: '[data-tour-id="customers-stats"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customers-filters',
+      title: 'Tìm kiếm & bộ lọc',
+      text: 'Sử dụng ô tìm kiếm và các thao tác lọc để thu hẹp danh sách khách hàng.',
+      attachTo: { element: '[data-tour-id="customers-filters"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customers-table',
+      title: 'Danh sách khách hàng',
+      text: 'Danh sách hiển thị đầy đủ thông tin và hành động nhanh cho từng khách hàng.',
+      attachTo: { element: '[data-tour-id="customers-table"]', on: 'top' },
+      when: {
+        show: () => {
+          if (firstCustomer) {
+            setSelectedCustomer(firstCustomer)
+            setShowDetailModal(true)
+          }
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: async () => {
+            await waitForElement('[data-tour-id="customers-detail-modal"]')
+            tour.next()
+          }
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customers-detail',
+      title: 'Chi tiết khách hàng',
+      text: 'Cửa sổ chi tiết cung cấp cái nhìn sâu hơn về thông tin và lịch sử của khách hàng.',
+      attachTo: { element: '[data-tour-id="customers-detail-modal"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      handleTourComplete()
+      tourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      handleTourCancel()
+      tourRef.current = null
+    })
+
+    tourRef.current = tour
+    setIsTourRunning(true)
+    tour.start()
+  }, [filteredCustomers, handleTourCancel, handleTourComplete, isBrowser, openAddModal, showAddModal])
+
+  const handleRestartTour = useCallback(() => {
+    setShowTourCompletionPrompt(false)
+    setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+    startCustomersTour()
+  }, [startCustomersTour])
+
+  useEffect(() => {
+    if (!isBrowser) return
+    if (loading) return
+    if (!filteredCustomers.length) return
+    if (autoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(TOUR_STORAGE_KEY)
+    autoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      startCustomersTour({ auto: true })
+    }
+  }, [filteredCustomers, isBrowser, loading, startCustomersTour])
+
+  useEffect(() => {
+    if (!isBrowser) return
+    if (!showTourCompletionPrompt) return
+
+    if (tourCountdown <= 0) {
+      setShowTourCompletionPrompt(false)
+      setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setTourCountdown((prev) => prev - 1)
+    }, 1000)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [isBrowser, showTourCompletionPrompt, tourCountdown])
+
+  useEffect(() => {
+    return () => {
+      tourRef.current?.cancel()
+      tourRef.current?.destroy()
+      tourRef.current = null
+    }
+  }, [])
+
   const stats = getCustomerStats()
 
   const handleQuickAction = (actionType: 'invoice' | 'payment' | 'estimate' | 'reminder') => {
@@ -531,7 +862,7 @@ export default function CustomersPage() {
         <div className="p-6">
           {/* Header */}
           <div className="mb-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between" data-tour-id="customers-header">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Trung tâm Khách hàng</h1>
                 <p className="mt-1 text-sm text-black">
@@ -554,7 +885,21 @@ export default function CustomersPage() {
                   )}
                 </div>
               </div>
-              <div className="flex space-x-3">
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => startCustomersTour()}
+                  disabled={isTourRunning}
+                  data-tour-id="customers-guide-button"
+                  className={`inline-flex items-center px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                    isTourRunning
+                      ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                  title="Bắt đầu tour hướng dẫn"
+                >
+                  <CircleHelp className="h-5 w-5 mr-2" />
+                  <span>Bắt đầu hướng dẫn</span>
+                </button>
                 <button
                   onClick={fetchCustomers}
                   disabled={loading}
@@ -567,6 +912,7 @@ export default function CustomersPage() {
                 </button>
                 <button 
                   onClick={openAddModal}
+                  data-tour-id="customers-add-button"
                   className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -649,7 +995,7 @@ export default function CustomersPage() {
           )}
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6" data-tour-id="customers-stats">
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center">
                 <div className="p-3 rounded-lg bg-blue-500">
@@ -725,7 +1071,7 @@ export default function CustomersPage() {
 
           {/* Filters */}
           <div className="mb-6">
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white rounded-lg shadow p-6" data-tour-id="customers-filters">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -754,7 +1100,7 @@ export default function CustomersPage() {
           </div>
 
           {/* Customer List */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
+          <div className="bg-white shadow overflow-hidden sm:rounded-md" data-tour-id="customers-table">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 Danh sách Khách hàng ({filteredCustomers.length})
@@ -972,7 +1318,10 @@ export default function CustomersPage() {
       {/* Add Customer Modal - Right Sidebar */}
       {showAddModal && (
         <div className="fixed top-16 right-4 z-50 w-full max-w-2xl">
-          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
+          <div
+            className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right"
+            data-tour-id="customers-add-modal"
+          >
             <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Tạo khách hàng mới</h2>
@@ -1263,7 +1612,10 @@ export default function CustomersPage() {
 
       {/* Customer Detail Modal */}
       {showDetailModal && selectedCustomer && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+          data-tour-id="customers-detail-modal"
+        >
           <div className="relative top-20 mx-auto p-5 border w-4xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <div className="flex items-center justify-between mb-4">
@@ -1771,6 +2123,31 @@ export default function CustomersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {showTourCompletionPrompt && (
+        <div className="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-50 max-w-sm bg-white border border-gray-200 rounded-xl shadow-xl p-5">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Bạn cần hướng dẫn lại phần nào?</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Tour sẽ đóng sau {tourCountdown}s. Bạn có thể khởi động lại ngay để xem lại các bước hướng dẫn.
+          </p>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => {
+                setShowTourCompletionPrompt(false)
+                setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+              }}
+              className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+            >
+              Để sau
+            </button>
+            <button
+              onClick={handleRestartTour}
+              className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              Bắt đầu lại tour
+            </button>
           </div>
         </div>
       )}

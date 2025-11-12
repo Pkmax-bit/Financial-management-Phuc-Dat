@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import '../styles/animations.css'
+import 'shepherd.js/dist/css/shepherd.css'
 import BackgroundProviderWrapper from '@/components/BackgroundProviderWrapper'
 
 const inter = Inter({ subsets: ['latin'] })
