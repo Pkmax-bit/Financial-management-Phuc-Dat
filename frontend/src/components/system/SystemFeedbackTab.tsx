@@ -45,20 +45,11 @@ export default function SystemFeedbackTab() {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({})
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
-  const [replyFiles, setReplyFiles] = useState<Record<string, File[]>>({})
-  const [uploadingReplyAttachments, setUploadingReplyAttachments] = useState<Record<string, boolean>>({})
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
 
   useEffect(() => {
     load()
   }, [])
-
-  useEffect(() => {
-    // Reset to page 1 when search changes
-    setCurrentPage(1)
-  }, [search])
 
   const load = async () => {
     try {
@@ -142,57 +133,6 @@ export default function SystemFeedbackTab() {
         throw new Error('No authentication token')
       }
 
-      // Upload attachments if any
-      let attachments: any[] = []
-      const replyKey = parentReplyId ? `reply-${parentReplyId}` : `top-${feedbackId}`
-      const files = replyFiles[replyKey] || []
-      
-      if (files.length > 0) {
-        setUploadingReplyAttachments(prev => ({ ...prev, [replyKey]: true }))
-        try {
-          // Upload files through backend API to avoid RLS issues
-          const uploadPromises = files.map(async (file) => {
-            try {
-              const formData = new FormData()
-              formData.append('file', file)
-              
-              const uploadRes = await fetch(`/api/uploads/SystemFeedbacks/${feedbackId}/replies`, {
-                method: 'POST',
-                headers: {
-                  ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
-                },
-                body: formData
-              })
-              
-              if (!uploadRes.ok) {
-                const errorData = await uploadRes.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Upload failed: ${uploadRes.status}`)
-              }
-              
-              const uploadResult = await uploadRes.json()
-              
-              return {
-                id: uploadResult.id,
-                name: uploadResult.name,
-                url: uploadResult.url,
-                type: uploadResult.type,
-                size: uploadResult.size,
-                uploaded_at: uploadResult.uploaded_at,
-                path: uploadResult.path
-              }
-            } catch (error) {
-              console.error('Error uploading attachment:', error)
-              return null
-            }
-          })
-          
-          const results = await Promise.all(uploadPromises)
-          attachments = results.filter(r => r !== null)
-        } finally {
-          setUploadingReplyAttachments(prev => ({ ...prev, [replyKey]: false }))
-        }
-      }
-
       const res = await fetch(`/api/feedback/system/${feedbackId}/replies`, {
         method: 'POST',
         headers: {
@@ -201,8 +141,7 @@ export default function SystemFeedbackTab() {
         },
         body: JSON.stringify({ 
           content,
-          parent_reply_id: parentReplyId || undefined,
-          attachments: attachments.length > 0 ? attachments : undefined
+          parent_reply_id: parentReplyId || undefined
         })
       })
 
@@ -217,51 +156,13 @@ export default function SystemFeedbackTab() {
       if (parentReplyId) {
         setReplyText('')
         setReplyingTo(null)
-        setReplyFiles(prev => {
-          const newState = { ...prev }
-          delete newState[replyKey]
-          return newState
-        })
       } else {
         setReplyContent(prev => ({ ...prev, [feedbackId]: '' }))
-        setReplyFiles(prev => {
-          const newState = { ...prev }
-          delete newState[replyKey]
-          return newState
-        })
       }
     } catch (error) {
       console.error('Error creating reply:', error)
       alert(error instanceof Error ? error.message : 'Lỗi khi tạo phản hồi')
     }
-  }
-
-  const handleReplyFileSelect = (e: React.ChangeEvent<HTMLInputElement>, replyKey: string) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files)
-      const validFiles = files.filter(file => {
-        if (file.size > 10 * 1024 * 1024) {
-          alert(`File ${file.name} quá lớn. Kích thước tối đa là 10MB.`)
-          return false
-        }
-        if (!file.type.startsWith('image/')) {
-          alert(`File ${file.name} không phải là hình ảnh. Chỉ hỗ trợ hình ảnh.`)
-          return false
-        }
-        return true
-      })
-      setReplyFiles(prev => ({
-        ...prev,
-        [replyKey]: [...(prev[replyKey] || []), ...validFiles]
-      }))
-    }
-  }
-
-  const removeReplyFile = (replyKey: string, index: number) => {
-    setReplyFiles(prev => ({
-      ...prev,
-      [replyKey]: (prev[replyKey] || []).filter((_, i) => i !== index)
-    }))
   }
 
   const formatTimeAgo = (dateString: string) => {
@@ -354,91 +255,41 @@ export default function SystemFeedbackTab() {
             </div>
             
             {/* Reply Form */}
-            {isReplying && (() => {
-              const replyKey = `reply-${reply.id}`
-              const currentFiles = replyFiles[replyKey] || []
-              const isUploading = uploadingReplyAttachments[replyKey] || false
-              return (
-                <div className="mt-3 ml-11">
-                  <form onSubmit={(e) => { e.preventDefault(); handleReply(feedbackId, reply.id); }} className="space-y-2">
-                    <div className="flex gap-2">
-                      <div className="w-6 h-6 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                        👤
-                      </div>
-                      <div className="flex-1">
-                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
-                          <input
-                            type="text"
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            placeholder="Trả lời..."
-                            className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
-                            autoFocus
-                            disabled={isUploading}
-                          />
-                        </div>
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={!replyText.trim() || isUploading}
-                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
-                      >
-                        {isUploading ? '⏳' : '📤'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { 
-                          setReplyingTo(null)
-                          setReplyText('')
-                          setReplyFiles(prev => {
-                            const newState = { ...prev }
-                            delete newState[replyKey]
-                            return newState
-                          })
-                        }}
-                        className="px-3 py-2 bg-gray-500 text-white rounded-full text-xs font-semibold hover:bg-gray-600 transition-all duration-200"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="ml-8 flex items-center gap-2">
+            {isReplying && (
+              <div className="mt-3 ml-11">
+                <form onSubmit={(e) => { e.preventDefault(); handleReply(feedbackId, reply.id); }} className="flex gap-2">
+                  <div className="w-6 h-6 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                    👤
+                  </div>
+                  <div className="flex-1">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
                       <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleReplyFileSelect(e, replyKey)}
-                        className="hidden"
-                        id={`reply-image-${replyKey}`}
-                        disabled={isUploading}
-                        multiple
+                        type="text"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        placeholder="Trả lời..."
+                        className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
+                        autoFocus
                       />
-                      <label
-                        htmlFor={`reply-image-${replyKey}`}
-                        className="text-xs text-gray-600 hover:text-blue-600 cursor-pointer flex items-center gap-1"
-                      >
-                        <ImageIcon className="w-3 h-3" />
-                        Thêm hình
-                      </label>
-                      {currentFiles.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          {currentFiles.map((file, index) => (
-                            <div key={index} className="flex items-center gap-1 text-xs">
-                              <span className="text-gray-600 truncate max-w-[80px]">{file.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeReplyFile(replyKey, index)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                  </form>
-                </div>
-              )
-            })()}
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!replyText.trim()}
+                    className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    📤
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                    className="px-3 py-2 bg-gray-500 text-white rounded-full text-xs font-semibold hover:bg-gray-600 transition-all duration-200"
+                  >
+                    ✕
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
         
@@ -459,12 +310,6 @@ export default function SystemFeedbackTab() {
     if (!s) return items
     return items.filter(it => it.title.toLowerCase().includes(s) || it.content.toLowerCase().includes(s))
   }, [items, search])
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filtered.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedItems = filtered.slice(startIndex, endIndex)
 
   const resetForm = () => {
     setForm({ id: '', title: '', content: '', category: 'other', priority: 'medium', status: 'open' })
@@ -627,14 +472,14 @@ export default function SystemFeedbackTab() {
 
       {/* Feedback List */}
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        {loading ? (
+            {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="flex items-center space-x-2 text-gray-500">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
               <span>Đang tải...</span>
             </div>
           </div>
-        ) : filtered.length === 0 ? (
+            ) : filtered.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
               <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -652,9 +497,8 @@ export default function SystemFeedbackTab() {
             </button>
           </div>
         ) : (
-          <>
-            <div className="divide-y divide-gray-200">
-              {paginatedItems.map((it, index) => (
+          <div className="divide-y divide-gray-200">
+            {filtered.map((it, index) => (
               <div key={it.id} className="p-6 hover:bg-gray-50 transition-colors">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
@@ -770,73 +614,29 @@ export default function SystemFeedbackTab() {
                           )}
 
                           {/* Reply Form (Top-level) - Giống CompactComments */}
-                          {(() => {
-                            const replyKey = `top-${it.id}`
-                            const currentFiles = replyFiles[replyKey] || []
-                            const isUploading = uploadingReplyAttachments[replyKey] || false
-                            return (
-                              <form onSubmit={(e) => { e.preventDefault(); handleReply(it.id, null); }} className="space-y-2">
-                                <div className="flex gap-3">
-                                  <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                                    👤
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
-                                      <input
-                                        type="text"
-                                        value={replyContent[it.id] || ''}
-                                        onChange={(e) => setReplyContent(prev => ({ ...prev, [it.id]: e.target.value }))}
-                                        placeholder="Viết bình luận..."
-                                        className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
-                                        disabled={isUploading}
-                                      />
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="submit"
-                                    disabled={!replyContent[it.id]?.trim() || isUploading}
-                                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
-                                  >
-                                    {isUploading ? '⏳' : '📤'}
-                                  </button>
-                                </div>
-                                <div className="ml-11 flex items-center gap-2">
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => handleReplyFileSelect(e, replyKey)}
-                                    className="hidden"
-                                    id={`reply-image-${replyKey}`}
-                                    disabled={isUploading}
-                                    multiple
-                                  />
-                                  <label
-                                    htmlFor={`reply-image-${replyKey}`}
-                                    className="text-xs text-gray-600 hover:text-blue-600 cursor-pointer flex items-center gap-1"
-                                  >
-                                    <ImageIcon className="w-3 h-3" />
-                                    Thêm hình
-                                  </label>
-                                  {currentFiles.length > 0 && (
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                      {currentFiles.map((file, index) => (
-                                        <div key={index} className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded">
-                                          <span className="text-gray-600 truncate max-w-[80px]">{file.name}</span>
-                                          <button
-                                            type="button"
-                                            onClick={() => removeReplyFile(replyKey, index)}
-                                            className="text-red-500 hover:text-red-700"
-                                          >
-                                            <X className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </form>
-                            )
-                          })()}
+                          <form onSubmit={(e) => { e.preventDefault(); handleReply(it.id, null); }} className="flex gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                              👤
+                            </div>
+                            <div className="flex-1">
+                              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
+                                <input
+                                  type="text"
+                                  value={replyContent[it.id] || ''}
+                                  onChange={(e) => setReplyContent(prev => ({ ...prev, [it.id]: e.target.value }))}
+                                  placeholder="Viết bình luận..."
+                                  className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="submit"
+                              disabled={!replyContent[it.id]?.trim()}
+                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
+                            >
+                              📤
+                            </button>
+                          </form>
                         </div>
                       )}
                     </div>
@@ -860,116 +660,7 @@ export default function SystemFeedbackTab() {
                 </div>
               </div>
             ))}
-            </div>
-            
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
-                <div className="text-sm text-gray-700">
-                  Hiển thị <span className="font-medium">{startIndex + 1}</span> đến{' '}
-                  <span className="font-medium">{Math.min(endIndex, filtered.length)}</span> trong tổng số{' '}
-                  <span className="font-medium">{filtered.length}</span> góp ý
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Trước
-                  </button>
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum
-                      if (totalPages <= 5) {
-                        pageNum = i + 1
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i
-                      } else {
-                        pageNum = currentPage - 2 + i
-                      }
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                            currentPage === pageNum
-                              ? 'bg-blue-600 text-white'
-                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Sau
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4 px-6">
-                <div className="text-sm text-gray-700">
-                  Hiển thị <span className="font-medium">{startIndex + 1}</span> đến{' '}
-                  <span className="font-medium">{Math.min(endIndex, filtered.length)}</span> trong tổng số{' '}
-                  <span className="font-medium">{filtered.length}</span> góp ý
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Trước
-                  </button>
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum
-                      if (totalPages <= 5) {
-                        pageNum = i + 1
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i
-                      } else {
-                        pageNum = currentPage - 2 + i
-                      }
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                            currentPage === pageNum
-                              ? 'bg-blue-600 text-white'
-                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Sau
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </div>
 
@@ -1178,7 +869,7 @@ export default function SystemFeedbackTab() {
               <X className="h-6 w-6 text-gray-800" />
             </button>
             <img
-              src={selectedImage || ''}
+              src={selectedImage}
               alt="Preview"
               className="w-full h-full object-contain rounded-lg"
               onClick={(e) => e.stopPropagation()}
