@@ -366,7 +366,7 @@ export default function ProjectsTab({
       )}
 
       {/* Filters */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200" data-tour-id="projects-filters">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-black mb-2">Tìm kiếm dự án</label>
@@ -443,11 +443,14 @@ export default function ProjectsTab({
 
       {/* Projects Grid */}
       <div className="p-4 sm:p-6 lg:p-8">
-        <div className={`grid gap-6 ${
+        <div
+          className={`grid gap-6 ${
           sidebarOpen 
             ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-8'
             : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10'
-        }`}>
+        }`}
+          data-tour-id="projects-grid"
+        >
         {sortedProjects.map((project) => {
           const StatusIcon = statusIcons[project.status]
           return (

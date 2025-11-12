@@ -280,7 +280,10 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         }}
       />
       <div className="fixed top-16 right-4 z-50 w-full max-w-2xl">
-      <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right">
+      <div
+        className="bg-white rounded-lg shadow-2xl border border-gray-200 max-h-[85vh] overflow-y-auto animate-slide-in-right"
+        data-tour-id="projects-create-modal"
+      >
         <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Tạo dự án mới</h2>
