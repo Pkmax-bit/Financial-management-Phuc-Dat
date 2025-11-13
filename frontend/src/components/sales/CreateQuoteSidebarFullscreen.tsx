@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   X, 
   FileText, 
@@ -16,7 +16,8 @@ import {
   Package,
   Search,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  CircleHelp
 } from 'lucide-react'
 import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -148,6 +149,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const adjustmentTimersRef = useRef<Map<string, any>>(new Map())
   const [showRulesDialog, setShowRulesDialog] = useState(false)
   const [manualAdjusting, setManualAdjusting] = useState(false)
+  
+  // Tour state
+  const QUOTE_FORM_TOUR_STORAGE_KEY = 'quote-form-tour-status-v1'
+  const [isQuoteTourRunning, setIsQuoteTourRunning] = useState(false)
+  const quoteTourRef = useRef<any>(null)
+  const quoteShepherdRef = useRef<any>(null)
+  const quoteTourAutoStartAttemptedRef = useRef(false)
+  type QuoteShepherdModule = typeof import('shepherd.js')
+  type QuoteShepherdType = QuoteShepherdModule & { Tour: new (...args: any[]) => any }
+  type QuoteShepherdTour = InstanceType<QuoteShepherdType['Tour']>
   const [showProfitWarningDialog, setShowProfitWarningDialog] = useState(false)
   const [lowProfitItems, setLowProfitItems] = useState<Array<{ name: string; percentage: number }>>([])
 
@@ -617,12 +628,221 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   }
 
+  const startQuoteTour = useCallback(async () => {
+    if (!isOpen || typeof window === 'undefined') return
+
+    if (quoteTourRef.current) {
+      quoteTourRef.current.cancel()
+      quoteTourRef.current = null
+    }
+
+    if (!quoteShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: QuoteShepherdType })?.default ?? (module as unknown as QuoteShepherdType)
+        quoteShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = quoteShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="quote-form-basic-info"]')
+    await waitForElement('[data-tour-id="quote-form-items"]')
+    await waitForElement('[data-tour-id="quote-form-area-info"]')
+    await waitForElement('[data-tour-id="quote-form-totals"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'quote-form-intro',
+      title: 'Hướng dẫn tạo báo giá',
+      text: 'Form này giúp bạn tạo báo giá với tính năng tự động tính diện tích và điều chỉnh vật tư khi thay đổi kích thước sản phẩm.',
+      attachTo: { element: '[data-tour-id="quote-form-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-basic-info',
+      title: 'Thông tin cơ bản',
+      text: 'Điền số báo giá, chọn khách hàng và dự án (nếu có). Hệ thống sẽ tự động tải danh sách dự án khi bạn chọn khách hàng.',
+      attachTo: { element: '[data-tour-id="quote-form-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-items',
+      title: 'Thêm sản phẩm',
+      text: 'Nhấn "Chọn từ danh sách" để chọn sản phẩm có sẵn, hoặc "Thêm sản phẩm tự do" để nhập thủ công. Bạn có thể thêm nhiều sản phẩm vào báo giá.',
+      attachTo: { element: '[data-tour-id="quote-form-items"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-area-info',
+      title: 'Nhập kích thước và diện tích',
+      text: 'Nhập chiều dài (mm) và chiều cao (mm) để hệ thống tự động tính diện tích (m²). Bạn cũng có thể nhập trực tiếp diện tích nếu đã biết.',
+      attachTo: { element: '[data-tour-id="quote-form-area-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-area-rules',
+      title: 'Quy tắc khi tăng diện tích',
+      text: 'Khi bạn tăng diện tích sản phẩm, hệ thống sẽ tự động áp dụng quy tắc điều chỉnh vật tư:\n\n• Nếu diện tích tăng → số lượng vật tư có thể tăng hoặc giảm tùy theo quy tắc đã thiết lập\n• Quy tắc được áp dụng dựa trên phần trăm thay đổi hoặc giá trị tuyệt đối\n• Bạn có thể xem và quản lý các quy tắc trong mục "Quy tắc điều chỉnh vật tư"\n\nNhấn nút "Áp dụng điều chỉnh" để cập nhật số lượng vật tư ngay lập tức.',
+      attachTo: { element: '[data-tour-id="quote-form-area-rules"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-totals',
+      title: 'Tổng tiền và lưu',
+      text: 'Hệ thống tự động tính tổng tiền dựa trên đơn giá và diện tích. Sau khi kiểm tra, nhấn "Lưu nháp" để lưu hoặc "Gửi ngay" để gửi báo giá cho khách hàng.',
+      attachTo: { element: '[data-tour-id="quote-form-totals"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsQuoteTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(QUOTE_FORM_TOUR_STORAGE_KEY, 'completed')
+      }
+      quoteTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsQuoteTourRunning(false)
+      quoteTourRef.current = null
+    })
+
+    quoteTourRef.current = tour
+    setIsQuoteTourRunning(true)
+    tour.start()
+  }, [isOpen])
+
   // When project changes, load product components and fill items
   useEffect(() => {
     if (formData.project_id) {
       loadProductComponentsForProject(formData.project_id)
     }
   }, [formData.project_id])
+
+  // Auto-start tour when form opens for the first time
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isOpen) return
+    if (quoteTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(QUOTE_FORM_TOUR_STORAGE_KEY)
+    quoteTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startQuoteTour()
+      }, 800)
+    }
+  }, [isOpen, startQuoteTour])
+
+  // Reset tour auto-start when form closes
+  useEffect(() => {
+    if (!isOpen) {
+      quoteTourAutoStartAttemptedRef.current = false
+    }
+  }, [isOpen])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      quoteTourRef.current?.cancel()
+      quoteTourRef.current?.destroy?.()
+      quoteTourRef.current = null
+    }
+  }, [])
 
   // Update selected project when project_id changes
   useEffect(() => {
@@ -1047,8 +1267,6 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (components.length === 0) return
 
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
-      
       // Apply adjustments for each component
       const adjustedComponents = await Promise.all(
         components.map(async (component: any) => {
@@ -2075,24 +2293,39 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       {/* Full screen container */}
       <div className="fixed inset-0 bg-white flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0" data-tour-id="quote-form-header">
           <div className="flex items-center">
             <FileText className="h-6 w-6 text-black mr-3" />
             <h1 className="text-xl font-semibold text-black">Tạo báo giá mới</h1>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md"
-          >
-            <X className="h-5 w-5 text-black" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => startQuoteTour()}
+              disabled={isQuoteTourRunning || submitting}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                isQuoteTourRunning || submitting
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+              }`}
+              title="Bắt đầu hướng dẫn tạo báo giá"
+            >
+              <CircleHelp className="h-4 w-4" />
+              <span>Hướng dẫn</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-md"
+            >
+              <X className="h-5 w-5 text-black" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           <div className="w-full">
             {/* Basic Information */}
-            <div className="mb-8">
+            <div className="mb-8" data-tour-id="quote-form-basic-info">
               <h2 className="text-lg font-medium text-black mb-4">Thông tin cơ bản</h2>
               <div className="grid grid-cols-4 gap-4">
                 <div>
@@ -2230,13 +2463,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             </div>
 
             {/* Items Section */}
-            <div className="mb-8">
+            <div className="mb-8" data-tour-id="quote-form-items">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium text-black">Sản phẩm/Dịch vụ</h2>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={manualAdjustAll}
                   disabled={!rulesLoaded || manualAdjusting}
+                  data-tour-id="quote-form-area-rules"
                   className={`flex items-center px-3 py-2 rounded-md text-sm ${(!rulesLoaded || manualAdjusting) ? 'bg-purple-400 text-white opacity-70 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
                   title="Áp dụng điều chỉnh ngay cho tất cả dòng"
                 >
@@ -2285,7 +2519,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       {visibleColumns.unit && <div className="text-center">Đơn vị</div>}
                       {visibleColumns.unit_price && <div className="text-right">Đơn giá / m²</div>}
                       {visibleColumns.total_price && <div className="text-right">Thành tiền</div>}
-                      {visibleColumns.area && <div>Diện tích (m²)</div>}
+                      {visibleColumns.area && <div data-tour-id="quote-form-area-info">Diện tích (m²)</div>}
                       {visibleColumns.volume && <div>Thể tích (m³)</div>}
                       {visibleColumns.height && <div>Cao (mm)</div>}
                       {visibleColumns.length && <div>Dài (mm)</div>}
@@ -2582,7 +2816,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     />
                   </div>
                   <div className="flex items-end">
-                    <div className="w-full">
+                    <div className="w-full" data-tour-id="quote-form-totals">
                       <div className="flex justify-between items-center py-2 border-b border-gray-300">
                         <span className="text-sm font-medium text-black">Tạm tính:</span>
                         <span className="text-sm font-medium text-black">{formatCurrency(formData.subtotal)}</span>
