@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, 
@@ -15,7 +15,8 @@ import {
   Filter,
   Search,
   Eye,
-  BarChart3
+  BarChart3,
+  CircleHelp
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
@@ -61,6 +62,16 @@ export default function ProjectsDetailedReportPage() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [user, setUser] = useState<any>(null)
   const router = useRouter()
+
+  // Tour state
+  const REPORT_LIST_TOUR_STORAGE_KEY = 'report-list-tour-status-v1'
+  const [isReportListTourRunning, setIsReportListTourRunning] = useState(false)
+  const reportListTourRef = useRef<any>(null)
+  const reportListShepherdRef = useRef<any>(null)
+  const reportListTourAutoStartAttemptedRef = useRef(false)
+  type ReportListShepherdModule = typeof import('shepherd.js')
+  type ReportListShepherdType = ReportListShepherdModule & { Tour: new (...args: any[]) => any }
+  type ReportListShepherdTour = InstanceType<ReportListShepherdType['Tour']>
 
   useEffect(() => {
     checkUser()
@@ -238,6 +249,343 @@ export default function ProjectsDetailedReportPage() {
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  // Tour function
+  const startReportListTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+
+    if (reportListTourRef.current) {
+      reportListTourRef.current.cancel()
+      reportListTourRef.current = null
+    }
+
+    if (!reportListShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: ReportListShepherdType })?.default ?? (module as unknown as ReportListShepherdType)
+        reportListShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = reportListShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await waitForElement('[data-tour-id="report-list-header"]')
+    await waitForElement('[data-tour-id="report-summary-cards"]')
+    await waitForElement('[data-tour-id="report-summary-projects"]')
+    await waitForElement('[data-tour-id="report-summary-revenue"]')
+    await waitForElement('[data-tour-id="report-summary-costs"]')
+    await waitForElement('[data-tour-id="report-summary-profit"]')
+    await waitForElement('[data-tour-id="report-filters"]')
+    await waitForElement('[data-tour-id="report-filter-search"]')
+    await waitForElement('[data-tour-id="report-filter-status"]')
+    await waitForElement('[data-tour-id="report-filter-year"]')
+    await waitForElement('[data-tour-id="report-filter-month"]')
+    await waitForElement('[data-tour-id="report-filter-download"]')
+    await waitForElement('[data-tour-id="report-table"]')
+    await waitForElement('[data-tour-id="report-table-action-button"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'report-list-intro',
+      title: 'Hướng dẫn xem báo cáo chi phí dự án',
+      text: 'Trang này hiển thị danh sách tất cả các dự án với thông tin tài chính tổng hợp. Bạn có thể xem doanh thu, chi phí, lợi nhuận và biên lợi nhuận của từng dự án.',
+      attachTo: { element: '[data-tour-id="report-list-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-intro',
+      title: 'Khu vực tóm tắt',
+      text: 'Bốn thẻ tóm tắt cung cấp bức tranh tổng quan nhanh về danh sách dự án. Tiếp tục để xem chi tiết từng chỉ số.',
+      attachTo: { element: '[data-tour-id="report-summary-cards"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-projects',
+      title: 'Tổng dự án',
+      text: 'Hiển thị số lượng dự án trong danh sách sau khi áp dụng bộ lọc. Con số này giúp bạn biết phạm vi báo cáo hiện tại.',
+      attachTo: { element: '[data-tour-id="report-summary-projects"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-revenue',
+      title: 'Tổng doanh thu',
+      text: 'Tổng số tiền đã xuất hóa đơn (đã gửi/đã thanh toán) cho các dự án. Dựa trên dữ liệu hóa đơn thực tế.',
+      attachTo: { element: '[data-tour-id="report-summary-revenue"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-costs',
+      title: 'Tổng chi phí',
+      text: 'Tổng chi phí thực tế đã duyệt từ bảng Chi phí Dự án. Con số này giúp đánh giá mức chi tiêu.',
+      attachTo: { element: '[data-tour-id="report-summary-costs"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-profit',
+      title: 'Lợi nhuận',
+      text: 'Lợi nhuận = Doanh thu - Chi phí. Màu xanh thể hiện lãi, màu đỏ báo hiệu đang lỗ hoặc vượt chi.',
+      attachTo: { element: '[data-tour-id="report-summary-profit"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-filter-search',
+      title: 'Tìm kiếm dự án',
+      text: 'Nhập tên dự án, mã dự án hoặc tên khách hàng để lọc danh sách theo từ khóa.',
+      attachTo: { element: '[data-tour-id="report-filter-search"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-filter-status',
+      title: 'Lọc theo trạng thái',
+      text: 'Chọn trạng thái dự án (Lập kế hoạch, Đang hoạt động, Hoàn thành, ...) để phân tích nhóm dự án cụ thể.',
+      attachTo: { element: '[data-tour-id="report-filter-status"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-filter-time',
+      title: 'Chọn thời gian',
+      text: 'Sử dụng bộ lọc Năm và Tháng để giới hạn dữ liệu trong giai đoạn cần theo dõi. Chọn "Tất cả tháng" để xem toàn bộ năm.',
+      attachTo: { element: '[data-tour-id="report-filter-year"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-filter-month',
+      title: 'Lọc theo tháng',
+      text: 'Kết hợp với bộ lọc tháng để phân tích chi tiết từng giai đoạn. Ví dụ: Chọn Tháng 6 để xem kết quả riêng của tháng 6.',
+      attachTo: { element: '[data-tour-id="report-filter-month"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-filter-download',
+      title: 'Xuất báo cáo',
+      text: 'Nhấn "Tải Excel" để xuất dữ liệu đã lọc thành file Excel, bao gồm cả bảng tổng hợp và chi tiết từng dự án.',
+      attachTo: { element: '[data-tour-id="report-filter-download"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-table-overview',
+      title: 'Bảng danh sách dự án',
+      text: 'Bảng hiển thị chi tiết từng dự án sau khi áp dụng bộ lọc. Các cột bao gồm thông tin dự án, khách hàng, trạng thái, doanh thu, chi phí, lợi nhuận và biên lợi nhuận.',
+      attachTo: { element: '[data-tour-id="report-table"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-table-action',
+      title: 'Xem báo cáo chi tiết',
+      text: 'Nhấn "Xem chi tiết" để mở báo cáo chi tiết của dự án, bao gồm phân tích kế hoạch vs thực tế và các chi phí liên quan.',
+      attachTo: { element: '[data-tour-id="report-table-action-button"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn thành',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsReportListTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(REPORT_LIST_TOUR_STORAGE_KEY, 'completed')
+      }
+      reportListTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsReportListTourRunning(false)
+      reportListTourRef.current = null
+    })
+
+    reportListTourRef.current = tour
+    setIsReportListTourRunning(true)
+    tour.start()
+  }, [])
+
+  // Auto-start tour
+  useEffect(() => {
+    if (typeof window === 'undefined' || reportListTourAutoStartAttemptedRef.current) return
+
+    const hasCompletedTour = localStorage.getItem(REPORT_LIST_TOUR_STORAGE_KEY) === 'completed'
+    if (hasCompletedTour) {
+      reportListTourAutoStartAttemptedRef.current = true
+      return
+    }
+
+    if (!loading && projects.length >= 0) {
+      reportListTourAutoStartAttemptedRef.current = true
+      setTimeout(() => {
+        startReportListTour()
+      }, 800)
+    }
+  }, [loading, projects.length, startReportListTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      if (reportListTourRef.current) {
+        reportListTourRef.current.cancel()
+        reportListTourRef.current = null
+      }
+    }
+  }, [])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -802,12 +1150,22 @@ export default function ProjectsDetailedReportPage() {
         <StickyTopNav 
           title="Báo cáo Dự án Chi tiết" 
           subtitle="Phân tích chi tiết kế hoạch và thực tế của từng dự án"
-        />
+        >
+          <button
+            onClick={startReportListTour}
+            disabled={isReportListTourRunning}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Hướng dẫn xem báo cáo"
+          >
+            <CircleHelp className="h-4 w-4" />
+            Hướng dẫn
+          </button>
+        </StickyTopNav>
 
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour-id="report-summary-cards">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-summary-projects">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-teal-100 rounded-lg">
                   <FolderOpen className="h-5 w-5 text-teal-600" />
@@ -819,7 +1177,7 @@ export default function ProjectsDetailedReportPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-summary-revenue">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <DollarSign className="h-5 w-5 text-blue-600" />
@@ -831,7 +1189,7 @@ export default function ProjectsDetailedReportPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-summary-costs">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-100 rounded-lg">
                   <TrendingDown className="h-5 w-5 text-red-600" />
@@ -843,7 +1201,7 @@ export default function ProjectsDetailedReportPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-summary-profit">
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${totalActualProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
                   <TrendingUp className={`h-5 w-5 ${totalActualProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
@@ -859,11 +1217,11 @@ export default function ProjectsDetailedReportPage() {
           </div>
 
           {/* Filters */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6" data-tour-id="report-filters">
             <div className="flex flex-col gap-4">
               {/* Row 1: Search and Filters */}
               <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
+                <div className="flex-1" data-tour-id="report-filter-search">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
@@ -876,7 +1234,7 @@ export default function ProjectsDetailedReportPage() {
                   </div>
                 </div>
 
-                <div className="w-full sm:w-48">
+                <div className="w-full sm:w-48" data-tour-id="report-filter-status">
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -899,7 +1257,7 @@ export default function ProjectsDetailedReportPage() {
                   <span className="font-medium">Báo cáo theo tháng:</span>
                 </div>
 
-                <div className="w-full sm:w-32">
+                <div className="w-full sm:w-32" data-tour-id="report-filter-year">
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
@@ -911,7 +1269,7 @@ export default function ProjectsDetailedReportPage() {
                   </select>
                 </div>
 
-                <div className="w-full sm:w-40">
+                <div className="w-full sm:w-40" data-tour-id="report-filter-month">
                   <select
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
@@ -933,7 +1291,7 @@ export default function ProjectsDetailedReportPage() {
                   </select>
                 </div>
 
-                <div className="flex-1 flex justify-end">
+                <div className="flex-1 flex justify-end" data-tour-id="report-filter-download">
                   <button
                     onClick={handleDownloadExcel}
                     disabled={loading || filteredProjects.length === 0}
@@ -948,8 +1306,8 @@ export default function ProjectsDetailedReportPage() {
           </div>
 
           {/* Projects Table */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200" data-tour-id="report-table">
+            <div className="p-6 border-b border-gray-200" data-tour-id="report-list-header">
               <h2 className="text-xl font-semibold text-gray-900">Danh sách dự án</h2>
               <p className="text-gray-600">Click vào dự án để xem báo cáo chi tiết</p>
             </div>
@@ -1049,6 +1407,7 @@ export default function ProjectsDetailedReportPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <button
+                            data-tour-id="report-table-action-button"
                             onClick={() => router.push(`/reports/projects-detailed/${project.id}`)}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm"
                           >
