@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   X, 
   FileText, 
@@ -13,7 +13,8 @@ import {
   Send,
   Package,
   Search,
-  Eye
+  Eye,
+  CircleHelp
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -98,6 +99,16 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const [showProductModal, setShowProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
   const [showColumnDialog, setShowColumnDialog] = useState(false)
+  
+  // Tour state
+  const INVOICE_FORM_TOUR_STORAGE_KEY = 'invoice-form-tour-status-v1'
+  const [isInvoiceTourRunning, setIsInvoiceTourRunning] = useState(false)
+  const invoiceTourRef = useRef<any>(null)
+  const invoiceShepherdRef = useRef<any>(null)
+  const invoiceTourAutoStartAttemptedRef = useRef(false)
+  type InvoiceShepherdModule = typeof import('shepherd.js')
+  type InvoiceShepherdType = InvoiceShepherdModule & { Tour: new (...args: any[]) => any }
+  type InvoiceShepherdTour = InstanceType<InvoiceShepherdType['Tour']>
   const [visibleColumns, setVisibleColumns] = useState({
     name: true,
     description: false,
@@ -179,6 +190,164 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     calculateSubtotal()
   }, [items, formData.tax_rate, formData.discount_amount])
 
+  const startInvoiceTour = useCallback(async () => {
+    if (!isOpen || typeof window === 'undefined') return
+
+    if (invoiceTourRef.current) {
+      invoiceTourRef.current.cancel()
+      invoiceTourRef.current = null
+    }
+
+    if (!invoiceShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: InvoiceShepherdType })?.default ?? (module as unknown as InvoiceShepherdType)
+        invoiceShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = invoiceShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="invoice-form-basic-info"]')
+    await waitForElement('[data-tour-id="invoice-form-items"]')
+    await waitForElement('[data-tour-id="invoice-form-area-info"]')
+    await waitForElement('[data-tour-id="invoice-form-totals"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'invoice-form-intro',
+      title: 'Hướng dẫn tạo hóa đơn',
+      text: 'Form này giúp bạn tạo hóa đơn với tính năng tự động tính diện tích và điều chỉnh vật tư khi thay đổi kích thước sản phẩm.',
+      attachTo: { element: '[data-tour-id="invoice-form-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'invoice-form-basic-info',
+      title: 'Thông tin cơ bản',
+      text: 'Điền số hóa đơn, chọn khách hàng và dự án (nếu có). Hệ thống sẽ tự động tải danh sách dự án khi bạn chọn khách hàng.',
+      attachTo: { element: '[data-tour-id="invoice-form-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'invoice-form-items',
+      title: 'Thêm sản phẩm',
+      text: 'Nhấn "Chọn từ danh sách" để chọn sản phẩm có sẵn, hoặc "Thêm sản phẩm tự do" để nhập thủ công. Bạn có thể thêm nhiều sản phẩm vào hóa đơn.',
+      attachTo: { element: '[data-tour-id="invoice-form-items"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'invoice-form-area-info',
+      title: 'Nhập kích thước và diện tích',
+      text: 'Nhập chiều dài (mm) và chiều cao (mm) để hệ thống tự động tính diện tích (m²). Bạn cũng có thể nhập trực tiếp diện tích nếu đã biết.',
+      attachTo: { element: '[data-tour-id="invoice-form-area-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'invoice-form-totals',
+      title: 'Tổng tiền và lưu',
+      text: 'Hệ thống tự động tính tổng tiền dựa trên đơn giá và diện tích. Sau khi kiểm tra, nhấn "Lưu nháp" để lưu hoặc "Gửi ngay" để gửi hóa đơn cho khách hàng.',
+      attachTo: { element: '[data-tour-id="invoice-form-totals"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsInvoiceTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(INVOICE_FORM_TOUR_STORAGE_KEY, 'completed')
+      }
+      invoiceTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsInvoiceTourRunning(false)
+      invoiceTourRef.current = null
+    })
+
+    invoiceTourRef.current = tour
+    setIsInvoiceTourRunning(true)
+    tour.start()
+  }, [isOpen])
+
   // Fetch projects when customer changes
   useEffect(() => {
     if (formData.customer_id) {
@@ -188,6 +357,39 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       setFormData(prev => ({ ...prev, project_id: '' }))
     }
   }, [formData.customer_id])
+
+  // Auto-start tour when form opens for the first time
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isOpen) return
+    if (invoiceTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(INVOICE_FORM_TOUR_STORAGE_KEY)
+    invoiceTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startInvoiceTour()
+      }, 800)
+    }
+  }, [isOpen, startInvoiceTour])
+
+  // Reset tour auto-start when form closes
+  useEffect(() => {
+    if (!isOpen) {
+      invoiceTourAutoStartAttemptedRef.current = false
+    }
+  }, [isOpen])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      invoiceTourRef.current?.cancel()
+      invoiceTourRef.current?.destroy?.()
+      invoiceTourRef.current = null
+    }
+  }, [])
 
   const fetchCustomers = async () => {
     try {
@@ -711,24 +913,39 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       {/* Full screen container */}
       <div className="fixed inset-0 bg-white flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0" data-tour-id="invoice-form-header">
           <div className="flex items-center">
             <FileText className="h-6 w-6 text-black mr-3" />
             <h1 className="text-xl font-semibold text-black">Tạo hóa đơn mới</h1>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md"
-          >
-            <X className="h-5 w-5 text-gray-600" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => startInvoiceTour()}
+              disabled={isInvoiceTourRunning || submitting}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                isInvoiceTourRunning || submitting
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+              }`}
+              title="Bắt đầu hướng dẫn tạo hóa đơn"
+            >
+              <CircleHelp className="h-4 w-4" />
+              <span>Hướng dẫn</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-md"
+            >
+              <X className="h-5 w-5 text-gray-600" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="w-full">
             {/* Basic Information */}
-            <div className="mb-8">
+            <div className="mb-8" data-tour-id="invoice-form-basic-info">
               <h2 className="text-lg font-medium text-black mb-4">Thông tin cơ bản</h2>
               <div className="grid grid-cols-4 gap-4">
                 <div>
@@ -857,7 +1074,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             </div>
 
             {/* Items Section */}
-            <div className="mb-8">
+            <div className="mb-8" data-tour-id="invoice-form-items">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium text-black">Sản phẩm/Dịch vụ</h2>
                 <div className="flex items-center space-x-2">
@@ -909,7 +1126,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                     {visibleColumns.unit && <div>Đơn vị</div>}
                     {visibleColumns.unit_price && <div>Đơn giá / m²</div>}
                     {visibleColumns.total_price && <div>Thành tiền</div>}
-                    {visibleColumns.area && <div>Diện tích (m²)</div>}
+                    {visibleColumns.area && <div data-tour-id="invoice-form-area-info">Diện tích (m²)</div>}
                     {visibleColumns.volume && <div>Thể tích</div>}
                     {visibleColumns.height && <div>Cao</div>}
                     {visibleColumns.length && <div>Dài</div>}
@@ -1115,7 +1332,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                     </div>
                   </div>
                   <div className="flex items-end">
-                    <div className="w-full">
+                    <div className="w-full" data-tour-id="invoice-form-totals">
                       <div className="flex justify-between items-center py-2 border-b border-gray-300">
                         <span className="text-sm font-medium text-black">Tạm tính:</span>
                         <span className="text-sm font-medium text-black">{formatCurrency(formData.subtotal)}</span>
