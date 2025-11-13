@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   DollarSign, 
   Plus, 
@@ -20,13 +20,14 @@ import {
   ChevronRight,
   ChevronDown,
   Folder,
-  FileText
+  FileText,
+  CircleHelp
 } from 'lucide-react'
 import CreateProjectExpenseDialog from './CreateProjectExpenseDialog'
 import CreateExpenseObjectDialog from './CreateExpenseObjectDialog'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
-import SnapshotStatusIndicator from './SnapshotStatusIndicator'
 import { supabase } from '@/lib/supabase'
+import { getApiUrl } from '@/lib/apiUrl'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
 
 interface ProjectExpense {
@@ -63,6 +64,16 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [userRole, setUserRole] = useState<string>('employee')
+
+  // Tour state
+  const APPROVE_EXPENSE_TOUR_STORAGE_KEY = 'approve-expense-tour-status-v1'
+  const [isApproveExpenseTourRunning, setIsApproveExpenseTourRunning] = useState(false)
+  const approveExpenseTourRef = useRef<any>(null)
+  const approveExpenseShepherdRef = useRef<any>(null)
+  const approveExpenseTourAutoStartAttemptedRef = useRef(false)
+  type ApproveExpenseShepherdModule = typeof import('shepherd.js')
+  type ApproveExpenseShepherdType = ApproveExpenseShepherdModule & { Tour: new (...args: any[]) => any }
+  type ApproveExpenseShepherdTour = InstanceType<ApproveExpenseShepherdType['Tour']>
 
 // Filter expenses based on view mode and build tree
 const getFilteredExpenses = () => {
@@ -351,6 +362,162 @@ const handleApproveExpense = async (expenseId: string) => {
     }
   }
 }
+
+const startApproveExpenseTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+
+    if (approveExpenseTourRef.current) {
+      approveExpenseTourRef.current.cancel()
+      approveExpenseTourRef.current = null
+    }
+
+    if (!approveExpenseShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: ApproveExpenseShepherdType })?.default ?? (module as unknown as ApproveExpenseShepherdType)
+        approveExpenseShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = approveExpenseShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    // Try to find a planned expense with pending status
+    const pendingPlannedExpense = expenses.find(e => e.category === 'planned' && e.status === 'pending')
+    const hasApproveButton = pendingPlannedExpense ? await waitForElement(`[data-tour-id="approve-expense-button-${pendingPlannedExpense.id}"]`) : false
+
+    await waitForElement('[data-tour-id="expenses-list-header"]')
+    await waitForElement('[data-tour-id="expenses-list"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'approve-expense-intro',
+      title: 'Hướng dẫn duyệt chi phí kế hoạch thành chi phí thực tế',
+      text: 'Sau khi tạo chi phí kế hoạch, bạn có thể duyệt nó để chuyển thành chi phí thực tế. Khi duyệt, tất cả thông tin từ chi phí kế hoạch sẽ được sao chép sang chi phí thực tế.',
+      attachTo: { element: '[data-tour-id="expenses-list-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    if (hasApproveButton && pendingPlannedExpense) {
+      tour.addStep({
+        id: 'approve-expense-button',
+        title: 'Nút duyệt chi phí',
+        text: `Khi chi phí kế hoạch có trạng thái "Chờ duyệt" (pending), bạn sẽ thấy nút duyệt (biểu tượng ✓ màu xanh lá). Nhấn vào nút này để duyệt chi phí kế hoạch thành chi phí thực tế.`,
+        attachTo: { element: `[data-tour-id="approve-expense-button-${pendingPlannedExpense.id}"]`, on: 'left' },
+        buttons: [
+          {
+            text: 'Quay lại',
+            action: () => tour.back(),
+            classes: 'shepherd-button-secondary'
+          },
+          {
+            text: 'Tiếp tục',
+            action: () => tour.next()
+          }
+        ]
+      })
+    }
+
+    tour.addStep({
+      id: 'approve-expense-process',
+      title: 'Quy trình duyệt',
+      text: 'Khi nhấn nút duyệt:\n\n• Hệ thống sẽ tự động tạo chi phí thực tế mới từ chi phí kế hoạch\n• Tất cả thông tin (dự án, đối tượng chi phí, số tiền, hóa đơn) sẽ được sao chép\n• Trạng thái chi phí kế hoạch sẽ được cập nhật thành "Đã duyệt"\n• Chi phí thực tế sẽ xuất hiện trong tab "Thực tế"\n• Bạn có thể so sánh chi phí kế hoạch và thực tế trong tab "Tất cả"',
+      attachTo: { element: '[data-tour-id="expenses-list"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsApproveExpenseTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(APPROVE_EXPENSE_TOUR_STORAGE_KEY, 'completed')
+      }
+      approveExpenseTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsApproveExpenseTourRunning(false)
+      approveExpenseTourRef.current = null
+    })
+
+    approveExpenseTourRef.current = tour
+    setIsApproveExpenseTourRunning(true)
+    tour.start()
+  }, [expenses])
+
+  // Auto-start tour when expenses are loaded and there's at least one pending planned expense
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (approveExpenseTourAutoStartAttemptedRef.current) return
+    if (loading) return
+    if (expenses.length === 0) return
+
+    const storedStatus = localStorage.getItem(APPROVE_EXPENSE_TOUR_STORAGE_KEY)
+    if (storedStatus) return
+
+    // Check if there's at least one pending planned expense
+    const hasPendingPlannedExpense = expenses.some(e => e.category === 'planned' && e.status === 'pending')
+    if (!hasPendingPlannedExpense) return
+
+    approveExpenseTourAutoStartAttemptedRef.current = true
+    setTimeout(() => {
+      startApproveExpenseTour()
+    }, 1000)
+  }, [loading, expenses, startApproveExpenseTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      approveExpenseTourRef.current?.cancel()
+      approveExpenseTourRef.current?.destroy?.()
+      approveExpenseTourRef.current = null
+    }
+  }, [])
+
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createExpenseCategory, setCreateExpenseCategory] = useState<'planned' | 'actual'>('planned')
   const [showExpenseObjectModal, setShowExpenseObjectModal] = useState(false)
@@ -690,11 +857,6 @@ const handleApproveExpense = async (expenseId: string) => {
     onCreateExpense()
   }
 
-  const handleRestoreSuccess = async () => {
-    // Reload data after successful restore
-    await fetchProjectExpenses()
-  }
-
   const handleCloseModal = () => {
     setShowCreateModal(false)
     setEditExpense(null)
@@ -761,7 +923,22 @@ const handleApproveExpense = async (expenseId: string) => {
 return (
   <div className="space-y-6">
     {/* Action Buttons */}
-    <div className="flex justify-end space-x-2">
+    <div className="flex justify-end space-x-2" data-tour-id="expenses-list-header">
+      {viewMode === 'planned' && (
+        <button
+          onClick={() => startApproveExpenseTour()}
+          disabled={isApproveExpenseTourRunning}
+          className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+            isApproveExpenseTourRunning
+              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+              : 'text-white bg-green-600 hover:bg-green-700'
+          }`}
+          title="Bắt đầu hướng dẫn duyệt chi phí kế hoạch"
+        >
+          <CircleHelp className="h-4 w-4" />
+          <span>Hướng dẫn duyệt</span>
+        </button>
+      )}
       <button
         onClick={() => setShowExpenseObjectModal(true)}
         className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -971,7 +1148,7 @@ return (
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" data-tour-id="expenses-list">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -1198,6 +1375,7 @@ return (
                                 onClick={() => handleApprove(expense.id)}
                                 className="text-green-600 hover:text-green-900 p-1"
                                 title="Duyệt thành chi phí thực tế"
+                                data-tour-id={`approve-expense-button-${expense.id}`}
                               >
                                 <CheckCircle className="h-4 w-4" />
                               </button>
@@ -1246,18 +1424,6 @@ return (
                             )}
                           </>
                         )}
-                        
-    {/* Snapshot Status Indicator for parent expenses only */}
-    {console.log(`Expense ${expense.id}: level=${expense.level}, category=${expense.category}`)}
-    {(!expense.level || expense.level === 0) && (
-      <SnapshotStatusIndicator
-        parentId={expense.id}
-        tableName={expense.category === 'planned' ? 'project_expenses_quote' : 'project_expenses'}
-        projectId={expense.project_id}
-        onRestore={handleRestoreSuccess}
-        className="inline-flex"
-      />
-    )}
                         
                         <button 
                           className="text-gray-600 hover:text-gray-900 p-1"

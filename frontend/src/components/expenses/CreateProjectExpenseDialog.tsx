@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { 
   X, 
   Save, 
@@ -18,7 +18,8 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  Eye
+  Eye,
+  CircleHelp
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -199,6 +200,26 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     amounts: true,
     additional: false
   })
+
+  // Tour state for planned expenses
+  const PLANNED_EXPENSE_TOUR_STORAGE_KEY = 'planned-expense-tour-status-v1'
+  const [isPlannedExpenseTourRunning, setIsPlannedExpenseTourRunning] = useState(false)
+  const plannedExpenseTourRef = useRef<any>(null)
+  const plannedExpenseShepherdRef = useRef<any>(null)
+  const plannedExpenseTourAutoStartAttemptedRef = useRef(false)
+  type PlannedExpenseShepherdModule = typeof import('shepherd.js')
+  type PlannedExpenseShepherdType = PlannedExpenseShepherdModule & { Tour: new (...args: any[]) => any }
+  type PlannedExpenseShepherdTour = InstanceType<PlannedExpenseShepherdType['Tour']>
+
+  // Tour state for actual expenses
+  const ACTUAL_EXPENSE_TOUR_STORAGE_KEY = 'actual-expense-tour-status-v1'
+  const [isActualExpenseTourRunning, setIsActualExpenseTourRunning] = useState(false)
+  const actualExpenseTourRef = useRef<any>(null)
+  const actualExpenseShepherdRef = useRef<any>(null)
+  const actualExpenseTourAutoStartAttemptedRef = useRef(false)
+  type ActualExpenseShepherdModule = typeof import('shepherd.js')
+  type ActualExpenseShepherdType = ActualExpenseShepherdModule & { Tour: new (...args: any[]) => any }
+  type ActualExpenseShepherdTour = InstanceType<ActualExpenseShepherdType['Tour']>
 
   // State for cost detail modal
   const [showCostDetailModal, setShowCostDetailModal] = useState(false)
@@ -2460,6 +2481,388 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       alert('Lỗi khi tạo chi phí dự kiến!')
     }
   }
+
+  const startPlannedExpenseTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+    if (category !== 'planned') return
+
+    if (plannedExpenseTourRef.current) {
+      plannedExpenseTourRef.current.cancel()
+      plannedExpenseTourRef.current = null
+    }
+
+    if (!plannedExpenseShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: PlannedExpenseShepherdType })?.default ?? (module as unknown as PlannedExpenseShepherdType)
+        plannedExpenseShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = plannedExpenseShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="planned-expense-header"]')
+    await waitForElement('[data-tour-id="planned-expense-basic-info"]')
+    await waitForElement('[data-tour-id="planned-expense-objects"]')
+    await waitForElement('[data-tour-id="planned-expense-amounts"]')
+    await waitForElement('[data-tour-id="planned-expense-submit"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'planned-expense-intro',
+      title: 'Hướng dẫn tạo chi phí kế hoạch',
+      text: 'Chi phí kế hoạch là chi phí dự kiến cho dự án, giúp bạn lập kế hoạch và theo dõi ngân sách. Form này cho phép bạn tạo chi phí kế hoạch với đầy đủ thông tin về dự án, đối tượng chi phí và số tiền.',
+      attachTo: { element: '[data-tour-id="planned-expense-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-basic-info',
+      title: 'Thông tin cơ bản',
+      text: 'Điền các thông tin cơ bản:\n• Dự án (bắt buộc): Chọn dự án từ danh sách\n• Nhân viên: Tự động điền nhân viên đang đăng nhập\n• Chi phí cha: Chọn chi phí kế hoạch cha nếu có (để tạo cấu trúc phân cấp)\n• Loại chi phí: Kế hoạch (đã tự động chọn)\n• Ngày chi phí (bắt buộc): Chọn ngày phát sinh chi phí\n• Vai trò: Tự động điền vai trò của nhân viên',
+      attachTo: { element: '[data-tour-id="planned-expense-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-objects',
+      title: 'Đối tượng chi phí',
+      text: 'Chọn đối tượng chi phí (có thể chọn nhiều):\n• Nhấn vào ô chọn để mở danh sách đối tượng chi phí\n• Chọn một hoặc nhiều đối tượng chi phí để phân bổ ngân sách\n• Hệ thống sẽ tự động tải đối tượng chi phí từ báo giá nếu có\n• Bạn có thể chọn đối tượng chi phí cấp 1, 2, hoặc 3',
+      attachTo: { element: '[data-tour-id="planned-expense-objects"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-amounts',
+      title: 'Phân bổ số tiền',
+      text: 'Phân bổ số tiền cho các đối tượng chi phí:\n• Nhập số tiền cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Bạn có thể phân bổ theo tỷ lệ phần trăm hoặc số tiền cụ thể\n• Có thể thêm hóa đơn/đơn hàng từ báo giá nếu có',
+      attachTo: { element: '[data-tour-id="planned-expense-amounts"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-submit',
+      title: 'Lưu chi phí kế hoạch',
+      text: 'Sau khi điền đầy đủ thông tin:\n• Kiểm tra lại các thông tin đã nhập\n• Nhấn nút "Tạo chi phí kế hoạch" để lưu\n• Chi phí kế hoạch sẽ được thêm vào dự án và có thể được duyệt sau\n• Bạn có thể xem chi phí kế hoạch trong danh sách chi phí dự án',
+      attachTo: { element: '[data-tour-id="planned-expense-submit"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsPlannedExpenseTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(PLANNED_EXPENSE_TOUR_STORAGE_KEY, 'completed')
+      }
+      plannedExpenseTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsPlannedExpenseTourRunning(false)
+      plannedExpenseTourRef.current = null
+    })
+
+    plannedExpenseTourRef.current = tour
+    setIsPlannedExpenseTourRunning(true)
+    tour.start()
+  }, [category])
+
+  // Auto-start tour when dialog opens for the first time (only for planned expenses)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (category !== 'planned') return
+    if (!isOpen) return
+    if (plannedExpenseTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(PLANNED_EXPENSE_TOUR_STORAGE_KEY)
+    plannedExpenseTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startPlannedExpenseTour()
+      }, 1000)
+    }
+  }, [isOpen, category, startPlannedExpenseTour])
+
+  // Reset tour auto-start when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      plannedExpenseTourAutoStartAttemptedRef.current = false
+    }
+  }, [isOpen])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      plannedExpenseTourRef.current?.cancel()
+      plannedExpenseTourRef.current?.destroy?.()
+      plannedExpenseTourRef.current = null
+      actualExpenseTourRef.current?.cancel()
+      actualExpenseTourRef.current?.destroy?.()
+      actualExpenseTourRef.current = null
+    }
+  }, [])
+
+  const startActualExpenseTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+    if (category !== 'actual') return
+
+    if (actualExpenseTourRef.current) {
+      actualExpenseTourRef.current.cancel()
+      actualExpenseTourRef.current = null
+    }
+
+    if (!actualExpenseShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: ActualExpenseShepherdType })?.default ?? (module as unknown as ActualExpenseShepherdType)
+        actualExpenseShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = actualExpenseShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="actual-expense-header"]')
+    await waitForElement('[data-tour-id="actual-expense-basic-info"]')
+    await waitForElement('[data-tour-id="actual-expense-objects"]')
+    await waitForElement('[data-tour-id="actual-expense-amounts"]')
+    await waitForElement('[data-tour-id="actual-expense-submit"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'actual-expense-intro',
+      title: 'Hướng dẫn tạo chi phí thực tế',
+      text: 'Chi phí thực tế là chi phí đã phát sinh trong quá trình thực hiện dự án. Form này cho phép bạn tạo chi phí thực tế với đầy đủ thông tin về dự án, đối tượng chi phí và số tiền đã chi.',
+      attachTo: { element: '[data-tour-id="actual-expense-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-basic-info',
+      title: 'Thông tin cơ bản',
+      text: 'Điền các thông tin cơ bản:\n• Dự án (bắt buộc): Chọn dự án từ danh sách\n• Nhân viên: Tự động điền nhân viên đang đăng nhập\n• Chi phí cha: Chọn chi phí thực tế cha nếu có (để tạo cấu trúc phân cấp)\n• Loại chi phí: Thực tế (đã tự động chọn)\n• Ngày chi phí (bắt buộc): Chọn ngày phát sinh chi phí\n• Vai trò: Tự động điền vai trò của nhân viên\n• Cập nhật chi phí đã có: Có thể chọn chi phí thực tế đã có để cập nhật',
+      attachTo: { element: '[data-tour-id="actual-expense-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-objects',
+      title: 'Đối tượng chi phí',
+      text: 'Chọn đối tượng chi phí (có thể chọn nhiều):\n• Nhấn vào ô chọn để mở danh sách đối tượng chi phí\n• Chọn một hoặc nhiều đối tượng chi phí để phân bổ chi phí thực tế\n• Hệ thống sẽ tự động tải đối tượng chi phí từ hóa đơn nếu có\n• Bạn có thể chọn đối tượng chi phí cấp 1, 2, hoặc 3',
+      attachTo: { element: '[data-tour-id="actual-expense-objects"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-amounts',
+      title: 'Phân bổ số tiền',
+      text: 'Phân bổ số tiền cho các đối tượng chi phí:\n• Nhập số tiền thực tế đã chi cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Bạn có thể phân bổ theo tỷ lệ phần trăm hoặc số tiền cụ thể\n• Có thể thêm hóa đơn/đơn hàng từ hóa đơn nếu có',
+      attachTo: { element: '[data-tour-id="actual-expense-amounts"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-submit',
+      title: 'Lưu chi phí thực tế',
+      text: 'Sau khi điền đầy đủ thông tin:\n• Kiểm tra lại các thông tin đã nhập\n• Nhấn nút "Tạo chi phí thực tế" để lưu\n• Chi phí thực tế sẽ được thêm vào dự án và có thể được duyệt sau\n• Bạn có thể xem chi phí thực tế trong danh sách chi phí dự án',
+      attachTo: { element: '[data-tour-id="actual-expense-submit"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsActualExpenseTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(ACTUAL_EXPENSE_TOUR_STORAGE_KEY, 'completed')
+      }
+      actualExpenseTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsActualExpenseTourRunning(false)
+      actualExpenseTourRef.current = null
+    })
+
+    actualExpenseTourRef.current = tour
+    setIsActualExpenseTourRunning(true)
+    tour.start()
+  }, [category])
+
+  // Auto-start tour when dialog opens for the first time (only for actual expenses)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (category !== 'actual') return
+    if (!isOpen) return
+    if (actualExpenseTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(ACTUAL_EXPENSE_TOUR_STORAGE_KEY)
+    actualExpenseTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startActualExpenseTour()
+      }, 1000)
+    }
+  }, [isOpen, category, startActualExpenseTour])
+
+  // Reset tour auto-start when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      actualExpenseTourAutoStartAttemptedRef.current = false
+    }
+  }, [isOpen])
   
   // ========================================
   // FUNCTION TẠO CHI PHÍ THỰC TẾ (ACTUAL)
@@ -3571,7 +3974,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="bg-white shadow-2xl border border-gray-200 min-h-full w-full animate-slide-in-right flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50" data-tour-id={category === 'planned' ? 'planned-expense-header' : 'actual-expense-header'}>
           <div className="flex items-center space-x-3">
             <div className={`p-2 rounded-lg ${category === 'actual' ? 'bg-green-100' : 'bg-blue-100'}`}>
               <DollarSign className={`h-6 w-6 ${category === 'actual' ? 'text-green-600' : 'text-blue-600'}`} />
@@ -3595,6 +3998,36 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           </div>
           </div>
           <div className="flex items-center space-x-2">
+            {category === 'planned' && (
+              <button
+                onClick={() => startPlannedExpenseTour()}
+                disabled={isPlannedExpenseTourRunning || submitting}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                  isPlannedExpenseTourRunning || submitting
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    : 'text-white bg-blue-600 hover:bg-blue-700'
+                }`}
+                title="Bắt đầu hướng dẫn tạo chi phí kế hoạch"
+              >
+                <CircleHelp className="h-4 w-4" />
+                <span>Hướng dẫn</span>
+              </button>
+            )}
+            {category === 'actual' && (
+              <button
+                onClick={() => startActualExpenseTour()}
+                disabled={isActualExpenseTourRunning || submitting}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                  isActualExpenseTourRunning || submitting
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    : 'text-white bg-green-600 hover:bg-green-700'
+                }`}
+                title="Bắt đầu hướng dẫn tạo chi phí thực tế"
+              >
+                <CircleHelp className="h-4 w-4" />
+                <span>Hướng dẫn</span>
+              </button>
+            )}
             {/* Update existing expense button */}
             {category === 'actual' && !selectedExpenseToUpdate && formData.project_id && (
               <button
@@ -3618,7 +4051,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         <div className="flex-1 overflow-hidden p-6 text-gray-900 flex flex-col">
           <div className="space-y-6 flex-none">
             {/* Basic Information Section */}
-            <div className="bg-white border border-gray-200 rounded-lg">
+            <div className="bg-white border border-gray-200 rounded-lg" data-tour-id={category === 'planned' ? 'planned-expense-basic-info' : 'actual-expense-basic-info'}>
               <button
                 onClick={() => toggleSection('basic')}
                 className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
@@ -3895,7 +4328,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </p>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4" data-tour-id={category === 'planned' ? 'planned-expense-objects' : 'actual-expense-objects'}>
                     <label className="block text-base font-semibold text-gray-900 mb-3">
                       <div className="flex items-center space-x-2">
                         <div className="p-1.5 bg-blue-100 rounded-lg">
@@ -4021,7 +4454,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               )}
 
               {/* Invoice-like details full width */}
-              <div className="h-full overflow-auto bg-white border border-gray-200 rounded-lg">
+              <div className="h-full overflow-auto bg-white border border-gray-200 rounded-lg" data-tour-id={category === 'planned' ? 'planned-expense-amounts' : 'actual-expense-amounts'}>
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Chi tiết hóa đơn</h3>
@@ -4845,6 +5278,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
               }`}
               title={getValidationStatus()?.details || ''}
+              data-tour-id={category === 'planned' ? 'planned-expense-submit' : 'actual-expense-submit'}
             >
               <Save className="h-4 w-4" />
               <span>

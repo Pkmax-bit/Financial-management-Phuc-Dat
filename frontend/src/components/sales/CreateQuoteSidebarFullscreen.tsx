@@ -436,13 +436,17 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   // Hide sidebar when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      hideSidebar(true)
+      // Use setTimeout to ensure sidebar is hidden after component renders
+      const timer = setTimeout(() => {
+        hideSidebar(true)
+      }, 0)
+      return () => {
+        clearTimeout(timer)
+        hideSidebar(false)
+      }
     } else {
       hideSidebar(false)
-    }
-    // Cleanup: restore sidebar when component unmounts
-    return () => {
-      hideSidebar(false)
+      return undefined
     }
   }, [isOpen, hideSidebar])
 
