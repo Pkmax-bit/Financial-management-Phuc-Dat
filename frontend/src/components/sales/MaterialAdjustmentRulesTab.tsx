@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, RefreshCw, Save, Edit2, Check, X } from 'lucide-react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { Plus, Trash2, RefreshCw, Save, Edit2, Check, X, CircleHelp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 type DimensionType = 'area' | 'volume' | 'height' | 'length' | 'depth' | 'quantity'
@@ -51,6 +51,16 @@ export default function MaterialAdjustmentRulesTab() {
   const [search, setSearch] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
+
+  // Tour state
+  const RULE_FORM_TOUR_STORAGE_KEY = 'rule-form-tour-status-v1'
+  const [isRuleTourRunning, setIsRuleTourRunning] = useState(false)
+  const ruleTourRef = useRef<any>(null)
+  const ruleShepherdRef = useRef<any>(null)
+  const ruleTourAutoStartAttemptedRef = useRef(false)
+  type RuleShepherdModule = typeof import('shepherd.js')
+  type RuleShepherdType = RuleShepherdModule & { Tour: new (...args: any[]) => any }
+  type RuleShepherdTour = InstanceType<RuleShepherdType['Tour']>
 
   const filteredRules = useMemo(() => {
     const s = search.trim().toLowerCase()
@@ -252,17 +262,252 @@ export default function MaterialAdjustmentRulesTab() {
     }
   }
 
+  const startRuleTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+
+    if (ruleTourRef.current) {
+      ruleTourRef.current.cancel()
+      ruleTourRef.current = null
+    }
+
+    if (!ruleShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: RuleShepherdType })?.default ?? (module as unknown as RuleShepherdType)
+        ruleShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = ruleShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="rule-form-header"]')
+    await waitForElement('[data-tour-id="rule-form-add-button"]')
+    await waitForElement('[data-tour-id="rule-form-table"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'rule-form-intro',
+      title: 'Hướng dẫn tạo quy tắc điều chỉnh vật tư',
+      text: 'Quy tắc điều chỉnh vật tư giúp tự động điều chỉnh số lượng/giá vật tư khi kích thước sản phẩm thay đổi. Ví dụ: Khi diện tích tăng 10%, vật tư A tăng 5%.',
+      attachTo: { element: '[data-tour-id="rule-form-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-form-add',
+      title: 'Thêm quy tắc mới',
+      text: 'Nhấn nút "Thêm quy tắc" để tạo quy tắc mới. Một dòng mới sẽ xuất hiện ở đầu bảng để bạn điền thông tin.',
+      attachTo: { element: '[data-tour-id="rule-form-add-button"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-form-basic-fields',
+      title: 'Thông tin cơ bản',
+      text: 'Điền các thông tin cơ bản:\n• Vật tư: Chọn vật tư sẽ được điều chỉnh\n• Loại sản phẩm: Chọn loại sản phẩm áp dụng (để trống = áp dụng cho tất cả)\n• Kích thước: Chọn loại kích thước theo dõi (diện tích, thể tích, chiều cao, dài, sâu, số lượng)',
+      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-form-change-settings',
+      title: 'Cài đặt thay đổi',
+      text: 'Cấu hình điều kiện kích hoạt:\n• Loại thay đổi: Phần trăm (%) hoặc Tuyệt đối (số cụ thể)\n• Ngưỡng: Giá trị ngưỡng để kích hoạt quy tắc (ví dụ: 10 = 10% hoặc 5m²)\n• Chiều thay đổi: Tăng, Giảm, hoặc Cả hai',
+      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-form-adjustment-settings',
+      title: 'Cài đặt điều chỉnh',
+      text: 'Cấu hình cách điều chỉnh:\n• Cách điều chỉnh: Phần trăm (áp dụng % vào số lượng) hoặc Tuyệt đối (cộng/trừ trực tiếp)\n• Giá trị điều chỉnh: Giá trị áp dụng (có thể âm để giảm)\n• Tối đa điều chỉnh (%): Giới hạn tối đa cho điều chỉnh phần trăm\n• Tối đa điều chỉnh (abs): Giới hạn tối đa cho điều chỉnh tuyệt đối',
+      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-form-other-fields',
+      title: 'Thông tin bổ sung',
+      text: 'Điền thông tin bổ sung:\n• Ưu tiên: Số nhỏ hơn = ưu tiên cao hơn (khi có nhiều quy tắc)\n• Tên: Tên quy tắc (tùy chọn)\n• Mô tả: Mô tả chi tiết quy tắc (tùy chọn)\n• Kích hoạt: Bật/tắt quy tắc',
+      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-form-save',
+      title: 'Lưu quy tắc',
+      text: 'Sau khi điền đầy đủ thông tin, nhấn nút "Lưu" (✓) để lưu quy tắc. Nhấn "Xóa" (🗑️) để xóa quy tắc không cần thiết. Quy tắc sẽ tự động áp dụng khi tạo báo giá nếu điều kiện được thỏa mãn.',
+      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsRuleTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(RULE_FORM_TOUR_STORAGE_KEY, 'completed')
+      }
+      ruleTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsRuleTourRunning(false)
+      ruleTourRef.current = null
+    })
+
+    ruleTourRef.current = tour
+    setIsRuleTourRunning(true)
+    tour.start()
+  }, [])
+
+  // Auto-start tour when component is first rendered
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (ruleTourAutoStartAttemptedRef.current) return
+    if (loading) return
+
+    const storedStatus = localStorage.getItem(RULE_FORM_TOUR_STORAGE_KEY)
+    ruleTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startRuleTour()
+      }, 800)
+    }
+  }, [loading, startRuleTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      ruleTourRef.current?.cancel()
+      ruleTourRef.current?.destroy?.()
+      ruleTourRef.current = null
+    }
+  }, [])
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg">
       {/* Header - Responsive */}
-      <div className="px-4 py-3 border-b">
+      <div className="px-4 py-3 border-b" data-tour-id="rule-form-header">
         <div className="flex flex-col md:flex-row md:items-center gap-3">
           <div className="flex flex-wrap gap-2">
             <button onClick={refresh} className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-black bg-white hover:bg-gray-50">
               <RefreshCw className="h-4 w-4 mr-2" /> Làm mới
             </button>
-            <button onClick={addBlank} className="inline-flex items-center px-3 py-2 border border-transparent rounded-md text-sm text-white bg-blue-600 hover:bg-blue-700">
+            <button 
+              onClick={addBlank} 
+              className="inline-flex items-center px-3 py-2 border border-transparent rounded-md text-sm text-white bg-blue-600 hover:bg-blue-700"
+              data-tour-id="rule-form-add-button"
+            >
               <Plus className="h-4 w-4 mr-2" /> Thêm quy tắc
+            </button>
+            <button 
+              onClick={() => startRuleTour()} 
+              disabled={isRuleTourRunning || loading}
+              className={`inline-flex items-center px-3 py-2 border rounded-md text-sm font-semibold transition-colors ${
+                isRuleTourRunning || loading
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed border-gray-300'
+                  : 'text-white bg-blue-600 hover:bg-blue-700 border-transparent'
+              }`}
+              title="Bắt đầu hướng dẫn tạo quy tắc"
+            >
+              <CircleHelp className="h-4 w-4 mr-2" /> Hướng dẫn tạo quy tắc
             </button>
             <button onClick={() => setShowHelp(true)} className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-black bg-white hover:bg-gray-50">
               <HelpIcon /> Hướng dẫn
@@ -275,7 +520,7 @@ export default function MaterialAdjustmentRulesTab() {
       </div>
 
       {/* Desktop Table - Hidden on mobile */}
-      <div className="hidden md:block overflow-auto">
+      <div className="hidden md:block overflow-auto" data-tour-id="rule-form-table">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
