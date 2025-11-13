@@ -449,7 +449,7 @@ export default function QuoteEmailPreviewModal({
     tour.addStep({
       id: 'email-form-preview',
       title: 'Xem trước email',
-      text: 'Bên trái hiển thị preview email sẽ được gửi cho khách hàng. Preview sẽ tự động cập nhật khi bạn chỉnh sửa các thông tin bên phải.',
+      text: 'Bên trái hiển thị preview email sẽ được gửi cho khách hàng. Preview sẽ tự động cập nhật khi bạn chỉnh sửa các thông tin bên phải.\n\nNội dung preview bao gồm:\n• Logo công ty\n• Thông tin công ty\n• Thông tin khách hàng\n• Chi tiết báo giá (sản phẩm, số lượng, đơn giá, thành tiền)\n• Phương thức thanh toán\n• Ghi chú\n• Thông tin ngân hàng',
       attachTo: { element: '[data-tour-id="email-form-preview"]', on: 'left' },
       buttons: [
         {
@@ -467,7 +467,7 @@ export default function QuoteEmailPreviewModal({
     tour.addStep({
       id: 'email-form-edit-payment',
       title: 'Chỉnh sửa phương thức thanh toán',
-      text: 'Bạn có thể chỉnh sửa các đợt thanh toán, số tiền và đánh dấu đã nhận. Nhấn "+" để thêm đợt mới, hoặc "X" để xóa đợt.',
+      text: 'Các thao tác có thể thực hiện:\n• Thêm đợt thanh toán: Nhấn nút "+" để thêm đợt mới\n• Xóa đợt: Nhấn nút "X" để xóa đợt\n• Chỉnh sửa đợt:\n  - Mô tả: Mô tả đợt thanh toán (ví dụ: "Cọc đợt 1", "Còn lại")\n  - Số tiền: Số tiền của đợt (VND)\n  - Đã nhận: Đánh dấu nếu đã nhận tiền\n\nLưu ý: Bạn có thể chỉnh sửa các đợt thanh toán, số tiền và đánh dấu đã nhận.',
       attachTo: { element: '[data-tour-id="email-form-edit-payment"]', on: 'left' },
       buttons: [
         {
@@ -521,7 +521,7 @@ export default function QuoteEmailPreviewModal({
     tour.addStep({
       id: 'email-form-send',
       title: 'Gửi email',
-      text: 'Sau khi kiểm tra preview và chỉnh sửa xong, nhấn "Gửi email" để gửi email báo giá cho khách hàng. Email sẽ được gửi đến địa chỉ email của khách hàng đã đăng ký.',
+      text: 'Sau khi kiểm tra preview và chỉnh sửa xong, nhấn "Gửi email" để gửi email báo giá cho khách hàng.\n\nKết quả:\n• Email sẽ được gửi đến địa chỉ email của khách hàng đã đăng ký\n• Trạng thái báo giá sẽ được cập nhật thành "Đã gửi"\n• Thông báo xác nhận sẽ hiển thị',
       attachTo: { element: '[data-tour-id="email-form-send"]', on: 'top' },
       buttons: [
         {

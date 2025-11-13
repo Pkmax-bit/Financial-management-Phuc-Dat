@@ -284,13 +284,15 @@ const handleApproveExpense = async (expenseId: string) => {
       console.log('Quote data to approve:', quoteData)
       
       // Create actual expense from quote
+      // CRITICAL: Status must be 'pending' by default, not 'approved'
+      // Only the approve button in the actions column should change status to 'approved'
       const newExpense: any = {
         id: crypto.randomUUID(), // Generate new UUID for id
         project_id: quoteData.project_id,
         description: quoteData.description,
         amount: quoteData.amount,
         expense_date: quoteData.expense_date,
-        status: 'approved',
+        status: 'pending', // Default to pending - must be approved via approve button
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -456,7 +458,7 @@ const startApproveExpenseTour = useCallback(async () => {
     tour.addStep({
       id: 'approve-expense-process',
       title: 'Quy trình duyệt',
-      text: 'Khi nhấn nút duyệt:\n\n• Hệ thống sẽ tự động tạo chi phí thực tế mới từ chi phí kế hoạch\n• Tất cả thông tin (dự án, đối tượng chi phí, số tiền, hóa đơn) sẽ được sao chép\n• Trạng thái chi phí kế hoạch sẽ được cập nhật thành "Đã duyệt"\n• Chi phí thực tế sẽ xuất hiện trong tab "Thực tế"\n• Bạn có thể so sánh chi phí kế hoạch và thực tế trong tab "Tất cả"',
+      text: 'Khi nhấn nút duyệt, hệ thống sẽ tự động:\n\n1. Tạo chi phí thực tế mới: Tạo chi phí thực tế mới từ chi phí kế hoạch\n2. Sao chép thông tin: Tất cả thông tin sẽ được sao chép:\n   - Dự án\n   - Đối tượng chi phí\n   - Số tiền\n   - Hóa đơn/đơn hàng\n   - Ghi chú\n3. Cập nhật trạng thái: Trạng thái chi phí kế hoạch sẽ được cập nhật thành "Đã duyệt"\n4. Hiển thị kết quả:\n   - Chi phí thực tế sẽ xuất hiện trong tab "Thực tế"\n   - Bạn có thể so sánh chi phí kế hoạch và thực tế trong tab "Tất cả"\n\nLưu ý:\n• Quá trình này không thể hoàn tác\n• Chi phí kế hoạch vẫn giữ nguyên trong danh sách với trạng thái "Đã duyệt"',
       attachTo: { element: '[data-tour-id="expenses-list"]', on: 'top' },
       buttons: [
         {

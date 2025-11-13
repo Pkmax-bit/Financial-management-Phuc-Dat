@@ -438,12 +438,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (isOpen) {
       // Use setTimeout to ensure sidebar is hidden after component renders
       const timer = setTimeout(() => {
-        hideSidebar(true)
+      hideSidebar(true)
       }, 0)
       return () => {
         clearTimeout(timer)
-        hideSidebar(false)
-      }
+      hideSidebar(false)
+    }
     } else {
       hideSidebar(false)
       return undefined
@@ -670,6 +670,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
     await waitForElement('[data-tour-id="quote-form-basic-info"]')
     await waitForElement('[data-tour-id="quote-form-items"]')
+    await waitForElement('[data-tour-id="quote-select-product-button"]')
     await waitForElement('[data-tour-id="quote-form-area-info"]')
     await waitForElement('[data-tour-id="quote-form-totals"]')
 
@@ -685,7 +686,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     tour.addStep({
       id: 'quote-form-intro',
       title: 'Hướng dẫn tạo báo giá',
-      text: 'Form này giúp bạn tạo báo giá với tính năng tự động tính diện tích và điều chỉnh vật tư khi thay đổi kích thước sản phẩm.',
+      text: 'Tạo báo giá với tính năng tự động tính diện tích và điều chỉnh vật tư khi thay đổi kích thước.',
       attachTo: { element: '[data-tour-id="quote-form-header"]', on: 'bottom' },
       buttons: [
         {
@@ -703,7 +704,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     tour.addStep({
       id: 'quote-form-basic-info',
       title: 'Thông tin cơ bản',
-      text: 'Điền số báo giá, chọn khách hàng và dự án (nếu có). Hệ thống sẽ tự động tải danh sách dự án khi bạn chọn khách hàng.',
+      text: 'Điền: Số báo giá, Khách hàng (bắt buộc), Dự án (tùy chọn), Ngày phát hành, Ngày hết hạn, Ghi chú.\n\nLưu ý: Dự án tự động tải khi chọn khách hàng.',
       attachTo: { element: '[data-tour-id="quote-form-basic-info"]', on: 'top' },
       buttons: [
         {
@@ -721,8 +722,26 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     tour.addStep({
       id: 'quote-form-items',
       title: 'Thêm sản phẩm',
-      text: 'Nhấn "Chọn từ danh sách" để chọn sản phẩm có sẵn, hoặc "Thêm sản phẩm tự do" để nhập thủ công. Bạn có thể thêm nhiều sản phẩm vào báo giá.',
+      text: 'Cách thêm: "Chọn từ danh sách" hoặc "Thêm sản phẩm tự do".\n\nĐiền: Tên, Mô tả, Số lượng, Đơn vị, Đơn giá.\nThành tiền = Đơn giá × Số lượng × Diện tích (tự động).',
       attachTo: { element: '[data-tour-id="quote-form-items"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-select-product',
+      title: 'Chọn sản phẩm từ danh sách',
+      text: 'Nhấn nút "Chọn từ danh sách" để mở modal chọn sản phẩm.\n\nTrong modal:\n• Tìm kiếm sản phẩm theo tên, mô tả hoặc loại\n• Chọn sản phẩm bằng checkbox (có thể chọn nhiều)\n• Mở/đóng từng loại sản phẩm để xem chi tiết\n• Nhấn "Thêm đã chọn" để thêm vào báo giá\n\nLưu ý: Sản phẩm được chọn sẽ tự động điền thông tin (tên, mô tả, đơn giá, kích thước).',
+      attachTo: { element: '[data-tour-id="quote-select-product-button"]', on: 'bottom' },
       buttons: [
         {
           text: 'Quay lại',
@@ -739,7 +758,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     tour.addStep({
       id: 'quote-form-area-info',
       title: 'Nhập kích thước và diện tích',
-      text: 'Nhập chiều dài (mm) và chiều cao (mm) để hệ thống tự động tính diện tích (m²). Bạn cũng có thể nhập trực tiếp diện tích nếu đã biết.',
+      text: 'Điền: Chiều dài (mm), Chiều cao (mm), Chiều sâu (mm, tùy chọn).\nDiện tích (m²) = (Dài × Cao) / 1,000,000 (tự động).\nThể tích (m³) tự động tính nếu có chiều sâu.\n\nLưu ý: Có thể nhập trực tiếp diện tích nếu đã biết.',
       attachTo: { element: '[data-tour-id="quote-form-area-info"]', on: 'top' },
       buttons: [
         {
@@ -757,7 +776,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     tour.addStep({
       id: 'quote-form-area-rules',
       title: 'Quy tắc khi tăng diện tích',
-      text: 'Khi bạn tăng diện tích sản phẩm, hệ thống sẽ tự động áp dụng quy tắc điều chỉnh vật tư:\n\n• Nếu diện tích tăng → số lượng vật tư có thể tăng hoặc giảm tùy theo quy tắc đã thiết lập\n• Quy tắc được áp dụng dựa trên phần trăm thay đổi hoặc giá trị tuyệt đối\n• Bạn có thể xem và quản lý các quy tắc trong mục "Quy tắc điều chỉnh vật tư"\n\nNhấn nút "Áp dụng điều chỉnh" để cập nhật số lượng vật tư ngay lập tức.',
+      text: 'Khi tăng diện tích, hệ thống tự động điều chỉnh số lượng vật tư theo quy tắc đã thiết lập (phần trăm hoặc giá trị tuyệt đối).\n\nNhấn "Áp dụng điều chỉnh" để cập nhật ngay.\nQuản lý quy tắc tại mục "Quy tắc điều chỉnh vật tư".',
       attachTo: { element: '[data-tour-id="quote-form-area-rules"]', on: 'left' },
       buttons: [
         {
@@ -775,7 +794,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     tour.addStep({
       id: 'quote-form-totals',
       title: 'Tổng tiền và lưu',
-      text: 'Hệ thống tự động tính tổng tiền dựa trên đơn giá và diện tích. Sau khi kiểm tra, nhấn "Lưu nháp" để lưu hoặc "Gửi ngay" để gửi báo giá cho khách hàng.',
+      text: 'Hiển thị: Tổng tiền, Thuế VAT, Tổng cộng (tự động tính).\n\nHành động:\n• "Lưu nháp": Lưu để chỉnh sửa sau\n• "Gửi ngay": Lưu và gửi cho khách hàng',
       attachTo: { element: '[data-tour-id="quote-form-totals"]', on: 'top' },
       buttons: [
         {
@@ -2316,12 +2335,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               <CircleHelp className="h-4 w-4" />
               <span>Hướng dẫn</span>
             </button>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-md"
-            >
-              <X className="h-5 w-5 text-black" />
-            </button>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-md"
+          >
+            <X className="h-5 w-5 text-black" />
+          </button>
           </div>
         </div>
 
@@ -2506,6 +2525,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   <button
                     onClick={() => setShowProductModal(true)}
                     className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                    data-tour-id="quote-select-product-button"
                   >
                     <Search className="h-4 w-4 mr-1" />
                     Chọn từ danh sách
@@ -2514,8 +2534,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               </div>
 
               <div className="overflow-auto max-h-[60vh]">
-                <div className="bg-white border border-gray-300 rounded-md inline-block min-w-max">
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 sticky top-0 z-10 shadow-sm">
+                <div className="bg-white border-2 border-gray-500 rounded-md inline-block min-w-max">
+                  <div className="bg-gray-50 px-4 py-3 border-b-2 border-gray-500 sticky top-0 z-10 shadow-sm">
                     <div className="grid gap-2 text-xs font-medium text-black items-start" style={{ gridTemplateColumns }}>
                       {visibleColumns.name && <div>Tên sản phẩm</div>}
                       {visibleColumns.description && <div>Mô tả</div>}
@@ -2553,7 +2573,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     </div>
                   </div>
 
-                  <div className="divide-y divide-gray-300">
+                  <div className="divide-y-2 divide-gray-500">
                     {items.map((item, index) => (
                       <div
                         key={index}
@@ -3097,7 +3117,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       {/* Product Selection Modal */}
       {showProductModal && (
         <div className="fixed inset-0 z-60 bg-transparent flex items-end justify-center">
-          <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[60vh] flex flex-col">
+          <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[60vh] flex flex-col" data-tour-id="quote-product-selection-modal">
             <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-700">Chọn sản phẩm</h3>
               <button

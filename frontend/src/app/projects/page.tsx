@@ -197,7 +197,7 @@ export default function ProjectsPage() {
     tour.addStep({
       id: 'projects-stats',
       title: 'Số liệu tổng quan',
-      text: 'Các thẻ chỉ số giúp bạn nắm tình trạng dự án trước khi tạo mới hoặc cập nhật.',
+      text: 'Các thẻ chỉ số giúp bạn nắm tình trạng dự án trước khi tạo mới hoặc cập nhật:\n• Tổng số dự án\n• Dự án đang hoạt động\n• Dự án đã hoàn thành\n• Dự án đang lập kế hoạch',
       attachTo: { element: '[data-tour-id="projects-stats"]', on: 'top' },
       buttons: [
         {
@@ -240,9 +240,9 @@ export default function ProjectsPage() {
     })
 
     tour.addStep({
-      id: 'projects-create-modal',
+      id: 'projects-create-modal-intro',
       title: 'Điền thông tin dự án',
-      text: 'Form này hướng dẫn bạn nhập mã, khách hàng, đội ngũ và ngân sách. Đừng quên đặt trạng thái và tiến độ ban đầu.',
+      text: 'Form này bao gồm các thông tin cơ bản về dự án. Chúng ta sẽ điền từng trường một.',
       attachTo: { element: '[data-tour-id="projects-create-modal"]', on: 'left' },
       when: {
         show: async () => {
@@ -268,6 +268,249 @@ export default function ProjectsPage() {
           classes: 'shepherd-button-secondary'
         },
         {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-code',
+      title: 'Mã dự án',
+      text: 'Mã dự án: Tự động tạo hoặc nhập thủ công. Hệ thống sẽ tự động tạo mã theo định dạng PRJ001, PRJ002, ... Bạn có thể nhấn nút "Tạo mới" để tự động tạo mã mới hoặc nhập thủ công.',
+      attachTo: { element: '[data-tour-id="project-field-code"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-code"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-name',
+      title: 'Tên dự án',
+      text: 'Tên dự án (bắt buộc *): Nhập tên dự án. Đây là trường bắt buộc, không được để trống.',
+      attachTo: { element: '[data-tour-id="project-field-name"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-name"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-customer',
+      title: 'Khách hàng',
+      text: 'Khách hàng (bắt buộc *): Chọn khách hàng từ danh sách dropdown. Đây là trường bắt buộc. Hệ thống sẽ tự động tải danh sách khách hàng khi mở form.',
+      attachTo: { element: '[data-tour-id="project-field-customer"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-customer"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-team',
+      title: 'Đội ngũ (Nhân viên)',
+      text: 'Đội ngũ: Chọn nhân viên tham gia dự án từ danh sách dropdown. Trường này là bắt buộc. Bạn có thể chọn người quản lý dự án hoặc nhân viên chính phụ trách.',
+      attachTo: { element: '[data-tour-id="project-field-team"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-team"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-budget',
+      title: 'Ngân sách',
+      text: 'Ngân sách: Nhập ngân sách dự án (VND). Trường này không bắt buộc nhưng nên điền để theo dõi ngân sách dự án. Bạn có thể nhập số tiền dự kiến cho dự án.',
+      attachTo: { element: '[data-tour-id="project-field-budget"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-budget"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-status',
+      title: 'Trạng thái',
+      text: 'Trạng thái: Chọn trạng thái dự án từ dropdown:\n• Lập kế hoạch: Dự án đang trong giai đoạn lập kế hoạch\n• Đang hoạt động: Dự án đang được thực hiện\n• Tạm dừng: Dự án tạm thời dừng lại\n• Hoàn thành: Dự án đã hoàn thành\n• Đã hủy: Dự án đã bị hủy',
+      attachTo: { element: '[data-tour-id="project-field-status"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-status"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-start-date',
+      title: 'Ngày bắt đầu',
+      text: 'Ngày bắt đầu (bắt buộc *): Chọn ngày bắt đầu dự án. Đây là trường bắt buộc. Sử dụng date picker để chọn ngày.',
+      attachTo: { element: '[data-tour-id="project-field-start-date"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-start-date"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-end-date',
+      title: 'Ngày kết thúc dự kiến',
+      text: 'Ngày kết thúc dự kiến: Chọn ngày dự kiến hoàn thành dự án. Trường này không bắt buộc nhưng nên điền để theo dõi tiến độ. Sử dụng date picker để chọn ngày.',
+      attachTo: { element: '[data-tour-id="project-field-end-date"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-end-date"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'project-field-description',
+      title: 'Mô tả',
+      text: 'Mô tả: Nhập mô tả chi tiết về dự án. Trường này không bắt buộc nhưng nên điền để có thông tin đầy đủ về dự án. Bạn có thể mô tả mục tiêu, phạm vi, hoặc các thông tin quan trọng khác.',
+      attachTo: { element: '[data-tour-id="project-field-description"]', on: 'top' },
+      when: {
+        show: async () => {
+          if (!showCreateModal) {
+            setShowCreateModal(true)
+            await new Promise((resolve) => setTimeout(resolve, 150))
+          }
+          await waitForElement('[data-tour-id="project-field-description"]', 25, 160)
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
           text: 'Tiếp tục',
           action: async () => {
             setShowCreateModal(false)
@@ -282,7 +525,7 @@ export default function ProjectsPage() {
     tour.addStep({
       id: 'projects-grid',
       title: 'Danh sách dự án',
-      text: 'Sau khi lưu, dự án mới sẽ xuất hiện tại đây. Bạn có thể mở chi tiết, cập nhật tiến độ hoặc phân công đội ngũ.',
+      text: 'Sau khi lưu, dự án mới sẽ xuất hiện tại đây. Các thao tác có thể thực hiện:\n• Xem chi tiết dự án\n• Cập nhật tiến độ\n• Phân công đội ngũ\n• Xóa dự án',
       attachTo: { element: '[data-tour-id="projects-grid"]', on: 'top' },
       buttons: [
         {

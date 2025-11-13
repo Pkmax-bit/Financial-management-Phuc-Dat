@@ -261,7 +261,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.addStep({
       id: 'invoice-form-basic-info',
       title: 'Thông tin cơ bản',
-      text: 'Điền số hóa đơn, chọn khách hàng và dự án (nếu có). Hệ thống sẽ tự động tải danh sách dự án khi bạn chọn khách hàng.',
+      text: 'Điền các trường sau:\n• Số hóa đơn: Nhập số hóa đơn (có thể tự động tạo)\n• Khách hàng (bắt buộc *): Chọn khách hàng từ danh sách\n• Dự án (tùy chọn): Chọn dự án liên quan (tự động tải khi chọn khách hàng)\n• Loại hóa đơn: Chọn loại (Tiêu chuẩn, ...)\n• Ngày phát hành: Ngày phát hành hóa đơn\n• Ngày đến hạn: Ngày đến hạn thanh toán\n• Ghi chú: Ghi chú bổ sung\n\nLưu ý: Hệ thống sẽ tự động tải danh sách dự án khi bạn chọn khách hàng.',
       attachTo: { element: '[data-tour-id="invoice-form-basic-info"]', on: 'top' },
       buttons: [
         {
@@ -279,7 +279,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.addStep({
       id: 'invoice-form-items',
       title: 'Thêm sản phẩm',
-      text: 'Nhấn "Chọn từ danh sách" để chọn sản phẩm có sẵn, hoặc "Thêm sản phẩm tự do" để nhập thủ công. Bạn có thể thêm nhiều sản phẩm vào hóa đơn.',
+      text: 'Các cách thêm sản phẩm:\n1. Chọn từ danh sách: Nhấn "Chọn từ danh sách" để chọn sản phẩm có sẵn\n2. Thêm sản phẩm tự do: Nhấn "Thêm sản phẩm tự do" để nhập thủ công\n\nThông tin sản phẩm cần điền:\n• Tên sản phẩm: Tên sản phẩm\n• Mô tả: Mô tả chi tiết\n• Số lượng: Số lượng sản phẩm\n• Đơn vị: Đơn vị tính (cái, bộ, m², ...)\n• Đơn giá: Giá bán một đơn vị\n• Thành tiền: Tự động tính = Đơn giá × Số lượng × Diện tích\n\nLưu ý: Bạn có thể thêm nhiều sản phẩm vào hóa đơn.',
       attachTo: { element: '[data-tour-id="invoice-form-items"]', on: 'top' },
       buttons: [
         {
@@ -297,7 +297,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.addStep({
       id: 'invoice-form-area-info',
       title: 'Nhập kích thước và diện tích',
-      text: 'Nhập chiều dài (mm) và chiều cao (mm) để hệ thống tự động tính diện tích (m²). Bạn cũng có thể nhập trực tiếp diện tích nếu đã biết.',
+      text: 'Các trường cần điền:\n• Chiều dài (mm): Nhập chiều dài sản phẩm (đơn vị: mm)\n• Chiều cao (mm): Nhập chiều cao sản phẩm (đơn vị: mm)\n• Diện tích (m²): Tự động tính = (Chiều dài × Chiều cao) / 1,000,000\n• Thể tích (m³): Tự động tính nếu có chiều sâu\n• Chiều sâu (mm): Nhập chiều sâu (nếu cần)\n\nLưu ý:\n• Bạn có thể nhập trực tiếp diện tích nếu đã biết\n• Hệ thống tự động tính diện tích khi nhập chiều dài và chiều cao',
       attachTo: { element: '[data-tour-id="invoice-form-area-info"]', on: 'top' },
       buttons: [
         {
@@ -315,7 +315,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.addStep({
       id: 'invoice-form-totals',
       title: 'Tổng tiền và lưu',
-      text: 'Hệ thống tự động tính tổng tiền dựa trên đơn giá và diện tích. Sau khi kiểm tra, nhấn "Lưu nháp" để lưu hoặc "Gửi ngay" để gửi hóa đơn cho khách hàng.',
+      text: 'Thông tin hiển thị:\n• Tổng tiền: Tự động tính dựa trên đơn giá và diện tích\n• Thuế VAT: Tự động tính (nếu có)\n• Tổng cộng: Tổng tiền sau thuế\n\nCác nút hành động:\n• Lưu nháp: Lưu hóa đơn ở trạng thái nháp (có thể chỉnh sửa sau)\n• Gửi ngay: Lưu và gửi hóa đơn cho khách hàng ngay lập tức\n\nLưu ý: Sau khi kiểm tra, nhấn "Lưu nháp" để lưu hoặc "Gửi ngay" để gửi hóa đơn cho khách hàng.',
       attachTo: { element: '[data-tour-id="invoice-form-totals"]', on: 'top' },
       buttons: [
         {

@@ -648,6 +648,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
     // Try to find a quote with accepted status, otherwise just show general guidance
     const acceptedQuote = quotes.find(q => q.status === 'accepted' || q.status === 'sent' || q.status === 'viewed')
+    await waitForElement('[data-tour-id="quotes-list-header"]')
+    await waitForElement('[data-tour-id="quotes-list"]')
+    await waitForElement('[data-tour-id="quote-actions-buttons"]')
     const hasConvertButton = acceptedQuote ? await waitForElement(`[data-tour-id="quote-convert-button-${acceptedQuote.id}"]`) : false
 
     const tour = new Shepherd.Tour({
@@ -698,10 +701,102 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     }
 
     tour.addStep({
-      id: 'quote-convert-process',
-      title: 'Quy trình chuyển đổi',
-      text: 'Khi nhấn "Chuyển thành hóa đơn":\n\n• Hệ thống sẽ tự động tạo hóa đơn mới với số hóa đơn tự động\n• Tất cả sản phẩm và vật tư từ báo giá sẽ được sao chép sang hóa đơn\n• Trạng thái báo giá sẽ được cập nhật thành "Đã đóng"\n• Bạn có thể xem hóa đơn mới trong tab "Hóa đơn"',
-      attachTo: { element: '[data-tour-id="quotes-list"]', on: 'top' },
+      id: 'quote-actions-intro',
+      title: 'Các nút thao tác',
+      text: 'Trong danh sách báo giá, mỗi báo giá có các nút thao tác. Chúng ta sẽ xem từng nút một.',
+      attachTo: { element: '[data-tour-id="quote-actions-buttons"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-button-view',
+      title: 'Nút Xem chi tiết',
+      text: '👁️ Xem chi tiết: Nhấn nút này để mở trang chi tiết báo giá trong tab mới. Bạn có thể xem đầy đủ thông tin, in báo giá, hoặc thực hiện các thao tác khác.',
+      attachTo: { element: '[data-tour-id="quote-button-view"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-button-edit',
+      title: 'Nút Chỉnh sửa',
+      text: '✏️ Chỉnh sửa: Nhấn nút này để sửa thông tin báo giá. Bạn có thể chỉnh sửa các thông tin như khách hàng, dự án, sản phẩm, giá cả, v.v.',
+      attachTo: { element: '[data-tour-id="quote-button-edit"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-button-send',
+      title: 'Nút Gửi báo giá',
+      text: '📧 Gửi báo giá: Nhấn nút này để gửi email báo giá cho khách hàng. Hệ thống sẽ mở modal cho phép bạn xem trước, chỉnh sửa nội dung email, và gửi đi.',
+      attachTo: { element: '[data-tour-id="quote-button-send"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    if (hasConvertButton && acceptedQuote) {
+      tour.addStep({
+        id: 'quote-button-convert',
+        title: 'Nút Chuyển thành hóa đơn',
+        text: '💰 Chuyển thành hóa đơn: Nhấn nút này để chuyển báo giá đã chấp nhận thành hóa đơn. Nút này chỉ hiển thị khi báo giá ở trạng thái "Đã chấp nhận", "Đã gửi" hoặc "Đã xem". Hệ thống sẽ tự động tạo hóa đơn mới và sao chép tất cả thông tin từ báo giá.',
+        attachTo: { element: `[data-tour-id="quote-convert-button-${acceptedQuote.id}"]`, on: 'bottom' },
+        buttons: [
+          {
+            text: 'Quay lại',
+            action: () => tour.back(),
+            classes: 'shepherd-button-secondary'
+          },
+          {
+            text: 'Tiếp tục',
+            action: () => tour.next()
+          }
+        ]
+      })
+    }
+
+    tour.addStep({
+      id: 'quote-button-delete',
+      title: 'Nút Xóa',
+      text: '🗑️ Xóa: Nhấn nút này để xóa báo giá khỏi hệ thống. Hành động này không thể hoàn tác, vì vậy hãy cẩn thận khi sử dụng.',
+      attachTo: { element: '[data-tour-id="quote-button-delete"]', on: 'bottom' },
       buttons: [
         {
           text: 'Quay lại',
@@ -1120,10 +1215,11 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   {quote.employee_in_charge_name || 'N/A'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-2" data-tour-id="quote-actions-buttons">
                     <button 
                       className="text-black hover:text-black" 
                       title="Xem chi tiết"
+                      data-tour-id="quote-button-view"
                       onClick={() => {
                         window.open(`/sales/quotes/${quote.id}`, '_blank')
                       }}
@@ -1135,6 +1231,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <button 
                         className="text-black hover:text-blue-600" 
                         title="Chỉnh sửa"
+                        data-tour-id="quote-button-edit"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
@@ -1142,6 +1239,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                         onClick={() => sendQuote(quote.id)}
                         className="text-black hover:text-green-600" 
                         title="Gửi báo giá"
+                        data-tour-id="quote-button-send"
                       >
                         <Send className="h-4 w-4" />
                       </button>
@@ -1162,6 +1260,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       onClick={() => deleteQuote(quote.id)}
                       className="text-black hover:text-red-600" 
                       title="Xóa"
+                      data-tour-id="quote-button-delete"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1320,8 +1419,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       {/* Help Sidebar */}
       {showHelpModal && (
         <div className="fixed inset-0 z-40 overflow-hidden">
-          <div className="absolute inset-0 bg-black bg-opacity-25" onClick={() => setShowHelpModal(false)}></div>
-          <div className="absolute right-0 top-0 h-full w-96 bg-white shadow-xl overflow-y-auto">
+          <div className="absolute inset-0 bg-transparent" onClick={() => setShowHelpModal(false)}></div>
+          <div className="absolute right-0 top-0 h-full w-96 bg-white/95 backdrop-blur-sm shadow-xl overflow-y-auto">
             <div className="p-6">
               {/* Header */}
               <div className="flex items-center justify-between mb-6 border-b pb-4">

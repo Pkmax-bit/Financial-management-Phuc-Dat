@@ -335,7 +335,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
+            <div data-tour-id="project-field-code">
               <label className="block text-sm font-medium text-black mb-2">
                 Mã dự án *
               </label>
@@ -363,7 +363,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </div>
             </div>
 
-            <div>
+            <div data-tour-id="project-field-name">
               <label className="block text-sm font-medium text-black mb-2">
                 Tên dự án *
               </label>
@@ -381,7 +381,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
             </div>
           </div>
 
-          <div>
+          <div data-tour-id="project-field-description">
             <label className="block text-sm font-medium text-black mb-2">
               Mô tả
             </label>
@@ -398,7 +398,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
+            <div data-tour-id="project-field-customer">
               <label className="block text-sm font-medium text-black mb-2">
                 Khách hàng *
               </label>
@@ -420,7 +420,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </div>
             </div>
 
-            <div>
+            <div data-tour-id="project-field-team">
               <label className="block text-sm font-medium text-black mb-2">
                 Nhân viên *
               </label>
@@ -444,7 +444,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
+            <div data-tour-id="project-field-start-date">
               <label className="block text-sm font-medium text-black mb-2">
                 Ngày bắt đầu *
               </label>
@@ -460,7 +460,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </div>
             </div>
 
-            <div>
+            <div data-tour-id="project-field-end-date">
               <label className="block text-sm font-medium text-black mb-2">
                 Ngày kết thúc
               </label>
@@ -477,7 +477,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
+            <div data-tour-id="project-field-budget">
               <label className="block text-sm font-medium text-black mb-2">
                 Ngân sách
               </label>
@@ -495,7 +495,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </div>
             </div>
 
-            <div>
+            <div data-tour-id="project-field-status">
               <label className="block text-sm font-medium text-black mb-2">
                 Trạng thái
               </label>

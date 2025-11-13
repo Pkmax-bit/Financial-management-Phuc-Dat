@@ -365,6 +365,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     unitPrice: number // Đơn giá
     quantity: number // Số lượng
     unit: string // Đơn vị
+    area?: number | null // Diện tích (m²)
     // Derived
     lineTotal: number // Thành tiền
     // Component percentages per row
@@ -424,7 +425,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       const next = [...prev]
       const updated = updater(next[rowIndex])
       // Recompute line total
-      updated.lineTotal = (Number(updated.unitPrice) || 0) * (Number(updated.quantity) || 0)
+      // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+      const unitPrice = Number(updated.unitPrice) || 0
+      const quantity = Number(updated.quantity) || 0
+      const areaVal = updated.area != null ? Number(updated.area) : null
+      
+      if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+        // Có diện tích: thành tiền = Đơn giá × Diện tích × Số lượng
+        updated.lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+      } else {
+        // Không có diện tích: thành tiền = đơn giá × số lượng
+        updated.lineTotal = Math.round(unitPrice * quantity * 100) / 100
+      }
       next[rowIndex] = updated
       return next
     })
@@ -442,6 +454,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         unitPrice: 0,
         quantity: 0,
         unit: 'cái',
+        area: null,
         lineTotal: 0,
         componentsPct: {},
         componentsAmt: {},
@@ -490,6 +503,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const profitComputed = useMemo(() => {
     return (Number(projectRevenueTotal) || 0) - (Number(grandAllocationTotal) || 0)
   }, [projectRevenueTotal, grandAllocationTotal])
+
+  // Hàm xác định màu cảnh báo cho tỷ lệ chi phí so với thành tiền
+  const getCostPercentageColor = (cost: number, totalPrice: number): string => {
+    if (totalPrice <= 0) {
+      return 'text-gray-600' // Không có thành tiền
+    }
+    const percentage = (cost / totalPrice) * 100
+    if (percentage > 100) {
+      return 'text-red-600' // Chi phí vượt thành tiền: màu đỏ
+    } else if (percentage > 90) {
+      return 'text-yellow-600' // Chi phí > 90% thành tiền: màu vàng
+    } else {
+      return 'text-green-600' // Chi phí <= 90% thành tiền: màu xanh
+    }
+  }
 
   // Auto-select expense objects from product_components when both are ready (for both planned and actual expenses)
   useEffect(() => {
@@ -678,7 +706,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           // Try with minimal columns including product_components
           const { data: basicData, error: basicError } = await supabase
             .from('quote_items')
-            .select('id, quote_id, name_product, description, quantity, unit_price, unit, total_price, created_at, components, product_components')
+            .select('id, quote_id, name_product, description, quantity, unit_price, unit, total_price, area, created_at, components, product_components')
             .in('quote_id', quoteIds)
             .order('created_at', { ascending: true })
           
@@ -744,7 +772,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           // Create invoice item row from quote_item
           const unitPrice = Number(qi.unit_price ?? qi.price) || 0
           const quantity = Number(qi.quantity ?? qi.qty) || 0
-          const lineTotal = Number(qi.total_price ?? qi.subtotal ?? qi.total) || (unitPrice * quantity)
+          const areaVal = qi.area != null ? Number(qi.area) : null
+          // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+          let lineTotal = Number(qi.total_price ?? qi.subtotal ?? qi.total)
+          if (!lineTotal || lineTotal === 0) {
+            if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+              lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+            } else {
+              lineTotal = Math.round(unitPrice * quantity * 100) / 100
+            }
+          }
           
           // Prepare components data for this row
           const componentsPct: Record<string, number> = {}
@@ -786,6 +823,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             unitPrice,
             quantity,
             unit: qi.unit || 'cái',
+            area: areaVal,
             lineTotal,
             componentsPct,
             componentsAmt,
@@ -851,7 +889,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             // Try with minimal columns including product_components
             const { data: basicData, error: basicError } = await supabase
               .from('invoice_items')
-              .select('id, invoice_id, name_product, description, quantity, unit_price, unit, total_price, created_at, components, product_components')
+              .select('id, invoice_id, name_product, description, quantity, unit_price, unit, total_price, area, created_at, components, product_components')
               .in('invoice_id', invoiceIds)
               .order('created_at', { ascending: true })
             
@@ -904,7 +942,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               // Create invoice item row from invoice_item
               const unitPrice = Number(ii.unit_price ?? ii.price) || 0
               const quantity = Number(ii.quantity ?? ii.qty) || 0
-              const lineTotal = Number(ii.total_price ?? ii.subtotal ?? ii.total) || (unitPrice * quantity)
+              const areaVal = ii.area != null ? Number(ii.area) : null
+              // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+              let lineTotal = Number(ii.total_price ?? ii.subtotal ?? ii.total)
+              if (!lineTotal || lineTotal === 0) {
+                if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+                  lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+                } else {
+                  lineTotal = Math.round(unitPrice * quantity * 100) / 100
+                }
+              }
               
               // Prepare components data for this row
               const componentsPct: Record<string, number> = {}
@@ -946,6 +993,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 unitPrice,
                 quantity,
                 unit: ii.unit || 'cái',
+                area: areaVal,
                 lineTotal,
                 componentsPct,
                 componentsAmt,
@@ -1018,7 +1066,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               items.forEach((li: any, liIdx: number) => {
                 const unitPrice = Number(li.unit_price) || 0
                 const quantity = Number(li.quantity) || 0
-                const lineTotal = Number(li.line_total) || (unitPrice * quantity)
+                const areaVal = li.area != null ? Number(li.area) : null
+                // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+                let lineTotal = Number(li.line_total)
+                if (!lineTotal || lineTotal === 0) {
+                  if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+                    lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+                  } else {
+                    lineTotal = Math.round(unitPrice * quantity * 100) / 100
+                  }
+                }
                 rows.push({
                   section: sectionName,
                   index: rows.length + 1,
@@ -1027,6 +1084,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   unitPrice,
                   quantity,
                   unit: li.unit || 'cái',
+                  area: areaVal,
                   lineTotal,
                   componentsPct: {},
                   componentsAmt: {},
@@ -1053,7 +1111,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               items.forEach((it: any) => {
                 const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
                 const quantity = Number(it.quantity ?? it.qty) || 0
-                const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * quantity)
+                const areaVal = it.area != null ? Number(it.area) : null
+                // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+                let lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal)
+                if (!lineTotal || lineTotal === 0) {
+                  if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+                    lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+                  } else {
+                    lineTotal = Math.round(unitPrice * quantity * 100) / 100
+                  }
+                }
                 rows.push({
                   section: '',
                   index: rows.length + 1,
@@ -1063,6 +1130,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   unitPrice,
                   quantity,
                   unit: it.unit || 'cái',
+                  area: areaVal,
                   lineTotal,
                   componentsPct: {},
                   componentsAmt: {},
@@ -1096,7 +1164,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               itemRows.forEach((it: any) => {
                 const unitPrice = Number(it.unit_price ?? it.price) || 0
                 const quantity = Number(it.quantity ?? it.qty) || 0
-                const lineTotal = Number(it.total_price ?? it.subtotal ?? it.total) || (unitPrice * quantity)
+                const areaVal = it.area != null ? Number(it.area) : null
+                // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+                let lineTotal = Number(it.total_price ?? it.subtotal ?? it.total)
+                if (!lineTotal || lineTotal === 0) {
+                  if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+                    lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+                  } else {
+                    lineTotal = Math.round(unitPrice * quantity * 100) / 100
+                  }
+                }
                 rows.push({
                   section: '',
                   index: rows.length + 1,
@@ -1106,6 +1183,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   unitPrice,
                   quantity,
                   unit: it.unit || 'cái',
+                  area: areaVal,
                   lineTotal,
                   componentsPct: {},
                   componentsAmt: {},
@@ -1414,6 +1492,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           console.log('📝 No saved expense object columns, keeping current selection or will auto-select all')
         }
         if (Array.isArray(data.invoice_items) && data.invoice_items.length > 0) {
+          console.log('📋 Loading invoice_items for edit:', data.invoice_items)
           const rows: InvoiceItemRow[] = data.invoice_items.map((it: any, idx: number) => {
             const componentsPct = it.components_pct || {}
             const componentsAmt: Record<string, number> = {}
@@ -1433,10 +1512,50 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               })
             }
             
+            // Calculate lineTotal with area support - Always recalculate to ensure accuracy
+            const unitPrice = Number(it.unit_price) || 0
+            const quantity = Number(it.quantity) || 0
+            let areaVal = it.area != null ? Number(it.area) : null
+            
+            // If area is missing but we have line_total, try to calculate area backwards
+            // This handles cases where area wasn't saved in older records
+            if ((areaVal == null || areaVal === 0) && unitPrice > 0 && quantity > 0) {
+              const storedLineTotal = Number(it.line_total) || 0
+              const calculatedWithoutArea = Math.round(unitPrice * quantity * 100) / 100
+              // If stored line_total is different from calculated (without area), 
+              // it likely means area was used in the original calculation
+              if (storedLineTotal > 0 && Math.abs(storedLineTotal - calculatedWithoutArea) > 0.01) {
+                // Calculate area backwards: area = line_total / (unitPrice * quantity)
+                const calculatedArea = storedLineTotal / (unitPrice * quantity)
+                if (calculatedArea > 0 && isFinite(calculatedArea)) {
+                  areaVal = Math.round(calculatedArea * 1e6) / 1e6 // Round to 6 decimal places
+                  console.log('🔧 Calculated area backwards from line_total:', areaVal, 'for product:', it.product_name)
+                }
+              }
+            }
+            
+            // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+            // Always recalculate lineTotal based on current values, don't trust stored value
+            console.log('🔍 Loading invoice item for edit:', {
+              productName: it.product_name,
+              unitPrice,
+              quantity,
+              area: it.area,
+              areaVal,
+              storedLineTotal: it.line_total
+            })
+            let lineTotal: number
+            if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+              lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+              console.log('✅ Calculated lineTotal with area:', lineTotal, '= unitPrice', unitPrice, '× area', areaVal, '× quantity', quantity)
+            } else {
+              lineTotal = Math.round(unitPrice * quantity * 100) / 100
+              console.log('⚠️ Calculated lineTotal without area:', lineTotal, '= unitPrice', unitPrice, '× quantity', quantity, '(area:', areaVal, ')')
+            }
+            
             // Calculate componentsAmt from componentsPct and lineTotal
             Object.keys(componentsPct).forEach(id => {
               const pct = Number(componentsPct[id]) || 0
-              const lineTotal = Number(it.line_total) || 0
               componentsAmt[id] = Math.round((lineTotal * pct) / 100)
             })
             
@@ -1446,10 +1565,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               productCode: '',
               productName: it.product_name || it.description || '',
               description: it.description || '',
-              unitPrice: Number(it.unit_price) || 0,
-              quantity: Number(it.quantity) || 0,
+              unitPrice,
+              quantity,
               unit: it.unit || 'cái',
-              lineTotal: Number(it.line_total) || 0,
+              area: areaVal,
+              lineTotal,
               componentsPct,
               componentsAmt,
               componentsQuantity,
@@ -1762,19 +1882,54 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             })
           }
           
+          // Calculate lineTotal with area support - Always recalculate to ensure accuracy
+          const unitPrice = Number(it.unit_price) || 0
+          const quantity = Number(it.quantity) || 0
+          let areaVal = it.area != null ? Number(it.area) : null
+          
+          // If area is missing but we have line_total, try to calculate area backwards
+          // This handles cases where area wasn't saved in older records
+          if ((areaVal == null || areaVal === 0) && unitPrice > 0 && quantity > 0) {
+            const storedLineTotal = Number(it.line_total) || 0
+            const calculatedWithoutArea = Math.round(unitPrice * quantity * 100) / 100
+            // If stored line_total is different from calculated (without area), 
+            // it likely means area was used in the original calculation
+            if (storedLineTotal > 0 && Math.abs(storedLineTotal - calculatedWithoutArea) > 0.01) {
+              // Calculate area backwards: area = line_total / (unitPrice * quantity)
+              const calculatedArea = storedLineTotal / (unitPrice * quantity)
+              if (calculatedArea > 0 && isFinite(calculatedArea)) {
+                areaVal = Math.round(calculatedArea * 1e6) / 1e6 // Round to 6 decimal places
+                console.log('🔧 Calculated area backwards from line_total:', areaVal, 'for product:', it.product_name)
+              }
+            }
+          }
+          
+          // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
+          // Always recalculate lineTotal based on current values, don't trust stored value
+          let lineTotal: number
+          if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+            lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
+          } else {
+            lineTotal = Math.round(unitPrice * quantity * 100) / 100
+          }
+          
           Object.keys(componentsPct).forEach((key: string) => {
-            const qty = it.quantity || 0
-            const price = it.unit_price || 0
-            componentsAmt[key] = (qty * price * (componentsPct[key] || 0)) / 100
+            const pct = Number(componentsPct[key]) || 0
+            componentsAmt[key] = Math.round((lineTotal * pct) / 100)
           })
           
           return {
+            section: '',
             index: idx + 1,
+            productCode: '',
             productId: it.product_id || '',
             productName: it.product_name || '',
-            quantity: it.quantity || 0,
-            unit: it.unit || '',
-            unitPrice: it.unit_price || 0,
+            description: it.description || '',
+            quantity,
+            unit: it.unit || 'cái',
+            unitPrice,
+            area: areaVal,
+            lineTotal,
             componentsPct,
             componentsAmt,
             componentsQuantity,
@@ -2521,6 +2676,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
     await waitForElement('[data-tour-id="planned-expense-header"]')
     await waitForElement('[data-tour-id="planned-expense-basic-info"]')
+    await waitForElement('[data-tour-id="planned-expense-field-project"]')
+    await waitForElement('[data-tour-id="planned-expense-field-employee"]')
+    await waitForElement('[data-tour-id="planned-expense-field-parent"]')
+    await waitForElement('[data-tour-id="planned-expense-field-category"]')
+    await waitForElement('[data-tour-id="planned-expense-field-date"]')
+    await waitForElement('[data-tour-id="planned-expense-field-role"]')
+    await waitForElement('[data-tour-id="planned-expense-field-description"]')
     await waitForElement('[data-tour-id="planned-expense-objects"]')
     await waitForElement('[data-tour-id="planned-expense-amounts"]')
     await waitForElement('[data-tour-id="planned-expense-submit"]')
@@ -2553,10 +2715,136 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     })
 
     tour.addStep({
-      id: 'planned-expense-basic-info',
+      id: 'planned-expense-basic-info-intro',
       title: 'Thông tin cơ bản',
-      text: 'Điền các thông tin cơ bản:\n• Dự án (bắt buộc): Chọn dự án từ danh sách\n• Nhân viên: Tự động điền nhân viên đang đăng nhập\n• Chi phí cha: Chọn chi phí kế hoạch cha nếu có (để tạo cấu trúc phân cấp)\n• Loại chi phí: Kế hoạch (đã tự động chọn)\n• Ngày chi phí (bắt buộc): Chọn ngày phát sinh chi phí\n• Vai trò: Tự động điền vai trò của nhân viên',
+      text: 'Form này bao gồm các thông tin cơ bản về chi phí kế hoạch. Chúng ta sẽ điền từng trường một.',
       attachTo: { element: '[data-tour-id="planned-expense-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-field-project',
+      title: 'Dự án',
+      text: 'Dự án (bắt buộc *): Chọn dự án từ danh sách dropdown. Đây là trường bắt buộc. Hệ thống sẽ tự động tải danh sách dự án khi mở form.',
+      attachTo: { element: '[data-tour-id="planned-expense-field-project"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-field-employee',
+      title: 'Nhân viên',
+      text: 'Nhân viên: Tự động điền nhân viên đang đăng nhập. Trường này sẽ tự động được điền khi bạn mở form. Bạn có thể thay đổi nếu cần.',
+      attachTo: { element: '[data-tour-id="planned-expense-field-employee"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-field-parent',
+      title: 'Chi phí cha',
+      text: 'Chi phí cha (tùy chọn): Chọn chi phí kế hoạch cha nếu có để tạo cấu trúc phân cấp:\n• Cấp cha: Chi phí chính (Cấp: 1)\n• Cấp con: Chi phí chi tiết (Cấp: 2+)\n\nLưu ý: Chỉ chọn khi bạn muốn tạo chi phí con thuộc một chi phí cha đã có.',
+      attachTo: { element: '[data-tour-id="planned-expense-field-parent"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-field-category',
+      title: 'Loại chi phí',
+      text: 'Loại chi phí: Kế hoạch (đã tự động chọn, không thể thay đổi). Trường này được tự động điền dựa trên loại form bạn đang mở.',
+      attachTo: { element: '[data-tour-id="planned-expense-field-category"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-field-date',
+      title: 'Ngày chi phí',
+      text: 'Ngày chi phí (bắt buộc *): Chọn ngày phát sinh chi phí. Đây là trường bắt buộc. Sử dụng date picker để chọn ngày.',
+      attachTo: { element: '[data-tour-id="planned-expense-field-date"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-field-role',
+      title: 'Vai trò',
+      text: 'Vai trò: Tự động điền vai trò của nhân viên đang đăng nhập. Trường này được tự động điền dựa trên thông tin đăng nhập của bạn.',
+      attachTo: { element: '[data-tour-id="planned-expense-field-role"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'planned-expense-field-description',
+      title: 'Mô tả',
+      text: 'Mô tả (bắt buộc *): Nhập mô tả chi tiết về chi phí. Đây là trường bắt buộc. Mô tả nên rõ ràng để dễ quản lý và theo dõi sau này.',
+      attachTo: { element: '[data-tour-id="planned-expense-field-description"]', on: 'top' },
       buttons: [
         {
           text: 'Quay lại',
@@ -2591,7 +2879,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     tour.addStep({
       id: 'planned-expense-amounts',
       title: 'Phân bổ số tiền',
-      text: 'Phân bổ số tiền cho các đối tượng chi phí:\n• Nhập số tiền cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Bạn có thể phân bổ theo tỷ lệ phần trăm hoặc số tiền cụ thể\n• Có thể thêm hóa đơn/đơn hàng từ báo giá nếu có',
+      text: 'Các cách phân bổ:\n1. Phân bổ theo tỷ lệ phần trăm: Nhập % cho từng đối tượng chi phí\n2. Phân bổ theo số tiền cụ thể: Nhập số tiền trực tiếp cho từng đối tượng\n\nThông tin hiển thị:\n• Bảng chi tiết hóa đơn với các cột: STT, Tên sản phẩm, Mô tả, Đơn giá, Số lượng, Đơn vị, Thành tiền\n• Các cột đối tượng chi phí (%, Số lượng, Đơn giá, VND)\n• Tổng phân bổ\n\nThao tác:\n• Nhập số tiền cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Có thể thêm hóa đơn/đơn hàng từ báo giá nếu có',
       attachTo: { element: '[data-tour-id="planned-expense-amounts"]', on: 'top' },
       buttons: [
         {
@@ -2609,7 +2897,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     tour.addStep({
       id: 'planned-expense-submit',
       title: 'Lưu chi phí kế hoạch',
-      text: 'Sau khi điền đầy đủ thông tin:\n• Kiểm tra lại các thông tin đã nhập\n• Nhấn nút "Tạo chi phí kế hoạch" để lưu\n• Chi phí kế hoạch sẽ được thêm vào dự án và có thể được duyệt sau\n• Bạn có thể xem chi phí kế hoạch trong danh sách chi phí dự án',
+      text: 'Hành động:\n• Kiểm tra lại các thông tin đã nhập\n• Nhấn nút "Tạo chi phí kế hoạch" để lưu\n\nKết quả:\n• Chi phí kế hoạch sẽ được thêm vào dự án\n• Có thể được duyệt sau để chuyển thành chi phí thực tế\n• Bạn có thể xem chi phí kế hoạch trong danh sách chi phí dự án',
       attachTo: { element: '[data-tour-id="planned-expense-submit"]', on: 'top' },
       buttons: [
         {
@@ -2718,6 +3006,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
     await waitForElement('[data-tour-id="actual-expense-header"]')
     await waitForElement('[data-tour-id="actual-expense-basic-info"]')
+    await waitForElement('[data-tour-id="actual-expense-field-project"]')
+    await waitForElement('[data-tour-id="actual-expense-field-employee"]')
+    await waitForElement('[data-tour-id="actual-expense-field-parent"]')
+    await waitForElement('[data-tour-id="actual-expense-field-category"]')
+    await waitForElement('[data-tour-id="actual-expense-field-date"]')
+    await waitForElement('[data-tour-id="actual-expense-field-role"]')
+    await waitForElement('[data-tour-id="actual-expense-field-update"]')
+    await waitForElement('[data-tour-id="actual-expense-field-description"]')
     await waitForElement('[data-tour-id="actual-expense-objects"]')
     await waitForElement('[data-tour-id="actual-expense-amounts"]')
     await waitForElement('[data-tour-id="actual-expense-submit"]')
@@ -2750,10 +3046,154 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     })
 
     tour.addStep({
-      id: 'actual-expense-basic-info',
+      id: 'actual-expense-basic-info-intro',
       title: 'Thông tin cơ bản',
-      text: 'Điền các thông tin cơ bản:\n• Dự án (bắt buộc): Chọn dự án từ danh sách\n• Nhân viên: Tự động điền nhân viên đang đăng nhập\n• Chi phí cha: Chọn chi phí thực tế cha nếu có (để tạo cấu trúc phân cấp)\n• Loại chi phí: Thực tế (đã tự động chọn)\n• Ngày chi phí (bắt buộc): Chọn ngày phát sinh chi phí\n• Vai trò: Tự động điền vai trò của nhân viên\n• Cập nhật chi phí đã có: Có thể chọn chi phí thực tế đã có để cập nhật',
+      text: 'Form này bao gồm các thông tin cơ bản về chi phí thực tế. Chúng ta sẽ điền từng trường một.',
       attachTo: { element: '[data-tour-id="actual-expense-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-project',
+      title: 'Dự án',
+      text: 'Dự án (bắt buộc *): Chọn dự án từ danh sách dropdown. Đây là trường bắt buộc. Hệ thống sẽ tự động tải danh sách dự án khi mở form.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-project"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-employee',
+      title: 'Nhân viên',
+      text: 'Nhân viên: Tự động điền nhân viên đang đăng nhập. Trường này sẽ tự động được điền khi bạn mở form. Bạn có thể thay đổi nếu cần.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-employee"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-parent',
+      title: 'Chi phí cha',
+      text: 'Chi phí cha (tùy chọn): Chọn chi phí thực tế cha nếu có để tạo cấu trúc phân cấp:\n• Cấp cha: Chi phí chính (Cấp: 1)\n• Cấp con: Chi phí chi tiết (Cấp: 2+)\n\nLưu ý: Chỉ chọn khi bạn muốn tạo chi phí con thuộc một chi phí cha đã có.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-parent"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-category',
+      title: 'Loại chi phí',
+      text: 'Loại chi phí: Thực tế (đã tự động chọn, không thể thay đổi). Trường này được tự động điền dựa trên loại form bạn đang mở.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-category"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-date',
+      title: 'Ngày chi phí',
+      text: 'Ngày chi phí (bắt buộc *): Chọn ngày phát sinh chi phí. Đây là trường bắt buộc. Sử dụng date picker để chọn ngày.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-date"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-role',
+      title: 'Vai trò',
+      text: 'Vai trò: Tự động điền vai trò của nhân viên đang đăng nhập. Trường này được tự động điền dựa trên thông tin đăng nhập của bạn.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-role"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-update',
+      title: 'Cập nhật chi phí đã có',
+      text: 'Cập nhật chi phí đã có (tùy chọn): Có thể chọn chi phí thực tế đã có để cập nhật thông tin. Nếu không chọn, hệ thống sẽ tạo chi phí mới.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-update"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'actual-expense-field-description',
+      title: 'Mô tả',
+      text: 'Mô tả (bắt buộc *): Nhập mô tả chi tiết về chi phí. Đây là trường bắt buộc. Mô tả nên rõ ràng để dễ quản lý và theo dõi sau này.',
+      attachTo: { element: '[data-tour-id="actual-expense-field-description"]', on: 'top' },
       buttons: [
         {
           text: 'Quay lại',
@@ -2788,7 +3228,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     tour.addStep({
       id: 'actual-expense-amounts',
       title: 'Phân bổ số tiền',
-      text: 'Phân bổ số tiền cho các đối tượng chi phí:\n• Nhập số tiền thực tế đã chi cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Bạn có thể phân bổ theo tỷ lệ phần trăm hoặc số tiền cụ thể\n• Có thể thêm hóa đơn/đơn hàng từ hóa đơn nếu có',
+      text: 'Các cách phân bổ:\n1. Phân bổ theo tỷ lệ phần trăm: Nhập % cho từng đối tượng chi phí\n2. Phân bổ theo số tiền cụ thể: Nhập số tiền trực tiếp cho từng đối tượng\n\nThông tin hiển thị:\n• Bảng chi tiết hóa đơn với các cột: STT, Tên sản phẩm, Mô tả, Đơn giá, Số lượng, Đơn vị, Thành tiền\n• Các cột đối tượng chi phí (%, Số lượng, Đơn giá, VND)\n• Tổng phân bổ\n\nThao tác:\n• Nhập số tiền thực tế đã chi cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Có thể thêm hóa đơn/đơn hàng từ hóa đơn nếu có',
       attachTo: { element: '[data-tour-id="actual-expense-amounts"]', on: 'top' },
       buttons: [
         {
@@ -2806,7 +3246,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     tour.addStep({
       id: 'actual-expense-submit',
       title: 'Lưu chi phí thực tế',
-      text: 'Sau khi điền đầy đủ thông tin:\n• Kiểm tra lại các thông tin đã nhập\n• Nhấn nút "Tạo chi phí thực tế" để lưu\n• Chi phí thực tế sẽ được thêm vào dự án và có thể được duyệt sau\n• Bạn có thể xem chi phí thực tế trong danh sách chi phí dự án',
+      text: 'Hành động:\n• Kiểm tra lại các thông tin đã nhập\n• Nhấn nút "Tạo chi phí thực tế" để lưu\n\nKết quả:\n• Chi phí thực tế sẽ được thêm vào dự án\n• Có thể được duyệt sau\n• Bạn có thể xem chi phí thực tế trong danh sách chi phí dự án',
       attachTo: { element: '[data-tour-id="actual-expense-submit"]', on: 'top' },
       buttons: [
         {
@@ -2884,6 +3324,76 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       
       if (selectedExpenseObjectIds.length === 0) {
         alert('Vui lòng chọn ít nhất một đối tượng chi phí!')
+        return
+      }
+
+      // Handle update if in edit mode (similar to planned expense)
+      if (isEdit && editId) {
+        console.log('📤 Updating actual expense:', editId)
+        
+        const primaryExpenseObjectId = formData.expense_object_id || selectedExpenseObjectIds[0]
+        const totalAmount = Object.values(directObjectTotals).some(val => val > 0)
+          ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+          : (Number(grandAllocationTotal) || 0)
+        
+        // Do NOT include status in update - preserve current status from database
+        // Status should only be changed through approval/rejection actions, not through edit
+        const expenseData = {
+          project_id: formData.project_id,
+          employee_id: formData.employee_id || null,
+          description: formData.description,
+          expense_object_id: primaryExpenseObjectId,
+          amount: totalAmount,
+          currency: formData.currency,
+          expense_date: formData.expense_date,
+          // status is intentionally omitted to preserve current status
+          notes: formData.notes || null,
+          receipt_url: formData.receipt_url || null,
+          id_parent: formData.id_parent || null,
+          expense_object_columns: selectedExpenseObjectIds,
+          expense_object_totals: Object.values(directObjectTotals).some(val => val > 0) ? directObjectTotals : undefined,
+          invoice_items: getInvoiceItems().map((item: any) => ({
+            ...item,
+            components_pct: item.components_pct || {},
+            components_quantity: item.components_quantity || {},
+            components_unit_price: item.components_unit_price || {},
+            components_amount: item.components_amount || {}
+          }))
+        }
+
+        // CRITICAL: Remove status from expenseData if it exists to prevent auto-approval
+        const { status: _, ...expenseDataWithoutStatus } = expenseData as any
+        const finalExpenseData = expenseDataWithoutStatus
+        
+        console.log('📤 Expense data prepared for update (status explicitly excluded):', finalExpenseData)
+        console.log('⚠️ CRITICAL: Status field has been explicitly removed from update payload')
+        console.log('📊 Original expenseData had status?', 'status' in expenseData)
+        console.log('📊 Final expenseData has status?', 'status' in finalExpenseData)
+
+        // Explicitly exclude status from update to ensure it's not changed
+        const { error } = await supabase
+          .from('project_expenses')
+          .update(finalExpenseData)
+          .eq('id', editId)
+        
+        if (error) {
+          console.error('❌ Error updating actual expense:', error)
+          throw error
+        }
+        
+        console.log('✅ Actual expense updated successfully')
+        
+        // Update parent if exists
+        if (expenseData.id_parent) {
+          console.log('🔄 Updating parent expense amount...')
+          await updateParentExpenseAmount(expenseData.id_parent, 'project_expenses')
+        }
+        
+        alert('Cập nhật chi phí thực tế thành công!')
+        hideSidebar(true)
+        onSuccess()
+        onClose()
+        resetForm()
         return
       }
       
@@ -3281,6 +3791,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         unit_price: r.unitPrice || 0,
         quantity: r.quantity || 0,
         unit: r.unit || '',
+        area: r.area != null ? Number(r.area) : null,
         line_total: r.lineTotal || 0,
         components_pct,
         components_quantity,
@@ -3459,7 +3970,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             amount: amount,
             currency: dataToUse.formData.currency || 'VND',
             expense_date: dataToUse.formData.expense_date || new Date().toISOString().split('T')[0],
-            status: 'approved',
+            status: 'pending', // CRITICAL: Must be pending - only approve button can change to approved
             role: selectedRole,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -3621,7 +4132,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         amount: totalAmount,
         currency: dataToUse.formData.currency || 'VND',
         expense_date: dataToUse.formData.expense_date,
-        status: 'approved',
+        status: 'pending', // CRITICAL: Must be pending - only approve button can change to approved
         employee_id: dataToUse.formData.employee_id || null,
         id_parent: null, // This is a parent expense, so no parent
         created_at: new Date().toISOString(),
@@ -3705,7 +4216,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           amount: amountValue,
           currency: dataToUse.formData.currency || 'VND',
           expense_date: dataToUse.formData.expense_date,
-          status: 'approved',
+          status: 'pending', // CRITICAL: Must be pending - only approve button can change to approved
           employee_id: dataToUse.formData.employee_id || null,
           id_parent: createdParent.id, // Link to parent
           created_at: new Date().toISOString(),
@@ -3981,12 +4492,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">
-                {category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch'}
+                {isEdit 
+                  ? (category === 'actual' ? 'Chỉnh sửa chi phí thực tế' : 'Chỉnh sửa chi phí kế hoạch')
+                  : (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch')}
               </h2>
               <p className="text-sm text-black mt-1">
                 {category === 'actual' 
-                  ? 'Tạo chi phí thực tế đã phát sinh cho dự án'
-                  : 'Tạo chi phí dự kiến cho dự án'}
+                  ? (isEdit ? 'Chỉnh sửa chi phí thực tế đã phát sinh cho dự án' : 'Tạo chi phí thực tế đã phát sinh cho dự án')
+                  : (isEdit ? 'Chỉnh sửa chi phí dự kiến cho dự án' : 'Tạo chi phí dự kiến cho dự án')}
               </p>
               
               {/* Show selected expense info */}
@@ -4070,7 +4583,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               {expandedSections.basic && (
                 <div className="px-4 pb-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                    <div data-tour-id={category === 'planned' ? 'planned-expense-field-project' : 'actual-expense-field-project'}>
                       <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Dự án <span className="text-red-500">*</span>
                       </label>
@@ -4116,7 +4629,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       )}
                     </div>
 
-                    <div>
+                    <div data-tour-id={category === 'planned' ? 'planned-expense-field-employee' : 'actual-expense-field-employee'}>
                       <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Nhân viên
                       </label>
@@ -4143,7 +4656,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </div>
                   </div>
 
-                  <div>
+                  <div data-tour-id={category === 'planned' ? 'planned-expense-field-parent' : 'actual-expense-field-parent'}>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">
                       <div className="flex items-center space-x-2">
                         <span>Chi phí cha (tuỳ chọn)</span>
@@ -4227,7 +4740,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
                   {/* Chọn chi phí thực tế để cập nhật - chỉ hiển thị khi category = 'actual' */}
                   {category === 'actual' && (
-                    <div>
+                    <div data-tour-id="actual-expense-field-update">
                       <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Chọn chi phí thực tế để cập nhật (tùy chọn)
                       </label>
@@ -4267,7 +4780,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                    <div data-tour-id={category === 'planned' ? 'planned-expense-field-category' : 'actual-expense-field-category'}>
                       <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Loại chi phí <span className="text-red-500">*</span>
                       </label>
@@ -4283,7 +4796,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       </select>
                     </div>
 
-                    <div>
+                    <div data-tour-id={category === 'planned' ? 'planned-expense-field-date' : 'actual-expense-field-date'}>
                       <label className="block text-sm font-semibold text-gray-900 mb-2">
                         Ngày chi phí <span className="text-red-500">*</span>
                       </label>
@@ -4305,7 +4818,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   </div>
 
                   {/* Role field - hiển thị lại để user có thể thấy role của mình */}
-                  <div className="space-y-2">
+                  <div className="space-y-2" data-tour-id={category === 'planned' ? 'planned-expense-field-role' : 'actual-expense-field-role'}>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700">
                       Vai trò *
                     </label>
@@ -4392,7 +4905,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </div>
                   </div>
 
-                  <div>
+                  <div data-tour-id={category === 'planned' ? 'planned-expense-field-description' : 'actual-expense-field-description'}>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">
                       Mô tả <span className="text-red-500">*</span>
                     </label>
@@ -4738,8 +5251,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                             {selectedExpenseObjectIds.length > 0 && (
                             <tr className="bg-gray-50">
                               <td className="px-3 py-1.5 text-left text-xs font-medium bg-gray-50 sticky left-0 z-10" colSpan={totalColSpan}>Tổng chi phí</td>
-                              <td className="px-3 py-1.5 text-right text-xs font-medium">
+                              <td className={`px-3 py-1.5 text-right text-xs font-medium ${getCostPercentageColor(grandAllocationTotal, plannedAmountComputed)}`}>
                                 {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
+                                {plannedAmountComputed > 0 && (
+                                  <span className="ml-2 text-xs">
+                                    ({(grandAllocationTotal / plannedAmountComputed * 100).toFixed(1)}%)
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-1.5"></td>
                             </tr>
@@ -4765,7 +5283,24 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     <div className="flex flex-col items-end gap-1">
                       {selectedExpenseObjectIds.length > 0 && (
                         <div className="text-sm text-gray-700">
-                          Tổng chi phí: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</span>
+                          Tổng chi phí: <span className={`font-semibold ${getCostPercentageColor(grandAllocationTotal, plannedAmountComputed)}`}>
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
+                            {plannedAmountComputed > 0 && (
+                              <span className="ml-2">
+                                ({(grandAllocationTotal / plannedAmountComputed * 100).toFixed(1)}%)
+                              </span>
+                            )}
+                          </span>
+                          {plannedAmountComputed > 0 && grandAllocationTotal > plannedAmountComputed && (
+                            <div className="mt-1 text-xs text-red-600 font-medium">
+                              ⚠️ Chi phí vượt quá thành tiền!
+                            </div>
+                          )}
+                          {plannedAmountComputed > 0 && grandAllocationTotal > plannedAmountComputed * 0.9 && grandAllocationTotal <= plannedAmountComputed && (
+                            <div className="mt-1 text-xs text-yellow-600 font-medium">
+                              ⚠️ Chi phí gần bằng thành tiền!
+                            </div>
+                          )}
                         </div>
                       )}
                   <div className="text-sm text-gray-700">
@@ -4775,6 +5310,95 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 </div>
                 </div>
             </div>
+
+            {/* Cost Warning Box */}
+            {selectedExpenseObjectIds.length > 0 && plannedAmountComputed > 0 && (
+              <div className="mt-4">
+                {(() => {
+                  const costPercentage = (grandAllocationTotal / plannedAmountComputed) * 100
+                  const isOverTotal = grandAllocationTotal > plannedAmountComputed
+                  const isNearTotal = grandAllocationTotal > plannedAmountComputed * 0.9 && grandAllocationTotal <= plannedAmountComputed
+                  
+                  if (isOverTotal) {
+                    return (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                        <div className="flex items-start">
+                          <svg className="h-5 w-5 text-red-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <h3 className="text-sm font-medium text-red-800">
+                              Cảnh báo: Chi phí vượt quá thành tiền
+                            </h3>
+                            <div className="mt-1 text-sm text-red-700">
+                              <p>
+                                Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
+                              </p>
+                              <p className="mt-1">
+                                Tổng chi phí: <strong className="text-red-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
+                              </p>
+                              <p className="mt-1 text-red-600 font-medium">
+                                ⚠️ Chi phí vượt quá thành tiền {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal - plannedAmountComputed)} ({costPercentage.toFixed(1)}%)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  } else if (isNearTotal) {
+                    return (
+                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                        <div className="flex items-start">
+                          <svg className="h-5 w-5 text-yellow-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <h3 className="text-sm font-medium text-yellow-800">
+                              Cảnh báo: Chi phí gần bằng thành tiền
+                            </h3>
+                            <div className="mt-1 text-sm text-yellow-700">
+                              <p>
+                                Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
+                              </p>
+                              <p className="mt-1">
+                                Tổng chi phí: <strong className="text-yellow-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
+                              </p>
+                              <p className="mt-1 text-yellow-600 font-medium">
+                                ⚠️ Chi phí đã đạt {costPercentage.toFixed(1)}% thành tiền, cần kiểm tra lại!
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  } else {
+                    return (
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                        <div className="flex items-start">
+                          <svg className="h-5 w-5 text-green-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <h3 className="text-sm font-medium text-green-800">
+                              Tình trạng: Chi phí trong phạm vi an toàn
+                            </h3>
+                            <div className="mt-1 text-sm text-green-700">
+                              <p>
+                                Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
+                              </p>
+                              <p className="mt-1">
+                                Tổng chi phí: <strong className="text-green-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
+                                <span className="ml-2">({costPercentage.toFixed(1)}%)</span>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                })()}
+              </div>
+            )}
 
               {/* Right panel removed for full-width invoice table */}
                   </div>
@@ -5284,7 +5908,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               <span>
                 {submitting 
                   ? 'Đang lưu...' 
-                  : getValidationStatus()?.message || (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch')
+                  : getValidationStatus()?.message || (isEdit 
+                    ? (category === 'actual' ? 'Cập nhật chi phí thực tế' : 'Cập nhật chi phí kế hoạch')
+                    : (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch'))
                 }
               </span>
             </button>

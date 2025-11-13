@@ -301,6 +301,21 @@ export default function MaterialAdjustmentRulesTab() {
     await waitForElement('[data-tour-id="rule-form-header"]')
     await waitForElement('[data-tour-id="rule-form-add-button"]')
     await waitForElement('[data-tour-id="rule-form-table"]')
+    await waitForElement('[data-tour-id="rule-field-expense-object"]')
+    await waitForElement('[data-tour-id="rule-field-category"]')
+    await waitForElement('[data-tour-id="rule-field-dimension"]')
+    await waitForElement('[data-tour-id="rule-field-change-type"]')
+    await waitForElement('[data-tour-id="rule-field-change-value"]')
+    await waitForElement('[data-tour-id="rule-field-change-direction"]')
+    await waitForElement('[data-tour-id="rule-field-adjustment-type"]')
+    await waitForElement('[data-tour-id="rule-field-adjustment-value"]')
+    await waitForElement('[data-tour-id="rule-field-max-percentage"]')
+    await waitForElement('[data-tour-id="rule-field-max-absolute"]')
+    await waitForElement('[data-tour-id="rule-field-priority"]')
+    await waitForElement('[data-tour-id="rule-field-name"]')
+    await waitForElement('[data-tour-id="rule-field-description"]')
+    await waitForElement('[data-tour-id="rule-field-active"]')
+    await waitForElement('[data-tour-id="rule-field-actions"]')
 
     const tour = new Shepherd.Tour({
       defaultStepOptions: {
@@ -348,10 +363,10 @@ export default function MaterialAdjustmentRulesTab() {
     })
 
     tour.addStep({
-      id: 'rule-form-basic-fields',
-      title: 'Thông tin cơ bản',
-      text: 'Điền các thông tin cơ bản:\n• Vật tư: Chọn vật tư sẽ được điều chỉnh\n• Loại sản phẩm: Chọn loại sản phẩm áp dụng (để trống = áp dụng cho tất cả)\n• Kích thước: Chọn loại kích thước theo dõi (diện tích, thể tích, chiều cao, dài, sâu, số lượng)',
-      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      id: 'rule-field-expense-object',
+      title: 'Vật tư',
+      text: 'Vật tư (bắt buộc *): Chọn vật tư sẽ được điều chỉnh từ danh sách dropdown. Đây là đối tượng chi phí cấp 3 (vật tư cụ thể). Quy tắc sẽ tự động điều chỉnh số lượng vật tư này khi kích thước sản phẩm thay đổi.',
+      attachTo: { element: '[data-tour-id="rule-field-expense-object"]', on: 'bottom' },
       buttons: [
         {
           text: 'Quay lại',
@@ -366,10 +381,10 @@ export default function MaterialAdjustmentRulesTab() {
     })
 
     tour.addStep({
-      id: 'rule-form-change-settings',
-      title: 'Cài đặt thay đổi',
-      text: 'Cấu hình điều kiện kích hoạt:\n• Loại thay đổi: Phần trăm (%) hoặc Tuyệt đối (số cụ thể)\n• Ngưỡng: Giá trị ngưỡng để kích hoạt quy tắc (ví dụ: 10 = 10% hoặc 5m²)\n• Chiều thay đổi: Tăng, Giảm, hoặc Cả hai',
-      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      id: 'rule-field-category',
+      title: 'Loại sản phẩm',
+      text: 'Loại sản phẩm (tùy chọn): Chọn loại sản phẩm mà quy tắc này sẽ áp dụng. Bạn có thể:\n• Chọn một hoặc nhiều loại sản phẩm từ danh sách\n• Để trống (không chọn) = áp dụng cho tất cả loại sản phẩm\n• Sử dụng ô tìm kiếm để tìm nhanh loại sản phẩm\n• Nhấn "Chọn tất cả" để chọn tất cả\n• Nhấn "Bỏ chọn" để bỏ chọn tất cả',
+      attachTo: { element: '[data-tour-id="rule-field-category"]', on: 'bottom' },
       buttons: [
         {
           text: 'Quay lại',
@@ -384,10 +399,10 @@ export default function MaterialAdjustmentRulesTab() {
     })
 
     tour.addStep({
-      id: 'rule-form-adjustment-settings',
-      title: 'Cài đặt điều chỉnh',
-      text: 'Cấu hình cách điều chỉnh:\n• Cách điều chỉnh: Phần trăm (áp dụng % vào số lượng) hoặc Tuyệt đối (cộng/trừ trực tiếp)\n• Giá trị điều chỉnh: Giá trị áp dụng (có thể âm để giảm)\n• Tối đa điều chỉnh (%): Giới hạn tối đa cho điều chỉnh phần trăm\n• Tối đa điều chỉnh (abs): Giới hạn tối đa cho điều chỉnh tuyệt đối',
-      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      id: 'rule-field-dimension',
+      title: 'Kích thước',
+      text: 'Kích thước (bắt buộc *): Chọn loại kích thước mà quy tắc sẽ theo dõi và phản ứng khi thay đổi:\n• Diện tích (m²): Theo dõi diện tích sản phẩm\n• Thể tích (m³): Theo dõi thể tích sản phẩm\n• Chiều cao (mm): Theo dõi chiều cao\n• Dài (mm): Theo dõi chiều dài\n• Sâu (mm): Theo dõi chiều sâu\n• Số lượng: Theo dõi số lượng sản phẩm',
+      attachTo: { element: '[data-tour-id="rule-field-dimension"]', on: 'bottom' },
       buttons: [
         {
           text: 'Quay lại',
@@ -402,10 +417,190 @@ export default function MaterialAdjustmentRulesTab() {
     })
 
     tour.addStep({
-      id: 'rule-form-other-fields',
-      title: 'Thông tin bổ sung',
-      text: 'Điền thông tin bổ sung:\n• Ưu tiên: Số nhỏ hơn = ưu tiên cao hơn (khi có nhiều quy tắc)\n• Tên: Tên quy tắc (tùy chọn)\n• Mô tả: Mô tả chi tiết quy tắc (tùy chọn)\n• Kích hoạt: Bật/tắt quy tắc',
-      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      id: 'rule-field-change-type',
+      title: 'Loại thay đổi',
+      text: 'Loại thay đổi (bắt buộc *): Chọn cách đo lường sự thay đổi của kích thước:\n• Phần trăm (%): Đo lường theo phần trăm thay đổi (ví dụ: tăng 10%)\n• Tuyệt đối: Đo lường theo giá trị tuyệt đối (ví dụ: tăng 5m²)\n\nVí dụ: Nếu chọn "Phần trăm" và ngưỡng là 10, quy tắc sẽ kích hoạt khi kích thước tăng/giảm 10%.',
+      attachTo: { element: '[data-tour-id="rule-field-change-type"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-change-value',
+      title: 'Ngưỡng',
+      text: 'Ngưỡng (bắt buộc *): Nhập giá trị ngưỡng để kích hoạt quy tắc:\n• Nếu "Loại thay đổi" là "Phần trăm": Nhập số phần trăm (ví dụ: 10 = 10%)\n• Nếu "Loại thay đổi" là "Tuyệt đối": Nhập giá trị tuyệt đối (ví dụ: 5 = 5m²)\n\nVí dụ: Nếu chọn "Phần trăm" và nhập 10, quy tắc sẽ kích hoạt khi kích thước thay đổi 10% trở lên.',
+      attachTo: { element: '[data-tour-id="rule-field-change-value"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-change-direction',
+      title: 'Chiều thay đổi',
+      text: 'Chiều thay đổi (bắt buộc *): Chọn hướng thay đổi mà quy tắc sẽ phản ứng:\n• Tăng: Chỉ áp dụng khi kích thước tăng (ví dụ: diện tích tăng từ 10m² lên 12m²)\n• Giảm: Chỉ áp dụng khi kích thước giảm (ví dụ: diện tích giảm từ 12m² xuống 10m²)\n• Cả hai: Áp dụng cho cả tăng và giảm\n\nVí dụ: Nếu chọn "Tăng" và ngưỡng là 10%, quy tắc chỉ kích hoạt khi kích thước tăng 10% trở lên.',
+      attachTo: { element: '[data-tour-id="rule-field-change-direction"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-adjustment-type',
+      title: 'Cách điều chỉnh',
+      text: 'Cách điều chỉnh (bắt buộc *): Chọn cách thức điều chỉnh số lượng vật tư:\n• Phần trăm: Áp dụng phần trăm vào số lượng vật tư hiện tại\n  - Ví dụ: Nếu số lượng vật tư là 100 và giá trị điều chỉnh là 5, kết quả = 100 + (100 × 5%) = 105\n• Tuyệt đối: Cộng/trừ trực tiếp vào số lượng vật tư\n  - Ví dụ: Nếu số lượng vật tư là 100 và giá trị điều chỉnh là 5, kết quả = 100 + 5 = 105\n\nLưu ý: Giá trị điều chỉnh có thể âm để giảm số lượng.',
+      attachTo: { element: '[data-tour-id="rule-field-adjustment-type"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-adjustment-value',
+      title: 'Giá trị điều chỉnh',
+      text: 'Giá trị điều chỉnh (bắt buộc *): Nhập giá trị sẽ được áp dụng để điều chỉnh số lượng vật tư:\n• Nếu "Cách điều chỉnh" là "Phần trăm": Nhập phần trăm (ví dụ: 5 = tăng 5%, -2 = giảm 2%)\n• Nếu "Cách điều chỉnh" là "Tuyệt đối": Nhập số lượng cộng/trừ (ví dụ: 5 = +5, -2 = -2)\n\nVí dụ: Nếu chọn "Phần trăm" và nhập 10, số lượng vật tư sẽ tăng 10% khi điều kiện được thỏa mãn.',
+      attachTo: { element: '[data-tour-id="rule-field-adjustment-value"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-max-percentage',
+      title: 'Tối đa điều chỉnh (%)',
+      text: 'Tối đa điều chỉnh (%) (tùy chọn): Giới hạn tối đa cho điều chỉnh phần trăm. Trường này chỉ có hiệu lực khi "Cách điều chỉnh" là "Phần trăm":\n• Để trống = không giới hạn\n• Nhập số để giới hạn (ví dụ: 30 = tối đa 30%)\n\nVí dụ: Nếu "Giá trị điều chỉnh" là 50% nhưng "Tối đa điều chỉnh (%)" là 30, hệ thống sẽ chỉ điều chỉnh tối đa 30%.',
+      attachTo: { element: '[data-tour-id="rule-field-max-percentage"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-max-absolute',
+      title: 'Tối đa điều chỉnh (abs)',
+      text: 'Tối đa điều chỉnh (abs) (tùy chọn): Giới hạn tối đa cho điều chỉnh tuyệt đối. Trường này chỉ có hiệu lực khi "Cách điều chỉnh" là "Tuyệt đối":\n• Để trống = không giới hạn\n• Nhập số để giới hạn (ví dụ: 10 = tối đa +10 hoặc -10)\n\nVí dụ: Nếu "Giá trị điều chỉnh" là 20 nhưng "Tối đa điều chỉnh (abs)" là 10, hệ thống sẽ chỉ điều chỉnh tối đa ±10.',
+      attachTo: { element: '[data-tour-id="rule-field-max-absolute"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-priority',
+      title: 'Ưu tiên',
+      text: 'Ưu tiên (tùy chọn): Số ưu tiên của quy tắc khi có nhiều quy tắc cùng áp dụng:\n• Số nhỏ hơn = ưu tiên cao hơn (quy tắc được áp dụng trước)\n• Mặc định: 100\n• Ví dụ: Quy tắc có ưu tiên 10 sẽ được áp dụng trước quy tắc có ưu tiên 20\n\nLưu ý: Khi có nhiều quy tắc thỏa mãn điều kiện, hệ thống sẽ áp dụng theo thứ tự ưu tiên từ thấp đến cao.',
+      attachTo: { element: '[data-tour-id="rule-field-priority"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-name',
+      title: 'Tên quy tắc',
+      text: 'Tên (tùy chọn): Nhập tên quy tắc để dễ nhận biết và quản lý:\n• Tên nên mô tả ngắn gọn quy tắc\n• Ví dụ: "Tăng DT 20% → +10% vật tư", "Giảm thể tích 5m³ → -2 vật tư"\n• Trường này không bắt buộc nhưng nên điền để dễ quản lý nhiều quy tắc',
+      attachTo: { element: '[data-tour-id="rule-field-name"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-description',
+      title: 'Mô tả',
+      text: 'Mô tả (tùy chọn): Nhập mô tả chi tiết về quy tắc:\n• Mô tả nên giải thích rõ ràng mục đích và cách hoạt động của quy tắc\n• Ví dụ: "Khi diện tích sản phẩm tăng 10% trở lên, tự động tăng số lượng gỗ 5%"\n• Trường này không bắt buộc nhưng nên điền để người khác hiểu rõ quy tắc',
+      attachTo: { element: '[data-tour-id="rule-field-description"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'rule-field-active',
+      title: 'Kích hoạt',
+      text: 'Kích hoạt (bắt buộc *): Bật/tắt quy tắc bằng checkbox:\n• ✅ Đã chọn (checked): Quy tắc đang hoạt động và sẽ được áp dụng\n• ☐ Chưa chọn (unchecked): Quy tắc bị tắt và sẽ không được áp dụng\n\nLưu ý: Bạn có thể tắt quy tắc tạm thời mà không cần xóa, sau đó bật lại khi cần.',
+      attachTo: { element: '[data-tour-id="rule-field-active"]', on: 'bottom' },
       buttons: [
         {
           text: 'Quay lại',
@@ -422,8 +617,8 @@ export default function MaterialAdjustmentRulesTab() {
     tour.addStep({
       id: 'rule-form-save',
       title: 'Lưu quy tắc',
-      text: 'Sau khi điền đầy đủ thông tin, nhấn nút "Lưu" (✓) để lưu quy tắc. Nhấn "Xóa" (🗑️) để xóa quy tắc không cần thiết. Quy tắc sẽ tự động áp dụng khi tạo báo giá nếu điều kiện được thỏa mãn.',
-      attachTo: { element: '[data-tour-id="rule-form-table"]', on: 'top' },
+      text: 'Hành động:\n• Nhấn nút "Lưu" (✓) màu xanh lá để lưu quy tắc sau khi điền đầy đủ thông tin\n• Nhấn nút "Xóa" (🗑️) màu đỏ để xóa quy tắc không cần thiết\n• Nhấn nút "Sửa" (✏️) màu xanh dương để chỉnh sửa quy tắc đã lưu\n\nKết quả:\n• Quy tắc sẽ tự động áp dụng khi tạo báo giá nếu điều kiện được thỏa mãn\n• Quy tắc được lưu vào database và có thể chỉnh sửa sau\n• Các quy tắc được áp dụng theo thứ tự ưu tiên (số nhỏ hơn = ưu tiên cao hơn)',
+      attachTo: { element: '[data-tour-id="rule-field-actions"]', on: 'bottom' },
       buttons: [
         {
           text: 'Quay lại',
@@ -524,21 +719,21 @@ export default function MaterialAdjustmentRulesTab() {
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-black">Vật tư</th>
-              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 220 }}>Loại sản phẩm</th>
-              <th className="px-3 py-2 text-left font-medium text-black">Kích thước</th>
-              <th className="px-3 py-2 text-left font-medium text-black">Loại thay đổi</th>
-              <th className="px-3 py-2 text-right font-medium text-black">Ngưỡng</th>
-              <th className="px-3 py-2 text-left font-medium text-black">Chiều thay đổi</th>
-              <th className="px-3 py-2 text-left font-medium text-black">Cách điều chỉnh</th>
-              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }}>Giá trị điều chỉnh</th>
-              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }}>Tối đa điều chỉnh (%)</th>
-              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }}>Tối đa điều chỉnh (abs)</th>
-              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 120 }}>Ưu tiên</th>
-              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 200 }}>Tên</th>
-              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 280 }}>Mô tả</th>
-              <th className="px-3 py-2 text-center font-medium text-black" style={{ minWidth: 120 }}>Kích hoạt</th>
-              <th className="px-3 py-2 text-right font-medium text-black">Hành động</th>
+              <th className="px-3 py-2 text-left font-medium text-black" data-tour-id="rule-field-expense-object">Vật tư</th>
+              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 220 }} data-tour-id="rule-field-category">Loại sản phẩm</th>
+              <th className="px-3 py-2 text-left font-medium text-black" data-tour-id="rule-field-dimension">Kích thước</th>
+              <th className="px-3 py-2 text-left font-medium text-black" data-tour-id="rule-field-change-type">Loại thay đổi</th>
+              <th className="px-3 py-2 text-right font-medium text-black" data-tour-id="rule-field-change-value">Ngưỡng</th>
+              <th className="px-3 py-2 text-left font-medium text-black" data-tour-id="rule-field-change-direction">Chiều thay đổi</th>
+              <th className="px-3 py-2 text-left font-medium text-black" data-tour-id="rule-field-adjustment-type">Cách điều chỉnh</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }} data-tour-id="rule-field-adjustment-value">Giá trị điều chỉnh</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }} data-tour-id="rule-field-max-percentage">Tối đa điều chỉnh (%)</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 140 }} data-tour-id="rule-field-max-absolute">Tối đa điều chỉnh (abs)</th>
+              <th className="px-3 py-2 text-right font-medium text-black" style={{ minWidth: 120 }} data-tour-id="rule-field-priority">Ưu tiên</th>
+              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 200 }} data-tour-id="rule-field-name">Tên</th>
+              <th className="px-3 py-2 text-left font-medium text-black" style={{ minWidth: 280 }} data-tour-id="rule-field-description">Mô tả</th>
+              <th className="px-3 py-2 text-center font-medium text-black" style={{ minWidth: 120 }} data-tour-id="rule-field-active">Kích hoạt</th>
+              <th className="px-3 py-2 text-right font-medium text-black" data-tour-id="rule-field-actions">Hành động</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
