@@ -41,7 +41,13 @@ function Input({ className = '', ...props }: any) {
   )
 }
 
-export default function MaterialAdjustmentRulesTab() {
+export default function MaterialAdjustmentRulesTab({
+  supportTourRequest,
+  onSupportTourHandled
+}: {
+  supportTourRequest?: { slug: string; token: number } | null
+  onSupportTourHandled?: () => void
+} = {}) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [rules, setRules] = useState<RuleRow[]>([])
@@ -675,6 +681,13 @@ export default function MaterialAdjustmentRulesTab() {
       ruleTourRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!supportTourRequest) return
+    if (supportTourRequest.slug !== 'material-rules') return
+    startRuleTour()
+    onSupportTourHandled?.()
+  }, [supportTourRequest, onSupportTourHandled, startRuleTour])
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg">

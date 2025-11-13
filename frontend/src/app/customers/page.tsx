@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Customer } from '@/types'
 import { 
   Building2, 
@@ -76,6 +76,7 @@ export default function CustomersPage() {
   const [quickActionType, setQuickActionType] = useState<'invoice' | 'payment' | 'estimate' | 'reminder'>('invoice')
   const [user, setUser] = useState<{ email?: string; full_name?: string; role?: string } | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showTourCompletionPrompt, setShowTourCompletionPrompt] = useState(false)
   const [tourCountdown, setTourCountdown] = useState(TOUR_COUNTDOWN_SECONDS)
   const [isTourRunning, setIsTourRunning] = useState(false)
@@ -986,6 +987,23 @@ export default function CustomersPage() {
     setQuickActionType(actionType)
     setShowQuickActionModal(true)
   }
+
+  useEffect(() => {
+    if (!isBrowser) return
+    if (!searchParams) return
+    if (loading) return
+    if (!filteredCustomers.length) return
+
+    const tourParam = searchParams.get('tour')
+    if (tourParam !== 'customers') return
+
+    startCustomersTour({ auto: true })
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('tour')
+    const nextPath = params.toString() ? `/customers?${params.toString()}` : '/customers'
+    router.replace(nextPath, { scroll: false })
+  }, [filteredCustomers.length, isBrowser, loading, router, searchParams, startCustomersTour])
 
   if (loading) {
     return (

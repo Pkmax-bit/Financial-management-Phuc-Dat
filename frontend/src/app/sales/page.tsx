@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { 
   FileText, 
@@ -47,7 +47,17 @@ interface User {
   email?: string
 }
 
-function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
+function SalesPageContent({
+  activeTab,
+  setActiveTab,
+  supportTourSlug,
+  onSupportTourHandled
+}: {
+  activeTab: string
+  setActiveTab: (tab: string) => void
+  supportTourSlug?: string | null
+  onSupportTourHandled?: () => void
+}) {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
@@ -58,6 +68,10 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
   const [showQuickGuide, setShowQuickGuide] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const [quotesSupportTour, setQuotesSupportTour] = useState<{ slug: string; token: number } | null>(null)
+  const [invoicesSupportTour, setInvoicesSupportTour] = useState<{ slug: string; token: number } | null>(null)
+  const [productsSupportTour, setProductsSupportTour] = useState<{ slug: string; token: number } | null>(null)
+  const [adjustmentsSupportTour, setAdjustmentsSupportTour] = useState<{ slug: string; token: number } | null>(null)
 
   useEffect(() => {
     checkUser()
@@ -66,7 +80,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
   // Handle tab parameter from URL - removed to fix runtime error
 
   useEffect(() => {
-    if (shouldOpenCreateModal && activeTab === 'quotes') {
+    if (shouldOpenCreateModal && (activeTab === 'quotes' || activeTab === 'invoices')) {
       // Reset the flag after a short delay to allow the modal to open
       const timer = setTimeout(() => {
         setShouldOpenCreateModal(false)
@@ -111,6 +125,44 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
     router.push('/login')
   }
 
+  useEffect(() => {
+    if (!supportTourSlug) return
+
+    const token = Date.now()
+
+    switch (supportTourSlug) {
+      case 'quote-form':
+        handleCreateQuote(true)
+        break
+      case 'quote-actions':
+        setActiveTab('quotes')
+        setQuotesSupportTour({ slug: 'quote-actions', token })
+        break
+      case 'email-modal':
+        setActiveTab('quotes')
+        setQuotesSupportTour({ slug: 'email-modal', token })
+        break
+      case 'invoice-form':
+        setActiveTab('invoices')
+        setShouldOpenCreateModal(true)
+        setInvoicesSupportTour({ slug: 'invoice-form', token })
+        break
+      case 'product-form':
+        setActiveTab('products')
+        setShowCreateProductModal(true)
+        setProductsSupportTour({ slug: 'product-form', token })
+        break
+      case 'material-rules':
+        setActiveTab('adjustments')
+        setAdjustmentsSupportTour({ slug: 'material-rules', token })
+        break
+      default:
+        break
+    }
+
+    onSupportTourHandled?.()
+  }, [supportTourSlug, setActiveTab, onSupportTourHandled])
+
   const fetchSalesStats = async () => {
     try {
       setLoading(true)
@@ -150,10 +202,12 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
     }
   }
 
-  const handleCreateQuote = () => {
-    // Navigate to create quote page or open modal
+  const handleCreateQuote = (openTour?: boolean) => {
     setActiveTab('quotes')
     setShouldOpenCreateModal(true)
+    if (openTour) {
+      setQuotesSupportTour({ slug: 'quote-form', token: Date.now() })
+    }
   }
 
   const handleCreateInvoice = () => {
@@ -560,6 +614,8 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   searchTerm={searchTerm}
                   onCreateInvoice={handleCreateInvoice}
                   shouldOpenCreateModal={shouldOpenCreateModal}
+                  supportTourRequest={invoicesSupportTour}
+                  onSupportTourHandled={() => setInvoicesSupportTour(null)}
                 />
               )}
               {activeTab === 'quotes' && (
@@ -567,6 +623,8 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   searchTerm={searchTerm}
                   onCreateQuote={handleCreateQuote}
                   shouldOpenCreateModal={shouldOpenCreateModal}
+                  supportTourRequest={quotesSupportTour}
+                  onSupportTourHandled={() => setQuotesSupportTour(null)}
                 />
               )}
               {activeTab === 'receipts' && (
@@ -619,7 +677,10 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                     <h3 className="text-lg font-semibold text-gray-900">Điều chỉnh vật tư</h3>
                     <p className="text-sm text-black">Thiết lập quy tắc điều chỉnh theo kích thước, số lượng</p>
                   </div>
-                  <MaterialAdjustmentRulesTab />
+                  <MaterialAdjustmentRulesTab
+                    supportTourRequest={adjustmentsSupportTour}
+                    onSupportTourHandled={() => setAdjustmentsSupportTour(null)}
+                  />
                 </div>
               )}
             </div>
@@ -650,6 +711,8 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
         onSuccess={() => {
           setShowCreateProductModal(false)
         }}
+        supportTourRequest={productsSupportTour}
+        onSupportTourHandled={() => setProductsSupportTour(null)}
       />
     </LayoutWithSidebar>
   )
@@ -657,7 +720,9 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
 
 function SalesPageWithParams() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('overview')
+  const [supportTourSlug, setSupportTourSlug] = useState<string | null>(null)
 
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -666,7 +731,50 @@ function SalesPageWithParams() {
     }
   }, [searchParams])
 
-  return <SalesPageContent activeTab={activeTab} setActiveTab={setActiveTab} />
+  useEffect(() => {
+    const tour = searchParams.get('tour')
+    if (tour) {
+      setSupportTourSlug(tour)
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    const action = searchParams.get('action')
+    if (!action) return
+
+    if (action === 'create-quote-tour') {
+      setActiveTab('quotes')
+      setSupportTourSlug('quote-form')
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('action')
+      const nextPath = params.toString() ? `/sales?${params.toString()}` : '/sales'
+      router.replace(nextPath, { scroll: false })
+    }
+  }, [searchParams, router])
+
+  const handleSupportTourHandled = useCallback(() => {
+    setSupportTourSlug(null)
+    const params = new URLSearchParams(searchParams.toString())
+    if (params.has('tour')) {
+      params.delete('tour')
+    }
+    if (params.has('action')) {
+      params.delete('action')
+    }
+    if (searchParams.get('tour') || searchParams.get('action')) {
+      const nextPath = params.toString() ? `/sales?${params.toString()}` : '/sales'
+      router.replace(nextPath, { scroll: false })
+    }
+  }, [router, searchParams])
+
+  return (
+    <SalesPageContent
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      supportTourSlug={supportTourSlug}
+      onSupportTourHandled={handleSupportTourHandled}
+    />
+  )
 }
 
 export default function SalesPage() {

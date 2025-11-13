@@ -66,9 +66,17 @@ interface QuotesTabProps {
   searchTerm?: string
   onCreateQuote: () => void
   shouldOpenCreateModal?: boolean
+  supportTourRequest?: { slug: string; token: number } | null
+  onSupportTourHandled?: () => void
 }
 
-export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateModal }: QuotesTabProps) {
+export default function QuotesTab({
+  searchTerm,
+  onCreateQuote,
+  shouldOpenCreateModal,
+  supportTourRequest,
+  onSupportTourHandled
+}: QuotesTabProps) {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
@@ -85,6 +93,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   } | null>(null)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
+  const [forceQuoteTourToken, setForceQuoteTourToken] = useState(0)
+  const [forceEmailTourToken, setForceEmailTourToken] = useState(0)
+  const [skipQuoteAutoStart, setSkipQuoteAutoStart] = useState(false)
   
   // Tour state
   const QUOTE_CONVERT_TOUR_STORAGE_KEY = 'quote-convert-tour-status-v1'
@@ -139,6 +151,12 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       setShowCreateModal(true)
     }
   }, [shouldOpenCreateModal])
+
+  useEffect(() => {
+    if (supportTourRequest) {
+      setPendingSupportTour(supportTourRequest)
+    }
+  }, [supportTourRequest])
 
   const fetchQuotes = async () => {
     try {
@@ -857,6 +875,53 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     }
   }, [])
 
+  useEffect(() => {
+    if (!pendingSupportTour) return
+
+    const { slug } = pendingSupportTour
+
+    if (slug === 'quote-form') {
+      setShowCreateModal(true)
+      setSkipQuoteAutoStart(true)
+      setForceQuoteTourToken(prev => prev + 1)
+      onSupportTourHandled?.()
+      setPendingSupportTour(null)
+      setTimeout(() => setSkipQuoteAutoStart(false), 1000)
+      return
+    }
+
+    if (slug === 'quote-actions') {
+      if (loading) return
+      if (quotes.length === 0) {
+        console.warn('[Support Tour] Không có báo giá để hiển thị tour "quote-actions".')
+        onSupportTourHandled?.()
+        setPendingSupportTour(null)
+        return
+      }
+      startConvertTour()
+      onSupportTourHandled?.()
+      setPendingSupportTour(null)
+      return
+    }
+
+    if (slug === 'email-modal') {
+      if (loading) return
+      if (quotes.length === 0) {
+        console.warn('[Support Tour] Không có báo giá để mở tour email.')
+        onSupportTourHandled?.()
+        setPendingSupportTour(null)
+        return
+      }
+      const targetQuote = quotes[0]
+      setPreviewQuoteId(targetQuote.id)
+      setShowPreviewModal(true)
+      setForceEmailTourToken(prev => prev + 1)
+      onSupportTourHandled?.()
+      setPendingSupportTour(null)
+      return
+    }
+  }, [pendingSupportTour, loading, quotes, startConvertTour, onSupportTourHandled])
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
@@ -1404,6 +1469,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         onSuccess={() => {
           fetchQuotes()
         }}
+        forceStartTourToken={forceQuoteTourToken}
+        skipAutoStartTour={skipQuoteAutoStart}
       />
 
       <QuoteEmailPreviewModal
@@ -1414,6 +1481,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         }}
         quoteId={previewQuoteId || ''}
         onConfirmSend={confirmSendQuote}
+        forceStartTourToken={forceEmailTourToken}
       />
 
       {/* Help Sidebar */}
