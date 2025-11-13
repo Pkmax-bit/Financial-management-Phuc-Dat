@@ -83,8 +83,6 @@ export default function CustomersPage() {
   const shepherdRef = useRef<CustomersShepherdType | null>(null)
   const tourRef = useRef<CustomersShepherdTour | null>(null)
   const formTourRef = useRef<CustomersShepherdTour | null>(null)
-  const autoStartAttemptedRef = useRef(false)
-  const formTourAutoStartAttemptedRef = useRef(false)
   const currentTourModeRef = useRef<'auto' | 'manual'>('manual')
   const isBrowser = typeof window !== 'undefined'
 
@@ -659,13 +657,13 @@ export default function CustomersPage() {
       title: 'Điền thông tin khách hàng',
       text: 'Form này hướng dẫn bạn nhập thông tin cơ bản, liên hệ và hạn mức tín dụng. Sau khi lưu, khách hàng sẽ xuất hiện trong danh sách.',
       attachTo: { element: '[data-tour-id="customers-add-modal"]', on: 'left' },
+      beforeShowPromise: async () => {
+        if (!showAddModal) {
+          await openAddModal()
+        }
+        await waitForElement('[data-tour-id="customers-add-modal"]')
+      },
       when: {
-        show: async () => {
-          if (!showAddModal) {
-            await openAddModal()
-          }
-          await waitForElement('[data-tour-id="customers-add-modal"]')
-        },
         hide: () => {
           setShowAddModal(false)
         }
@@ -954,20 +952,6 @@ export default function CustomersPage() {
 
   useEffect(() => {
     if (!isBrowser) return
-    if (loading) return
-    if (!filteredCustomers.length) return
-    if (autoStartAttemptedRef.current) return
-
-    const storedStatus = localStorage.getItem(TOUR_STORAGE_KEY)
-    autoStartAttemptedRef.current = true
-
-    if (!storedStatus) {
-      startCustomersTour({ auto: true })
-    }
-  }, [filteredCustomers, isBrowser, loading, startCustomersTour])
-
-  useEffect(() => {
-    if (!isBrowser) return
     if (!showTourCompletionPrompt) return
 
     if (tourCountdown <= 0) {
@@ -995,29 +979,6 @@ export default function CustomersPage() {
       formTourRef.current = null
     }
   }, [])
-
-  useEffect(() => {
-    if (!isBrowser) return
-    if (!showAddModal) return
-    if (formTourAutoStartAttemptedRef.current) return
-
-    const storedStatus = localStorage.getItem(CUSTOMER_FORM_TOUR_STORAGE_KEY)
-    formTourAutoStartAttemptedRef.current = true
-
-    if (!storedStatus) {
-      // Delay to ensure modal is fully rendered
-      setTimeout(() => {
-        startCustomerFormTour()
-      }, 500)
-    }
-  }, [isBrowser, showAddModal, startCustomerFormTour])
-
-  useEffect(() => {
-    // Reset form tour auto-start when modal closes
-    if (!showAddModal) {
-      formTourAutoStartAttemptedRef.current = false
-    }
-  }, [showAddModal])
 
   const stats = getCustomerStats()
 
@@ -1606,13 +1567,12 @@ export default function CustomersPage() {
                           }
                         }}
                         disabled={addSaving}
-                        className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+                        className="px-3 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
                         title="Tự động tạo mã khách hàng"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
-                        <span className="text-sm font-medium">Auto</span>
                       </button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
