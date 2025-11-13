@@ -45,6 +45,7 @@ import { customerApi } from '@/lib/api'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 
 const TOUR_STORAGE_KEY = 'customers-page-tour-status-v1'
+const CUSTOMER_FORM_TOUR_STORAGE_KEY = 'customer-form-tour-status-v1'
 const TOUR_COUNTDOWN_SECONDS = 5
 type CustomersShepherdModule = typeof import('shepherd.js')
 type CustomersShepherdType = CustomersShepherdModule & { Tour: new (...args: any[]) => any }
@@ -78,9 +79,12 @@ export default function CustomersPage() {
   const [showTourCompletionPrompt, setShowTourCompletionPrompt] = useState(false)
   const [tourCountdown, setTourCountdown] = useState(TOUR_COUNTDOWN_SECONDS)
   const [isTourRunning, setIsTourRunning] = useState(false)
+  const [isFormTourRunning, setIsFormTourRunning] = useState(false)
   const shepherdRef = useRef<CustomersShepherdType | null>(null)
   const tourRef = useRef<CustomersShepherdTour | null>(null)
+  const formTourRef = useRef<CustomersShepherdTour | null>(null)
   const autoStartAttemptedRef = useRef(false)
+  const formTourAutoStartAttemptedRef = useRef(false)
   const currentTourModeRef = useRef<'auto' | 'manual'>('manual')
   const isBrowser = typeof window !== 'undefined'
 
@@ -790,6 +794,164 @@ export default function CustomersPage() {
     startCustomersTour()
   }, [startCustomersTour])
 
+  const startCustomerFormTour = useCallback(async () => {
+    if (!isBrowser || !showAddModal) return
+
+    if (formTourRef.current) {
+      formTourRef.current.cancel()
+      formTourRef.current = null
+    }
+
+    if (!shepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: CustomersShepherdType })?.default ?? (module as unknown as CustomersShepherdType)
+        shepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = shepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="customer-form-basic-info"]')
+    await waitForElement('[data-tour-id="customer-form-financial-info"]')
+    await waitForElement('[data-tour-id="customer-form-additional-info"]')
+    await waitForElement('[data-tour-id="customer-form-submit"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'customer-form-intro',
+      title: 'Hướng dẫn tạo khách hàng',
+      text: 'Form này gồm 3 phần chính: Thông tin cơ bản, Thông tin tài chính và Thông tin bổ sung. Hãy điền đầy đủ để tạo khách hàng mới.',
+      attachTo: { element: '[data-tour-id="customers-add-modal"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-form-basic-info',
+      title: 'Thông tin cơ bản',
+      text: 'Điền mã khách hàng (tự động tạo), loại khách hàng, tên/công ty, email, điện thoại, địa chỉ và mã số thuế. Các trường có dấu * là bắt buộc.',
+      attachTo: { element: '[data-tour-id="customer-form-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-form-financial-info',
+      title: 'Thông tin tài chính',
+      text: 'Thiết lập hạn mức tín dụng (VND) và điều khoản thanh toán (số ngày). Đây là thông tin quan trọng để quản lý công nợ.',
+      attachTo: { element: '[data-tour-id="customer-form-financial-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-form-additional-info',
+      title: 'Thông tin bổ sung',
+      text: 'Thêm ghi chú hoặc thông tin bổ sung về khách hàng nếu cần. Phần này không bắt buộc nhưng có thể hữu ích cho việc quản lý sau này.',
+      attachTo: { element: '[data-tour-id="customer-form-additional-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-form-submit',
+      title: 'Hoàn tất',
+      text: 'Sau khi điền đầy đủ thông tin, nhấn nút "Tạo khách hàng" để lưu. Khách hàng mới sẽ xuất hiện trong danh sách ngay sau đó.',
+      attachTo: { element: '[data-tour-id="customer-form-submit"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsFormTourRunning(false)
+      if (isBrowser) {
+        localStorage.setItem(CUSTOMER_FORM_TOUR_STORAGE_KEY, 'completed')
+      }
+      formTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsFormTourRunning(false)
+      formTourRef.current = null
+    })
+
+    formTourRef.current = tour
+    setIsFormTourRunning(true)
+    tour.start()
+  }, [isBrowser, showAddModal])
+
   useEffect(() => {
     if (!isBrowser) return
     if (loading) return
@@ -828,8 +990,34 @@ export default function CustomersPage() {
       tourRef.current?.cancel()
       tourRef.current?.destroy()
       tourRef.current = null
+      formTourRef.current?.cancel()
+      formTourRef.current?.destroy?.()
+      formTourRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!isBrowser) return
+    if (!showAddModal) return
+    if (formTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(CUSTOMER_FORM_TOUR_STORAGE_KEY)
+    formTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure modal is fully rendered
+      setTimeout(() => {
+        startCustomerFormTour()
+      }, 500)
+    }
+  }, [isBrowser, showAddModal, startCustomerFormTour])
+
+  useEffect(() => {
+    // Reset form tour auto-start when modal closes
+    if (!showAddModal) {
+      formTourAutoStartAttemptedRef.current = false
+    }
+  }, [showAddModal])
 
   const stats = getCustomerStats()
 
@@ -1327,15 +1515,30 @@ export default function CustomersPage() {
                 <h2 className="text-xl font-bold text-gray-900">Tạo khách hàng mới</h2>
                 <p className="text-sm font-semibold text-gray-700">Thêm khách hàng vào hệ thống</p>
               </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-black hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                disabled={addSaving}
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => startCustomerFormTour()}
+                  disabled={isFormTourRunning || addSaving}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                    isFormTourRunning || addSaving
+                      ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                      : 'text-white bg-blue-600 hover:bg-blue-700'
+                  }`}
+                  title="Bắt đầu hướng dẫn form"
+                >
+                  <CircleHelp className="h-4 w-4" />
+                  <span>Hướng dẫn</span>
+                </button>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="text-black hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                  disabled={addSaving}
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <form onSubmit={createCustomer} className="p-6 space-y-6">
@@ -1360,7 +1563,7 @@ export default function CustomersPage() {
               )}
 
               {/* Basic Information */}
-              <div>
+              <div data-tour-id="customer-form-basic-info">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin cơ bản</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -1529,7 +1732,7 @@ export default function CustomersPage() {
               </div>
               
               {/* Financial Information */}
-              <div>
+              <div data-tour-id="customer-form-financial-info">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin tài chính</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -1564,7 +1767,7 @@ export default function CustomersPage() {
               </div>
               
               {/* Additional Information */}
-              <div>
+              <div data-tour-id="customer-form-additional-info">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Thông tin bổ sung</h3>
                 <div className="grid grid-cols-1 gap-6">
                   <div>
@@ -1585,7 +1788,7 @@ export default function CustomersPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex justify-end space-x-4 pt-6 border-t-2 border-gray-200">
+              <div className="flex justify-end space-x-4 pt-6 border-t-2 border-gray-200" data-tour-id="customer-form-submit">
                 <button 
                   type="button" 
                   onClick={() => setShowAddModal(false)}
