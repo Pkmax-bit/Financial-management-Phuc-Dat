@@ -263,6 +263,7 @@ Sau khi hoàn thành mỗi task, đánh dấu checkbox và cập nhật status t
 - [API Security Guide](./API_SECURITY_GUIDE.md) - Hướng dẫn chi tiết
 - [Security Principles & Technologies](./SECURITY_PRINCIPLES_AND_TECHNOLOGIES.md) - Quy tắc, lợi ích và công nghệ
 - [Before & After Comparison](./SECURITY_BEFORE_AFTER_COMPARISON.md) - So sánh trước và sau
+- [Performance Analysis](./SECURITY_PERFORMANCE_ANALYSIS.md) - Phân tích hiệu năng
 - [Comprehensive Test Results](./COMPREHENSIVE_SECURITY_TEST_RESULTS.md) - Kết quả test tổng hợp
 - [Feasibility Analysis](./API_SECURITY_FEASIBILITY.md) - Đánh giá tính khả thi
 - [Implementation Plan](./API_SECURITY_IMPLEMENTATION_PLAN.md) - Kế hoạch triển khai chi tiết
