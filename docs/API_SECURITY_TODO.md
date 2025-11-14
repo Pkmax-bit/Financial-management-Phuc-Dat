@@ -37,14 +37,14 @@ Danh sách các task cần thực hiện để triển khai bảo mật API, đ�
 
 ### 🌐 Task 1.2: CORS Enhancement
 
-- [ ] **security-4**: Enhance CORS Configuration
+- [x] **security-4**: Enhance CORS Configuration ✅
   - Cập nhật `backend/main.py`
   - Production: Chỉ cho phép specific origins
   - Development: Giữ nguyên "*" nhưng thêm max_age
   - Thêm expose_headers: ["X-Request-ID"]
   - **Thời gian:** 20 phút
 
-- [ ] **security-5**: Test CORS
+- [x] **security-5**: Test CORS ✅
   - Test với frontend từ allowed origin
   - Test với frontend từ disallowed origin
   - Test preflight requests (OPTIONS)

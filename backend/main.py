@@ -47,13 +47,26 @@ else:
     ]
 
 # CORS middleware (add first, will execute last due to reverse order)
+# Enhanced CORS configuration for better security
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins if ENVIRONMENT == "production" else ["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=[
+        "X-Request-ID",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+        "Retry-After"
+    ],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Request ID Middleware (add after CORS, will execute before CORS)
+from middleware.request_id import RequestIDMiddleware
+app.add_middleware(RequestIDMiddleware)
 
 # Rate Limiting Middleware (import and add after CORS, will execute before CORS)
 from middleware.rate_limit import rate_limiter, get_rate_limit_config
