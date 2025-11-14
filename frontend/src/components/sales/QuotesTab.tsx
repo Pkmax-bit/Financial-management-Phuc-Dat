@@ -85,7 +85,6 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   } | null>(null)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
-<<<<<<< HEAD
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('planning') // Mặc định: lập kế hoạch
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
@@ -93,8 +92,6 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [forceQuoteTourToken, setForceQuoteTourToken] = useState(0)
   const [forceEmailTourToken, setForceEmailTourToken] = useState(0)
   const [skipQuoteAutoStart, setSkipQuoteAutoStart] = useState(false)
-=======
->>>>>>> origin/main
   
   // Tour state
   const QUOTE_CONVERT_TOUR_STORAGE_KEY = 'quote-convert-tour-status-v1'

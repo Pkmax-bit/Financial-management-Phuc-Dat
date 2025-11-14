@@ -64,15 +64,9 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [userRole, setUserRole] = useState<string>('employee')
-<<<<<<< HEAD
-  const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
-  const [forcePlannedTourToken, setForcePlannedTourToken] = useState(0)
-  const [forceActualTourToken, setForceActualTourToken] = useState(0)
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('planning') // Mặc định: lập kế hoạch (cho planned)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
-=======
->>>>>>> origin/main
 
   // Tour state
   const APPROVE_EXPENSE_TOUR_STORAGE_KEY = 'approve-expense-tour-status-v1'
@@ -83,51 +77,6 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   type ApproveExpenseShepherdModule = typeof import('shepherd.js')
   type ApproveExpenseShepherdType = ApproveExpenseShepherdModule & { Tour: new (...args: any[]) => any }
   type ApproveExpenseShepherdTour = InstanceType<ApproveExpenseShepherdType['Tour']>
-
-// Filter expenses based on view mode and build tree
-const getFilteredExpenses = () => {
-  let filtered: ProjectExpense[] = []
-  
-  switch (viewMode) {
-    case 'planned':
-      filtered = expenses.filter(e => e.category === 'planned')
-      break
-    case 'actual':
-      filtered = expenses.filter(e => e.category === 'actual')
-      break
-    default:
-      filtered = expenses
-  }
-  
-  // Filter by project status if needed
-  if (projectStatusFilter !== 'all') {
-    filtered = filtered.filter(e => {
-      const project = projectsMap.get(e.project_id)
-      return project && project.status === projectStatusFilter
-    })
-  }
-  
-  // Build tree structure and flatten for display
-  const tree = buildTree(filtered)
-  return flattenTree(tree)
-}
-
-// Get paginated filtered expenses
-const getPaginatedFilteredExpenses = () => {
-  const allFiltered = getFilteredExpenses()
-  return allFiltered.slice(startIndex, endIndex)
-}
-
-// Get display data based on view mode
-const getDisplayData = () => {
-  if (viewMode === 'all') {
-    // For 'all' view, show aggregated by project
-    return projectDisplay
-  } else {
-    // For 'planned' or 'actual', show individual expense items
-    return getFilteredExpenses()
-  }
-}
 
 // CRUD permissions
 const canEdit = (expense: ProjectExpense) => {
@@ -561,6 +510,52 @@ const startApproveExpenseTour = useCallback(async () => {
     }
     // For 'all' view, keep current filter or default to 'all'
   }, [viewMode])
+
+  // Filter expenses based on view mode and build tree
+  const getFilteredExpenses = () => {
+    let filtered: ProjectExpense[] = []
+    
+    switch (viewMode) {
+      case 'planned':
+        filtered = expenses.filter(e => e.category === 'planned')
+        break
+      case 'actual':
+        filtered = expenses.filter(e => e.category === 'actual')
+        break
+      default:
+        filtered = expenses
+    }
+    
+    // Filter by project status if needed
+    if (projectStatusFilter !== 'all') {
+      filtered = filtered.filter(e => {
+        const project = projectsMap.get(e.project_id)
+        return project && project.status === projectStatusFilter
+      })
+    }
+    
+    // Build tree structure and flatten for display
+    const tree = buildTree(filtered)
+    return flattenTree(tree)
+  }
+
+  // Get paginated filtered expenses (will use startIndex and endIndex calculated below)
+  const getPaginatedFilteredExpenses = () => {
+    const allFiltered = getFilteredExpenses()
+    // startIndex and endIndex are calculated below in the component body
+    return allFiltered
+  }
+
+  // Get display data based on view mode
+  const getDisplayData = () => {
+    if (viewMode === 'all') {
+      // For 'all' view, show aggregated by project
+      return projectDisplay
+    } else {
+      // For 'planned' or 'actual', show individual expense items
+      return getFilteredExpenses()
+    }
+  }
 
   // Toggle expand/collapse for parent items
   const toggleExpand = (itemId: string) => {
@@ -1319,7 +1314,7 @@ return (
                 ))
               ) : (
                 // Show individual expense items for 'planned' or 'actual' view
-                getPaginatedFilteredExpenses().map((expense) => (
+                getPaginatedFilteredExpenses().slice(startIndex, endIndex).map((expense) => (
                   <tr key={expense.id} className={`hover:bg-gray-50 ${
                     expense.level && expense.level > 0 
                       ? 'bg-orange-50' // Child expenses - light orange background
