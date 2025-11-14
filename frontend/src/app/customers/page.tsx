@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Customer } from '@/types'
 import { 
   Building2, 
@@ -76,7 +76,6 @@ export default function CustomersPage() {
   const [quickActionType, setQuickActionType] = useState<'invoice' | 'payment' | 'estimate' | 'reminder'>('invoice')
   const [user, setUser] = useState<{ email?: string; full_name?: string; role?: string } | null>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [showTourCompletionPrompt, setShowTourCompletionPrompt] = useState(false)
   const [tourCountdown, setTourCountdown] = useState(TOUR_COUNTDOWN_SECONDS)
   const [isTourRunning, setIsTourRunning] = useState(false)
@@ -988,23 +987,6 @@ export default function CustomersPage() {
     setShowQuickActionModal(true)
   }
 
-  useEffect(() => {
-    if (!isBrowser) return
-    if (!searchParams) return
-    if (loading) return
-    if (!filteredCustomers.length) return
-
-    const tourParam = searchParams.get('tour')
-    if (tourParam !== 'customers') return
-
-    startCustomersTour({ auto: true })
-
-    const params = new URLSearchParams(searchParams.toString())
-    params.delete('tour')
-    const nextPath = params.toString() ? `/customers?${params.toString()}` : '/customers'
-    router.replace(nextPath, { scroll: false })
-  }, [filteredCustomers.length, isBrowser, loading, router, searchParams, startCustomersTour])
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1249,7 +1231,7 @@ export default function CustomersPage() {
                     placeholder="Tìm kiếm theo tên, email, điện thoại..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white text-gray-900 font-semibold placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div className="flex items-center space-x-3 justify-end">

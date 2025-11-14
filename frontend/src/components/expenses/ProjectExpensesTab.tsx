@@ -54,16 +54,9 @@ interface ProjectExpense {
 interface ProjectExpensesTabProps {
   searchTerm?: string
   onCreateExpense: () => void
-  supportTourRequest?: { slug: string; token: number } | null
-  onSupportTourHandled?: () => void
 }
 
-export default function ProjectExpensesTab({
-  searchTerm,
-  onCreateExpense,
-  supportTourRequest,
-  onSupportTourHandled
-}: ProjectExpensesTabProps) {
+export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: ProjectExpensesTabProps) {
   const [expenses, setExpenses] = useState<ProjectExpense[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,12 +64,15 @@ export default function ProjectExpensesTab({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [userRole, setUserRole] = useState<string>('employee')
+<<<<<<< HEAD
   const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
   const [forcePlannedTourToken, setForcePlannedTourToken] = useState(0)
   const [forceActualTourToken, setForceActualTourToken] = useState(0)
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('planning') // Mặc định: lập kế hoạch (cho planned)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
+=======
+>>>>>>> origin/main
 
   // Tour state
   const APPROVE_EXPENSE_TOUR_STORAGE_KEY = 'approve-expense-tour-status-v1'
@@ -550,43 +546,6 @@ const startApproveExpenseTour = useCallback(async () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createExpenseCategory, setCreateExpenseCategory] = useState<'planned' | 'actual'>('planned')
   const [showExpenseObjectModal, setShowExpenseObjectModal] = useState(false)
-
-  useEffect(() => {
-    if (supportTourRequest) {
-      setPendingSupportTour(supportTourRequest)
-    }
-  }, [supportTourRequest])
-
-  useEffect(() => {
-    if (!pendingSupportTour) return
-
-    switch (pendingSupportTour.slug) {
-      case 'planned-expense':
-        setCreateExpenseCategory('planned')
-        setShowCreateModal(true)
-        setForcePlannedTourToken(prev => prev + 1)
-        onSupportTourHandled?.()
-        setPendingSupportTour(null)
-        return
-      case 'actual-expense':
-        setCreateExpenseCategory('actual')
-        setShowCreateModal(true)
-        setForceActualTourToken(prev => prev + 1)
-        onSupportTourHandled?.()
-        setPendingSupportTour(null)
-        return
-      case 'approve-expense':
-        if (loading) return
-        startApproveExpenseTour()
-        onSupportTourHandled?.()
-        setPendingSupportTour(null)
-        return
-      default:
-        onSupportTourHandled?.()
-        setPendingSupportTour(null)
-        return
-    }
-  }, [pendingSupportTour, loading, startApproveExpenseTour, onSupportTourHandled])
 
   // Define projectsMap at the top of the component after fetching data
   const [projectsMap, setProjectsMap] = useState(new Map())
@@ -1607,8 +1566,6 @@ return (
         category={createExpenseCategory}
         mode={editExpense ? 'edit' : 'create'}
         editId={editExpense?.id}
-        forcePlannedTourToken={forcePlannedTourToken}
-        forceActualTourToken={forceActualTourToken}
       />
 
       {/* Create Expense Object Dialog */}

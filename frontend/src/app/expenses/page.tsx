@@ -1,7 +1,7 @@
 ﻿'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   Receipt, 
   Plus, 
@@ -33,7 +33,7 @@ interface User {
   email?: string
 }
 
-export default function ExpensesPage() {
+function ExpensesPageContent() {
   const [activeTab, setActiveTab] = useState('expenses')
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -42,8 +42,6 @@ export default function ExpensesPage() {
   const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const [projectExpensesTour, setProjectExpensesTour] = useState<{ slug: string; token: number } | null>(null)
 
   useEffect(() => {
     checkUser()
@@ -72,37 +70,6 @@ export default function ExpensesPage() {
   const handleCloseCreateModal = () => {
     setShouldOpenCreateModal(false)
   }
-
-  const handleSupportTourHandled = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (params.has('tour')) {
-      params.delete('tour')
-      const nextPath = params.toString() ? `/expenses?${params.toString()}` : '/expenses'
-      router.replace(nextPath, { scroll: false })
-    }
-  }, [router, searchParams])
-
-  const handleProjectExpensesTourHandled = useCallback(() => {
-    setProjectExpensesTour(null)
-    handleSupportTourHandled()
-  }, [handleSupportTourHandled])
-
-  useEffect(() => {
-    const tour = searchParams.get('tour')
-    if (!tour) return
-    const token = Date.now()
-    switch (tour) {
-      case 'planned-expense':
-      case 'actual-expense':
-      case 'approve-expense':
-        setActiveTab('project-expenses')
-        setProjectExpensesTour({ slug: tour, token })
-        break
-      default:
-        return
-    }
-    handleSupportTourHandled()
-  }, [searchParams, handleSupportTourHandled])
 
   const checkUser = async () => {
     try {
@@ -527,8 +494,6 @@ export default function ExpensesPage() {
                   <ProjectExpensesTab 
                     searchTerm={searchTerm}
                     onCreateExpense={handleCreateProjectExpense}
-                    supportTourRequest={projectExpensesTour}
-                    onSupportTourHandled={handleProjectExpensesTourHandled}
                   />
                 )}
               </div>
@@ -537,5 +502,20 @@ export default function ExpensesPage() {
         </div>
       </div>
     </LayoutWithSidebar>
+  )
+}
+
+export default function ExpensesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Đang tải...</p>
+        </div>
+      </div>
+    }>
+      <ExpensesPageContent />
+    </Suspense>
   )
 }

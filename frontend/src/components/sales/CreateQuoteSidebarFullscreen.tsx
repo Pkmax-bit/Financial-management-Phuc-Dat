@@ -99,8 +99,6 @@ interface CreateQuoteSidebarProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  forceStartTourToken?: number
-  skipAutoStartTour?: boolean
 }
 
 // Helper function to convert category names to Vietnamese with diacritics
@@ -118,13 +116,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
   return categoryMap[categoryName] || categoryName
 }
 
-export default function CreateQuoteSidebarFullscreen({
-  isOpen,
-  onClose,
-  onSuccess,
-  forceStartTourToken,
-  skipAutoStartTour
-}: CreateQuoteSidebarProps) {
+export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateQuoteSidebarProps) {
   const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -167,7 +159,6 @@ export default function CreateQuoteSidebarFullscreen({
   type QuoteShepherdModule = typeof import('shepherd.js')
   type QuoteShepherdType = QuoteShepherdModule & { Tour: new (...args: any[]) => any }
   type QuoteShepherdTour = InstanceType<QuoteShepherdType['Tour']>
-  const lastForceTourTokenRef = useRef<number | null>(null)
   const [showProfitWarningDialog, setShowProfitWarningDialog] = useState(false)
   const [lowProfitItems, setLowProfitItems] = useState<Array<{ name: string; percentage: number }>>([])
 
@@ -847,7 +838,6 @@ export default function CreateQuoteSidebarFullscreen({
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!isOpen) return
-    if (skipAutoStartTour) return
     if (quoteTourAutoStartAttemptedRef.current) return
 
     const storedStatus = localStorage.getItem(QUOTE_FORM_TOUR_STORAGE_KEY)
@@ -859,23 +849,14 @@ export default function CreateQuoteSidebarFullscreen({
         startQuoteTour()
       }, 800)
     }
-  }, [isOpen, skipAutoStartTour, startQuoteTour])
+  }, [isOpen, startQuoteTour])
 
   // Reset tour auto-start when form closes
   useEffect(() => {
     if (!isOpen) {
       quoteTourAutoStartAttemptedRef.current = false
-      lastForceTourTokenRef.current = null
     }
   }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen) return
-    if (!forceStartTourToken) return
-    if (lastForceTourTokenRef.current === forceStartTourToken) return
-    lastForceTourTokenRef.current = forceStartTourToken
-    startQuoteTour()
-  }, [forceStartTourToken, isOpen, startQuoteTour])
 
   // Cleanup tour on unmount
   useEffect(() => {

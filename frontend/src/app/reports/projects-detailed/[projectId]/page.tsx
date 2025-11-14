@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Calendar, FileSpreadsheet, CircleHelp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
@@ -93,7 +93,6 @@ export default function ProjectDetailedReportDetailPage() {
   const params = useParams()
   const projectId = params?.projectId as string
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   
@@ -926,22 +925,6 @@ export default function ProjectDetailedReportDetailPage() {
     setIsReportDetailTourRunning(true)
     tour.start()
   }, [])
-
-  useEffect(() => {
-    const tourParam = searchParams?.get('tour')
-    if (tourParam !== 'report-detail') return
-    if (loading) return
-    if (!project) return
-
-    startReportDetailTour()
-
-    const params = new URLSearchParams(searchParams?.toString() ?? '')
-    params.delete('tour')
-    const nextPath = params.toString()
-      ? `/reports/projects-detailed/${projectId}?${params.toString()}`
-      : `/reports/projects-detailed/${projectId}`
-    router.replace(nextPath, { scroll: false })
-  }, [searchParams, startReportDetailTour, loading, project, router, projectId])
 
   // Auto-start tour
   useEffect(() => {

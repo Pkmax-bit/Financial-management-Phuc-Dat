@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { 
   FolderOpen, 
   Plus, 
@@ -70,7 +70,6 @@ export default function ProjectsPage() {
     onHold: 0
   })
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -82,9 +81,9 @@ export default function ProjectsPage() {
   const [isTourRunning, setIsTourRunning] = useState(false)
   const shepherdRef = useRef<ProjectsShepherdType | null>(null)
   const tourRef = useRef<ProjectsShepherdTour | null>(null)
+  const autoStartAttemptedRef = useRef(false)
   const currentTourModeRef = useRef<'auto' | 'manual'>('manual')
   const isBrowser = typeof window !== 'undefined'
-  const supportTourHandledRef = useRef(false)
 
   const handleTourComplete = useCallback(() => {
     setIsTourRunning(false)
@@ -570,20 +569,15 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     if (!isBrowser) return
-    if (!searchParams) return
-    if (supportTourHandledRef.current) return
+    if (autoStartAttemptedRef.current) return
 
-    const tourParam = searchParams.get('tour')
-    if (tourParam !== 'projects') return
+    const storedStatus = localStorage.getItem(TOUR_STORAGE_KEY)
+    autoStartAttemptedRef.current = true
 
-    supportTourHandledRef.current = true
-    startProjectsTour({ auto: true })
-
-    const params = new URLSearchParams(searchParams.toString())
-    params.delete('tour')
-    const nextPath = params.toString() ? `/projects?${params.toString()}` : '/projects'
-    router.replace(nextPath, { scroll: false })
-  }, [isBrowser, router, searchParams, startProjectsTour])
+    if (!storedStatus) {
+      startProjectsTour({ auto: true })
+    }
+  }, [isBrowser, startProjectsTour])
 
   useEffect(() => {
     if (!showTourCompletionPrompt) return

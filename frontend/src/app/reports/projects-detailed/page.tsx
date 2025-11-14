@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, 
   FolderOpen, 
@@ -62,7 +62,6 @@ export default function ProjectsDetailedReportPage() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [user, setUser] = useState<any>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   // Tour state
   const REPORT_LIST_TOUR_STORAGE_KEY = 'report-list-tour-status-v1'
@@ -627,28 +626,6 @@ export default function ProjectsDetailedReportPage() {
 
     return matchesSearch && matchesStatus
   })
-
-  useEffect(() => {
-    const tourParam = searchParams?.get('tour')
-    if (!tourParam) return
-
-    if (tourParam === 'reports') {
-      startReportListTour()
-      const params = new URLSearchParams(searchParams?.toString() ?? '')
-      params.delete('tour')
-      const nextPath = params.toString()
-        ? `/reports/projects-detailed?${params.toString()}`
-        : '/reports/projects-detailed'
-      router.replace(nextPath, { scroll: false })
-    } else if (tourParam === 'report-detail') {
-      if (loading) return
-      if (filteredProjects.length === 0) return
-      const targetProject = filteredProjects[0]
-      const params = new URLSearchParams(searchParams?.toString() ?? '')
-      params.delete('tour')
-      router.replace(`/reports/projects-detailed/${targetProject.id}?tour=report-detail`, { scroll: false })
-    }
-  }, [searchParams, startReportListTour, router, loading, filteredProjects])
 
   // Calculate totals
   const totalPlannedRevenue = filteredProjects.reduce((sum, p) => sum + p.planned_revenue, 0)
