@@ -57,19 +57,19 @@ Danh sách các task cần thực hiện để triển khai bảo mật API, đ�
 
 ### 🔐 Task 1.3: HTTPS Enforcement
 
-- [ ] **security-6**: Implement HTTPS Enforcement
+- [x] **security-6**: Implement HTTPS Enforcement ✅
   - Thêm middleware redirect HTTP → HTTPS trong production
   - Chỉ áp dụng khi ENVIRONMENT=production
   - **Thời gian:** 15 phút
 
-- [ ] **security-7**: Add Security Headers
+- [x] **security-7**: Add Security Headers ✅
   - Strict-Transport-Security: max-age=31536000; includeSubDomains
   - X-Content-Type-Options: nosniff
   - X-Frame-Options: DENY
   - X-XSS-Protection: 1; mode=block
   - **Thời gian:** 15 phút
 
-- [ ] **security-8**: Test HTTPS Redirect
+- [x] **security-8**: Test HTTPS Redirect ✅
   - Test HTTP request → verify redirect 301
   - Test HTTPS request → verify no redirect
   - Verify security headers trong browser dev tools
@@ -81,20 +81,20 @@ Danh sách các task cần thực hiện để triển khai bảo mật API, đ�
 
 ### 🛡️ Task 1.4: Input Validation Enhancement
 
-- [ ] **security-9**: Create Input Validators
+- [x] **security-9**: Create Input Validators ✅
   - Tạo `backend/utils/validators.py`
   - Implement `sanitize_string()` - remove XSS và SQL injection patterns
   - Implement `validate_email()` - regex validation
   - Implement `validate_phone()` - format và length check
   - **Thời gian:** 45 phút
 
-- [ ] **security-10**: Apply Validation to Models
+- [x] **security-10**: Apply Validation to Models ✅
   - Áp dụng validators vào `CustomerCreate`, `CustomerUpdate`
   - Áp dụng vào `EmployeeCreate`, `EmployeeUpdate`
   - Áp dụng vào các models quan trọng khác (Invoice, Quote, Project)
   - **Thời gian:** 1 giờ
 
-- [ ] **security-11**: Test Input Validation
+- [x] **security-11**: Test Input Validation ✅
   - Test với XSS payloads: `<script>alert('xss')</script>`
   - Test với SQL injection: `'; DROP TABLE users; --`
   - Test với invalid email formats
@@ -110,38 +110,38 @@ Danh sách các task cần thực hiện để triển khai bảo mật API, đ�
 
 ### 🔑 Task 2.1: Request Signing
 
-- [ ] **security-12**: Install Crypto Dependencies
+- [x] **security-12**: Install Crypto Dependencies ✅
   - Frontend: `npm install crypto-js @types/crypto-js`
   - Backend: Verify có sẵn `hmac`, `hashlib` (Python stdlib)
   - **Thời gian:** 10 phút
 
-- [ ] **security-13**: Implement Request Signing (Frontend)
+- [x] **security-13**: Implement Request Signing (Frontend) ✅
   - Tạo `frontend/src/lib/api/security.ts`
   - Implement `generateRequestSignature()` function
   - Sử dụng HMAC-SHA256 với API_SECRET
   - Generate nonce và timestamp
   - **Thời gian:** 1 giờ
 
-- [ ] **security-14**: Update API Client
+- [x] **security-14**: Update API Client ✅
   - Cập nhật `frontend/src/lib/api/client.ts`
   - Sử dụng `getSecureHeaders()` thay vì `getAuthHeaders()`
   - Thêm X-Request-Timestamp, X-Request-Signature, X-Request-ID headers
   - **Thời gian:** 30 phút
 
-- [ ] **security-15**: Implement Request Verification (Backend)
-  - Tạo `backend/middleware/security.py`
+- [x] **security-15**: Implement Request Verification (Backend) ✅
+  - Tạo `backend/middleware/request_signing.py`
   - Implement `verify_request_signature()` function
   - Verify timestamp (5 minute window)
   - Verify signature với HMAC-SHA256
   - **Thời gian:** 1 giờ
 
-- [ ] **security-16**: Integrate Security Middleware
+- [x] **security-16**: Integrate Security Middleware ✅
   - Thêm security middleware vào `backend/main.py`
   - Cho phép skip verification trong development mode
   - Handle missing headers gracefully
   - **Thời gian:** 30 phút
 
-- [ ] **security-17**: Test Request Signing
+- [x] **security-17**: Test Request Signing ✅
   - Test với valid signature → should pass
   - Test với invalid signature → should fail 401
   - Test với expired timestamp → should fail 401

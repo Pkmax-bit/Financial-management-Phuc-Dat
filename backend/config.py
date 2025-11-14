@@ -52,6 +52,11 @@ class Settings:
     
     # Timezone
     DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE", "Asia/Ho_Chi_Minh")
+    
+    # API Security
+    API_SECRET = os.getenv("API_SECRET", "default-dev-secret-change-in-production")
+    REQUEST_SIGNING_ENABLED = os.getenv("REQUEST_SIGNING_ENABLED", "false").lower() == "true"
+    REQUEST_TIMESTAMP_WINDOW = int(os.getenv("REQUEST_TIMESTAMP_WINDOW", "300"))  # 5 minutes
 
 # Create settings instance
 settings = Settings()

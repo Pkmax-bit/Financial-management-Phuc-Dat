@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '../supabase'
+import { getSecureHeaders, generateRequestId } from './security'
 
 // Types
 interface CacheEntry<T> {
@@ -70,6 +71,48 @@ class ApiClient {
   }
 
   /**
+   * Get secure headers with request signing
+   */
+  private async getSecureHeaders(
+    method: string,
+    path: string,
+    body?: string
+  ): Promise<Record<string, string>> {
+    // Get base auth headers
+    const authHeaders = await this.getAuthHeaders()
+    
+    // Add request signing headers if enabled
+    // In development, this can be disabled
+    const enableSigning = process.env.NEXT_PUBLIC_ENABLE_REQUEST_SIGNING !== 'false'
+    
+    if (enableSigning) {
+      try {
+        const secureHeaders = await getSecureHeaders(method, path, body)
+        const requestId = generateRequestId()
+        
+        return {
+          ...authHeaders,
+          ...secureHeaders,
+          'X-Request-ID': requestId,
+        }
+      } catch (error) {
+        console.warn('Failed to generate secure headers:', error)
+        // Fallback to auth headers only
+        return {
+          ...authHeaders,
+          'X-Request-ID': generateRequestId(),
+        }
+      }
+    }
+    
+    // Return auth headers with request ID
+    return {
+      ...authHeaders,
+      'X-Request-ID': generateRequestId(),
+    }
+  }
+
+  /**
    * Check if cached data is still valid
    */
   private isCacheValid(key: string, ttl: number): boolean {
@@ -122,7 +165,14 @@ class ApiClient {
     const retries = options.retries ?? this.defaultRetries
     let lastError: Error | null = null
 
-    const headers = await this.getAuthHeaders()
+    // Get secure headers with request signing
+    const path = endpoint.startsWith('http://') || endpoint.startsWith('https://')
+      ? new URL(endpoint).pathname
+      : endpoint.startsWith('/') ? endpoint : '/' + endpoint
+    const method = options.method || 'GET'
+    const bodyString = options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+    
+    const headers = await this.getSecureHeaders(method, path, bodyString)
     if (options.headers) {
       Object.assign(headers, options.headers)
     }

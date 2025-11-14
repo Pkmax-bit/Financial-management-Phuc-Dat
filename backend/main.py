@@ -46,6 +46,14 @@ else:
         "http://0.0.0.0:3001",
     ]
 
+# HTTPS Redirect Middleware (only in production, add first to execute last)
+from middleware.https_redirect import HTTPSRedirectMiddleware
+app.add_middleware(HTTPSRedirectMiddleware, environment=ENVIRONMENT)
+
+# Security Headers Middleware (add after HTTPS redirect, will execute before)
+from middleware.security_headers import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware, environment=ENVIRONMENT)
+
 # CORS middleware (add first, will execute last due to reverse order)
 # Enhanced CORS configuration for better security
 app.add_middleware(
@@ -63,6 +71,10 @@ app.add_middleware(
     ],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Request Signing Middleware (add after security headers, will execute before)
+from middleware.request_signing import RequestSigningMiddleware
+app.add_middleware(RequestSigningMiddleware, environment=ENVIRONMENT)
 
 # Request ID Middleware (add after CORS, will execute before CORS)
 from middleware.request_id import RequestIDMiddleware
