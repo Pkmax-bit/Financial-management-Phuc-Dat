@@ -1,17 +1,7 @@
 ﻿'use client'
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
-=======
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
->>>>>>> origin/main
-=======
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
->>>>>>> parent of 6f0e51e (trung tâm hỗ trợ)
 import { 
   Receipt, 
   Plus, 
