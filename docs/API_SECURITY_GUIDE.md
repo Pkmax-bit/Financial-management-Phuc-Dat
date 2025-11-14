@@ -566,6 +566,14 @@ python test_request_signing.py
 
 ---
 
+## 📋 Security Principles & Technologies
+
+Xem chi tiết về:
+- [Security Principles, Benefits & Technologies](./SECURITY_PRINCIPLES_AND_TECHNOLOGIES.md) - Quy tắc, lợi ích và công nghệ
+- [Before & After Comparison](./SECURITY_BEFORE_AFTER_COMPARISON.md) - So sánh trước và sau
+
+---
+
 ## 🔗 Documentation Links
 
 ### Implementation Guides:
