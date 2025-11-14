@@ -56,15 +56,63 @@ async def get_projects(
     status: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all projects with optional filtering"""
+    """Get projects with optional filtering. Only shows projects where user is in project_team, except for admin, accountant, and workshop_employee who see all projects."""
     try:
         supabase = get_supabase_client()
         
-        query = supabase.table("projects").select("""
-            *,
-            customers:customer_id(name),
-            employees:manager_id(first_name, last_name)
-        """)
+        # Admin, accountant, and workshop_employee see all projects
+        if current_user.role in ["admin", "accountant", "workshop_employee"]:
+            query = supabase.table("projects").select("""
+                *,
+                customers:customer_id(name),
+                employees:manager_id(first_name, last_name)
+            """)
+        else:
+            # Non-admin users: only see projects where they are in project_team
+            # First, get project_ids where user is in team (by user_id or email)
+            team_query = supabase.table("project_team").select("project_id").eq("status", "active")
+            
+            # Match by user_id or email using OR condition
+            # Supabase OR syntax: "column1.eq.value1,column2.eq.value2"
+            or_conditions = []
+            if current_user.id:
+                or_conditions.append(f"user_id.eq.{current_user.id}")
+            if current_user.email:
+                or_conditions.append(f"email.eq.{current_user.email}")
+            
+            if not or_conditions:
+                # If no user_id or email, return empty list
+                return []
+            
+            # Apply OR condition if we have multiple conditions
+            if len(or_conditions) > 1:
+                team_query = team_query.or_(",".join(or_conditions))
+            else:
+                # Single condition - apply directly
+                condition = or_conditions[0]
+                if condition.startswith("user_id.eq."):
+                    team_query = team_query.eq("user_id", current_user.id)
+                elif condition.startswith("email.eq."):
+                    team_query = team_query.eq("email", current_user.email)
+            
+            team_result = team_query.execute()
+            
+            if not team_result.data:
+                # User is not in any project team
+                return []
+            
+            # Get unique project_ids
+            project_ids = list(set([member["project_id"] for member in team_result.data]))
+            
+            if not project_ids:
+                return []
+            
+            # Query projects that user has access to
+            query = supabase.table("projects").select("""
+                *,
+                customers:customer_id(name),
+                employees:manager_id(first_name, last_name)
+            """).in_("id", project_ids)
         
         # Apply filters
         if search:

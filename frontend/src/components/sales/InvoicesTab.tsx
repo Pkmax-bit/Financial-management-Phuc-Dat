@@ -94,8 +94,11 @@ export default function InvoicesTab({
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null)
-  const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('active') // Mặc định: đang hoạt động
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [itemsPerPage] = useState<number>(10)
   const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
   const [forceInvoiceTourToken, setForceInvoiceTourToken] = useState(0)
 
@@ -108,7 +111,7 @@ export default function InvoicesTab({
     try {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, name, project_code')
+        .select('id, name, project_code, status')
         .order('name', { ascending: true })
       
       if (error) throw error
@@ -154,7 +157,7 @@ export default function InvoicesTab({
         .select(`
           *,
           customers:customer_id(name, email),
-          projects:project_id(name, project_code)
+          projects:project_id(name, project_code, status)
         `)
         .order('created_at', { ascending: false })
       
@@ -168,7 +171,8 @@ export default function InvoicesTab({
         ...inv,
         customer_name: inv.customers?.name,
         project_name: inv.projects?.name,
-        project_code: inv.projects?.project_code
+        project_code: inv.projects?.project_code,
+        project_status: inv.projects?.status
       }))
       setInvoices(transformed)
     } catch (error) {
@@ -519,9 +523,22 @@ export default function InvoicesTab({
     }
     
     const matchesProject = selectedProjectId === 'all' || invoice.project_id === selectedProjectId
+    
+    const matchesProjectStatus = projectStatusFilter === 'all' || (invoice as any).project_status === projectStatusFilter
 
-    return matchesSearch && matchesFilter && matchesProject
+    return matchesSearch && matchesFilter && matchesProject && matchesProjectStatus
   })
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filter, selectedProjectId, projectStatusFilter, searchTerm])
 
   if (loading) {
     return (
@@ -690,6 +707,20 @@ export default function InvoicesTab({
               </option>
             ))}
           </select>
+          
+          {/* Project Status Filter */}
+          <select
+            value={projectStatusFilter}
+            onChange={(e) => setProjectStatusFilter(e.target.value)}
+            className="px-3 py-1 rounded-md text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="planning">Lập kế hoạch</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="on_hold">Tạm dừng</option>
+            <option value="completed">Hoàn thành</option>
+            <option value="cancelled">Đã hủy</option>
+          </select>
         </div>
 
         <button
@@ -730,7 +761,7 @@ export default function InvoicesTab({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredInvoices.map((invoice) => (
+            {paginatedInvoices.map((invoice) => (
               <tr key={invoice.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
@@ -842,23 +873,66 @@ export default function InvoicesTab({
           </tbody>
         </table>
         
-        {filteredInvoices.length === 0 && (
+        {filteredInvoices.length === 0 ? (
           <div className="text-center py-8">
             <Receipt className="mx-auto h-12 w-12 text-black" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có hóa đơn</h3>
             <p className="mt-1 text-sm text-black">
               Bắt đầu bằng cách tạo hóa đơn mới.
             </p>
-            <div className="mt-6">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Tạo hóa đơn đầu tiên
-              </button>
-            </div>
           </div>
+        ) : (
+          <>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+                <div className="flex items-center text-sm text-gray-700">
+                  <span>
+                    Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredInvoices.length)} trong tổng số {filteredInvoices.length} hóa đơn
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1 rounded-md text-sm ${
+                      currentPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    Trước
+                  </button>
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1 rounded-md text-sm ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-1 rounded-md text-sm ${
+                      currentPage === totalPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -86,7 +86,23 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
     try {
       setLoading(true);
 
-      // Fetch employees with their department, position and manager
+      // First, fetch team members from project_team for this project to filter out existing members
+      const { data: teamMembersData, error: teamError } = await supabase
+        .from('project_team')
+        .select('user_id, email')
+        .eq('project_id', projectId)
+        .eq('status', 'active');
+
+      if (teamError) {
+        console.error('Error fetching team members:', teamError);
+        // Continue anyway - we'll show all employees
+      }
+
+      // Extract user_ids and emails from existing team members (to exclude them)
+      const existingTeamUserIds = new Set((teamMembersData || []).map(tm => tm.user_id).filter(Boolean));
+      const existingTeamEmails = new Set((teamMembersData || []).map(tm => tm.email).filter(Boolean));
+
+      // Fetch ALL employees with their department, position and manager
       const { data: employeesData, error: employeesError } = await supabase
         .from('employees')
         .select(`
@@ -109,7 +125,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
 
       if (employeesError) throw new Error(`Error fetching employees: ${employeesError.message}`);
 
-      // Fetch users
+      // Fetch ALL users
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select(`
@@ -125,35 +141,47 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
 
       if (usersError) throw new Error(`Error fetching users: ${usersError.message}`);
 
-      // Format employee data
-      const formattedEmployees = (employeesData || []).map(emp => ({
-        id: emp.id,
-        name: `${emp.first_name} ${emp.last_name}`,
-        email: emp.email,
-        user_id: emp.user_id,
-        type: 'employee' as const,
-        department: emp.departments?.name,
-        position: emp.positions?.name,
-        phone: emp.phone,
-        avatar_url: emp.avatar_url,
-        employee_code: emp.employee_code,
-        hire_date: emp.hire_date,
-        manager_name: emp.managers ? `${emp.managers.first_name} ${emp.managers.last_name}` : undefined,
-        address: emp.address,
-        status: emp.status
-      }));
+      // Format employee data - exclude those already in team
+      const formattedEmployees = (employeesData || [])
+        .filter(emp => {
+          // Exclude if already in team (by user_id or email)
+          return !((emp.user_id && existingTeamUserIds.has(emp.user_id)) || 
+                   (emp.email && existingTeamEmails.has(emp.email)));
+        })
+        .map(emp => ({
+          id: emp.id,
+          name: `${emp.first_name} ${emp.last_name}`,
+          email: emp.email,
+          user_id: emp.user_id,
+          type: 'employee' as const,
+          department: emp.departments?.name,
+          position: emp.positions?.name,
+          phone: emp.phone,
+          avatar_url: emp.avatar_url,
+          employee_code: emp.employee_code,
+          hire_date: emp.hire_date,
+          manager_name: emp.managers ? `${emp.managers.first_name} ${emp.managers.last_name}` : undefined,
+          address: emp.address,
+          status: emp.status
+        }));
 
-      // Format user data
-      const formattedUsers = (usersData || []).map(user => ({
-        id: user.id,
-        name: user.full_name,
-        email: user.email,
-        user_id: user.id,
-        type: 'user' as const,
-        role: user.role,
-        phone: user.phone,
-        avatar_url: user.avatar_url
-      }));
+      // Format user data - exclude those already in team
+      const formattedUsers = (usersData || [])
+        .filter(user => {
+          // Exclude if already in team (by id or email)
+          return !((user.id && existingTeamUserIds.has(user.id)) || 
+                   (user.email && existingTeamEmails.has(user.email)));
+        })
+        .map(user => ({
+          id: user.id,
+          name: user.full_name,
+          email: user.email,
+          user_id: user.id,
+          type: 'user' as const,
+          role: user.role,
+          phone: user.phone,
+          avatar_url: user.avatar_url
+        }));
 
       // Combine all data
       const allEmployees = [...formattedEmployees, ...formattedUsers];

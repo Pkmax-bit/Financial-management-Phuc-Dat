@@ -91,8 +91,11 @@ export default function QuotesTab({
     dueDate: string
     convertedItems: any[]
   } | null>(null)
-  const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('planning') // Mặc định: lập kế hoạch
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [itemsPerPage] = useState<number>(10)
   const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
   const [forceQuoteTourToken, setForceQuoteTourToken] = useState(0)
   const [forceEmailTourToken, setForceEmailTourToken] = useState(0)
@@ -117,7 +120,7 @@ export default function QuotesTab({
     try {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, name, project_code')
+        .select('id, name, project_code, status')
         .order('name', { ascending: true })
       
       if (error) throw error
@@ -170,7 +173,7 @@ export default function QuotesTab({
         .select(`
           *,
           customers:customer_id(name, email),
-          projects:project_id(name, project_code),
+          projects:project_id(name, project_code, status),
           employee_in_charge:employee_in_charge_id(
             id,
             first_name,
@@ -215,6 +218,7 @@ export default function QuotesTab({
           customer_name: q.customers?.name,
           project_name: q.projects?.name,
           project_code: q.projects?.project_code,
+          project_status: q.projects?.status,
           employee_in_charge_name: employeeInChargeName
         }
       })
@@ -972,9 +976,22 @@ export default function QuotesTab({
     const matchesFilter = filter === 'all' || quote.status === filter
     
     const matchesProject = selectedProjectId === 'all' || quote.project_id === selectedProjectId
+    
+    const matchesProjectStatus = projectStatusFilter === 'all' || (quote as any).project_status === projectStatusFilter
 
-    return matchesSearch && matchesFilter && matchesProject
+    return matchesSearch && matchesFilter && matchesProject && matchesProjectStatus
   })
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredQuotes.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedQuotes = filteredQuotes.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filter, selectedProjectId, projectStatusFilter, searchTerm])
 
   if (loading) {
     return (
@@ -1201,6 +1218,20 @@ export default function QuotesTab({
               </option>
             ))}
           </select>
+          
+          {/* Project Status Filter */}
+          <select
+            value={projectStatusFilter}
+            onChange={(e) => setProjectStatusFilter(e.target.value)}
+            className="px-3 py-1 rounded-md text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="planning">Lập kế hoạch</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="on_hold">Tạm dừng</option>
+            <option value="completed">Hoàn thành</option>
+            <option value="cancelled">Đã hủy</option>
+          </select>
         </div>
 
         <button
@@ -1244,7 +1275,7 @@ export default function QuotesTab({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredQuotes.map((quote) => (
+            {paginatedQuotes.map((quote) => (
               <tr key={quote.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
@@ -1336,7 +1367,7 @@ export default function QuotesTab({
           </tbody>
         </table>
         
-        {filteredQuotes.length === 0 && (
+        {filteredQuotes.length === 0 ? (
           <div className="text-center py-8">
             <FileText className="mx-auto h-12 w-12 text-black" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có báo giá</h3>
@@ -1353,6 +1384,58 @@ export default function QuotesTab({
               </button>
             </div>
           </div>
+        ) : (
+          <>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+                <div className="flex items-center text-sm text-gray-700">
+                  <span>
+                    Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredQuotes.length)} trong tổng số {filteredQuotes.length} báo giá
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1 rounded-md text-sm ${
+                      currentPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    Trước
+                  </button>
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1 rounded-md text-sm ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-1 rounded-md text-sm ${
+                      currentPage === totalPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1376,7 +1459,7 @@ export default function QuotesTab({
             </div>
           </div>
         ) : (
-          filteredQuotes.map((quote) => (
+          paginatedQuotes.map((quote) => (
             <div key={quote.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
               {/* Card Header */}
               <div className="flex items-start justify-between mb-3 pb-3 border-b border-gray-200">
@@ -1460,6 +1543,44 @@ export default function QuotesTab({
               </div>
             </div>
           ))
+        )}
+        
+        {/* Mobile Pagination Controls */}
+        {filteredQuotes.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+            <div className="flex items-center text-sm text-gray-700">
+              <span>
+                {startIndex + 1} - {Math.min(endIndex, filteredQuotes.length)} / {filteredQuotes.length}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className={`px-3 py-1 rounded-md text-sm ${
+                  currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                Trước
+              </button>
+              <span className="text-sm text-gray-700">
+                Trang {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-1 rounded-md text-sm ${
+                  currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                Sau
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

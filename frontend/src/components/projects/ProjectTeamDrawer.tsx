@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import axios from 'axios';
+import { supabase } from '@/lib/supabase';
 
 interface Employee {
   id: string;
@@ -54,26 +55,60 @@ export const ProjectTeamDrawer: React.FC<ProjectTeamDrawerProps> = ({
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
+        // First, fetch team members from project_team for this project
+        const { data: teamMembersData, error: teamError } = await supabase
+          .from('project_team')
+          .select('user_id, email')
+          .eq('project_id', projectId)
+          .eq('status', 'active');
+
+        if (teamError) {
+          console.error('Error fetching team members:', teamError);
+          return;
+        }
+
+        // Extract user_ids and emails from team members
+        const teamUserIds = new Set((teamMembersData || []).map((tm: any) => tm.user_id).filter(Boolean));
+        const teamEmails = new Set((teamMembersData || []).map((tm: any) => tm.email).filter(Boolean));
+
+        // If no team members, return empty array
+        if (teamUserIds.size === 0 && teamEmails.size === 0) {
+          setEmployees([]);
+          return;
+        }
+
         // Fetch both employees and users
         const [employeesRes, usersRes] = await Promise.all([
           axios.get('/api/employees'),
           axios.get('/api/users')
         ]);
         
-        // Combine and format the data
+        // Combine and format the data, but filter to only include team members
         const combinedEmployees = [
-          ...employeesRes.data.map((emp: any) => ({
-            id: emp.id,
-            name: emp.name,
-            email: emp.email,
-            user_id: emp.user_id
-          })),
-          ...usersRes.data.map((user: any) => ({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            user_id: user.id
-          }))
+          ...employeesRes.data
+            .filter((emp: any) => {
+              // Include if user_id matches or email matches
+              return (emp.user_id && teamUserIds.has(emp.user_id)) || 
+                     (emp.email && teamEmails.has(emp.email));
+            })
+            .map((emp: any) => ({
+              id: emp.id,
+              name: emp.name || `${emp.first_name} ${emp.last_name}`,
+              email: emp.email,
+              user_id: emp.user_id
+            })),
+          ...usersRes.data
+            .filter((user: any) => {
+              // Include if id matches or email matches
+              return (user.id && teamUserIds.has(user.id)) || 
+                     (user.email && teamEmails.has(user.email));
+            })
+            .map((user: any) => ({
+              id: user.id,
+              name: user.name || user.full_name,
+              email: user.email,
+              user_id: user.id
+            }))
         ];
 
         // Remove duplicates based on email
@@ -90,7 +125,7 @@ export const ProjectTeamDrawer: React.FC<ProjectTeamDrawerProps> = ({
     if (open) {
       fetchEmployees();
     }
-  }, [open]);
+  }, [open, projectId]);
 
   const handleEmployeeRoleChange = (employeeId: string, role: string) => {
     setEmployeeRoles(prev => ({

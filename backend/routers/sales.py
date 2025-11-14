@@ -26,6 +26,85 @@ from services.notification_service import notification_service
 router = APIRouter()
 
 # ============================================================================
+# HELPER FUNCTIONS - Hàm hỗ trợ
+# ============================================================================
+
+def get_user_accessible_project_ids(supabase, current_user: User) -> List[str]:
+    """Get list of project_ids that user has access to via project_team"""
+    # Admin, accountant, and workshop_employee have access to all projects
+    if current_user.role in ["admin", "accountant", "workshop_employee"]:
+        return None  # None means all projects
+    
+    # Get project_ids where user is in team (by user_id or email)
+    team_query = supabase.table("project_team").select("project_id").eq("status", "active")
+    
+    # Match by user_id or email using OR condition
+    or_conditions = []
+    if current_user.id:
+        or_conditions.append(f"user_id.eq.{current_user.id}")
+    if current_user.email:
+        or_conditions.append(f"email.eq.{current_user.email}")
+    
+    if not or_conditions:
+        # If no user_id or email, return empty list
+        return []
+    
+    # Apply OR condition if we have multiple conditions
+    if len(or_conditions) > 1:
+        team_query = team_query.or_(",".join(or_conditions))
+    else:
+        # Single condition - apply directly
+        condition = or_conditions[0]
+        if condition.startswith("user_id.eq."):
+            team_query = team_query.eq("user_id", current_user.id)
+        elif condition.startswith("email.eq."):
+            team_query = team_query.eq("email", current_user.email)
+    
+    team_result = team_query.execute()
+    
+    if not team_result.data:
+        # User is not in any project team
+        return []
+    
+    # Get unique project_ids
+    project_ids = list(set([member["project_id"] for member in team_result.data]))
+    return project_ids
+
+def check_user_has_project_access(supabase, current_user: User, project_id: Optional[str]) -> bool:
+    """Check if user has access to a specific project"""
+    if not project_id:
+        return True  # No project_id means no restriction
+    
+    # Admin, accountant, and workshop_employee have access to all projects
+    if current_user.role in ["admin", "accountant", "workshop_employee"]:
+        return True
+    
+    # Check if user is in project_team for this project
+    team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
+    
+    # Match by user_id or email
+    or_conditions = []
+    if current_user.id:
+        or_conditions.append(f"user_id.eq.{current_user.id}")
+    if current_user.email:
+        or_conditions.append(f"email.eq.{current_user.email}")
+    
+    if or_conditions:
+        if len(or_conditions) > 1:
+            team_query = team_query.or_(",".join(or_conditions))
+        else:
+            condition = or_conditions[0]
+            if condition.startswith("user_id.eq."):
+                team_query = team_query.eq("user_id", current_user.id)
+            elif condition.startswith("email.eq."):
+                team_query = team_query.eq("email", current_user.email)
+        
+        team_result = team_query.execute()
+        return len(team_result.data) > 0
+    
+    return False
+
+# ============================================================================
 # PROJECT INTEGRATION - Tích hợp dự án
 # ============================================================================
 
@@ -128,11 +207,25 @@ async def get_quotes(
     status: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all quotes with optional filtering"""
+    """Get all quotes with optional filtering. Only shows quotes for projects where user is in project_team, except for admin, accountant, and workshop_employee who see all quotes."""
     try:
         supabase = get_supabase_client()
         
+        # Get accessible project_ids for current user
+        accessible_project_ids = get_user_accessible_project_ids(supabase, current_user)
+        
         query = supabase.table("quotes").select("*")
+        
+        # Filter by accessible projects if user is not admin/accountant/workshop_employee
+        if accessible_project_ids is not None:  # None means all projects (admin/accountant/workshop_employee)
+            if not accessible_project_ids:
+                # User has no access to any projects - only show quotes with NULL project_id
+                query = query.is_("project_id", "null")
+            else:
+                # Filter quotes to only show quotes for projects user has access to
+                # Also include quotes with NULL project_id (quotes not linked to any project)
+                # First filter by project_ids, then we'll add NULL project_id in post-processing
+                query = query.in_("project_id", accessible_project_ids)
         
         # Apply filters
         if search:
@@ -146,6 +239,29 @@ async def get_quotes(
         
         # Apply pagination and ordering
         result = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
+        
+        # If user is not admin/accountant/workshop_employee and has accessible projects,
+        # also include quotes with NULL project_id
+        if accessible_project_ids is not None and accessible_project_ids:
+            null_quotes_query = supabase.table("quotes").select("*").is_("project_id", "null")
+            if search:
+                null_quotes_query = null_quotes_query.or_(f"quote_number.ilike.%{search}%")
+            if customer_id:
+                null_quotes_query = null_quotes_query.eq("customer_id", customer_id)
+            if status:
+                null_quotes_query = null_quotes_query.eq("status", status)
+            null_quotes_result = null_quotes_query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
+            
+            # Combine results and remove duplicates
+            all_quotes = (result.data or []) + (null_quotes_result.data or [])
+            # Remove duplicates by id
+            seen_ids = set()
+            unique_quotes = []
+            for quote in all_quotes:
+                if quote.get('id') not in seen_ids:
+                    seen_ids.add(quote.get('id'))
+                    unique_quotes.append(quote)
+            result.data = unique_quotes
         
         # Return empty list if no data
         if not result.data:
@@ -207,7 +323,7 @@ async def get_quote(
     quote_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific quote by ID"""
+    """Get a specific quote by ID. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
     try:
         supabase = get_supabase_client()
         
@@ -217,6 +333,16 @@ async def get_quote(
             raise HTTPException(
                 status_code=404,
                 detail="Quote not found"
+            )
+        
+        quote = result.data[0]
+        project_id = quote.get("project_id")
+        
+        # Check if user has access to this project
+        if not check_user_has_project_access(supabase, current_user, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this quote"
             )
         
         return Quote(**result.data[0])
@@ -1801,11 +1927,25 @@ async def get_invoices(
     overdue_only: bool = Query(False),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all invoices with optional filtering"""
+    """Get all invoices with optional filtering. Only shows invoices for projects where user is in project_team, except for admin, accountant, and workshop_employee who see all invoices."""
     try:
         supabase = get_supabase_client()
         
+        # Get accessible project_ids for current user
+        accessible_project_ids = get_user_accessible_project_ids(supabase, current_user)
+        
         query = supabase.table("invoices").select("*")
+        
+        # Filter by accessible projects if user is not admin/accountant/workshop_employee
+        if accessible_project_ids is not None:  # None means all projects (admin/accountant/workshop_employee)
+            if not accessible_project_ids:
+                # User has no access to any projects - only show invoices with NULL project_id
+                query = query.is_("project_id", "null")
+            else:
+                # Filter invoices to only show invoices for projects user has access to
+                # Also include invoices with NULL project_id (invoices not linked to any project)
+                # First filter by project_ids, then we'll add NULL project_id in post-processing
+                query = query.in_("project_id", accessible_project_ids)
         
         # Apply filters
         if search:
@@ -1829,6 +1969,36 @@ async def get_invoices(
         
         # Apply pagination and ordering
         result = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
+        
+        # If user is not admin/accountant/workshop_employee and has accessible projects,
+        # also include invoices with NULL project_id
+        if accessible_project_ids is not None and accessible_project_ids:
+            null_invoices_query = supabase.table("invoices").select("*").is_("project_id", "null")
+            if search:
+                null_invoices_query = null_invoices_query.or_(f"invoice_number.ilike.%{search}%")
+            if customer_id:
+                null_invoices_query = null_invoices_query.eq("customer_id", customer_id)
+            if status:
+                null_invoices_query = null_invoices_query.eq("status", status)
+            if payment_status:
+                null_invoices_query = null_invoices_query.eq("payment_status", payment_status)
+            if invoice_type:
+                null_invoices_query = null_invoices_query.eq("invoice_type", invoice_type)
+            if overdue_only:
+                today = datetime.now().date().isoformat()
+                null_invoices_query = null_invoices_query.lt("due_date", today).neq("payment_status", "paid")
+            null_invoices_result = null_invoices_query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
+            
+            # Combine results and remove duplicates
+            all_invoices = (result.data or []) + (null_invoices_result.data or [])
+            # Remove duplicates by id
+            seen_ids = set()
+            unique_invoices = []
+            for invoice in all_invoices:
+                if invoice.get('id') not in seen_ids:
+                    seen_ids.add(invoice.get('id'))
+                    unique_invoices.append(invoice)
+            result.data = unique_invoices
         
         return [Invoice(**invoice) for invoice in result.data]
         
@@ -1876,7 +2046,7 @@ async def get_invoice(
     invoice_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific invoice by ID"""
+    """Get a specific invoice by ID. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
     try:
         supabase = get_supabase_client()
         
@@ -1886,6 +2056,16 @@ async def get_invoice(
             raise HTTPException(
                 status_code=404,
                 detail="Invoice not found"
+            )
+        
+        invoice = result.data[0]
+        project_id = invoice.get("project_id")
+        
+        # Check if user has access to this project
+        if not check_user_has_project_access(supabase, current_user, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this invoice"
             )
         
         return Invoice(**result.data[0])

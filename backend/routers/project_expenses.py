@@ -177,10 +177,62 @@ async def get_project_expenses(
     status_filter: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
+    """Get project expenses with optional filtering. Only shows expenses for projects where user is in project_team, except for admin, accountant, and workshop_employee who see all expenses."""
     try:
         supabase = get_supabase_client()
         query = supabase.table("project_expenses").select("*")
 
+        # Admin, accountant, and workshop_employee see all project expenses
+        # Other roles: only see expenses for projects where they are in project_team
+        if current_user.role not in ["admin", "accountant", "workshop_employee"]:
+            # Get project_ids where user is in team (by user_id or email)
+            team_query = supabase.table("project_team").select("project_id").eq("status", "active")
+            
+            # Match by user_id or email using OR condition
+            or_conditions = []
+            if current_user.id:
+                or_conditions.append(f"user_id.eq.{current_user.id}")
+            if current_user.email:
+                or_conditions.append(f"email.eq.{current_user.email}")
+            
+            if not or_conditions:
+                # If no user_id or email, return empty list
+                return []
+            
+            # Apply OR condition if we have multiple conditions
+            if len(or_conditions) > 1:
+                team_query = team_query.or_(",".join(or_conditions))
+            else:
+                # Single condition - apply directly
+                condition = or_conditions[0]
+                if condition.startswith("user_id.eq."):
+                    team_query = team_query.eq("user_id", current_user.id)
+                elif condition.startswith("email.eq."):
+                    team_query = team_query.eq("email", current_user.email)
+            
+            team_result = team_query.execute()
+            
+            if not team_result.data:
+                # User is not in any project team
+                return []
+            
+            # Get unique project_ids
+            allowed_project_ids = list(set([member["project_id"] for member in team_result.data]))
+            
+            if not allowed_project_ids:
+                return []
+            
+            # If project_id filter is provided, check if user has access to that project
+            if project_id:
+                if project_id not in allowed_project_ids:
+                    # User doesn't have access to this project
+                    return []
+                # User has access, continue with the provided project_id filter
+            else:
+                # Filter expenses to only show expenses for projects user has access to
+                query = query.in_("project_id", allowed_project_ids)
+
+        # Apply other filters
         if search:
             query = query.or_(
                 f"description.ilike.%{search}%,expense_code.ilike.%{search}%,tags.ilike.%{search}%"
@@ -213,6 +265,7 @@ async def get_project_expenses(
 async def get_project_expense(
     expense_id: str, current_user: User = Depends(get_current_user)
 ):
+    """Get a specific project expense. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
     try:
         supabase = get_supabase_client()
         result = (
@@ -220,7 +273,48 @@ async def get_project_expense(
         )
         if not result.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-        return result.data[0]
+        
+        expense = result.data[0]
+        project_id = expense.get("project_id")
+        
+        # Admin, accountant, and workshop_employee can access all expenses
+        if current_user.role not in ["admin", "accountant", "workshop_employee"]:
+            # Check if user is in project_team for this project
+            team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
+            
+            # Match by user_id or email
+            or_conditions = []
+            if current_user.id:
+                or_conditions.append(f"user_id.eq.{current_user.id}")
+            if current_user.email:
+                or_conditions.append(f"email.eq.{current_user.email}")
+            
+            if or_conditions:
+                if len(or_conditions) > 1:
+                    team_query = team_query.or_(",".join(or_conditions))
+                else:
+                    condition = or_conditions[0]
+                    if condition.startswith("user_id.eq."):
+                        team_query = team_query.eq("user_id", current_user.id)
+                    elif condition.startswith("email.eq."):
+                        team_query = team_query.eq("email", current_user.email)
+                
+                team_result = team_query.execute()
+                
+                if not team_result.data:
+                    # User is not in project team for this project
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You don't have access to this project expense"
+                    )
+            else:
+                # No user_id or email to check
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have access to this project expense"
+                )
+        
+        return expense
     except HTTPException:
         raise
     except Exception as e:

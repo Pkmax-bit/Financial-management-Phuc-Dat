@@ -74,6 +74,9 @@ export default function ProjectExpensesTab({
   const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
   const [forcePlannedTourToken, setForcePlannedTourToken] = useState(0)
   const [forceActualTourToken, setForceActualTourToken] = useState(0)
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('planning') // Mặc định: lập kế hoạch (cho planned)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [itemsPerPage] = useState<number>(10)
 
   // Tour state
   const APPROVE_EXPENSE_TOUR_STORAGE_KEY = 'approve-expense-tour-status-v1'
@@ -100,9 +103,23 @@ const getFilteredExpenses = () => {
       filtered = expenses
   }
   
+  // Filter by project status if needed
+  if (projectStatusFilter !== 'all') {
+    filtered = filtered.filter(e => {
+      const project = projectsMap.get(e.project_id)
+      return project && project.status === projectStatusFilter
+    })
+  }
+  
   // Build tree structure and flatten for display
   const tree = buildTree(filtered)
   return flattenTree(tree)
+}
+
+// Get paginated filtered expenses
+const getPaginatedFilteredExpenses = () => {
+  const allFiltered = getFilteredExpenses()
+  return allFiltered.slice(startIndex, endIndex)
 }
 
 // Get display data based on view mode
@@ -574,7 +591,17 @@ const startApproveExpenseTour = useCallback(async () => {
   // Define projectsMap at the top of the component after fetching data
   const [projectsMap, setProjectsMap] = useState(new Map())
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
-  const [projectsList, setProjectsList] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
+  const [projectsList, setProjectsList] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
+  
+  // Update project status filter when viewMode changes
+  useEffect(() => {
+    if (viewMode === 'planned') {
+      setProjectStatusFilter('planning')
+    } else if (viewMode === 'actual') {
+      setProjectStatusFilter('active')
+    }
+    // For 'all' view, keep current filter or default to 'all'
+  }, [viewMode])
 
   // Toggle expand/collapse for parent items
   const toggleExpand = (itemId: string) => {
@@ -688,7 +715,7 @@ const startApproveExpenseTour = useCallback(async () => {
           .order('created_at', { ascending: false }),
         supabase
           .from('projects')
-          .select('id, name, project_code'),
+          .select('id, name, project_code, status'),
       ])
 
       if (quotesRes.error) throw quotesRes.error
@@ -926,8 +953,24 @@ const startApproveExpenseTour = useCallback(async () => {
     
     const matchesProject = selectedProjectId === 'all' || expense.project_id === selectedProjectId
     
-    return matchesSearch && matchesView && matchesProject
+    const matchesProjectStatus = projectStatusFilter === 'all' || (() => {
+      const project = projectsMap.get(expense.project_id)
+      return project && project.status === projectStatusFilter
+    })()
+    
+    return matchesSearch && matchesView && matchesProject && matchesProjectStatus
   })
+
+  // Pagination calculations - use getFilteredExpenses for accurate count
+  const allFilteredExpenses = getFilteredExpenses()
+  const totalPages = Math.ceil(allFilteredExpenses.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [viewMode, selectedProjectId, projectStatusFilter, searchTerm])
 
   // Calculate summary statistics
   const totalPlanned = expenses
@@ -1052,19 +1095,35 @@ return (
         </button>
       </div>
       
-      {/* Project Filter */}
-      <select
-        value={selectedProjectId}
-        onChange={(e) => setSelectedProjectId(e.target.value)}
-        className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <option value="all">Tất cả dự án</option>
-        {projectsList.map((project) => (
-          <option key={project.id} value={project.id}>
-            {project.project_code ? `${project.project_code} - ` : ''}{project.name}
-          </option>
-        ))}
-      </select>
+      <div className="flex space-x-2">
+        {/* Project Filter */}
+        <select
+          value={selectedProjectId}
+          onChange={(e) => setSelectedProjectId(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">Tất cả dự án</option>
+          {projectsList.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.project_code ? `${project.project_code} - ` : ''}{project.name}
+            </option>
+          ))}
+        </select>
+        
+        {/* Project Status Filter */}
+        <select
+          value={projectStatusFilter}
+          onChange={(e) => setProjectStatusFilter(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">Tất cả trạng thái</option>
+          <option value="planning">Lập kế hoạch</option>
+          <option value="active">Đang hoạt động</option>
+          <option value="on_hold">Tạm dừng</option>
+          <option value="completed">Hoàn thành</option>
+          <option value="cancelled">Đã hủy</option>
+        </select>
+      </div>
     </div>
 
     {/* Summary Cards - Show based on viewMode */}
@@ -1301,7 +1360,7 @@ return (
                 ))
               ) : (
                 // Show individual expense items for 'planned' or 'actual' view
-                getFilteredExpenses().map((expense) => (
+                getPaginatedFilteredExpenses().map((expense) => (
                   <tr key={expense.id} className={`hover:bg-gray-50 ${
                     expense.level && expense.level > 0 
                       ? 'bg-orange-50' // Child expenses - light orange background
@@ -1487,6 +1546,56 @@ return (
               )}
             </tbody>
           </table>
+          
+          {/* Pagination Controls */}
+          {allFilteredExpenses.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+              <div className="flex items-center text-sm text-gray-700">
+                <span>
+                  Hiển thị {startIndex + 1} - {Math.min(endIndex, allFilteredExpenses.length)} trong tổng số {allFilteredExpenses.length} chi phí
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 rounded-md text-sm ${
+                    currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  Trước
+                </button>
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 rounded-md text-sm ${
+                        currentPage === page
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1 rounded-md text-sm ${
+                    currentPage === totalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
