@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, Calendar, FileSpreadsheet } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { ArrowLeft, Calendar, FileSpreadsheet, CircleHelp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
@@ -93,6 +93,7 @@ export default function ProjectDetailedReportDetailPage() {
   const params = useParams()
   const projectId = params?.projectId as string
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   
@@ -105,6 +106,16 @@ export default function ProjectDetailedReportDetailPage() {
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [expenseObjectNames, setExpenseObjectNames] = useState<Map<string, string>>(new Map())
   const [showExpenseObjectDetails, setShowExpenseObjectDetails] = useState<boolean>(true)
+
+  // Tour state
+  const REPORT_DETAIL_TOUR_STORAGE_KEY = 'report-detail-tour-status-v1'
+  const [isReportDetailTourRunning, setIsReportDetailTourRunning] = useState(false)
+  const reportDetailTourRef = useRef<any>(null)
+  const reportDetailShepherdRef = useRef<any>(null)
+  const reportDetailTourAutoStartAttemptedRef = useRef(false)
+  type ReportDetailShepherdModule = typeof import('shepherd.js')
+  type ReportDetailShepherdType = ReportDetailShepherdModule & { Tour: new (...args: any[]) => any }
+  type ReportDetailShepherdTour = InstanceType<ReportDetailShepherdType['Tour']>
 
   useEffect(() => {
     checkUser()
@@ -283,6 +294,682 @@ export default function ProjectDetailedReportDetailPage() {
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  // Tour function
+  const startReportDetailTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+
+    if (reportDetailTourRef.current) {
+      reportDetailTourRef.current.cancel()
+      reportDetailTourRef.current = null
+    }
+
+    if (!reportDetailShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: ReportDetailShepherdType })?.default ?? (module as unknown as ReportDetailShepherdType)
+        reportDetailShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = reportDetailShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await waitForElement('[data-tour-id="report-detail-page-header"]')
+    await waitForElement('[data-tour-id="report-detail-summary"]')
+    await waitForElement('[data-tour-id="report-detail-summary-quotes"]')
+    await waitForElement('[data-tour-id="report-detail-summary-invoices"]')
+    await waitForElement('[data-tour-id="report-detail-summary-expenses"]')
+    await waitForElement('[data-tour-id="report-detail-summary-profit"]')
+    await waitForElement('[data-tour-id="report-detail-plan-vs-actual"]')
+    await waitForElement('[data-tour-id="report-detail-plan-overview"]')
+    await waitForElement('[data-tour-id="report-detail-plan-quotes"]')
+    await waitForElement('[data-tour-id="report-detail-plan-costs"]')
+    await waitForElement('[data-tour-id="report-detail-plan-profit"]')
+    await waitForElement('[data-tour-id="report-detail-actual-overview"]')
+    await waitForElement('[data-tour-id="report-detail-actual-invoices"]')
+    await waitForElement('[data-tour-id="report-detail-actual-expenses"]')
+    await waitForElement('[data-tour-id="report-detail-actual-profit"]')
+    await waitForElement('[data-tour-id="report-detail-analysis"]')
+    await waitForElement('[data-tour-id="report-detail-expense-lists"]')
+    await waitForElement('[data-tour-id="report-detail-planned-list"]')
+    await waitForElement('[data-tour-id="report-detail-actual-list"]')
+    await waitForElement('[data-tour-id="report-detail-planned-total"]')
+    await waitForElement('[data-tour-id="report-detail-actual-total"]')
+    await waitForElement('[data-tour-id="report-detail-charts"]')
+    await waitForElement('[data-tour-id="report-chart-revenue-expense-profit"]')
+    await waitForElement('[data-tour-id="report-chart-expense-objects"]')
+    await waitForElement('[data-tour-id="report-detail-summary-section"]')
+    await waitForElement('[data-tour-id="report-summary-total-revenue"]')
+    await waitForElement('[data-tour-id="report-summary-total-cost"]')
+    await waitForElement('[data-tour-id="report-summary-net-profit"]')
+    await waitForElement('[data-tour-id="report-summary-total-quotes"]')
+    await waitForElement('[data-tour-id="report-summary-variance"]')
+    await waitForElement('[data-tour-id="report-detail-expense-objects"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'report-detail-intro',
+      title: 'Báo cáo chi tiết dự án',
+      text: 'Trang này tổng hợp toàn bộ dữ liệu tài chính của dự án: kế hoạch, thực tế, phân tích chênh lệch và danh sách chi phí.',
+      attachTo: { element: '[data-tour-id="report-detail-page-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-summary-intro',
+      title: 'Khu vực tóm tắt',
+      text: 'Các thẻ dưới đây giúp bạn nắm nhanh tình hình chung của dự án. Tiếp tục để xem từng chỉ số cụ thể.',
+      attachTo: { element: '[data-tour-id="report-detail-summary"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-summary-quotes',
+      title: 'Tổng báo giá',
+      text: 'Tổng giá trị các báo giá (doanh thu dự kiến) và số lượng báo giá đã lập cho dự án.',
+      attachTo: { element: '[data-tour-id="report-detail-summary-quotes"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-summary-invoices',
+      title: 'Tổng hóa đơn',
+      text: 'Tổng doanh thu thực tế từ hóa đơn đã phát hành và số lượng hóa đơn. Có cảnh báo cho hóa đơn chưa thanh toán.',
+      attachTo: { element: '[data-tour-id="report-detail-summary-invoices"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-summary-expenses',
+      title: 'Tổng chi phí',
+      text: 'Tổng chi phí thực tế đã duyệt cùng số lượng khoản chi. Báo cáo lấy dữ liệu từ bảng Chi phí Dự án.',
+      attachTo: { element: '[data-tour-id="report-detail-summary-expenses"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-summary-profit',
+      title: 'Lợi nhuận thực tế',
+      text: 'Lợi nhuận = Tổng hóa đơn - Tổng chi phí. Biên lợi nhuận (%) giúp đánh giá hiệu quả dự án.',
+      attachTo: { element: '[data-tour-id="report-detail-summary-profit"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-plan-overview',
+      title: 'Cột Kế hoạch',
+      text: 'Cột bên trái biểu diễn dữ liệu kế hoạch (màu xanh dương) gồm doanh thu dự kiến và chi phí dự kiến.',
+      attachTo: { element: '[data-tour-id="report-detail-plan-overview"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-plan-quotes',
+      title: 'Báo giá (Kế hoạch)',
+      text: 'Danh sách các báo giá của dự án, bao gồm mô tả, sản phẩm và trạng thái. Dùng để theo dõi doanh thu dự kiến.',
+      attachTo: { element: '[data-tour-id="report-detail-plan-quotes"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-plan-costs',
+      title: 'Chi phí dự kiến',
+      text: 'Liệt kê các chi phí kế hoạch, nhân sự phụ trách và phòng ban. Tổng số tiền hiển thị ở góc phải.',
+      attachTo: { element: '[data-tour-id="report-detail-plan-costs"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-plan-profit',
+      title: 'Lợi nhuận dự kiến',
+      text: 'Tổng lợi nhuận dự kiến dựa trên kế hoạch (Báo giá - Chi phí dự kiến).',
+      attachTo: { element: '[data-tour-id="report-detail-plan-profit"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-actual-overview',
+      title: 'Cột Thực tế',
+      text: 'Cột bên phải (màu xanh lá) thể hiện dữ liệu thực tế phát sinh: hóa đơn đã lập và chi phí đã duyệt.',
+      attachTo: { element: '[data-tour-id="report-detail-actual-overview"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-actual-invoices',
+      title: 'Hóa đơn thực tế',
+      text: 'Danh sách hóa đơn đã phát hành, trạng thái thanh toán và sản phẩm chi tiết. Sử dụng để đối chiếu doanh thu.',
+      attachTo: { element: '[data-tour-id="report-detail-actual-invoices"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-actual-expenses',
+      title: 'Chi phí thực tế',
+      text: 'Chi tiết từng khoản chi thực tế đã duyệt, kèm nhân sự, phòng ban và cảnh báo vượt kế hoạch.',
+      attachTo: { element: '[data-tour-id="report-detail-actual-expenses"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-actual-profit',
+      title: 'Lợi nhuận thực tế',
+      text: 'Tính toán lợi nhuận thực tế và chênh lệch so với kế hoạch để đánh giá hiệu quả dự án.',
+      attachTo: { element: '[data-tour-id="report-detail-actual-profit"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-analysis',
+      title: 'Bảng phân tích chi phí',
+      text: 'Bảng so sánh chi tiết từng đối tượng chi phí giữa kế hoạch và thực tế, kèm phần trăm biến động và ghi chú.',
+      attachTo: { element: '[data-tour-id="report-detail-analysis"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-expense-lists',
+      title: 'Danh sách chi phí',
+      text: 'Phần dưới hiển thị toàn bộ chi phí kế hoạch và chi phí thực tế đã duyệt để bạn rà soát chi tiết từng khoản.',
+      attachTo: { element: '[data-tour-id="report-detail-expense-lists"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-planned-list',
+      title: 'Chi phí kế hoạch',
+      text: 'Danh sách các khoản chi kế hoạch đã duyệt, kèm mô tả, nhân sự, phòng ban và ghi chú.',
+      attachTo: { element: '[data-tour-id="report-detail-planned-list"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-planned-total',
+      title: 'Tổng chi phí kế hoạch',
+      text: 'Tổng số tiền của toàn bộ chi phí kế hoạch đã duyệt để so sánh với thực tế.',
+      attachTo: { element: '[data-tour-id="report-detail-planned-total"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-actual-list',
+      title: 'Chi phí thực tế',
+      text: 'Danh sách chi phí thực tế đã phát sinh, bao gồm trạng thái, nhân sự phụ trách và cảnh báo vượt kế hoạch.',
+      attachTo: { element: '[data-tour-id="report-detail-actual-list"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-actual-total',
+      title: 'Tổng chi phí thực tế',
+      text: 'Tổng số tiền chi phí thực tế để đối chiếu với kế hoạch và lợi nhuận.',
+      attachTo: { element: '[data-tour-id="report-detail-actual-total"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-charts-intro',
+      title: 'Biểu đồ trực quan',
+      text: 'Hai biểu đồ tròn giúp bạn hiểu rõ hơn về tài chính dự án. Tiếp tục để xem từng biểu đồ.',
+      attachTo: { element: '[data-tour-id="report-detail-charts"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-chart-revenue-expense-profit',
+      title: 'Biểu đồ: Doanh thu – Chi phí – Lợi nhuận',
+      text: 'Biểu đồ này hiển thị tỷ lệ giữa doanh thu, chi phí và lợi nhuận thực tế:\n\n• Màu xanh dương = Doanh thu (từ hóa đơn)\n• Màu đỏ = Chi phí (đã duyệt)\n• Màu xanh lá = Lợi nhuận (chênh lệch)\n\nDi chuột vào từng phần để xem số tiền chi tiết. Biểu đồ giúp bạn nhanh chóng đánh giá tỷ lệ giữa các thành phần tài chính.',
+      attachTo: { element: '[data-tour-id="report-chart-revenue-expense-profit"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-chart-expense-objects',
+      title: 'Biểu đồ: Theo đối tượng chi phí',
+      text: 'Biểu đồ này phân bổ chi phí theo từng đối tượng chi phí:\n\n• Mỗi màu đại diện cho một đối tượng chi phí (Vật liệu, Nhân công, Vận chuyển, ...)\n• Kích thước phần biểu đồ tỷ lệ với số tiền chi phí\n• Giúp xác định đối tượng nào chiếm tỷ trọng lớn nhất\n\nDi chuột vào từng phần để xem tên đối tượng và số tiền chi tiết.',
+      attachTo: { element: '[data-tour-id="report-chart-expense-objects"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-summary-section-intro',
+      title: 'Tóm tắt Báo cáo',
+      text: 'Phần này tổng hợp các chỉ số quan trọng của dự án. Tiếp tục để xem từng chỉ số cụ thể.',
+      attachTo: { element: '[data-tour-id="report-detail-summary-section"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-total-revenue',
+      title: 'Tổng Doanh thu',
+      text: 'Tổng số tiền từ các hóa đơn đã phát hành (doanh thu thực tế). Hiển thị số lượng hóa đơn đã tạo.',
+      attachTo: { element: '[data-tour-id="report-summary-total-revenue"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-total-cost',
+      title: 'Tổng Chi phí',
+      text: 'Tổng số tiền chi phí đã duyệt. Hiển thị số lượng khoản chi phí đã phát sinh.',
+      attachTo: { element: '[data-tour-id="report-summary-total-cost"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-net-profit',
+      title: 'Lợi nhuận ròng',
+      text: 'Chênh lệch giữa doanh thu và chi phí. Biên lợi nhuận (%) = (Lợi nhuận / Doanh thu) × 100.\n\nMàu xanh = Lãi, Màu đỏ = Lỗ',
+      attachTo: { element: '[data-tour-id="report-summary-net-profit"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-total-quotes',
+      title: 'Tổng báo giá',
+      text: 'Tổng số tiền từ các báo giá (doanh thu dự kiến). Dùng để so sánh với doanh thu thực tế từ hóa đơn.',
+      attachTo: { element: '[data-tour-id="report-summary-total-quotes"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-summary-variance',
+      title: 'Chênh lệch',
+      text: 'Chênh lệch giữa doanh thu và chi phí (tổng quan). Công thức: Doanh thu - Chi phí.\n\nGiúp đánh giá nhanh tình hình tài chính của dự án.',
+      attachTo: { element: '[data-tour-id="report-summary-variance"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'report-detail-expense-objects',
+      title: 'Chi phí theo Đối tượng',
+      text: 'Bảng này so sánh chi phí kế hoạch và thực tế theo từng đối tượng chi phí:\n\n• Đối tượng: Tên đối tượng chi phí (Vật liệu, Nhân công, Vận chuyển, ...)\n• Kế hoạch: Số tiền dự kiến cho đối tượng này\n• Thực tế: Số tiền đã chi thực tế\n• Chênh lệch: Số tiền chênh lệch (dương = vượt, âm = tiết kiệm)\n• %: Phần trăm chênh lệch\n\nMàu đỏ = Vượt kế hoạch, Màu xanh = Tiết kiệm\n\nBạn có thể nhấn nút "Ẩn"/"Hiện" để ẩn/hiện bảng này.',
+      attachTo: { element: '[data-tour-id="report-detail-expense-objects"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn thành',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsReportDetailTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(REPORT_DETAIL_TOUR_STORAGE_KEY, 'completed')
+      }
+      reportDetailTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsReportDetailTourRunning(false)
+      reportDetailTourRef.current = null
+    })
+
+    reportDetailTourRef.current = tour
+    setIsReportDetailTourRunning(true)
+    tour.start()
+  }, [])
+
+  useEffect(() => {
+    const tourParam = searchParams?.get('tour')
+    if (tourParam !== 'report-detail') return
+    if (loading) return
+    if (!project) return
+
+    startReportDetailTour()
+
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    params.delete('tour')
+    const nextPath = params.toString()
+      ? `/reports/projects-detailed/${projectId}?${params.toString()}`
+      : `/reports/projects-detailed/${projectId}`
+    router.replace(nextPath, { scroll: false })
+  }, [searchParams, startReportDetailTour, loading, project, router, projectId])
+
+  // Auto-start tour
+  useEffect(() => {
+    if (typeof window === 'undefined' || reportDetailTourAutoStartAttemptedRef.current) return
+
+    const hasCompletedTour = localStorage.getItem(REPORT_DETAIL_TOUR_STORAGE_KEY) === 'completed'
+    if (hasCompletedTour) {
+      reportDetailTourAutoStartAttemptedRef.current = true
+      return
+    }
+
+    if (!loading && project) {
+      reportDetailTourAutoStartAttemptedRef.current = true
+      setTimeout(() => {
+        startReportDetailTour()
+      }, 800)
+    }
+  }, [loading, project, startReportDetailTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      if (reportDetailTourRef.current) {
+        reportDetailTourRef.current.cancel()
+        reportDetailTourRef.current = null
+      }
+    }
+  }, [])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -857,10 +1544,22 @@ export default function ProjectDetailedReportDetailPage() {
   return (
     <LayoutWithSidebar user={user} onLogout={handleLogout}>
       <div className="w-full">
-        <StickyTopNav 
-          title={`Báo cáo: ${project.name}`}
-          subtitle={`${project.project_code} - ${project.customer_name}`}
-        />
+        <div data-tour-id="report-detail-page-header">
+          <StickyTopNav 
+            title={`Báo cáo: ${project.name}`}
+            subtitle={`${project.project_code} - ${project.customer_name}`}
+          >
+          <button
+            onClick={startReportDetailTour}
+            disabled={isReportDetailTourRunning}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Hướng dẫn xem báo cáo chi tiết"
+          >
+            <CircleHelp className="h-4 w-4" />
+            Hướng dẫn
+          </button>
+          </StickyTopNav>
+        </div>
 
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           {/* Back button */}
@@ -873,8 +1572,8 @@ export default function ProjectDetailedReportDetailPage() {
           </button>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour-id="report-detail-summary">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-detail-summary-quotes">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg"></div>
                 <div>
@@ -885,7 +1584,7 @@ export default function ProjectDetailedReportDetailPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-detail-summary-invoices">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-lg"></div>
                 <div>
@@ -901,7 +1600,7 @@ export default function ProjectDetailedReportDetailPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-detail-summary-expenses">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-100 rounded-lg"></div>
                 <div>
@@ -912,7 +1611,7 @@ export default function ProjectDetailedReportDetailPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-detail-summary-profit">
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${actualProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}></div>
                 <div>
@@ -929,10 +1628,10 @@ export default function ProjectDetailedReportDetailPage() {
           </div>
 
           {/* Two Column Layout: Plan vs Actual */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" data-tour-id="report-detail-plan-vs-actual">
             {/* Left Column - PLAN (Kế hoạch) */}
             <div className="space-y-6">
-              <div className="bg-blue-50 rounded-xl shadow-sm border-2 border-blue-200 p-6">
+              <div className="bg-blue-50 rounded-xl shadow-sm border-2 border-blue-200 p-6" data-tour-id="report-detail-plan-overview">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-blue-600 rounded-lg"></div>
                   <div>
@@ -942,7 +1641,7 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Planned Revenue - Quotes */}
-                <div className="bg-white rounded-lg p-4 mb-4">
+                <div className="bg-white rounded-lg p-4 mb-4" data-tour-id="report-detail-plan-quotes">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-900">Báo giá (Doanh thu dự kiến)</h3>
                     <span className="text-lg font-bold text-blue-600">{formatCurrency(totalQuotes)}</span>
@@ -991,7 +1690,7 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Planned Costs - From project_expenses_quote */}
-                <div className="bg-white rounded-lg p-4">
+                <div className="bg-white rounded-lg p-4" data-tour-id="report-detail-plan-costs">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-900">Chi phí dự kiến (Quote)</h3>
@@ -1033,7 +1732,7 @@ export default function ProjectDetailedReportDetailPage() {
                     )}
                   </div>
 
-                  <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                  <div className="mt-3 p-3 bg-blue-50 rounded-lg" data-tour-id="report-detail-plan-profit">
                     <p className="text-sm font-medium text-blue-900">Lợi nhuận dự kiến</p>
                     <p className={`text-lg font-bold ${plannedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(plannedProfit)}
@@ -1045,7 +1744,7 @@ export default function ProjectDetailedReportDetailPage() {
 
             {/* Right Column - ACTUAL (Thực tế) */}
             <div className="space-y-6">
-              <div className="bg-green-50 rounded-xl shadow-sm border-2 border-green-200 p-6">
+              <div className="bg-green-50 rounded-xl shadow-sm border-2 border-green-200 p-6" data-tour-id="report-detail-actual-overview">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-green-600 rounded-lg"></div>
                   <div>
@@ -1055,7 +1754,7 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Actual Revenue - Invoices */}
-                <div className="bg-white rounded-lg p-4 mb-4">
+                <div className="bg-white rounded-lg p-4 mb-4" data-tour-id="report-detail-actual-invoices">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-900">Hóa đơn (Doanh thu thực tế)</h3>
                     <span className="text-lg font-bold text-green-600">{formatCurrency(totalInvoices)}</span>
@@ -1102,7 +1801,7 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Actual Costs - From project_expenses (approved only) */}
-                <div className="bg-white rounded-lg p-4">
+                <div className="bg-white rounded-lg p-4" data-tour-id="report-detail-actual-expenses">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-900">Chi phí thực tế (Đã duyệt)</h3>
@@ -1149,7 +1848,7 @@ export default function ProjectDetailedReportDetailPage() {
                     )}
                   </div>
 
-                  <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                  <div className="mt-3 p-3 bg-green-50 rounded-lg" data-tour-id="report-detail-actual-profit">
                     <p className="text-sm font-medium text-green-900">Lợi nhuận thực tế</p>
                     <p className={`text-lg font-bold ${actualProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(actualProfit)}
@@ -1170,8 +1869,8 @@ export default function ProjectDetailedReportDetailPage() {
           </div>
 
           {/* Expense Comparison Analysis */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
-            <div className="p-6 border-b border-gray-200">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8" data-tour-id="report-detail-analysis">
+            <div className="p-6 border-b border-gray-200" data-tour-id="report-detail-header">
               <h3 className="text-xl font-semibold text-gray-900">Phân tích Chi phí - Kế hoạch vs Thực tế</h3>
               <p className="text-gray-600">So sánh chi tiết và quy trách nhiệm từng khoản chi phí</p>
             </div>
@@ -1313,15 +2012,15 @@ export default function ProjectDetailedReportDetailPage() {
           </div>
 
           {/* Detailed Expenses List - Planned & Actual */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
-            <div className="p-6 border-b border-gray-200">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8" data-tour-id="report-detail-expense-lists">
+            <div className="p-6 border-b border-gray-200" data-tour-id="report-detail-expense-lists-header">
               <h3 className="text-xl font-semibold text-gray-900">Chi tiết Chi phí Kế hoạch & Thực tế</h3>
               <p className="text-gray-600">Danh sách đầy đủ các khoản chi phí đã duyệt</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
               {/* Planned Expenses (Approved) */}
-              <div>
+              <div data-tour-id="report-detail-planned-list">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-lg font-semibold text-gray-900">Chi phí Kế hoạch (Đã duyệt)</h4>
                   <span className="text-sm font-medium text-blue-600">
@@ -1380,7 +2079,7 @@ export default function ProjectDetailedReportDetailPage() {
                   )}
                 </div>
 
-                <div className="mt-4 p-4 bg-blue-100 rounded-lg">
+                <div className="mt-4 p-4 bg-blue-100 rounded-lg" data-tour-id="report-detail-planned-total">
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-blue-900">Tổng Kế hoạch (Đã duyệt):</span>
                     <span className="text-xl font-bold text-blue-600">
@@ -1391,7 +2090,7 @@ export default function ProjectDetailedReportDetailPage() {
               </div>
 
               {/* Actual Expenses (Approved) */}
-              <div>
+              <div data-tour-id="report-detail-actual-list">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-lg font-semibold text-gray-900">Chi phí Thực tế (Đã phát sinh)</h4>
                   <span className="text-sm font-medium text-green-600">
@@ -1448,7 +2147,7 @@ export default function ProjectDetailedReportDetailPage() {
                   )}
                 </div>
 
-                <div className="mt-4 p-4 bg-green-100 rounded-lg">
+                <div className="mt-4 p-4 bg-green-100 rounded-lg" data-tour-id="report-detail-actual-total">
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-green-900">Tổng Thực tế (Đã phát sinh):</span>
                     <span className="text-xl font-bold text-green-600">
@@ -1502,8 +2201,8 @@ export default function ProjectDetailedReportDetailPage() {
           </div>
 
           {/* Charts - Doanh thu/Lợi nhuận/Chi phí & Đối tượng chi phí */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" data-tour-id="report-detail-charts">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-chart-revenue-expense-profit">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Doanh thu – Chi phí – Lợi nhuận</h3>
               {(totalInvoices > 0 || totalExpenses > 0) ? (
                 <Pie
@@ -1530,7 +2229,7 @@ export default function ProjectDetailedReportDetailPage() {
               )}
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-chart-expense-objects">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Theo đối tượng chi phí</h3>
               {(expenseObjectsAndProfitPieData?.labels?.length > 0) ? (
                 <Pie
@@ -1559,22 +2258,22 @@ export default function ProjectDetailedReportDetailPage() {
           </div>
 
           {/* Summary Section */}
-          <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl shadow-sm border border-teal-200 p-6">
+          <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl shadow-sm border border-teal-200 p-6" data-tour-id="report-detail-summary-section">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Tóm tắt Báo cáo</h3>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="bg-white rounded-lg p-4">
+              <div className="bg-white rounded-lg p-4" data-tour-id="report-summary-total-revenue">
                 <p className="text-sm text-gray-600 mb-1">Tổng Doanh thu</p>
                 <p className="text-xl font-bold text-blue-600">{formatCurrency(totalInvoices)}</p>
                 <p className="text-xs text-gray-500">Từ {invoices.length} hóa đơn</p>
               </div>
               
-              <div className="bg-white rounded-lg p-4">
+              <div className="bg-white rounded-lg p-4" data-tour-id="report-summary-total-cost">
                 <p className="text-sm text-gray-600 mb-1">Tổng Chi phí</p>
                 <p className="text-xl font-bold text-red-600">{formatCurrency(totalExpenses)}</p>
                 <p className="text-xs text-gray-500">Từ {expenses.length} khoản chi</p>
               </div>
               
-              <div className="bg-white rounded-lg p-4">
+              <div className="bg-white rounded-lg p-4" data-tour-id="report-summary-net-profit">
                 <p className="text-sm text-gray-600 mb-1">Lợi nhuận ròng</p>
                 <p className={`text-xl font-bold ${actualProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(actualProfit)}
@@ -1584,13 +2283,13 @@ export default function ProjectDetailedReportDetailPage() {
                 </p>
               </div>
               
-              <div className="bg-white rounded-lg p-4">
+              <div className="bg-white rounded-lg p-4" data-tour-id="report-summary-total-quotes">
                 <p className="text-sm text-gray-600 mb-1">Tổng báo giá</p>
                 <p className="text-xl font-bold text-gray-900">{formatCurrency(totalQuotes)}</p>
                 <p className="text-xs text-gray-500">Từ {quotes.length} báo giá</p>
               </div>
               
-              <div className="bg-white rounded-lg p-4">
+              <div className="bg-white rounded-lg p-4" data-tour-id="report-summary-variance">
                 <p className="text-sm text-gray-600 mb-1">Chênh lệch (Doanh thu − Chi phí)</p>
                 <p className={`text-xl font-bold ${ (totalInvoices - totalExpenses) >= 0 ? 'text-green-600' : 'text-red-600' }`}>
                   {formatCurrency(totalInvoices - totalExpenses)}
@@ -1601,7 +2300,7 @@ export default function ProjectDetailedReportDetailPage() {
           </div>
 
           {/* Planned vs Actual by Expense Object */}
-          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200" data-tour-id="report-detail-expense-objects">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-gray-900">Chi phí theo Đối tượng: Kế hoạch vs Thực tế</h3>

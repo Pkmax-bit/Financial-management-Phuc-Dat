@@ -15,7 +15,10 @@ import {
   Send,
   Bell,
   Eye,
-  Edit
+  Edit,
+  Image as ImageIcon,
+  FileText,
+  Maximize2
 } from 'lucide-react'
 
 type Feedback = {
@@ -32,6 +35,15 @@ type Feedback = {
   resolved_at?: string
   resolved_by?: string
   admin_notes?: string
+  attachments?: Array<{
+    id: string
+    name: string
+    url: string
+    type: string
+    size: number
+    uploaded_at: string
+    path: string
+  }>
 }
 
 const categoryIcons = {
@@ -91,10 +103,218 @@ export default function FeedbackManagementTab() {
   const [notificationMessage, setNotificationMessage] = useState('')
   const [showSuccessNotification, setShowSuccessNotification] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set())
+  const [replies, setReplies] = useState<Record<string, any[]>>({})
+  const [replyContent, setReplyContent] = useState<Record<string, string>>({})
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
 
   useEffect(() => {
     load()
   }, [])
+
+  const loadReplies = async (feedbackId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/feedback/system/${feedbackId}/replies`, {
+        headers: { ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}) }
+      })
+      if (!res.ok) throw new Error('Failed to load replies')
+      const data = await res.json()
+      setReplies(prev => ({ ...prev, [feedbackId]: data }))
+    } catch (error) {
+      console.error('Error loading replies:', error)
+    }
+  }
+
+  const toggleReplies = (feedbackId: string) => {
+    const newExpanded = new Set(expandedReplies)
+    if (newExpanded.has(feedbackId)) {
+      newExpanded.delete(feedbackId)
+    } else {
+      newExpanded.add(feedbackId)
+      if (!replies[feedbackId]) {
+        loadReplies(feedbackId)
+      }
+    }
+    setExpandedReplies(newExpanded)
+  }
+
+  const handleReply = async (feedbackId: string, parentReplyId: string | null = null) => {
+    const content = parentReplyId ? replyText.trim() : replyContent[feedbackId]?.trim()
+    if (!content) {
+      alert('Vui lòng nhập nội dung phản hồi')
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('No authentication token')
+      }
+
+      const res = await fetch(`/api/feedback/system/${feedbackId}/replies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ 
+          content,
+          parent_reply_id: parentReplyId || undefined
+        })
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to create reply')
+      }
+
+      // Reload replies to get the tree structure
+      await loadReplies(feedbackId)
+      
+      if (parentReplyId) {
+        setReplyText('')
+        setReplyingTo(null)
+      } else {
+        setReplyContent(prev => ({ ...prev, [feedbackId]: '' }))
+      }
+    } catch (error) {
+      console.error('Error creating reply:', error)
+      alert(error instanceof Error ? error.message : 'Lỗi khi tạo phản hồi')
+    }
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    const diffInMinutes = Math.floor(diffInSeconds / 60)
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    const diffInDays = Math.floor(diffInHours / 24)
+    
+    if (diffInSeconds < 60) return 'Vừa xong'
+    if (diffInMinutes < 60) return `${diffInMinutes} phút trước`
+    if (diffInHours < 24) return `${diffInHours} giờ trước`
+    if (diffInDays === 1) return 'Hôm qua'
+    if (diffInDays < 7) return `${diffInDays} ngày trước`
+    return date.toLocaleDateString('vi-VN')
+  }
+
+  // Recursive component to render threaded replies (giống CompactComments)
+  const ReplyItem = ({ reply, feedbackId, depth = 0 }: { reply: any, feedbackId: string, depth?: number }) => {
+    const isReplying = replyingTo === reply.id
+    
+    return (
+      <div key={reply.id} className={`${depth > 0 ? 'ml-6 border-l-2 border-gray-100 pl-4' : ''}`}>
+        <div className="flex gap-3">
+          {/* Avatar */}
+          <div className={`w-8 h-8 bg-gradient-to-br ${
+            depth === 0 ? 'from-blue-500 to-purple-600' : 
+            depth === 1 ? 'from-green-500 to-teal-600' : 
+            'from-orange-500 to-red-600'
+          } rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm`}>
+            {(reply.replied_by_name || 'Admin').charAt(0)}
+          </div>
+          
+          {/* Comment Content */}
+          <div className="flex-1">
+            <div className="bg-gray-50 rounded-xl px-3 py-2 max-w-md shadow-sm border border-gray-100">
+              <div className="font-semibold text-xs text-gray-900 mb-1">{reply.replied_by_name || 'Admin'}</div>
+              <div className="text-xs text-gray-800 leading-relaxed">{reply.content}</div>
+            </div>
+            
+            {reply.attachments && reply.attachments.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2 mb-3">
+                {reply.attachments.map((attachment: any) => (
+                  attachment.type === 'image' ? (
+                    <img
+                      key={attachment.id}
+                      src={attachment.url}
+                      alt={attachment.name}
+                      className="w-16 h-16 object-cover rounded border border-gray-300 cursor-pointer"
+                      onClick={() => setSelectedImage(attachment.url)}
+                    />
+                  ) : (
+                    <a
+                      key={attachment.id}
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 px-2 py-1 bg-white rounded border border-gray-300 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      <FileText className="h-3 w-3" />
+                      {attachment.name}
+                    </a>
+                  )
+                ))}
+              </div>
+            )}
+            
+            {/* Comment Actions */}
+            <div className="flex items-center gap-3 mt-1 ml-3">
+              <button 
+                onClick={() => setReplyingTo(replyingTo === reply.id ? null : reply.id)}
+                className="text-xs text-gray-600 hover:text-blue-600 font-medium hover:bg-blue-50 px-2 py-1 rounded-full transition-colors"
+              >
+                💬 Trả lời
+              </button>
+              <span className="text-xs text-gray-500">
+                {formatTimeAgo(reply.created_at)}
+              </span>
+            </div>
+            
+            {/* Reply Form */}
+            {isReplying && (
+              <div className="mt-3 ml-11">
+                <form onSubmit={(e) => { e.preventDefault(); handleReply(feedbackId, reply.id); }} className="flex gap-2">
+                  <div className="w-6 h-6 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                    👤
+                  </div>
+                  <div className="flex-1">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
+                      <input
+                        type="text"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        placeholder="Trả lời..."
+                        className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!replyText.trim()}
+                    className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    📤
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                    className="px-3 py-2 bg-gray-500 text-white rounded-full text-xs font-semibold hover:bg-gray-600 transition-all duration-200"
+                  >
+                    ✕
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Nested Replies */}
+        {reply.children && reply.children.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {reply.children.map((child: any) => (
+              <ReplyItem key={child.id} reply={child} feedbackId={feedbackId} depth={depth + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const load = async () => {
     try {
@@ -384,6 +604,51 @@ export default function FeedbackManagementTab() {
                     <h3 className="text-lg font-semibold text-black mb-2">{item.title}</h3>
                     <p className="text-gray-800 mb-4 line-clamp-3">{item.content}</p>
 
+                    {/* Attachments Gallery */}
+                    {item.attachments && item.attachments.length > 0 && (
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <ImageIcon className="h-4 w-4 text-gray-600" />
+                          <span className="text-sm font-medium text-gray-700">
+                            Hình ảnh/Tài liệu đính kèm ({item.attachments.length})
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {item.attachments.map((attachment) => (
+                            <div key={attachment.id} className="relative group">
+                              {attachment.type === 'image' ? (
+                                <div
+                                  onClick={() => setSelectedImage(attachment.url)}
+                                  className="cursor-pointer relative"
+                                >
+                                  <img
+                                    src={attachment.url}
+                                    alt={attachment.name}
+                                    className="w-24 h-24 object-cover rounded-lg border-2 border-gray-200 hover:border-blue-500 transition-all shadow-sm hover:shadow-md"
+                                  />
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-opacity flex items-center justify-center">
+                                    <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <a
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block p-3 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-blue-500 transition-all shadow-sm hover:shadow-md min-w-[96px]"
+                                >
+                                  <FileText className="w-6 h-6 text-blue-600 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-700 truncate text-center max-w-[80px]">
+                                    {attachment.name}
+                                  </p>
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                      <div className="flex items-center gap-4 text-sm text-black">
                        <div className="flex items-center gap-1">
                          <User className="h-4 w-4" />
@@ -401,6 +666,60 @@ export default function FeedbackManagementTab() {
                          <p className="text-sm font-medium text-black">{item.admin_notes}</p>
                        </div>
                     )}
+
+                    {/* Replies Section */}
+                    <div className="mt-4 border-t border-gray-200 pt-4">
+                      <button
+                        onClick={() => toggleReplies(item.id)}
+                        className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 mb-3"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        <span>Phản hồi ({replies[item.id]?.length || 0})</span>
+                        {expandedReplies.has(item.id) ? (
+                          <X className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+
+                      {expandedReplies.has(item.id) && (
+                        <div className="space-y-4">
+                          {/* Existing Replies (Threaded) */}
+                          {replies[item.id] && replies[item.id].length > 0 && (
+                            <div className="space-y-3">
+                              {replies[item.id].map((reply) => (
+                                <ReplyItem key={reply.id} reply={reply} feedbackId={item.id} />
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Reply Form (Top-level) - Giống CompactComments */}
+                          <form onSubmit={(e) => { e.preventDefault(); handleReply(item.id, null); }} className="flex gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                              👤
+                            </div>
+                            <div className="flex-1">
+                              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
+                                <input
+                                  type="text"
+                                  value={replyContent[item.id] || ''}
+                                  onChange={(e) => setReplyContent(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  placeholder="Viết bình luận..."
+                                  className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="submit"
+                              disabled={!replyContent[item.id]?.trim()}
+                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
+                            >
+                              📤
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
@@ -525,6 +844,29 @@ export default function FeedbackManagementTab() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] w-full">
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 bg-white rounded-full p-2 hover:bg-gray-100 transition-colors z-10"
+            >
+              <X className="h-6 w-6 text-gray-800" />
+            </button>
+            <img
+              src={selectedImage}
+              alt="Preview"
+              className="w-full h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
       )}

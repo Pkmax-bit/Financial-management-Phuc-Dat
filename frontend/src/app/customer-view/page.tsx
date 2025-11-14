@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import CustomerInfo from '@/components/customer-view/CustomerInfo'
@@ -10,18 +10,21 @@ import { getApiEndpoint } from '@/lib/apiUrl'
 import { 
   Building2, 
   Calendar, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  User,
   Search,
   Filter,
   Grid,
   List,
   Download,
   Share2,
-  DollarSign
+  DollarSign,
+  CircleHelp
 } from 'lucide-react'
+
+const TOUR_STORAGE_KEY = 'customer-view-tour-status-v1'
+const TOUR_COUNTDOWN_SECONDS = 5
+type ShepherdModule = typeof import('shepherd.js')
+type ShepherdType = ShepherdModule & { Tour: new (...args: any[]) => any }
+type ShepherdTour = InstanceType<ShepherdType['Tour']>
 
 interface Customer {
   id: string
@@ -80,6 +83,14 @@ export default function CustomerViewPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [showTourCompletionPrompt, setShowTourCompletionPrompt] = useState(false)
+  const [tourCountdown, setTourCountdown] = useState(TOUR_COUNTDOWN_SECONDS)
+  const [isTourRunning, setIsTourRunning] = useState(false)
+  const shepherdRef = useRef<ShepherdType | null>(null)
+  const tourRef = useRef<ShepherdTour | null>(null)
+  const autoStartAttemptedRef = useRef(false)
+  const currentTourModeRef = useRef<'auto' | 'manual'>('manual')
+  const isBrowser = typeof window !== 'undefined'
 
   // Mock user data
   const user = {
@@ -246,28 +257,324 @@ export default function CustomerViewPage() {
     }
   }
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.company.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredCustomers = useMemo(() => {
+    return customers.filter(customer =>
+      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.company.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [customers, searchTerm])
 
-  const filteredProjects = projects.filter(project => {
-    if (filterStatus === 'all') return true
-    return project.status === filterStatus
-  })
+  const filteredProjects = useMemo(() => {
+    return projects.filter(project => {
+      if (filterStatus === 'all') return true
+      return project.status === filterStatus
+    })
+  }, [projects, filterStatus])
+
+  const handleTourComplete = useCallback(() => {
+    setIsTourRunning(false)
+    if (isBrowser) {
+      localStorage.setItem(TOUR_STORAGE_KEY, 'completed')
+    }
+    setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+    setShowTourCompletionPrompt(true)
+  }, [isBrowser])
+
+  const handleTourCancel = useCallback(() => {
+    setIsTourRunning(false)
+    if (isBrowser && currentTourModeRef.current === 'auto') {
+      localStorage.setItem(TOUR_STORAGE_KEY, 'dismissed')
+    }
+  }, [isBrowser])
+
+  const startCustomerViewTour = useCallback(async (options?: { auto?: boolean }) => {
+    if (!isBrowser || !filteredCustomers.length) return
+
+    currentTourModeRef.current = options?.auto ? 'auto' : 'manual'
+
+    if (tourRef.current) {
+      tourRef.current.cancel()
+      tourRef.current = null
+    }
+
+    setShowTourCompletionPrompt(false)
+    setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+
+    const firstCustomer = filteredCustomers[0]
+
+    if (firstCustomer) {
+      setSelectedCustomer((current) =>
+        current?.id === firstCustomer.id ? current : firstCustomer
+      )
+    }
+
+    if (!shepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: ShepherdType })?.default ?? (module as unknown as ShepherdType)
+        shepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = shepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 15, delay = 120) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="customer-header"]')
+    await waitForElement('[data-tour-id="customer-list"]')
+
+    if (firstCustomer) {
+      await waitForElement('[data-tour-id="customer-info"]')
+      await waitForElement('[data-tour-id="construction-gallery"]')
+      await waitForElement('[data-tour-id="timeline-gallery"]')
+    }
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'customer-view-intro',
+      title: 'Chào mừng đến giao diện khách hàng',
+      text: 'Trang này giúp bạn quản lý thông tin khách hàng, dự án và tiến độ thi công.',
+      attachTo: { element: '[data-tour-id="customer-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-view-guide-button',
+      title: 'Mở lại tour hướng dẫn',
+      text: 'Nút Hướng dẫn giúp bạn khởi động lại tour sau này khi cần xem lại.',
+      attachTo: { element: '[data-tour-id="customer-guide-button"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-view-search',
+      title: 'Tìm kiếm và lọc khách hàng',
+      text: 'Sử dụng ô tìm kiếm và bộ lọc trạng thái dự án để thu hẹp danh sách khách hàng.',
+      attachTo: { element: '[data-tour-id="customer-search"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-view-list',
+      title: 'Danh sách khách hàng',
+      text: 'Chọn một khách hàng để xem chi tiết: hệ thống sẽ tự chọn khách hàng đầu tiên cho bạn.',
+      attachTo: { element: '[data-tour-id="customer-list"]', on: 'right' },
+      when: {
+        show: () => {
+          if (firstCustomer) {
+            setSelectedCustomer((current) =>
+              current?.id === firstCustomer.id ? current : firstCustomer
+            )
+          }
+        }
+      },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-view-info',
+      title: 'Thông tin tổng quan khách hàng',
+      text: 'Khu vực này hiển thị các thông tin chính và danh sách dự án của khách hàng đã chọn.',
+      attachTo: { element: '[data-tour-id="customer-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-view-images',
+      title: 'Hình ảnh công trình',
+      text: 'Xem nhanh các hình ảnh được cập nhật từ công trường để đánh giá trực quan tiến độ.',
+      attachTo: { element: '[data-tour-id="construction-gallery"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'customer-view-timeline',
+      title: 'Timeline dự án',
+      text: 'Theo dõi các mốc quan trọng, tài liệu và cập nhật tiến độ của từng dự án.',
+      attachTo: { element: '[data-tour-id="timeline-gallery"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      handleTourComplete()
+      tourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      handleTourCancel()
+      tourRef.current = null
+    })
+
+    tourRef.current = tour
+    setIsTourRunning(true)
+    tour.start()
+  }, [filteredCustomers, handleTourCancel, handleTourComplete, isBrowser])
+
+  const handleRestartTour = useCallback(() => {
+    setShowTourCompletionPrompt(false)
+    setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+    startCustomerViewTour()
+  }, [startCustomerViewTour])
+
+  useEffect(() => {
+    if (!isBrowser) return
+    if (!filteredCustomers.length) return
+    if (autoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(TOUR_STORAGE_KEY)
+    autoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      startCustomerViewTour({ auto: true })
+    }
+  }, [filteredCustomers, isBrowser, startCustomerViewTour])
+
+  useEffect(() => {
+    if (!showTourCompletionPrompt) return
+
+    if (tourCountdown <= 0) {
+      setShowTourCompletionPrompt(false)
+      setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setTourCountdown((prev) => prev - 1)
+    }, 1000)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [showTourCompletionPrompt, tourCountdown])
+
+  useEffect(() => {
+    return () => {
+      tourRef.current?.cancel()
+      tourRef.current?.destroy()
+      tourRef.current = null
+    }
+  }, [])
 
   return (
     <LayoutWithSidebar user={user} onLogout={handleLogout}>
       <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between" data-tour-id="customer-header">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">View khách hàng</h1>
               <p className="text-gray-600 mt-2">Xem thông tin khách hàng và timeline công trình</p>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => startCustomerViewTour()}
+                disabled={isTourRunning}
+                data-tour-id="customer-guide-button"
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                  isTourRunning
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    : 'text-white bg-blue-600 hover:bg-blue-700'
+                }`}
+                title="Bắt đầu tour hướng dẫn"
+              >
+                <CircleHelp className="h-5 w-5" />
+                <span>Bắt đầu hướng dẫn</span>
+              </button>
               <button
                 onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -286,7 +593,7 @@ export default function CustomerViewPage() {
         </div>
 
         {/* Search and Filter */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row gap-4" data-tour-id="customer-search">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
@@ -315,7 +622,7 @@ export default function CustomerViewPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Customer List */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200" data-tour-id="customer-list">
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Danh sách khách hàng</h2>
                 <p className="text-gray-600 text-sm mt-1">{filteredCustomers.length} khách hàng</p>
@@ -374,43 +681,49 @@ export default function CustomerViewPage() {
             {selectedCustomer ? (
               <div className="space-y-6">
                 {/* Customer Info */}
-                <CustomerInfo customer={selectedCustomer} projects={filteredProjects} />
+                <div data-tour-id="customer-info">
+                  <CustomerInfo customer={selectedCustomer} projects={filteredProjects} />
+                </div>
                 
                 {/* Construction Images from Storage */}
-                <ConstructionImageGallery 
-                  images={timelineEntries
-                    .flatMap(entry => entry.attachments)
-                    .filter(attachment => attachment.type === 'image' || attachment.type.startsWith('image/'))
-                    .map(attachment => ({
-                      id: attachment.id,
-                      name: attachment.name,
-                      url: attachment.url,
-                      size: attachment.size,
-                      uploaded_at: attachment.uploaded_at,
-                      timeline_entry: timelineEntries.find(entry => 
-                        entry.attachments.some(att => att.id === attachment.id)
-                      ) ? {
-                        title: timelineEntries.find(entry => 
+                <div data-tour-id="construction-gallery">
+                  <ConstructionImageGallery 
+                    images={timelineEntries
+                      .flatMap(entry => entry.attachments)
+                      .filter(attachment => attachment.type === 'image' || attachment.type.startsWith('image/'))
+                      .map(attachment => ({
+                        id: attachment.id,
+                        name: attachment.name,
+                        url: attachment.url,
+                        size: attachment.size,
+                        uploaded_at: attachment.uploaded_at,
+                        timeline_entry: timelineEntries.find(entry => 
                           entry.attachments.some(att => att.id === attachment.id)
-                        )?.title || '',
-                        date: timelineEntries.find(entry => 
-                          entry.attachments.some(att => att.id === attachment.id)
-                        )?.date || '',
-                        type: timelineEntries.find(entry => 
-                          entry.attachments.some(att => att.id === attachment.id)
-                        )?.type || ''
-                      } : undefined
-                    }))
-                  }
-                  projectName={selectedCustomer.name}
-                />
+                        ) ? {
+                          title: timelineEntries.find(entry => 
+                            entry.attachments.some(att => att.id === attachment.id)
+                          )?.title || '',
+                          date: timelineEntries.find(entry => 
+                            entry.attachments.some(att => att.id === attachment.id)
+                          )?.date || '',
+                          type: timelineEntries.find(entry => 
+                            entry.attachments.some(att => att.id === attachment.id)
+                          )?.type || ''
+                        } : undefined
+                      }))
+                    }
+                    projectName={selectedCustomer.name}
+                  />
+                </div>
                 
                 {/* Project Timeline Gallery */}
-                <ProjectTimelineGallery 
-                  customer={selectedCustomer}
-                  projects={filteredProjects}
-                  timelineEntries={timelineEntries}
-                />
+                <div data-tour-id="timeline-gallery">
+                  <ProjectTimelineGallery 
+                    customer={selectedCustomer}
+                    projects={filteredProjects}
+                    timelineEntries={timelineEntries}
+                  />
+                </div>
               </div>
             ) : (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
@@ -422,6 +735,31 @@ export default function CustomerViewPage() {
           </div>
         </div>
       </div>
+      {showTourCompletionPrompt && (
+        <div className="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-50 max-w-sm bg-white border border-gray-200 rounded-xl shadow-xl p-5">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Bạn cần hướng dẫn lại phần nào?</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Tour sẽ đóng sau {tourCountdown}s. Bạn có thể khởi động lại ngay để xem lại các bước hướng dẫn.
+          </p>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => {
+                setShowTourCompletionPrompt(false)
+                setTourCountdown(TOUR_COUNTDOWN_SECONDS)
+              }}
+              className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+            >
+              Để sau
+            </button>
+            <button
+              onClick={handleRestartTour}
+              className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              Bắt đầu lại tour
+            </button>
+          </div>
+        </div>
+      )}
     </LayoutWithSidebar>
   )
 }

@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { CircleHelp } from 'lucide-react'
 
 type Category = {
   id: string
@@ -21,7 +22,13 @@ const parseCurrency = (s: string): number => {
   return clean ? parseInt(clean, 10) : 0
 }
 
-export default function ProductCreateForm({ onCreated }: { onCreated?: () => void }) {
+interface ProductCreateFormProps {
+  onCreated?: () => void
+  supportTourRequest?: { slug: string; token: number } | null
+  onSupportTourHandled?: () => void
+}
+
+export default function ProductCreateForm({ onCreated, supportTourRequest, onSupportTourHandled }: ProductCreateFormProps) {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,6 +58,16 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
   const [componentRows, setComponentRows] = useState<Array<{ expense_object_id: string; expense_object_name?: string; unit: string; unit_price: number; quantity: number }>>([
     { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }
   ])
+
+  // Tour state
+  const PRODUCT_FORM_TOUR_STORAGE_KEY = 'product-form-tour-status-v1'
+  const [isProductTourRunning, setIsProductTourRunning] = useState(false)
+  const productTourRef = useRef<any>(null)
+  const productShepherdRef = useRef<any>(null)
+  const productTourAutoStartAttemptedRef = useRef(false)
+  type ProductShepherdModule = typeof import('shepherd.js')
+  type ProductShepherdType = ProductShepherdModule & { Tour: new (...args: any[]) => any }
+  type ProductShepherdTour = InstanceType<ProductShepherdType['Tour']>
 
   useEffect(() => {
     const load = async () => {
@@ -220,9 +237,215 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
     }
   }
 
+  const startProductTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+
+    if (productTourRef.current) {
+      productTourRef.current.cancel()
+      productTourRef.current = null
+    }
+
+    if (!productShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: ProductShepherdType })?.default ?? (module as unknown as ProductShepherdType)
+        productShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = productShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="product-form-header"]')
+    await waitForElement('[data-tour-id="product-form-basic-info"]')
+    await waitForElement('[data-tour-id="product-form-dimensions"]')
+    await waitForElement('[data-tour-id="product-form-components"]')
+    await waitForElement('[data-tour-id="product-form-submit"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'product-form-intro',
+      title: 'Hướng dẫn tạo sản phẩm',
+      text: 'Form này giúp bạn tạo sản phẩm mới với đầy đủ thông tin: loại sản phẩm, tên, giá, kích thước và vật tư cấu thành.',
+      attachTo: { element: '[data-tour-id="product-form-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'product-form-basic-info',
+      title: 'Thông tin cơ bản',
+      text: 'Điền các thông tin cơ bản:\n• Loại sản phẩm (bắt buộc): Chọn loại sản phẩm từ danh sách\n• Tên sản phẩm (bắt buộc): Nhập tên sản phẩm\n• Đơn giá: Nhập giá bán của sản phẩm\n• Đơn vị: Đơn vị tính (cái, bộ, m², ...)\n• Mô tả: Mô tả chi tiết về sản phẩm\n\nLưu ý: Thành tiền = Đơn giá × Diện tích (tự động tính khi nhập kích thước)',
+      attachTo: { element: '[data-tour-id="product-form-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'product-form-dimensions',
+      title: 'Kích thước sản phẩm',
+      text: 'Nhập kích thước sản phẩm (tùy chọn):\n• Diện tích (m²): Tự động tính từ Chiều cao × Dài\n• Thể tích (m³): Tự động tính từ Chiều cao × Dài × Sâu\n• Chiều cao (mm): Nhập chiều cao\n• Dài (mm): Nhập chiều dài\n• Sâu (mm): Nhập chiều sâu\n\nLưu ý: Hệ thống tự động tính diện tích và thể tích khi bạn nhập các kích thước.',
+      attachTo: { element: '[data-tour-id="product-form-dimensions"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'product-form-components',
+      title: 'Vật tư (đối tượng chi phí)',
+      text: 'Thêm vật tư cấu thành sản phẩm (tùy chọn):\n• Chọn đối tượng chi phí cấp 3 từ danh sách\n• Nhập đơn vị, đơn giá và số lượng\n• Nhấn "Thêm dòng" để thêm vật tư khác\n• Nhấn "Xóa" để xóa vật tư không cần thiết\n\nLưu ý: Thành tiền = Đơn giá × Số lượng (tự động tính)',
+      attachTo: { element: '[data-tour-id="product-form-components"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'product-form-submit',
+      title: 'Tạo sản phẩm',
+      text: 'Sau khi điền đầy đủ thông tin (ít nhất Loại sản phẩm và Tên sản phẩm), nhấn "Tạo sản phẩm" để lưu. Sản phẩm sẽ được thêm vào danh sách và có thể sử dụng khi tạo báo giá hoặc hóa đơn.',
+      attachTo: { element: '[data-tour-id="product-form-submit"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsProductTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(PRODUCT_FORM_TOUR_STORAGE_KEY, 'completed')
+      }
+      productTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsProductTourRunning(false)
+      productTourRef.current = null
+    })
+
+    productTourRef.current = tour
+    setIsProductTourRunning(true)
+    tour.start()
+  }, [])
+
+  // Auto-start tour when form is first rendered
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (productTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(PRODUCT_FORM_TOUR_STORAGE_KEY)
+    productTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startProductTour()
+      }, 800)
+    }
+  }, [startProductTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      productTourRef.current?.cancel()
+      productTourRef.current?.destroy?.()
+      productTourRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!supportTourRequest) return
+    if (supportTourRequest.slug !== 'product-form') return
+    startProductTour()
+    onSupportTourHandled?.()
+  }, [supportTourRequest, onSupportTourHandled, startProductTour])
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h3 className="text-lg font-semibold text-gray-900 mb-3">Tạo sản phẩm</h3>
+      <div className="flex items-center justify-between mb-3" data-tour-id="product-form-header">
+        <h3 className="text-lg font-semibold text-gray-900">Tạo sản phẩm</h3>
+        <button
+          onClick={() => startProductTour()}
+          disabled={isProductTourRunning || submitting}
+          className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+            isProductTourRunning || submitting
+              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+              : 'text-white bg-blue-600 hover:bg-blue-700'
+          }`}
+          title="Bắt đầu hướng dẫn tạo sản phẩm"
+        >
+          <CircleHelp className="h-4 w-4" />
+          <span>Hướng dẫn</span>
+        </button>
+      </div>
       
       {/* Success Notification */}
       {success && (
@@ -276,68 +499,72 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
         </div>
       )}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-        <div className="md:col-span-3">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Loại sản phẩm <span className="text-red-500">*</span></label>
-          <select
-            disabled={loading}
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Chọn loại</option>
-            {categories.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="md:col-span-3">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Tên sản phẩm <span className="text-red-500">*</span></label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
-            placeholder="VD: Bàn gỗ sồi"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Đơn giá</label>
-          <input
-            type="text"
-            value={priceDisplay}
-            onChange={(e) => onPriceChange(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black font-medium focus:ring-2 focus:ring-blue-500"
-            placeholder="0"
-            inputMode="numeric"
-            autoComplete="off"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Thành tiền (ĐG × DT)</label>
-          <div className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-right text-gray-900 bg-gray-50">
-            {area != null ? formatNumber((Number(price) || 0) * (Number(area) || 0)) : '-'}
+        <div className="md:col-span-12" data-tour-id="product-form-basic-info">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-900 mb-1">Loại sản phẩm <span className="text-red-500">*</span></label>
+              <select
+                disabled={loading}
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Chọn loại</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-900 mb-1">Tên sản phẩm <span className="text-red-500">*</span></label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
+                placeholder="VD: Bàn gỗ sồi"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-900 mb-1">Đơn giá</label>
+              <input
+                type="text"
+                value={priceDisplay}
+                onChange={(e) => onPriceChange(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black font-medium focus:ring-2 focus:ring-blue-500"
+                placeholder="0"
+                inputMode="numeric"
+                autoComplete="off"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-900 mb-1">Thành tiền (ĐG × DT)</label>
+              <div className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-right text-gray-900 bg-gray-50">
+                {area != null ? formatNumber((Number(price) || 0) * (Number(area) || 0)) : '-'}
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-900 mb-1">Đơn vị</label>
+              <input
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
+                placeholder="cái / bộ / m2 ..."
+              />
+            </div>
+            <div className="md:col-span-12">
+              <label className="block text-sm font-medium text-gray-900 mb-1">Mô tả</label>
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
+                placeholder="Mô tả chi tiết sản phẩm"
+              />
+            </div>
           </div>
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Đơn vị</label>
-          <input
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
-            placeholder="cái / bộ / m2 ..."
-          />
-        </div>
-        <div className="md:col-span-12">
-          <label className="block text-sm font-medium text-gray-900 mb-1">Mô tả</label>
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
-            placeholder="Mô tả chi tiết sản phẩm"
-          />
         </div>
         
         {/* Dimension fields */}
-        <div className="md:col-span-12">
+        <div className="md:col-span-12" data-tour-id="product-form-dimensions">
           <h4 className="text-md font-medium text-gray-900 mb-3 mt-4">Kích thước sản phẩm</h4>
         </div>
         <div className="md:col-span-2">
@@ -401,7 +628,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           />
         </div>
         {/* Chọn đối tượng chi phí (Vật tư) */}
-        <div className="md:col-span-12">
+        <div className="md:col-span-12" data-tour-id="product-form-components">
           <h4 className="text-md font-medium text-gray-900 mb-3 mt-4">Vật tư (đối tượng chi phí cấp 3)</h4>
           <div className="overflow-x-auto border border-gray-200 rounded">
             <table className="min-w-full text-sm">
@@ -503,7 +730,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           </div>
         </div>
         
-        <div className="md:col-span-12">
+        <div className="md:col-span-12" data-tour-id="product-form-submit">
           <button
             type="submit"
             disabled={submitting || !name.trim() || !categoryId}

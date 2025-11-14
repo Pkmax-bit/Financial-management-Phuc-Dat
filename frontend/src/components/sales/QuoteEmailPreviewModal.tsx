@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { useSidebar } from '@/components/LayoutWithSidebar'
 
@@ -37,13 +37,15 @@ interface QuoteEmailPreviewModalProps {
       mimeType: string
     }>
   }) => void
+  forceStartTourToken?: number
 }
 
 export default function QuoteEmailPreviewModal({
   isOpen,
   onClose,
   quoteId,
-  onConfirmSend
+  onConfirmSend,
+  forceStartTourToken
 }: QuoteEmailPreviewModalProps) {
   const [htmlContent, setHtmlContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
@@ -90,6 +92,16 @@ export default function QuoteEmailPreviewModal({
     base64?: string
   }
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
+
+  // Tour state
+  const EMAIL_FORM_TOUR_STORAGE_KEY = 'email-form-tour-status-v1'
+  const [isEmailTourRunning, setIsEmailTourRunning] = useState(false)
+  const emailTourRef = useRef<any>(null)
+  const emailShepherdRef = useRef<any>(null)
+  const emailTourAutoStartAttemptedRef = useRef(false)
+  type EmailShepherdModule = typeof import('shepherd.js')
+  type EmailShepherdType = EmailShepherdModule & { Tour: new (...args: any[]) => any }
+  type EmailShepherdTour = InstanceType<EmailShepherdType['Tour']>
 
   const { hideSidebar } = useSidebar()
 
@@ -367,6 +379,222 @@ export default function QuoteEmailPreviewModal({
     }
   }, [isOpen, quoteId, fetchPreview])
 
+  const startEmailTour = useCallback(async () => {
+    if (!isOpen || typeof window === 'undefined') return
+
+    if (emailTourRef.current) {
+      emailTourRef.current.cancel()
+      emailTourRef.current = null
+    }
+
+    if (!emailShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: EmailShepherdType })?.default ?? (module as unknown as EmailShepherdType)
+        emailShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = emailShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="email-form-header"]')
+    await waitForElement('[data-tour-id="email-form-preview"]')
+    await waitForElement('[data-tour-id="email-form-edit-payment"]')
+    await waitForElement('[data-tour-id="email-form-edit-notes"]')
+    await waitForElement('[data-tour-id="email-form-send"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'email-form-intro',
+      title: 'Hướng dẫn tạo và chỉnh sửa email báo giá',
+      text: 'Form này giúp bạn xem trước, chỉnh sửa và gửi email báo giá cho khách hàng. Bạn có thể tùy chỉnh phương thức thanh toán, ghi chú, thông tin công ty và ngân hàng.',
+      attachTo: { element: '[data-tour-id="email-form-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'email-form-preview',
+      title: 'Xem trước email',
+      text: 'Bên trái hiển thị preview email sẽ được gửi cho khách hàng. Preview sẽ tự động cập nhật khi bạn chỉnh sửa các thông tin bên phải.\n\nNội dung preview bao gồm:\n• Logo công ty\n• Thông tin công ty\n• Thông tin khách hàng\n• Chi tiết báo giá (sản phẩm, số lượng, đơn giá, thành tiền)\n• Phương thức thanh toán\n• Ghi chú\n• Thông tin ngân hàng',
+      attachTo: { element: '[data-tour-id="email-form-preview"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'email-form-edit-payment',
+      title: 'Chỉnh sửa phương thức thanh toán',
+      text: 'Các thao tác có thể thực hiện:\n• Thêm đợt thanh toán: Nhấn nút "+" để thêm đợt mới\n• Xóa đợt: Nhấn nút "X" để xóa đợt\n• Chỉnh sửa đợt:\n  - Mô tả: Mô tả đợt thanh toán (ví dụ: "Cọc đợt 1", "Còn lại")\n  - Số tiền: Số tiền của đợt (VND)\n  - Đã nhận: Đánh dấu nếu đã nhận tiền\n\nLưu ý: Bạn có thể chỉnh sửa các đợt thanh toán, số tiền và đánh dấu đã nhận.',
+      attachTo: { element: '[data-tour-id="email-form-edit-payment"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'email-form-edit-notes',
+      title: 'Chỉnh sửa ghi chú và thông tin',
+      text: 'Bạn có thể chỉnh sửa:\n• Ghi chú mặc định (GHI CHÚ section)\n• Ghi chú bổ sung\n• Thông tin công ty (tên, showroom, nhà máy, website, hotline, logo)\n• Thông tin ngân hàng (tên tài khoản, số tài khoản, ngân hàng, chi nhánh)\n• Đính kèm file (nếu cần)',
+      attachTo: { element: '[data-tour-id="email-form-edit-notes"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'email-form-save',
+      title: 'Lưu chỉnh sửa',
+      text: 'Nhấn "Lưu chỉnh sửa" để lưu các thay đổi vào bản nháp. Bạn có thể quay lại chỉnh sửa sau.',
+      attachTo: { element: '[data-tour-id="email-form-save"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'email-form-send',
+      title: 'Gửi email',
+      text: 'Sau khi kiểm tra preview và chỉnh sửa xong, nhấn "Gửi email" để gửi email báo giá cho khách hàng.\n\nKết quả:\n• Email sẽ được gửi đến địa chỉ email của khách hàng đã đăng ký\n• Trạng thái báo giá sẽ được cập nhật thành "Đã gửi"\n• Thông báo xác nhận sẽ hiển thị',
+      attachTo: { element: '[data-tour-id="email-form-send"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsEmailTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(EMAIL_FORM_TOUR_STORAGE_KEY, 'completed')
+      }
+      emailTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsEmailTourRunning(false)
+      emailTourRef.current = null
+    })
+
+    emailTourRef.current = tour
+    setIsEmailTourRunning(true)
+    tour.start()
+  }, [isOpen])
+
+  // Auto-start tour when form opens for the first time
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isOpen) return
+    if (emailTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(EMAIL_FORM_TOUR_STORAGE_KEY)
+    emailTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startEmailTour()
+      }, 1000)
+    }
+  }, [isOpen, startEmailTour])
+
+  // Reset tour auto-start when form closes
+  useEffect(() => {
+    if (!isOpen) {
+      emailTourAutoStartAttemptedRef.current = false
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (!forceStartTourToken) return
+    startEmailTour()
+  }, [forceStartTourToken, isOpen, startEmailTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      emailTourRef.current?.cancel()
+      emailTourRef.current?.destroy?.()
+      emailTourRef.current = null
+    }
+  }, [])
+
   // Function to fetch preview with current form data
   const fetchPreviewWithCurrentData = async () => {
     if (!quoteId || !isOpen) return
@@ -476,9 +704,22 @@ export default function QuoteEmailPreviewModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white shadow-xl w-full h-full flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200" data-tour-id="email-form-header">
           <h2 className="text-xl font-semibold text-gray-900">Xem trước & Chỉnh sửa email báo giá</h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => startEmailTour()}
+              disabled={isEmailTourRunning || loading}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                isEmailTourRunning || loading
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+              }`}
+              title="Bắt đầu hướng dẫn email"
+            >
+              <CircleHelp className="h-4 w-4" />
+              <span>Hướng dẫn</span>
+            </button>
             <button
               onClick={async () => {
                 // Always save when clicking save button
@@ -567,6 +808,7 @@ export default function QuoteEmailPreviewModal({
               }}
               className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
+              data-tour-id="email-form-save"
             >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {loading ? 'Đang lưu...' : 'Lưu chỉnh sửa'}
@@ -607,7 +849,7 @@ export default function QuoteEmailPreviewModal({
           {!loading && !error && (
             <div className="flex gap-4 h-full flex-1 overflow-hidden">
               {/* Left side: Email Preview */}
-              <div className="flex-1 overflow-auto pr-4 p-4">
+              <div className="flex-1 overflow-auto pr-4 p-4" data-tour-id="email-form-preview">
                 {htmlContent && (
                   <div className="bg-white rounded-lg shadow-sm p-4">
                     <div 
@@ -880,7 +1122,7 @@ export default function QuoteEmailPreviewModal({
                   </div>
 
               {/* Editable Payment Terms */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200" data-tour-id="email-form-edit-payment">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">Chỉnh sửa phương thức thanh toán</h3>
                     <button
@@ -1015,7 +1257,7 @@ export default function QuoteEmailPreviewModal({
                   </div>
 
                 {/* Default Notes Editor (GHI CHÚ section) */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
+                <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200" data-tour-id="email-form-edit-notes">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-semibold text-gray-900">Chỉnh sửa GHI CHÚ</h3>
                       <button
@@ -1213,6 +1455,7 @@ export default function QuoteEmailPreviewModal({
             }}
             disabled={loading || !!error}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            data-tour-id="email-form-send"
           >
             <Send className="w-4 h-4" />
             Gửi email

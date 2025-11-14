@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, MessageCircle, Bug, Lightbulb, Palette, Zap, FileText } from 'lucide-react'
+import { Plus, Search, MessageCircle, Bug, Lightbulb, Palette, Zap, FileText, User, Send, X, Eye, Image as ImageIcon, Maximize2, Upload, Edit2, Trash2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 type Feedback = {
@@ -32,6 +32,24 @@ const categoryLabels = {
   other: 'Khác'
 }
 
+type Reply = {
+  id: string
+  feedback_id: string
+  replied_by: string
+  content: string
+  parent_reply_id?: string | null
+  created_at: string
+  updated_at: string
+  replied_by_name?: string
+  children?: Reply[]
+  attachments?: Array<{
+    id: string
+    name: string
+    url: string
+    type: string
+  }>
+}
+
 export default function EmployeeSystemFeedback() {
   const [items, setItems] = useState<Feedback[]>([])
   const [loading, setLoading] = useState(false)
@@ -44,9 +62,21 @@ export default function EmployeeSystemFeedback() {
     category: 'other' as Feedback['category'],
     priority: 'medium' as Feedback['priority'],
   })
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set())
+  const [replies, setReplies] = useState<Record<string, Reply[]>>({})
+  const [replyContent, setReplyContent] = useState<Record<string, string>>({})
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [editingReply, setEditingReply] = useState<string | null>(null)
+  const [editReplyContent, setEditReplyContent] = useState<string>('')
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>()
 
   useEffect(() => {
     load()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUserId(session?.user?.id)
+    })
   }, [])
 
   const load = async () => {
@@ -59,6 +89,33 @@ export default function EmployeeSystemFeedback() {
       if (!res.ok) throw new Error('Failed to load system feedbacks')
       const data = await res.json()
       setItems(data)
+      
+      // Load replies count for all feedbacks
+      if (data && data.length > 0) {
+        const repliesPromises = data.map(async (item: Feedback) => {
+          try {
+            const repliesRes = await fetch(`/api/feedback/system/${item.id}/replies`, {
+              headers: { ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}) }
+            })
+            if (repliesRes.ok) {
+              const repliesData = await repliesRes.json()
+              return { feedbackId: item.id, replies: repliesData }
+            }
+          } catch (error) {
+            console.error(`Error loading replies for feedback ${item.id}:`, error)
+          }
+          return null
+        })
+        
+        const repliesResults = await Promise.all(repliesPromises)
+        const repliesMap: Record<string, Reply[]> = {}
+        repliesResults.forEach(result => {
+          if (result) {
+            repliesMap[result.feedbackId] = result.replies
+          }
+        })
+        setReplies(repliesMap)
+      }
     } finally {
       setLoading(false)
     }
@@ -71,6 +128,334 @@ export default function EmployeeSystemFeedback() {
   }, [items, search])
 
   const resetForm = () => setForm({ id: '', title: '', content: '', category: 'other', priority: 'medium' })
+
+  const loadReplies = async (feedbackId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/feedback/system/${feedbackId}/replies`, {
+        headers: { ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}) }
+      })
+      if (!res.ok) throw new Error('Failed to load replies')
+      const data = await res.json()
+      setReplies(prev => ({ ...prev, [feedbackId]: data }))
+    } catch (error) {
+      console.error('Error loading replies:', error)
+    }
+  }
+
+  const toggleReplies = (feedbackId: string) => {
+    const newExpanded = new Set(expandedReplies)
+    if (newExpanded.has(feedbackId)) {
+      newExpanded.delete(feedbackId)
+    } else {
+      newExpanded.add(feedbackId)
+      if (!replies[feedbackId]) {
+        loadReplies(feedbackId)
+      }
+    }
+    setExpandedReplies(newExpanded)
+  }
+
+  const handleReply = async (feedbackId: string, parentReplyId: string | null = null) => {
+    const content = parentReplyId ? replyText.trim() : replyContent[feedbackId]?.trim()
+    if (!content) {
+      alert('Vui lòng nhập nội dung phản hồi')
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('No authentication token')
+      }
+
+      const res = await fetch(`/api/feedback/system/${feedbackId}/replies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ 
+          content,
+          parent_reply_id: parentReplyId || undefined
+        })
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to create reply')
+      }
+
+      // Reload replies to get the tree structure
+      await loadReplies(feedbackId)
+      
+      if (parentReplyId) {
+        setReplyText('')
+        setReplyingTo(null)
+      } else {
+        setReplyContent(prev => ({ ...prev, [feedbackId]: '' }))
+      }
+    } catch (error) {
+      console.error('Error creating reply:', error)
+      alert(error instanceof Error ? error.message : 'Lỗi khi tạo phản hồi')
+    }
+  }
+
+  const handleDeleteReply = async (feedbackId: string, replyId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa phản hồi này?')) return
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('No authentication token')
+      }
+
+      const res = await fetch(`/api/feedback/system/${feedbackId}/replies/${replyId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to delete reply')
+      }
+
+      await loadReplies(feedbackId)
+    } catch (error) {
+      console.error('Error deleting reply:', error)
+      alert(error instanceof Error ? error.message : 'Lỗi khi xóa phản hồi')
+    }
+  }
+
+  const handleEditReply = async (feedbackId: string, replyId: string) => {
+    const content = editReplyContent.trim()
+    if (!content) {
+      alert('Vui lòng nhập nội dung phản hồi')
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('No authentication token')
+      }
+
+      const res = await fetch(`/api/feedback/system/${feedbackId}/replies/${replyId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ content })
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to update reply')
+      }
+
+      await loadReplies(feedbackId)
+      setEditingReply(null)
+      setEditReplyContent('')
+    } catch (error) {
+      console.error('Error updating reply:', error)
+      alert(error instanceof Error ? error.message : 'Lỗi khi cập nhật phản hồi')
+    }
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    const diffInMinutes = Math.floor(diffInSeconds / 60)
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    const diffInDays = Math.floor(diffInHours / 24)
+    
+    if (diffInSeconds < 60) return 'Vừa xong'
+    if (diffInMinutes < 60) return `${diffInMinutes} phút trước`
+    if (diffInHours < 24) return `${diffInHours} giờ trước`
+    if (diffInDays === 1) return 'Hôm qua'
+    if (diffInDays < 7) return `${diffInDays} ngày trước`
+    return date.toLocaleDateString('vi-VN')
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  // Recursive component to render threaded replies (giống CompactComments)
+  const ReplyItem = ({ reply, feedbackId, depth = 0, currentUserId }: { reply: Reply, feedbackId: string, depth?: number, currentUserId?: string }) => {
+    const isReplying = replyingTo === reply.id
+    const isEditing = editingReply === reply.id
+    const canEdit = currentUserId === reply.replied_by
+    
+    return (
+      <div key={reply.id} className={`${depth > 0 ? 'ml-6 border-l-2 border-gray-100 pl-4' : ''}`}>
+        <div className="flex gap-3">
+          {/* Avatar */}
+          <div className={`w-8 h-8 bg-gradient-to-br ${
+            depth === 0 ? 'from-blue-500 to-purple-600' : 
+            depth === 1 ? 'from-green-500 to-teal-600' : 
+            'from-orange-500 to-red-600'
+          } rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm`}>
+            {(reply.replied_by_name || 'Người dùng').charAt(0)}
+          </div>
+          
+          {/* Comment Content */}
+          <div className="flex-1">
+            {isEditing ? (
+              <div className="mb-3">
+                <textarea
+                  value={editReplyContent}
+                  onChange={(e) => setEditReplyContent(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-black placeholder-gray-600 mb-2"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingReply(null)
+                      setEditReplyContent('')
+                    }}
+                    className="px-3 py-1 text-xs text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={() => handleEditReply(feedbackId, reply.id)}
+                    className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                  >
+                    <Send className="h-3 w-3" />
+                    Lưu
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="bg-gray-50 rounded-xl px-3 py-2 max-w-md shadow-sm border border-gray-100">
+                  <div className="font-semibold text-xs text-gray-900 mb-1">{reply.replied_by_name || 'Người dùng'}</div>
+                  <div className="text-xs text-gray-800 leading-relaxed">{reply.content}</div>
+                </div>
+                
+                {reply.attachments && reply.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2 mb-3">
+                    {reply.attachments.map((attachment) => (
+                      attachment.type === 'image' ? (
+                        <img
+                          key={attachment.id}
+                          src={attachment.url}
+                          alt={attachment.name}
+                          className="w-16 h-16 object-cover rounded border border-gray-300 cursor-pointer"
+                          onClick={() => setSelectedImage(attachment.url)}
+                        />
+                      ) : (
+                        <a
+                          key={attachment.id}
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-2 py-1 bg-white rounded border border-gray-300 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          <FileText className="h-3 w-3" />
+                          {attachment.name}
+                        </a>
+                      )
+                    ))}
+                  </div>
+                )}
+                
+                {/* Comment Actions */}
+                <div className="flex items-center gap-3 mt-1 ml-3">
+                  <button 
+                    onClick={() => setReplyingTo(replyingTo === reply.id ? null : reply.id)}
+                    className="text-xs text-gray-600 hover:text-blue-600 font-medium hover:bg-blue-50 px-2 py-1 rounded-full transition-colors"
+                  >
+                    💬 Trả lời
+                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setEditingReply(reply.id)
+                          setEditReplyContent(reply.content)
+                        }}
+                        className="text-xs text-gray-600 hover:text-blue-600 font-medium hover:bg-blue-50 px-2 py-1 rounded-full transition-colors"
+                      >
+                        ✏️ Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReply(feedbackId, reply.id)}
+                        className="text-xs text-gray-600 hover:text-red-600 font-medium hover:bg-red-50 px-2 py-1 rounded-full transition-colors"
+                      >
+                        🗑️ Xóa
+                      </button>
+                    </>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    {formatTimeAgo(reply.created_at)}
+                  </span>
+                </div>
+                
+                {/* Reply Form */}
+                {isReplying && (
+                  <div className="mt-3 ml-11">
+                    <form onSubmit={(e) => { e.preventDefault(); handleReply(feedbackId, reply.id); }} className="flex gap-2">
+                      <div className="w-6 h-6 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                        👤
+                      </div>
+                      <div className="flex-1">
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
+                          <input
+                            type="text"
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            placeholder="Trả lời..."
+                            className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={!replyText.trim()}
+                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
+                      >
+                        📤
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                        className="px-3 py-2 bg-gray-500 text-white rounded-full text-xs font-semibold hover:bg-gray-600 transition-all duration-200"
+                      >
+                        ✕
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+        
+        {/* Nested Replies */}
+        {reply.children && reply.children.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {reply.children.map((child) => (
+              <ReplyItem key={child.id} reply={child} feedbackId={feedbackId} depth={depth + 1} currentUserId={currentUserId} />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const submit = async () => {
     try {
@@ -127,19 +512,20 @@ export default function EmployeeSystemFeedback() {
       
       // Show more specific error messages
       let errorMessage = 'Lỗi không xác định'
+      const errorMsg = error instanceof Error ? error.message : String(error)
       
-      if (error.message.includes('No authentication token')) {
+      if (errorMsg.includes('No authentication token')) {
         errorMessage = 'Bạn cần đăng nhập lại để thực hiện thao tác này'
-      } else if (error.message.includes('403')) {
+      } else if (errorMsg.includes('403')) {
         errorMessage = 'Bạn không có quyền thực hiện thao tác này'
-      } else if (error.message.includes('404')) {
+      } else if (errorMsg.includes('404')) {
         errorMessage = 'Không tìm thấy góp ý này'
-      } else if (error.message.includes('500')) {
+      } else if (errorMsg.includes('500')) {
         errorMessage = 'Lỗi server, vui lòng thử lại sau'
-      } else if (error.message.includes('admin_notes')) {
+      } else if (errorMsg.includes('admin_notes')) {
         errorMessage = 'Database schema chưa được cập nhật. Vui lòng liên hệ admin.'
       } else {
-        errorMessage = `Lỗi khi tạo góp ý: ${error.message}`
+        errorMessage = `Lỗi khi tạo góp ý: ${errorMsg}`
       }
       
       alert(errorMessage)
@@ -254,6 +640,71 @@ export default function EmployeeSystemFeedback() {
                          <span className="ml-4 font-medium">Cập nhật: {new Date(it.updated_at).toLocaleString('vi-VN')}</span>
                        )}
                      </div>
+
+                    {/* Replies Section */}
+                    <div className="mt-4 border-t border-gray-200 pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <button
+                          onClick={() => toggleReplies(it.id)}
+                          className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          <span>Phản hồi ({replies[it.id]?.length || 0})</span>
+                          {expandedReplies.has(it.id) ? (
+                            <X className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                        {replies[it.id] && replies[it.id].length > 0 && !expandedReplies.has(it.id) && (
+                          <span className="text-xs text-gray-500">
+                            Click để xem {replies[it.id].length} phản hồi
+                          </span>
+                        )}
+                      </div>
+
+                      {expandedReplies.has(it.id) && (
+                        <div className="space-y-4">
+                          {/* Existing Replies (Threaded) */}
+                          {replies[it.id] && replies[it.id].length > 0 ? (
+                            <div className="space-y-3">
+                              {replies[it.id].map((reply) => (
+                                <ReplyItem key={reply.id} reply={reply} feedbackId={it.id} currentUserId={currentUserId} />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-sm text-gray-500">
+                              Chưa có phản hồi nào. Hãy là người đầu tiên trả lời!
+                            </div>
+                          )}
+
+                          {/* Reply Form (Top-level) - Giống CompactComments */}
+                          <form onSubmit={(e) => { e.preventDefault(); handleReply(it.id, null); }} className="flex gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                              👤
+                            </div>
+                            <div className="flex-1">
+                              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-full px-3 py-2 border border-blue-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-300 focus-within:shadow-md transition-all duration-200">
+                                <input
+                                  type="text"
+                                  value={replyContent[it.id] || ''}
+                                  onChange={(e) => setReplyContent(prev => ({ ...prev, [it.id]: e.target.value }))}
+                                  placeholder="Viết bình luận..."
+                                  className="w-full bg-transparent text-xs outline-none placeholder-blue-400 text-black font-medium"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="submit"
+                              disabled={!replyContent[it.id]?.trim()}
+                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200"
+                            >
+                              📤
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2 ml-4">
                     <button 
@@ -270,6 +721,29 @@ export default function EmployeeSystemFeedback() {
           </div>
         )}
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] w-full">
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 bg-white rounded-full p-2 hover:bg-gray-100 transition-colors z-10"
+            >
+              <X className="h-6 w-6 text-gray-800" />
+            </button>
+            <img
+              src={selectedImage}
+              alt="Preview"
+              className="w-full h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modal Form */}
       {showForm && (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   FileText, 
   Plus, 
@@ -17,7 +17,8 @@ import {
   HelpCircle,
   X,
   Package,
-  CheckCircle2
+  CheckCircle2,
+  CircleHelp
 } from 'lucide-react'
 import CreateQuoteSidebarFullscreen from './CreateQuoteSidebarFullscreen'
 import QuoteEmailPreviewModal from './QuoteEmailPreviewModal'
@@ -65,9 +66,17 @@ interface QuotesTabProps {
   searchTerm?: string
   onCreateQuote: () => void
   shouldOpenCreateModal?: boolean
+  supportTourRequest?: { slug: string; token: number } | null
+  onSupportTourHandled?: () => void
 }
 
-export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateModal }: QuotesTabProps) {
+export default function QuotesTab({
+  searchTerm,
+  onCreateQuote,
+  shouldOpenCreateModal,
+  supportTourRequest,
+  onSupportTourHandled
+}: QuotesTabProps) {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
@@ -84,6 +93,20 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   } | null>(null)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
+  const [forceQuoteTourToken, setForceQuoteTourToken] = useState(0)
+  const [forceEmailTourToken, setForceEmailTourToken] = useState(0)
+  const [skipQuoteAutoStart, setSkipQuoteAutoStart] = useState(false)
+  
+  // Tour state
+  const QUOTE_CONVERT_TOUR_STORAGE_KEY = 'quote-convert-tour-status-v1'
+  const [isConvertTourRunning, setIsConvertTourRunning] = useState(false)
+  const convertTourRef = useRef<any>(null)
+  const convertShepherdRef = useRef<any>(null)
+  const convertTourAutoStartAttemptedRef = useRef(false)
+  type ConvertShepherdModule = typeof import('shepherd.js')
+  type ConvertShepherdType = ConvertShepherdModule & { Tour: new (...args: any[]) => any }
+  type ConvertShepherdTour = InstanceType<ConvertShepherdType['Tour']>
 
   useEffect(() => {
     fetchQuotes()
@@ -128,6 +151,12 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       setShowCreateModal(true)
     }
   }, [shouldOpenCreateModal])
+
+  useEffect(() => {
+    if (supportTourRequest) {
+      setPendingSupportTour(supportTourRequest)
+    }
+  }, [supportTourRequest])
 
   const fetchQuotes = async () => {
     try {
@@ -599,6 +628,300 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     return new Date(dateString).toLocaleDateString('vi-VN')
   }
 
+  const startConvertTour = useCallback(async () => {
+    if (typeof window === 'undefined') return
+
+    if (convertTourRef.current) {
+      convertTourRef.current.cancel()
+      convertTourRef.current = null
+    }
+
+    if (!convertShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: ConvertShepherdType })?.default ?? (module as unknown as ConvertShepherdType)
+        convertShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = convertShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    // Try to find a quote with accepted status, otherwise just show general guidance
+    const acceptedQuote = quotes.find(q => q.status === 'accepted' || q.status === 'sent' || q.status === 'viewed')
+    await waitForElement('[data-tour-id="quotes-list-header"]')
+    await waitForElement('[data-tour-id="quotes-list"]')
+    await waitForElement('[data-tour-id="quote-actions-buttons"]')
+    const hasConvertButton = acceptedQuote ? await waitForElement(`[data-tour-id="quote-convert-button-${acceptedQuote.id}"]`) : false
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'quote-convert-intro',
+      title: 'Hướng dẫn duyệt báo giá thành hóa đơn',
+      text: 'Sau khi khách hàng chấp nhận báo giá, bạn có thể chuyển báo giá đó thành hóa đơn để tiến hành thanh toán.',
+      attachTo: { element: '[data-tour-id="quotes-list-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    if (hasConvertButton && acceptedQuote) {
+      tour.addStep({
+        id: 'quote-convert-button',
+        title: 'Nút chuyển thành hóa đơn',
+        text: `Khi báo giá có trạng thái "Đã chấp nhận", "Đã gửi" hoặc "Đã xem", bạn sẽ thấy nút "Chuyển thành hóa đơn" (biểu tượng $). Nhấn vào nút này để tạo hóa đơn từ báo giá.`,
+        attachTo: { element: `[data-tour-id="quote-convert-button-${acceptedQuote.id}"]`, on: 'left' },
+        buttons: [
+          {
+            text: 'Quay lại',
+            action: () => tour.back(),
+            classes: 'shepherd-button-secondary'
+          },
+          {
+            text: 'Tiếp tục',
+            action: () => tour.next()
+          }
+        ]
+      })
+    }
+
+    tour.addStep({
+      id: 'quote-actions-intro',
+      title: 'Các nút thao tác',
+      text: 'Trong danh sách báo giá, mỗi báo giá có các nút thao tác. Chúng ta sẽ xem từng nút một.',
+      attachTo: { element: '[data-tour-id="quote-actions-buttons"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-button-view',
+      title: 'Nút Xem chi tiết',
+      text: '👁️ Xem chi tiết: Nhấn nút này để mở trang chi tiết báo giá trong tab mới. Bạn có thể xem đầy đủ thông tin, in báo giá, hoặc thực hiện các thao tác khác.',
+      attachTo: { element: '[data-tour-id="quote-button-view"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-button-edit',
+      title: 'Nút Chỉnh sửa',
+      text: '✏️ Chỉnh sửa: Nhấn nút này để sửa thông tin báo giá. Bạn có thể chỉnh sửa các thông tin như khách hàng, dự án, sản phẩm, giá cả, v.v.',
+      attachTo: { element: '[data-tour-id="quote-button-edit"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-button-send',
+      title: 'Nút Gửi báo giá',
+      text: '📧 Gửi báo giá: Nhấn nút này để gửi email báo giá cho khách hàng. Hệ thống sẽ mở modal cho phép bạn xem trước, chỉnh sửa nội dung email, và gửi đi.',
+      attachTo: { element: '[data-tour-id="quote-button-send"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    if (hasConvertButton && acceptedQuote) {
+      tour.addStep({
+        id: 'quote-button-convert',
+        title: 'Nút Chuyển thành hóa đơn',
+        text: '💰 Chuyển thành hóa đơn: Nhấn nút này để chuyển báo giá đã chấp nhận thành hóa đơn. Nút này chỉ hiển thị khi báo giá ở trạng thái "Đã chấp nhận", "Đã gửi" hoặc "Đã xem". Hệ thống sẽ tự động tạo hóa đơn mới và sao chép tất cả thông tin từ báo giá.',
+        attachTo: { element: `[data-tour-id="quote-convert-button-${acceptedQuote.id}"]`, on: 'bottom' },
+        buttons: [
+          {
+            text: 'Quay lại',
+            action: () => tour.back(),
+            classes: 'shepherd-button-secondary'
+          },
+          {
+            text: 'Tiếp tục',
+            action: () => tour.next()
+          }
+        ]
+      })
+    }
+
+    tour.addStep({
+      id: 'quote-button-delete',
+      title: 'Nút Xóa',
+      text: '🗑️ Xóa: Nhấn nút này để xóa báo giá khỏi hệ thống. Hành động này không thể hoàn tác, vì vậy hãy cẩn thận khi sử dụng.',
+      attachTo: { element: '[data-tour-id="quote-button-delete"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsConvertTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(QUOTE_CONVERT_TOUR_STORAGE_KEY, 'completed')
+      }
+      convertTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsConvertTourRunning(false)
+      convertTourRef.current = null
+    })
+
+    convertTourRef.current = tour
+    setIsConvertTourRunning(true)
+    tour.start()
+  }, [quotes])
+
+  // Auto-start tour when quotes are loaded and there's at least one accepted quote
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (convertTourAutoStartAttemptedRef.current) return
+    if (loading) return
+    if (quotes.length === 0) return
+
+    const storedStatus = localStorage.getItem(QUOTE_CONVERT_TOUR_STORAGE_KEY)
+    if (storedStatus) return
+
+    // Check if there's at least one accepted/sent/viewed quote
+    const hasConvertibleQuote = quotes.some(q => q.status === 'accepted' || q.status === 'sent' || q.status === 'viewed')
+    if (!hasConvertibleQuote) return
+
+    convertTourAutoStartAttemptedRef.current = true
+    setTimeout(() => {
+      startConvertTour()
+    }, 1000)
+  }, [loading, quotes, startConvertTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      convertTourRef.current?.cancel()
+      convertTourRef.current?.destroy?.()
+      convertTourRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!pendingSupportTour) return
+
+    const { slug } = pendingSupportTour
+
+    if (slug === 'quote-form') {
+      setShowCreateModal(true)
+      setSkipQuoteAutoStart(true)
+      setForceQuoteTourToken(prev => prev + 1)
+      onSupportTourHandled?.()
+      setPendingSupportTour(null)
+      setTimeout(() => setSkipQuoteAutoStart(false), 1000)
+      return
+    }
+
+    if (slug === 'quote-actions') {
+      if (loading) return
+      if (quotes.length === 0) {
+        console.warn('[Support Tour] Không có báo giá để hiển thị tour "quote-actions".')
+        onSupportTourHandled?.()
+        setPendingSupportTour(null)
+        return
+      }
+      startConvertTour()
+      onSupportTourHandled?.()
+      setPendingSupportTour(null)
+      return
+    }
+
+    if (slug === 'email-modal') {
+      if (loading) return
+      if (quotes.length === 0) {
+        console.warn('[Support Tour] Không có báo giá để mở tour email.')
+        onSupportTourHandled?.()
+        setPendingSupportTour(null)
+        return
+      }
+      const targetQuote = quotes[0]
+      setPreviewQuoteId(targetQuote.id)
+      setShowPreviewModal(true)
+      setForceEmailTourToken(prev => prev + 1)
+      onSupportTourHandled?.()
+      setPendingSupportTour(null)
+      return
+    }
+  }, [pendingSupportTour, loading, quotes, startConvertTour, onSupportTourHandled])
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
@@ -794,9 +1117,22 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   return (
     <div className="space-y-4">
       {/* Header with Help Button */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4" data-tour-id="quotes-list-header">
         <div className="flex items-center space-x-4">
           <h2 className="text-xl font-semibold text-gray-900">Báo giá</h2>
+          <button
+            onClick={() => startConvertTour()}
+            disabled={isConvertTourRunning}
+            className={`inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium ${
+              isConvertTourRunning
+                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                : 'text-white bg-blue-600 hover:bg-blue-700'
+            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+            title="Hướng dẫn chuyển báo giá thành hóa đơn"
+          >
+            <CircleHelp className="h-4 w-4 mr-1" />
+            Hướng dẫn chuyển đổi
+          </button>
           <button
             onClick={() => setShowHelpModal(true)}
             className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -877,7 +1213,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       </div>
 
       {/* Desktop Table - Hidden on mobile */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="hidden md:block overflow-x-auto" data-tour-id="quotes-list">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -944,10 +1280,11 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   {quote.employee_in_charge_name || 'N/A'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-2" data-tour-id="quote-actions-buttons">
                     <button 
                       className="text-black hover:text-black" 
                       title="Xem chi tiết"
+                      data-tour-id="quote-button-view"
                       onClick={() => {
                         window.open(`/sales/quotes/${quote.id}`, '_blank')
                       }}
@@ -959,6 +1296,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <button 
                         className="text-black hover:text-blue-600" 
                         title="Chỉnh sửa"
+                        data-tour-id="quote-button-edit"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
@@ -966,6 +1304,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                         onClick={() => sendQuote(quote.id)}
                         className="text-black hover:text-green-600" 
                         title="Gửi báo giá"
+                        data-tour-id="quote-button-send"
                       >
                         <Send className="h-4 w-4" />
                       </button>
@@ -976,6 +1315,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                         onClick={() => convertToInvoice(quote.id)}
                         className="text-black hover:text-purple-600" 
                         title="Chuyển thành hóa đơn"
+                        data-tour-id={`quote-convert-button-${quote.id}`}
                       >
                         <DollarSign className="h-4 w-4" />
                       </button>
@@ -985,6 +1325,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       onClick={() => deleteQuote(quote.id)}
                       className="text-black hover:text-red-600" 
                       title="Xóa"
+                      data-tour-id="quote-button-delete"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1104,6 +1445,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   <button
                     onClick={() => convertToInvoice(quote.id)}
                     className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-purple-600 bg-purple-50 rounded-md hover:bg-purple-100"
+                    data-tour-id={`quote-convert-button-${quote.id}`}
                   >
                     <DollarSign className="h-3 w-3 mr-1" />
                     Hóa đơn
@@ -1127,6 +1469,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         onSuccess={() => {
           fetchQuotes()
         }}
+        forceStartTourToken={forceQuoteTourToken}
+        skipAutoStartTour={skipQuoteAutoStart}
       />
 
       <QuoteEmailPreviewModal
@@ -1137,13 +1481,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         }}
         quoteId={previewQuoteId || ''}
         onConfirmSend={confirmSendQuote}
+        forceStartTourToken={forceEmailTourToken}
       />
 
       {/* Help Sidebar */}
       {showHelpModal && (
         <div className="fixed inset-0 z-40 overflow-hidden">
-          <div className="absolute inset-0 bg-black bg-opacity-25" onClick={() => setShowHelpModal(false)}></div>
-          <div className="absolute right-0 top-0 h-full w-96 bg-white shadow-xl overflow-y-auto">
+          <div className="absolute inset-0 bg-transparent" onClick={() => setShowHelpModal(false)}></div>
+          <div className="absolute right-0 top-0 h-full w-96 bg-white/95 backdrop-blur-sm shadow-xl overflow-y-auto">
             <div className="p-6">
               {/* Header */}
               <div className="flex items-center justify-between mb-6 border-b pb-4">

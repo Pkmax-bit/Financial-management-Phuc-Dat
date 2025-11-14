@@ -74,9 +74,17 @@ interface InvoicesTabProps {
   searchTerm?: string
   onCreateInvoice: () => void
   shouldOpenCreateModal?: boolean // Prop to control modal opening from parent
+  supportTourRequest?: { slug: string; token: number } | null
+  onSupportTourHandled?: () => void
 }
 
-export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCreateModal }: InvoicesTabProps) {
+export default function InvoicesTab({
+  searchTerm,
+  onCreateInvoice,
+  shouldOpenCreateModal,
+  supportTourRequest,
+  onSupportTourHandled
+}: InvoicesTabProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
@@ -88,6 +96,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
+  const [forceInvoiceTourToken, setForceInvoiceTourToken] = useState(0)
 
   useEffect(() => {
     fetchInvoices()
@@ -114,6 +124,24 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       setShowCreateModal(true)
     }
   }, [shouldOpenCreateModal])
+
+  useEffect(() => {
+    if (supportTourRequest) {
+      setPendingSupportTour(supportTourRequest)
+    }
+  }, [supportTourRequest])
+
+  useEffect(() => {
+    if (!pendingSupportTour) return
+
+    if (pendingSupportTour.slug === 'invoice-form') {
+      setShowCreateModal(true)
+      setForceInvoiceTourToken(prev => prev + 1)
+      onSupportTourHandled?.()
+      setPendingSupportTour(null)
+      return
+    }
+  }, [pendingSupportTour, onSupportTourHandled])
 
   const fetchInvoices = async () => {
     try {
@@ -842,6 +870,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           fetchInvoices()
           setShowCreateModal(false)
         }}
+        forceStartTourToken={forceInvoiceTourToken}
       />
 
       {/* Help Sidebar */}

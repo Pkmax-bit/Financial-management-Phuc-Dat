@@ -72,7 +72,7 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules
+from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -112,6 +112,7 @@ app.include_router(expense_restore.router, prefix="/api/expense-restore", tags=[
 app.include_router(system_feedback.router, tags=["System Feedback"])
 app.include_router(product_import.router, prefix="/api/sales/products", tags=["Product Import"])
 app.include_router(material_adjustment_rules.router, prefix="/api/material-adjustment-rules", tags=["Material Adjustment Rules"])
+app.include_router(file_upload.router, tags=["File Upload"])
 
 if __name__ == "__main__":
     uvicorn.run(

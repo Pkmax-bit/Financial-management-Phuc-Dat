@@ -1,7 +1,12 @@
 ﻿'use client'
 
+<<<<<<< HEAD
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
+=======
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+>>>>>>> origin/main
 import { 
   Receipt, 
   Plus, 
@@ -42,6 +47,8 @@ function ExpensesPageContent() {
   const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const [projectExpensesTour, setProjectExpensesTour] = useState<{ slug: string; token: number } | null>(null)
 
   useEffect(() => {
     checkUser()
@@ -70,6 +77,37 @@ function ExpensesPageContent() {
   const handleCloseCreateModal = () => {
     setShouldOpenCreateModal(false)
   }
+
+  const handleSupportTourHandled = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (params.has('tour')) {
+      params.delete('tour')
+      const nextPath = params.toString() ? `/expenses?${params.toString()}` : '/expenses'
+      router.replace(nextPath, { scroll: false })
+    }
+  }, [router, searchParams])
+
+  const handleProjectExpensesTourHandled = useCallback(() => {
+    setProjectExpensesTour(null)
+    handleSupportTourHandled()
+  }, [handleSupportTourHandled])
+
+  useEffect(() => {
+    const tour = searchParams.get('tour')
+    if (!tour) return
+    const token = Date.now()
+    switch (tour) {
+      case 'planned-expense':
+      case 'actual-expense':
+      case 'approve-expense':
+        setActiveTab('project-expenses')
+        setProjectExpensesTour({ slug: tour, token })
+        break
+      default:
+        return
+    }
+    handleSupportTourHandled()
+  }, [searchParams, handleSupportTourHandled])
 
   const checkUser = async () => {
     try {
@@ -494,6 +532,8 @@ function ExpensesPageContent() {
                   <ProjectExpensesTab 
                     searchTerm={searchTerm}
                     onCreateExpense={handleCreateProjectExpense}
+                    supportTourRequest={projectExpensesTour}
+                    onSupportTourHandled={handleProjectExpensesTourHandled}
                   />
                 )}
               </div>

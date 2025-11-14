@@ -136,7 +136,9 @@ async def approve_project_expense_quote(
             "expense_object_id","expense_object_columns","invoice_items"
         ] if k in quote}
         expense["id"] = str(uuid.uuid4())
-        expense["status"] = "approved"
+        # CRITICAL: Status must be 'pending' by default, not 'approved'
+        # Only the approve button in the actions column should change status to 'approved'
+        expense["status"] = "pending"
         expense["created_at"] = datetime.utcnow().isoformat()
         expense["updated_at"] = datetime.utcnow().isoformat()
 

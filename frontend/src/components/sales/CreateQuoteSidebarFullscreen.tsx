@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   X, 
   FileText, 
@@ -16,7 +16,8 @@ import {
   Package,
   Search,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  CircleHelp
 } from 'lucide-react'
 import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -98,6 +99,8 @@ interface CreateQuoteSidebarProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  forceStartTourToken?: number
+  skipAutoStartTour?: boolean
 }
 
 // Helper function to convert category names to Vietnamese with diacritics
@@ -115,7 +118,13 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
   return categoryMap[categoryName] || categoryName
 }
 
-export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateQuoteSidebarProps) {
+export default function CreateQuoteSidebarFullscreen({
+  isOpen,
+  onClose,
+  onSuccess,
+  forceStartTourToken,
+  skipAutoStartTour
+}: CreateQuoteSidebarProps) {
   const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -148,6 +157,17 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const adjustmentTimersRef = useRef<Map<string, any>>(new Map())
   const [showRulesDialog, setShowRulesDialog] = useState(false)
   const [manualAdjusting, setManualAdjusting] = useState(false)
+  
+  // Tour state
+  const QUOTE_FORM_TOUR_STORAGE_KEY = 'quote-form-tour-status-v1'
+  const [isQuoteTourRunning, setIsQuoteTourRunning] = useState(false)
+  const quoteTourRef = useRef<any>(null)
+  const quoteShepherdRef = useRef<any>(null)
+  const quoteTourAutoStartAttemptedRef = useRef(false)
+  type QuoteShepherdModule = typeof import('shepherd.js')
+  type QuoteShepherdType = QuoteShepherdModule & { Tour: new (...args: any[]) => any }
+  type QuoteShepherdTour = InstanceType<QuoteShepherdType['Tour']>
+  const lastForceTourTokenRef = useRef<number | null>(null)
   const [showProfitWarningDialog, setShowProfitWarningDialog] = useState(false)
   const [lowProfitItems, setLowProfitItems] = useState<Array<{ name: string; percentage: number }>>([])
 
@@ -425,13 +445,17 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   // Hide sidebar when modal opens/closes
   useEffect(() => {
     if (isOpen) {
+      // Use setTimeout to ensure sidebar is hidden after component renders
+      const timer = setTimeout(() => {
       hideSidebar(true)
-    } else {
+      }, 0)
+      return () => {
+        clearTimeout(timer)
       hideSidebar(false)
     }
-    // Cleanup: restore sidebar when component unmounts
-    return () => {
+    } else {
       hideSidebar(false)
+      return undefined
     }
   }, [isOpen, hideSidebar])
 
@@ -617,12 +641,250 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   }
 
+  const startQuoteTour = useCallback(async () => {
+    if (!isOpen || typeof window === 'undefined') return
+
+    if (quoteTourRef.current) {
+      quoteTourRef.current.cancel()
+      quoteTourRef.current = null
+    }
+
+    if (!quoteShepherdRef.current) {
+      try {
+        const module = await import('shepherd.js')
+        const shepherdInstance = (module as unknown as { default?: QuoteShepherdType })?.default ?? (module as unknown as QuoteShepherdType)
+        quoteShepherdRef.current = shepherdInstance
+      } catch (error) {
+        console.error('Failed to load Shepherd.js', error)
+        return
+      }
+    }
+
+    const Shepherd = quoteShepherdRef.current
+    if (!Shepherd) return
+
+    const waitForElement = async (selector: string, retries = 20, delay = 100) => {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        if (document.querySelector(selector)) {
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      return false
+    }
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    await waitForElement('[data-tour-id="quote-form-basic-info"]')
+    await waitForElement('[data-tour-id="quote-form-items"]')
+    await waitForElement('[data-tour-id="quote-select-product-button"]')
+    await waitForElement('[data-tour-id="quote-form-area-info"]')
+    await waitForElement('[data-tour-id="quote-form-totals"]')
+
+    const tour = new Shepherd.Tour({
+      defaultStepOptions: {
+        cancelIcon: { enabled: true },
+        classes: 'bg-white rounded-xl shadow-xl border border-gray-100',
+        scrollTo: { behavior: 'smooth', block: 'center' }
+      },
+      useModalOverlay: true
+    })
+
+    tour.addStep({
+      id: 'quote-form-intro',
+      title: 'Hướng dẫn tạo báo giá',
+      text: 'Tạo báo giá với tính năng tự động tính diện tích và điều chỉnh vật tư khi thay đổi kích thước.',
+      attachTo: { element: '[data-tour-id="quote-form-header"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Bỏ qua',
+          action: () => tour.cancel(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Bắt đầu',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-basic-info',
+      title: 'Thông tin cơ bản',
+      text: 'Điền: Số báo giá, Khách hàng (bắt buộc), Dự án (tùy chọn), Ngày phát hành, Ngày hết hạn, Ghi chú.\n\nLưu ý: Dự án tự động tải khi chọn khách hàng.',
+      attachTo: { element: '[data-tour-id="quote-form-basic-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-items',
+      title: 'Thêm sản phẩm',
+      text: 'Cách thêm: "Chọn từ danh sách" hoặc "Thêm sản phẩm tự do".\n\nĐiền: Tên, Mô tả, Số lượng, Đơn vị, Đơn giá.\nThành tiền = Đơn giá × Số lượng × Diện tích (tự động).',
+      attachTo: { element: '[data-tour-id="quote-form-items"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-select-product',
+      title: 'Chọn sản phẩm từ danh sách',
+      text: 'Nhấn nút "Chọn từ danh sách" để mở modal chọn sản phẩm.\n\nTrong modal:\n• Tìm kiếm sản phẩm theo tên, mô tả hoặc loại\n• Chọn sản phẩm bằng checkbox (có thể chọn nhiều)\n• Mở/đóng từng loại sản phẩm để xem chi tiết\n• Nhấn "Thêm đã chọn" để thêm vào báo giá\n\nLưu ý: Sản phẩm được chọn sẽ tự động điền thông tin (tên, mô tả, đơn giá, kích thước).',
+      attachTo: { element: '[data-tour-id="quote-select-product-button"]', on: 'bottom' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-area-info',
+      title: 'Nhập kích thước và diện tích',
+      text: 'Điền: Chiều dài (mm), Chiều cao (mm), Chiều sâu (mm, tùy chọn).\nDiện tích (m²) = (Dài × Cao) / 1,000,000 (tự động).\nThể tích (m³) tự động tính nếu có chiều sâu.\n\nLưu ý: Có thể nhập trực tiếp diện tích nếu đã biết.',
+      attachTo: { element: '[data-tour-id="quote-form-area-info"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-area-rules',
+      title: 'Quy tắc khi tăng diện tích',
+      text: 'Khi tăng diện tích, hệ thống tự động điều chỉnh số lượng vật tư theo quy tắc đã thiết lập (phần trăm hoặc giá trị tuyệt đối).\n\nNhấn "Áp dụng điều chỉnh" để cập nhật ngay.\nQuản lý quy tắc tại mục "Quy tắc điều chỉnh vật tư".',
+      attachTo: { element: '[data-tour-id="quote-form-area-rules"]', on: 'left' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Tiếp tục',
+          action: () => tour.next()
+        }
+      ]
+    })
+
+    tour.addStep({
+      id: 'quote-form-totals',
+      title: 'Tổng tiền và lưu',
+      text: 'Hiển thị: Tổng tiền, Thuế VAT, Tổng cộng (tự động tính).\n\nHành động:\n• "Lưu nháp": Lưu để chỉnh sửa sau\n• "Gửi ngay": Lưu và gửi cho khách hàng',
+      attachTo: { element: '[data-tour-id="quote-form-totals"]', on: 'top' },
+      buttons: [
+        {
+          text: 'Quay lại',
+          action: () => tour.back(),
+          classes: 'shepherd-button-secondary'
+        },
+        {
+          text: 'Hoàn tất',
+          action: () => tour.complete()
+        }
+      ]
+    })
+
+    tour.on('complete', () => {
+      setIsQuoteTourRunning(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(QUOTE_FORM_TOUR_STORAGE_KEY, 'completed')
+      }
+      quoteTourRef.current = null
+    })
+
+    tour.on('cancel', () => {
+      setIsQuoteTourRunning(false)
+      quoteTourRef.current = null
+    })
+
+    quoteTourRef.current = tour
+    setIsQuoteTourRunning(true)
+    tour.start()
+  }, [isOpen])
+
   // When project changes, load product components and fill items
   useEffect(() => {
     if (formData.project_id) {
       loadProductComponentsForProject(formData.project_id)
     }
   }, [formData.project_id])
+
+  // Auto-start tour when form opens for the first time
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isOpen) return
+    if (skipAutoStartTour) return
+    if (quoteTourAutoStartAttemptedRef.current) return
+
+    const storedStatus = localStorage.getItem(QUOTE_FORM_TOUR_STORAGE_KEY)
+    quoteTourAutoStartAttemptedRef.current = true
+
+    if (!storedStatus) {
+      // Delay to ensure form is fully rendered
+      setTimeout(() => {
+        startQuoteTour()
+      }, 800)
+    }
+  }, [isOpen, skipAutoStartTour, startQuoteTour])
+
+  // Reset tour auto-start when form closes
+  useEffect(() => {
+    if (!isOpen) {
+      quoteTourAutoStartAttemptedRef.current = false
+      lastForceTourTokenRef.current = null
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (!forceStartTourToken) return
+    if (lastForceTourTokenRef.current === forceStartTourToken) return
+    lastForceTourTokenRef.current = forceStartTourToken
+    startQuoteTour()
+  }, [forceStartTourToken, isOpen, startQuoteTour])
+
+  // Cleanup tour on unmount
+  useEffect(() => {
+    return () => {
+      quoteTourRef.current?.cancel()
+      quoteTourRef.current?.destroy?.()
+      quoteTourRef.current = null
+    }
+  }, [])
 
   // Update selected project when project_id changes
   useEffect(() => {
@@ -1047,8 +1309,6 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (components.length === 0) return
 
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
-      
       // Apply adjustments for each component
       const adjustedComponents = await Promise.all(
         components.map(async (component: any) => {
@@ -2075,24 +2335,39 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       {/* Full screen container */}
       <div className="fixed inset-0 bg-white flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0" data-tour-id="quote-form-header">
           <div className="flex items-center">
             <FileText className="h-6 w-6 text-black mr-3" />
             <h1 className="text-xl font-semibold text-black">Tạo báo giá mới</h1>
           </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => startQuoteTour()}
+              disabled={isQuoteTourRunning || submitting}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                isQuoteTourRunning || submitting
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+              }`}
+              title="Bắt đầu hướng dẫn tạo báo giá"
+            >
+              <CircleHelp className="h-4 w-4" />
+              <span>Hướng dẫn</span>
+            </button>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-md"
           >
             <X className="h-5 w-5 text-black" />
           </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           <div className="w-full">
             {/* Basic Information */}
-            <div className="mb-8">
+            <div className="mb-8" data-tour-id="quote-form-basic-info">
               <h2 className="text-lg font-medium text-black mb-4">Thông tin cơ bản</h2>
               <div className="grid grid-cols-4 gap-4">
                 <div>
@@ -2230,13 +2505,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             </div>
 
             {/* Items Section */}
-            <div className="mb-8">
+            <div className="mb-8" data-tour-id="quote-form-items">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium text-black">Sản phẩm/Dịch vụ</h2>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={manualAdjustAll}
                   disabled={!rulesLoaded || manualAdjusting}
+                  data-tour-id="quote-form-area-rules"
                   className={`flex items-center px-3 py-2 rounded-md text-sm ${(!rulesLoaded || manualAdjusting) ? 'bg-purple-400 text-white opacity-70 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
                   title="Áp dụng điều chỉnh ngay cho tất cả dòng"
                 >
@@ -2268,6 +2544,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   <button
                     onClick={() => setShowProductModal(true)}
                     className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                    data-tour-id="quote-select-product-button"
                   >
                     <Search className="h-4 w-4 mr-1" />
                     Chọn từ danh sách
@@ -2276,8 +2553,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               </div>
 
               <div className="overflow-auto max-h-[60vh]">
-                <div className="bg-white border border-gray-300 rounded-md inline-block min-w-max">
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 sticky top-0 z-10 shadow-sm">
+                <div className="bg-white border-2 border-gray-500 rounded-md inline-block min-w-max">
+                  <div className="bg-gray-50 px-4 py-3 border-b-2 border-gray-500 sticky top-0 z-10 shadow-sm">
                     <div className="grid gap-2 text-xs font-medium text-black items-start" style={{ gridTemplateColumns }}>
                       {visibleColumns.name && <div>Tên sản phẩm</div>}
                       {visibleColumns.description && <div>Mô tả</div>}
@@ -2285,7 +2562,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       {visibleColumns.unit && <div className="text-center">Đơn vị</div>}
                       {visibleColumns.unit_price && <div className="text-right">Đơn giá / m²</div>}
                       {visibleColumns.total_price && <div className="text-right">Thành tiền</div>}
-                      {visibleColumns.area && <div>Diện tích (m²)</div>}
+                      {visibleColumns.area && <div data-tour-id="quote-form-area-info">Diện tích (m²)</div>}
                       {visibleColumns.volume && <div>Thể tích (m³)</div>}
                       {visibleColumns.height && <div>Cao (mm)</div>}
                       {visibleColumns.length && <div>Dài (mm)</div>}
@@ -2315,7 +2592,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     </div>
                   </div>
 
-                  <div className="divide-y divide-gray-300">
+                  <div className="divide-y-2 divide-gray-500">
                     {items.map((item, index) => (
                       <div
                         key={index}
@@ -2582,7 +2859,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     />
                   </div>
                   <div className="flex items-end">
-                    <div className="w-full">
+                    <div className="w-full" data-tour-id="quote-form-totals">
                       <div className="flex justify-between items-center py-2 border-b border-gray-300">
                         <span className="text-sm font-medium text-black">Tạm tính:</span>
                         <span className="text-sm font-medium text-black">{formatCurrency(formData.subtotal)}</span>
@@ -2859,7 +3136,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       {/* Product Selection Modal */}
       {showProductModal && (
         <div className="fixed inset-0 z-60 bg-transparent flex items-end justify-center">
-          <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[60vh] flex flex-col">
+          <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[60vh] flex flex-col" data-tour-id="quote-product-selection-modal">
             <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-700">Chọn sản phẩm</h3>
               <button
