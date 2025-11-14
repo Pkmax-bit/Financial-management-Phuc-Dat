@@ -56,20 +56,9 @@ interface CreateProjectExpenseDialogProps {
   category?: 'planned' | 'actual'
   mode?: 'create' | 'edit'
   editId?: string
-  forcePlannedTourToken?: number
-  forceActualTourToken?: number
 }
 
-export default function CreateProjectExpenseDialog({
-  isOpen,
-  onClose,
-  onSuccess,
-  category = 'planned',
-  mode = 'create',
-  editId,
-  forcePlannedTourToken,
-  forceActualTourToken
-}: CreateProjectExpenseDialogProps) {
+export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId }: CreateProjectExpenseDialogProps) {
   const { hideSidebar } = useSidebar()
   
   // Hide sidebar when dialog opens/closes
@@ -3314,20 +3303,6 @@ export default function CreateProjectExpenseDialog({
       actualExpenseTourAutoStartAttemptedRef.current = false
     }
   }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen) return
-    if (!forcePlannedTourToken) return
-    if (category !== 'planned') return
-    startPlannedExpenseTour()
-  }, [forcePlannedTourToken, isOpen, category, startPlannedExpenseTour])
-
-  useEffect(() => {
-    if (!isOpen) return
-    if (!forceActualTourToken) return
-    if (category !== 'actual') return
-    startActualExpenseTour()
-  }, [forceActualTourToken, isOpen, category, startActualExpenseTour])
   
   // ========================================
   // FUNCTION TẠO CHI PHÍ THỰC TẾ (ACTUAL)

@@ -3,19 +3,7 @@
 import React from 'react'
 import ProductCreateForm from './ProductCreateForm'
 
-export default function ProductCreateModal({
-  isOpen,
-  onClose,
-  onSuccess,
-  supportTourRequest,
-  onSupportTourHandled
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onSuccess?: () => void
-  supportTourRequest?: { slug: string; token: number } | null
-  onSupportTourHandled?: () => void
-}) {
+export default function ProductCreateModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose: () => void; onSuccess?: () => void }) {
   if (!isOpen) return null
   return (
     <div className="fixed inset-0 z-50">
@@ -27,11 +15,7 @@ export default function ProductCreateModal({
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
           </div>
           <div className="p-6">
-            <ProductCreateForm
-              onCreated={() => { onSuccess?.(); onClose(); }}
-              supportTourRequest={supportTourRequest}
-              onSupportTourHandled={onSupportTourHandled}
-            />
+            <ProductCreateForm onCreated={() => { onSuccess?.(); onClose(); }} />
           </div>
         </div>
       </div>

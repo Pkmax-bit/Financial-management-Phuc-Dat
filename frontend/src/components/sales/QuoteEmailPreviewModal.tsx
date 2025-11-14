@@ -37,15 +37,13 @@ interface QuoteEmailPreviewModalProps {
       mimeType: string
     }>
   }) => void
-  forceStartTourToken?: number
 }
 
 export default function QuoteEmailPreviewModal({
   isOpen,
   onClose,
   quoteId,
-  onConfirmSend,
-  forceStartTourToken
+  onConfirmSend
 }: QuoteEmailPreviewModalProps) {
   const [htmlContent, setHtmlContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
@@ -579,12 +577,6 @@ export default function QuoteEmailPreviewModal({
       emailTourAutoStartAttemptedRef.current = false
     }
   }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen) return
-    if (!forceStartTourToken) return
-    startEmailTour()
-  }, [forceStartTourToken, isOpen, startEmailTour])
 
   // Cleanup tour on unmount
   useEffect(() => {

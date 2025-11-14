@@ -22,13 +22,7 @@ const parseCurrency = (s: string): number => {
   return clean ? parseInt(clean, 10) : 0
 }
 
-interface ProductCreateFormProps {
-  onCreated?: () => void
-  supportTourRequest?: { slug: string; token: number } | null
-  onSupportTourHandled?: () => void
-}
-
-export default function ProductCreateForm({ onCreated, supportTourRequest, onSupportTourHandled }: ProductCreateFormProps) {
+export default function ProductCreateForm({ onCreated }: { onCreated?: () => void }) {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -420,13 +414,6 @@ export default function ProductCreateForm({ onCreated, supportTourRequest, onSup
       productTourRef.current = null
     }
   }, [])
-
-  useEffect(() => {
-    if (!supportTourRequest) return
-    if (supportTourRequest.slug !== 'product-form') return
-    startProductTour()
-    onSupportTourHandled?.()
-  }, [supportTourRequest, onSupportTourHandled, startProductTour])
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">

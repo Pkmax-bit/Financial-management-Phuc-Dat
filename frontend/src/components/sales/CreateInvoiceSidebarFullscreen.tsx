@@ -70,7 +70,6 @@ interface CreateInvoiceSidebarProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  forceStartTourToken?: number
 }
 
 // Helper function to convert category names to Vietnamese with diacritics
@@ -88,7 +87,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
   return categoryMap[categoryName] || categoryName
 }
 
-export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSuccess, forceStartTourToken }: CreateInvoiceSidebarProps) {
+export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateInvoiceSidebarProps) {
   const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -382,12 +381,6 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       invoiceTourAutoStartAttemptedRef.current = false
     }
   }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen) return
-    if (!forceStartTourToken) return
-    startInvoiceTour()
-  }, [forceStartTourToken, isOpen, startInvoiceTour])
 
   // Cleanup tour on unmount
   useEffect(() => {
