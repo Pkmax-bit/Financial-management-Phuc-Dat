@@ -3,9 +3,10 @@ Financial Management API - Main Application
 FastAPI backend for financial management system
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 from dotenv import load_dotenv
 import os
@@ -45,6 +46,7 @@ else:
         "http://0.0.0.0:3001",
     ]
 
+# CORS middleware (add first, will execute last due to reverse order)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins if ENVIRONMENT == "production" else ["*"],
@@ -52,6 +54,62 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate Limiting Middleware (import and add after CORS, will execute before CORS)
+from middleware.rate_limit import rate_limiter, get_rate_limit_config
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Middleware to apply rate limiting to all requests"""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Get rate limit configuration
+        config = get_rate_limit_config()
+        
+        # Skip rate limiting if disabled
+        if not config["enabled"]:
+            return await call_next(request)
+        
+        # Skip rate limiting for health check and documentation endpoints
+        skip_paths = ["/", "/health", "/docs", "/redoc", "/openapi.json"]
+        if request.url.path in skip_paths:
+            return await call_next(request)
+        
+        # Check rate limit
+        try:
+            rate_limiter.check_rate_limit(
+                request,
+                max_requests=config["max_requests"],
+                window_seconds=config["window_seconds"]
+            )
+        except HTTPException as e:
+            # Add CORS headers manually to rate limit error response
+            # This ensures CORS works even when rate limit is exceeded
+            from fastapi.responses import JSONResponse
+            error_response = JSONResponse(
+                status_code=e.status_code,
+                content={"detail": e.detail},
+                headers={
+                    **e.headers,
+                    "Access-Control-Allow-Origin": allowed_origins[0] if ENVIRONMENT == "production" and allowed_origins else "*",
+                    "Access-Control-Allow-Credentials": "true",
+                }
+            )
+            return error_response
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Add rate limit headers to response
+        client_ip = request.client.host if request.client else 'unknown'
+        rate_info = rate_limiter.get_rate_limit_info(f"ip:{client_ip}", config["window_seconds"])
+        
+        response.headers["X-RateLimit-Limit"] = str(config["max_requests"])
+        response.headers["X-RateLimit-Remaining"] = str(max(0, config["max_requests"] - rate_info["requests_count"]))
+        
+        return response
+
+# Add rate limiting middleware (will execute before CORS due to reverse order)
+app.add_middleware(RateLimitMiddleware)
 
 # Security
 security = HTTPBearer()
