@@ -39,6 +39,10 @@ class ApiClient {
   private pendingRequests: Map<string, Promise<any>>
   private defaultCacheTTL: number = 30000 // 30 seconds
   private defaultRetries: number = 3
+  
+  // Token refresh state
+  private refreshPromise: Promise<any> | null = null
+  private refreshThreshold: number = 5 * 60 * 1000 // 5 minutes in milliseconds
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -47,11 +51,104 @@ class ApiClient {
   }
 
   /**
-   * Get authentication headers
+   * Check if token is expired or about to expire
+   */
+  private isTokenExpiringSoon(session: any): boolean {
+    if (!session?.access_token) {
+      return false
+    }
+    
+    try {
+      // Supabase JWT tokens contain expiration in 'exp' claim
+      // Parse JWT to get expiration (without verification, just for expiration check)
+      const tokenParts = session.access_token.split('.')
+      if (tokenParts.length !== 3) {
+        return false
+      }
+      
+      // Decode JWT payload (base64url)
+      const payload = JSON.parse(
+        atob(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/'))
+      )
+      
+      // Check expiration
+      if (!payload.exp) {
+        return false
+      }
+      
+      // exp is Unix timestamp in seconds
+      const expiresAt = payload.exp * 1000
+      const now = Date.now()
+      const timeUntilExpiry = expiresAt - now
+      
+      // Return true if token expires within threshold (5 minutes)
+      return timeUntilExpiry > 0 && timeUntilExpiry < this.refreshThreshold
+    } catch (error) {
+      // If we can't parse token, assume it's valid and don't refresh
+      console.warn('Failed to parse token expiration:', error)
+      return false
+    }
+  }
+
+  /**
+   * Refresh session token
+   */
+  private async refreshSession(): Promise<any> {
+    // If already refreshing, return the existing promise
+    if (this.refreshPromise) {
+      return this.refreshPromise
+    }
+    
+    // Create refresh promise
+    this.refreshPromise = (async () => {
+      try {
+        const { data, error } = await supabase.auth.refreshSession()
+        
+        if (error) {
+          console.warn('Failed to refresh session:', error)
+          throw error
+        }
+        
+        return data
+      } finally {
+        // Clear refresh promise after completion
+        this.refreshPromise = null
+      }
+    })()
+    
+    return this.refreshPromise
+  }
+
+  /**
+   * Get authentication headers with auto-refresh
    */
   private async getAuthHeaders(): Promise<Record<string, string>> {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.warn('Failed to get session:', sessionError)
+        return {
+          'Content-Type': 'application/json',
+        }
+      }
+      
+      // Check if token needs refresh
+      if (session && this.isTokenExpiringSoon(session)) {
+        try {
+          // Refresh token before it expires
+          const refreshed = await this.refreshSession()
+          if (refreshed?.session?.access_token) {
+            return {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${refreshed.session.access_token}`,
+            }
+          }
+        } catch (refreshError) {
+          console.warn('Token refresh failed, using current token:', refreshError)
+          // Fall through to use current token
+        }
+      }
       
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -190,15 +287,36 @@ class ApiClient {
         if (!response.ok) {
           // Handle specific error codes
           if (response.status === 401) {
-            // Try to refresh token (if possible)
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session?.access_token) {
-              throw new ApiError('Unauthorized', 401)
-            }
-            // Retry with new token
-            if (attempt < retries - 1) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
-              continue
+            // Try to refresh token and retry
+            try {
+              const refreshed = await this.refreshSession()
+              if (refreshed?.session?.access_token) {
+                // Update headers with new token and retry
+                const newHeaders = await this.getSecureHeaders(method, path, bodyString)
+                if (options.headers) {
+                  Object.assign(newHeaders, options.headers)
+                }
+                requestOptions.headers = newHeaders
+                
+                // Retry with refreshed token
+                if (attempt < retries - 1) {
+                  await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+                  continue
+                }
+              } else {
+                throw new ApiError('Unauthorized - Token refresh failed', 401)
+              }
+            } catch (refreshError) {
+              // Refresh failed, check if we have a session
+              const { data: { session } } = await supabase.auth.getSession()
+              if (!session?.access_token) {
+                throw new ApiError('Unauthorized', 401)
+              }
+              // Retry with current token (might work if it's a temporary issue)
+              if (attempt < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+                continue
+              }
             }
           }
 
