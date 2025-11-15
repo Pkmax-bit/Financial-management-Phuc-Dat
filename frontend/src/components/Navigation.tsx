@@ -18,7 +18,8 @@ import {
   HelpCircle,
   Brain,
   TestTube,
-  Camera
+  Camera,
+  Lock
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
@@ -137,9 +138,16 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
           )
         })}
         
-        {/* Support Center Button */}
-        <div className="pt-4 border-t border-gray-200">
+        {/* Support Center + Change Password */}
+        <div className="pt-4 border-t border-gray-200 space-y-2">
           <SupportCenterButton />
+          <button
+            onClick={() => router.push('/change-password')}
+            className="w-full flex items-center justify-center px-3 py-2 text-xs font-medium text-black bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+          >
+            <Lock className="w-4 h-4 mr-1 text-gray-600" />
+            Đổi mật khẩu
+          </button>
         </div>
         </div>
       </nav>
@@ -168,24 +176,26 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
         </div>
         
         {/* User Actions */}
-        <div className="mt-4 flex space-x-2">
+        <div className="mt-4 space-y-2">
           <button
             onClick={() => router.push('/settings')}
-            className="flex-1 flex items-center justify-center px-3 py-2 text-xs font-medium text-black bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+            className="w-full flex items-center justify-center px-3 py-2 text-xs font-medium text-black bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
           >
             <Settings className="w-4 h-4 mr-1" />
             Cài đặt
           </button>
-          <div className="flex-1 flex items-center justify-center">
-            <NotificationBell />
+          <div className="flex items-center space-x-2">
+            <div className="flex-1 flex items-center justify-center bg-gray-50 rounded-md py-2">
+              <NotificationBell />
+            </div>
+            <button
+              onClick={onLogout}
+              className="flex items-center justify-center px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors"
+              title="Đăng xuất"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={onLogout}
-            className="flex items-center justify-center px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors"
-            title="Đăng xuất"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
         </div>
       </div>
     </div>

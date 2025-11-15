@@ -10,11 +10,20 @@ from typing import Optional
 import jwt
 from jwt import PyJWTError
 from pydantic import BaseModel, EmailStr
+import asyncio
 
 from config import settings
 from services.supabase_client import get_supabase_client
+from services.email_service import email_service
 from models.user import User, UserCreate, UserUpdate, UserLogin, UserResponse
-from utils.auth import create_access_token, verify_token, get_current_user, hash_password
+from utils.auth import (
+    create_access_token,
+    verify_token,
+    get_current_user,
+    hash_password,
+    create_password_reset_token,
+    verify_password_reset_token,
+)
 
 router = APIRouter()
 security = HTTPBearer()
@@ -38,6 +47,55 @@ class PasswordResetConfirm(BaseModel):
 class ChangePassword(BaseModel):
     current_password: str
     new_password: str
+
+
+async def _handle_password_reset_request(email: str):
+    """Shared handler for password reset requests (avoids account enumeration)."""
+    normalized_email = email.strip().lower()
+    success_message = "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu."
+    
+    try:
+        supabase = get_supabase_client()
+        user_result = (
+            supabase
+            .table("users")
+            .select("id, email, full_name")
+            .eq("email", normalized_email)
+            .limit(1)
+            .execute()
+        )
+        
+        if not user_result.data:
+            # Small delay to make response timing uniform
+            await asyncio.sleep(0.2)
+            return {"message": success_message}
+        
+        user = user_result.data[0]
+        token = create_password_reset_token(user["id"], user["email"])
+        frontend_base = settings.FRONTEND_BASE_URL.rstrip("/")
+        reset_link = f"{frontend_base}/reset-password?token={token}"
+        
+        email_sent = await email_service.send_password_reset_email(
+            user_email=user["email"],
+            user_name=user.get("full_name"),
+            reset_link=reset_link
+        )
+        
+        if not email_sent:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau."
+            )
+        
+        return {"message": success_message}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Password reset request failed: {str(e)}"
+        )
 
 
 @router.post("/register", response_model=UserResponse)
@@ -209,10 +267,28 @@ async def change_password(
                 detail="Current password is incorrect"
             )
         
+        if len(password_data.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mật khẩu mới phải có ít nhất 6 ký tự"
+            )
+        
         # Update password in Supabase Auth
         supabase.auth.update_user({
             "password": password_data.new_password
         })
+        
+        # Update stored hash for reference
+        supabase.table("users").update({
+            "password_hash": hash_password(password_data.new_password),
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", current_user.id).execute()
+        
+        await email_service.send_password_change_confirmation(
+            user_email=current_user.email,
+            user_name=current_user.full_name,
+            via="manual"
+        )
         
         return {"message": "Password updated successfully"}
         
@@ -222,36 +298,69 @@ async def change_password(
             detail=f"Password change failed: {str(e)}"
         )
 
+@router.post("/password-reset/request")
+async def request_password_reset(password_reset: PasswordReset):
+    """Request password reset email with secure token"""
+    return await _handle_password_reset_request(password_reset.email)
+
+
 @router.post("/forgot-password")
 async def forgot_password(password_reset: PasswordReset):
-    """Send password reset email"""
-    try:
-        supabase = get_supabase_client()
-        
-        # Send password reset email
-        supabase.auth.reset_password_email(password_reset.email)
-        
-        return {"message": "Password reset email sent"}
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Password reset failed: {str(e)}"
-        )
+    """Backward-compatible endpoint for password reset requests"""
+    return await _handle_password_reset_request(password_reset.email)
 
 @router.post("/reset-password")
 async def reset_password(password_reset_confirm: PasswordResetConfirm):
     """Reset password with token"""
     try:
+        if len(password_reset_confirm.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mật khẩu mới phải có ít nhất 6 ký tự"
+            )
+        
+        payload = verify_password_reset_token(password_reset_confirm.token)
+        user_id = payload.get("sub")
+        user_email = payload.get("email")
+        
+        if not user_id or not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid password reset token"
+            )
+        
         supabase = get_supabase_client()
         
-        # Update password with token
-        supabase.auth.update_user({
-            "password": password_reset_confirm.new_password
-        })
+        # Update password via admin API
+        supabase.auth.admin.update_user_by_id(
+            user_id,
+            {"password": password_reset_confirm.new_password}
+        )
+        
+        # Update stored hash
+        supabase.table("users").update({
+            "password_hash": hash_password(password_reset_confirm.new_password),
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", user_id).execute()
+        
+        user_full_name = None
+        try:
+            user_result = supabase.table("users").select("full_name").eq("id", user_id).limit(1).execute()
+            if user_result.data:
+                user_full_name = user_result.data[0].get("full_name")
+        except Exception:
+            pass
+        
+        await email_service.send_password_change_confirmation(
+            user_email=user_email,
+            user_name=user_full_name,
+            via="reset"
+        )
         
         return {"message": "Password reset successfully"}
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -14,6 +14,7 @@ from typing import Dict, Any
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from services.supabase_client import get_supabase_client
+from config import settings
 
 class EmailService:
     def __init__(self):
@@ -873,6 +874,138 @@ class EmailService:
             return True
         except Exception as e:
             print(f"Failed to send notification email: {e}")
+            return False
+
+    async def send_password_reset_email(self, user_email: str, user_name: str | None, reset_link: str) -> bool:
+        """Send password reset instructions to a user"""
+        try:
+            if not self.smtp_username or not self.smtp_password:
+                print("Email credentials not configured, skipping password reset email")
+                return False
+
+            expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+            subject = "Hướng dẫn đặt lại mật khẩu tài khoản Phúc Đạt"
+
+            greeting_name = user_name or "bạn"
+            html_body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="border: 1px solid #000;">
+                <div style="padding: 16px; border-bottom: 1px solid #000;">
+                  <h2 style="margin: 0; color: #0f172a;">Đặt lại mật khẩu</h2>
+                </div>
+                <div style="padding: 16px;">
+                  <p>Xin chào {greeting_name},</p>
+                  <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại hệ thống Quản lý tài chính Phúc Đạt.</p>
+                  <p>Vui lòng nhấn nút bên dưới để đặt lại mật khẩu mới. Liên kết có hiệu lực trong {expire_minutes} phút.</p>
+                  <div style="text-align:center; margin: 24px 0;">
+                    <a href="{reset_link}" style="background:#0f172a;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;">
+                      Đặt lại mật khẩu
+                    </a>
+                  </div>
+                  <p>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này. Mật khẩu hiện tại của bạn vẫn an toàn.</p>
+                </div>
+                <div style="padding: 12px; border-top: 1px solid #000; text-align: center; color:#000000; font-size:12px;">
+                  Bộ phận Công ty Phúc Đạt
+                </div>
+              </div>
+            </body>
+            </html>
+            """
+
+            text_body = f"""Xin chào {greeting_name},
+
+Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại hệ thống Quản lý tài chính Phúc Đạt.
+
+Vui lòng nhấn vào nút "Đặt lại mật khẩu" trong email HTML. Liên kết có hiệu lực trong {expire_minutes} phút.
+
+Nếu bạn không yêu cầu, hãy bỏ qua email này.
+"""
+
+            msg = MIMEMultipart('related')
+            msg['Subject'] = subject
+            msg['From'] = f"Hệ thống Phúc Đạt <{self.smtp_username}>"
+            msg['To'] = user_email
+
+            alt = MIMEMultipart('alternative')
+            alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
+            alt.attach(MIMEText(html_body, 'html', 'utf-8'))
+            msg.attach(alt)
+            self._attach_company_logo(msg)
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+
+            print(f"Password reset email sent successfully to {user_email}")
+            return True
+        except Exception as e:
+            print(f"Failed to send password reset email: {e}")
+            return False
+
+    async def send_password_change_confirmation(self, user_email: str, user_name: str | None, via: str = "manual") -> bool:
+        """Notify user that their password has been changed"""
+        try:
+            if not self.smtp_username or not self.smtp_password:
+                print("Email credentials not configured, skipping password change confirmation email")
+                return False
+
+            subject = "Mật khẩu của bạn đã được cập nhật"
+            greeting_name = user_name or "bạn"
+            via_text = "bởi chính bạn" if via == "manual" else "thông qua liên kết đặt lại mật khẩu"
+
+            html_body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="border: 1px solid #000;">
+                <div style="padding: 16px; border-bottom: 1px solid #000;">
+                  <h2 style="margin: 0; color: #0f172a;">Xác nhận thay đổi mật khẩu</h2>
+                </div>
+                <div style="padding: 16px;">
+                  <p>Xin chào {greeting_name},</p>
+                  <p>Mật khẩu cho tài khoản của bạn vừa được cập nhật {via_text}.</p>
+                  <p>Nếu đây là bạn, không cần thêm hành động nào.</p>
+                  <p>Nếu bạn KHÔNG thực hiện thay đổi này, vui lòng:</p>
+                  <ul>
+                    <li>Đặt lại mật khẩu ngay lập tức bằng chức năng "Quên mật khẩu"</li>
+                    <li>Thông báo cho quản trị viên hệ thống</li>
+                  </ul>
+                </div>
+                <div style="padding: 12px; border-top: 1px solid #000; text-align: center; color:#000000; font-size:12px;">
+                  Bộ phận Công ty Phúc Đạt
+                </div>
+              </div>
+            </body>
+            </html>
+            """
+
+            text_body = f"""Xin chào {greeting_name},
+
+Mật khẩu cho tài khoản của bạn vừa được cập nhật {via_text}.
+Nếu bạn không thực hiện thay đổi này, hãy đặt lại mật khẩu ngay và liên hệ quản trị viên.
+"""
+
+            msg = MIMEMultipart('related')
+            msg['Subject'] = subject
+            msg['From'] = f"Hệ thống Phúc Đạt <{self.smtp_username}>"
+            msg['To'] = user_email
+
+            alt = MIMEMultipart('alternative')
+            alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
+            alt.attach(MIMEText(html_body, 'html', 'utf-8'))
+            msg.attach(alt)
+            self._attach_company_logo(msg)
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+
+            print(f"Password change confirmation email sent successfully to {user_email}")
+            return True
+        except Exception as e:
+            print(f"Failed to send password change confirmation email: {e}")
             return False
 
     async def send_quote_approved_notification_email(self, quote_data: Dict[str, Any], employee_email: str, employee_name: str, quote_items: list = None) -> bool:

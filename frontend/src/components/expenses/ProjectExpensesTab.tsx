@@ -64,7 +64,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [userRole, setUserRole] = useState<string>('employee')
-  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('planning') // Mặc định: lập kế hoạch (cho planned)
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('active') // Mặc định: đang thực hiện
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
 
@@ -504,7 +504,7 @@ const startApproveExpenseTour = useCallback(async () => {
   // Update project status filter when viewMode changes
   useEffect(() => {
     if (viewMode === 'planned') {
-      setProjectStatusFilter('planning')
+      setProjectStatusFilter('active')
     } else if (viewMode === 'actual') {
       setProjectStatusFilter('active')
     }
