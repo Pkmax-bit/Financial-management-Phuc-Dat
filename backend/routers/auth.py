@@ -264,7 +264,7 @@ async def change_password(
         if not auth_response.user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Current password is incorrect"
+                detail="Mật khẩu hiện tại không đúng"
             )
         
         if len(password_data.new_password) < 6:
@@ -273,10 +273,28 @@ async def change_password(
                 detail="Mật khẩu mới phải có ít nhất 6 ký tự"
             )
         
+        if len(password_data.new_password) > 128:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mật khẩu mới không được vượt quá 128 ký tự"
+            )
+        
+        if password_data.current_password == password_data.new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mật khẩu mới phải khác mật khẩu hiện tại"
+            )
+        
         # Update password in Supabase Auth
-        supabase.auth.update_user({
-            "password": password_data.new_password
-        })
+        try:
+            supabase.auth.update_user({
+                "password": password_data.new_password
+            })
+        except Exception as update_error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Không thể cập nhật mật khẩu: {str(update_error)}"
+            )
         
         # Update stored hash for reference
         supabase.table("users").update({
@@ -290,7 +308,7 @@ async def change_password(
             via="manual"
         )
         
-        return {"message": "Password updated successfully"}
+        return {"message": "Mật khẩu đã được cập nhật thành công"}
         
     except Exception as e:
         raise HTTPException(
@@ -319,6 +337,12 @@ async def reset_password(password_reset_confirm: PasswordResetConfirm):
                 detail="Mật khẩu mới phải có ít nhất 6 ký tự"
             )
         
+        if len(password_reset_confirm.new_password) > 128:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mật khẩu mới không được vượt quá 128 ký tự"
+            )
+        
         payload = verify_password_reset_token(password_reset_confirm.token)
         user_id = payload.get("sub")
         user_email = payload.get("email")
@@ -332,16 +356,26 @@ async def reset_password(password_reset_confirm: PasswordResetConfirm):
         supabase = get_supabase_client()
         
         # Update password via admin API
-        supabase.auth.admin.update_user_by_id(
-            user_id,
-            {"password": password_reset_confirm.new_password}
-        )
+        try:
+            supabase.auth.admin.update_user_by_id(
+                user_id,
+                {"password": password_reset_confirm.new_password}
+            )
+        except Exception as update_error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Không thể cập nhật mật khẩu: {str(update_error)}"
+            )
         
         # Update stored hash
-        supabase.table("users").update({
-            "password_hash": hash_password(password_reset_confirm.new_password),
-            "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", user_id).execute()
+        try:
+            supabase.table("users").update({
+                "password_hash": hash_password(password_reset_confirm.new_password),
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", user_id).execute()
+        except Exception as hash_error:
+            # Log error but don't fail the request since password is already updated in Supabase Auth
+            print(f"Warning: Failed to update password hash: {str(hash_error)}")
         
         user_full_name = None
         try:
@@ -357,7 +391,7 @@ async def reset_password(password_reset_confirm: PasswordResetConfirm):
             via="reset"
         )
         
-        return {"message": "Password reset successfully"}
+        return {"message": "Mật khẩu đã được đặt lại thành công"}
         
     except HTTPException:
         raise

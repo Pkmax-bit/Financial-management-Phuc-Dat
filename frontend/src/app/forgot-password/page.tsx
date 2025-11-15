@@ -14,12 +14,23 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState('')
   const router = useRouter()
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
-    if (!email || !email.includes('@')) {
+    if (!email || !email.trim()) {
       setStatus('error')
-      setMessage('Vui lòng nhập email hợp lệ')
+      setMessage('Vui lòng nhập địa chỉ email')
+      return
+    }
+
+    if (!validateEmail(email.trim())) {
+      setStatus('error')
+      setMessage('Vui lòng nhập địa chỉ email hợp lệ')
       return
     }
 

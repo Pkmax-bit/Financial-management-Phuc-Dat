@@ -3,7 +3,7 @@
 import { Suspense, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Lock, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react'
+import { Lock, ArrowLeft, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 
 type RequestState = 'idle' | 'loading' | 'success' | 'error'
@@ -16,6 +16,8 @@ function ResetPasswordContent() {
   const [token, setToken] = useState(initialToken)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [status, setStatus] = useState<RequestState>('idle')
   const [message, setMessage] = useState('')
 
@@ -31,6 +33,12 @@ function ResetPasswordContent() {
     if (newPassword.length < 6) {
       setStatus('error')
       setMessage('Mật khẩu phải có ít nhất 6 ký tự.')
+      return
+    }
+
+    if (newPassword.length > 128) {
+      setStatus('error')
+      setMessage('Mật khẩu không được vượt quá 128 ký tự.')
       return
     }
 
@@ -134,34 +142,74 @@ function ResetPasswordContent() {
             <label htmlFor="new-password" className="block text-sm font-medium text-gray-700">
               Mật khẩu mới
             </label>
-            <input
-              id="new-password"
-              name="new-password"
-              type="password"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
-              placeholder="Nhập mật khẩu mới"
-              required
-            />
+            <div className="mt-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                id="new-password"
+                name="new-password"
+                type={showNewPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
+                placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                {showNewPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Mật khẩu phải có ít nhất 6 ký tự
+            </p>
           </div>
 
           <div>
             <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700">
               Nhập lại mật khẩu
             </label>
-            <input
-              id="confirm-password"
-              name="confirm-password"
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
-              placeholder="Nhập lại mật khẩu mới"
-              required
-            />
+            <div className="mt-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                id="confirm-password"
+                name="confirm-password"
+                type={showConfirmPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
+                placeholder="Nhập lại mật khẩu mới"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+            {confirmPassword && newPassword !== confirmPassword && (
+              <p className="mt-1 text-xs text-red-500">
+                Mật khẩu xác nhận không khớp
+              </p>
+            )}
           </div>
 
           <button
