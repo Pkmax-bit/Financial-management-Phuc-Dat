@@ -99,6 +99,7 @@ interface CreateQuoteSidebarProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  quoteId?: string // Optional: if provided, load and edit existing quote
 }
 
 // Helper function to convert category names to Vietnamese with diacritics
@@ -116,7 +117,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
   return categoryMap[categoryName] || categoryName
 }
 
-export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateQuoteSidebarProps) {
+export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess, quoteId }: CreateQuoteSidebarProps) {
   const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -512,7 +513,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       fetchCustomers()
       fetchProducts()
       fetchEmployees()
-      generateQuoteNumber()
+      if (quoteId) {
+        loadQuoteData()
+      } else {
+        generateQuoteNumber()
+      }
       // Preload all active adjustment rules once when opening
       ;(async () => {
         try {
@@ -545,7 +550,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       adjustmentTimersRef.current.forEach((t) => clearTimeout(t))
       adjustmentTimersRef.current.clear()
     }
-  }, [isOpen])
+  }, [isOpen, quoteId])
 
   useEffect(() => {
     calculateSubtotal()
@@ -1088,6 +1093,127 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       ...prev,
       quote_number: `QUO-${dateStr}-${randomStr}`
     }))
+  }
+
+  const loadQuoteData = async () => {
+    if (!quoteId) return
+    
+    try {
+      setLoading(true)
+      console.log('🔍 Loading quote data for ID:', quoteId)
+      
+      // Load quote
+      const { data: quote, error: quoteError } = await supabase
+        .from('quotes')
+        .select('*')
+        .eq('id', quoteId)
+        .single()
+      
+      if (quoteError) {
+        console.error('❌ Error loading quote:', quoteError)
+        alert('Không thể tải báo giá: ' + quoteError.message)
+        return
+      }
+      
+      console.log('✅ Quote loaded:', quote)
+      
+      // Fill form data
+      setFormData({
+        quote_number: quote.quote_number || '',
+        customer_id: quote.customer_id || '',
+        project_id: quote.project_id || '',
+        created_by: quote.created_by || quote.employee_in_charge_id || '',
+        issue_date: quote.issue_date ? normalizeDateInput(quote.issue_date) || new Date().toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        valid_until: quote.valid_until ? normalizeDateInput(quote.valid_until) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: quote.subtotal || 0,
+        tax_rate: quote.tax_rate || 10,
+        tax_amount: quote.tax_amount || 0,
+        total_amount: quote.total_amount || 0,
+        discount_amount: quote.discount_amount || 0,
+        currency: quote.currency || 'VND',
+        status: quote.status || 'draft',
+        notes: quote.notes || '',
+        terms: quote.terms || 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
+      })
+      
+      // Load quote items
+      const { data: quoteItems, error: itemsError } = await supabase
+        .from('quote_items')
+        .select('*')
+        .eq('quote_id', quoteId)
+        .order('created_at', { ascending: true })
+      
+      if (itemsError) {
+        console.error('❌ Error loading quote items:', itemsError)
+      } else {
+        console.log('✅ Quote items loaded:', quoteItems?.length || 0)
+        
+        if (quoteItems && quoteItems.length > 0) {
+          const loadedItems: QuoteItem[] = quoteItems.map((item: any) => ({
+            id: item.id,
+            product_service_id: item.product_service_id,
+            expense_object_id: item.expense_object_id,
+            component_name: item.component_name,
+            name_product: item.name_product || '',
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            unit: item.unit || '',
+            unit_price: item.unit_price || 0,
+            total_price: item.total_price || 0,
+            area: item.area,
+            baseline_area: item.area, // Use current area as baseline
+            volume: item.volume,
+            baseline_volume: item.volume, // Use current volume as baseline
+            height: item.height,
+            length: item.length,
+            depth: item.depth,
+            area_is_manual: false,
+            volume_is_manual: false,
+            // Load components from product_components JSONB column
+            components: Array.isArray(item.product_components) ? item.product_components.map((comp: any) => ({
+              expense_object_id: comp.expense_object_id,
+              name: comp.name,
+              unit: comp.unit || '',
+              unit_price: comp.unit_price || 0,
+              quantity: comp.quantity || 0,
+              total_price: comp.total_price || 0,
+              baseline_quantity: comp.quantity || 0 // Store baseline for quantity adjustments
+            })) : []
+          }))
+          
+          setItems(loadedItems)
+        } else {
+          // No items, start with empty item
+          setItems([{ 
+            name_product: '', 
+            description: '', 
+            quantity: 1, 
+            unit: '', 
+            unit_price: 0, 
+            total_price: 0,
+            area: null,
+            baseline_area: null,
+            volume: null,
+            baseline_volume: null,
+            height: null,
+            length: null,
+            depth: null,
+            area_is_manual: false,
+            volume_is_manual: false
+          }])
+        }
+      }
+      
+      // Load projects for the customer
+      if (quote.customer_id) {
+        await fetchProjectsByCustomer(quote.customer_id)
+      }
+    } catch (error) {
+      console.error('❌ Error loading quote data:', error)
+      alert('Không thể tải dữ liệu báo giá: ' + (error as Error).message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const calculateSubtotal = () => {
@@ -1991,7 +2117,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       // Use created_by from form selection
       const created_by = formData.created_by || null
       
-      // Create quote directly in Supabase
+      // Create or update quote directly in Supabase
       const quoteData = {
         quote_number: formData.quote_number,
         customer_id: formData.customer_id || null,
@@ -2006,28 +2132,63 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         status: formData.status,
         notes: formData.notes || null,
         terms: formData.terms || null,
-        created_by,
+        created_by: quoteId ? undefined : created_by, // Don't update created_by when editing
         employee_in_charge_id: created_by
       }
 
       // Debug logging
-      console.log('Creating quote with data:', quoteData)
+      console.log(quoteId ? 'Updating quote with data:' : 'Creating quote with data:', quoteData)
       
-      // Insert quote
-      const { data: quote, error: quoteError } = await supabase
-        .from('quotes')
-        .insert(quoteData)
-        .select()
-        .single()
+      let quote: any
+      if (quoteId) {
+        // Update existing quote
+        const { data: updatedQuote, error: quoteError } = await supabase
+          .from('quotes')
+          .update(quoteData)
+          .eq('id', quoteId)
+          .select()
+          .single()
 
-      if (quoteError) {
-        console.error('Quote creation error:', quoteError)
-        throw new Error(`Lỗi tạo báo giá: ${quoteError.message}`)
+        if (quoteError) {
+          console.error('Quote update error:', quoteError)
+          throw new Error(`Lỗi cập nhật báo giá: ${quoteError.message}`)
+        }
+        
+        quote = updatedQuote
+        console.log('Quote updated successfully:', quote)
+      } else {
+        // Insert new quote
+        const { data: newQuote, error: quoteError } = await supabase
+          .from('quotes')
+          .insert(quoteData)
+          .select()
+          .single()
+
+        if (quoteError) {
+          console.error('Quote creation error:', quoteError)
+          throw new Error(`Lỗi tạo báo giá: ${quoteError.message}`)
+        }
+        
+        quote = newQuote
+        console.log('Quote created successfully:', quote)
       }
-      
-      console.log('Quote created successfully:', quote)
 
-      // Insert quote items
+      const currentQuoteId = quoteId || quote.id
+
+      // Delete existing quote items if updating
+      if (quoteId) {
+        const { error: deleteError } = await supabase
+          .from('quote_items')
+          .delete()
+          .eq('quote_id', currentQuoteId)
+
+        if (deleteError) {
+          console.error('Error deleting old quote items:', deleteError)
+          // Continue anyway
+        }
+      }
+
+      // Insert/update quote items
       if (items.length > 0) {
         const quoteItems = items.map(item => {
           // Format components as JSONB array for product_components column
@@ -2043,7 +2204,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           }))
 
           return {
-            quote_id: quote.id,
+            quote_id: currentQuoteId,
             product_service_id: item.product_service_id || null, // Lưu id của sản phẩm
             name_product: item.name_product,
             description: item.description,
@@ -2066,8 +2227,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           .select('id')
 
         if (itemsError) {
-          console.error('Error creating quote items:', itemsError)
-          // Don't throw error here, quote was created successfully
+          console.error('Error saving quote items:', itemsError)
+          // Don't throw error here, quote was saved successfully
         }
         // Components are already saved in product_components JSONB column, no need to insert separately
       }
@@ -2087,7 +2248,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           animation: slideIn 0.3s ease-out;
         ">
-          ✅ Báo giá đã được tạo thành công!
+          ✅ Báo giá đã được ${quoteId ? 'cập nhật' : 'tạo'} thành công!
         </div>
         <style>
           @keyframes slideIn {
@@ -2111,8 +2272,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setShowProfitWarningDialog(false)
       setLowProfitItems([])
     } catch (error) {
-      console.error('Error creating quote:', error)
-      alert('Có lỗi xảy ra khi tạo báo giá: ' + (error as Error).message)
+      console.error(`Error ${quoteId ? 'updating' : 'creating'} quote:`, error)
+      alert(`Có lỗi xảy ra khi ${quoteId ? 'cập nhật' : 'tạo'} báo giá: ` + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -2319,7 +2480,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0" data-tour-id="quote-form-header">
           <div className="flex items-center">
             <FileText className="h-6 w-6 text-black mr-3" />
-            <h1 className="text-xl font-semibold text-black">Tạo báo giá mới</h1>
+            <h1 className="text-xl font-semibold text-black">{quoteId ? 'Chỉnh sửa báo giá' : 'Tạo báo giá mới'}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button

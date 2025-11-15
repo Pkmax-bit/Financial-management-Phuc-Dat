@@ -506,7 +506,7 @@ class EmailService:
 
                     <!-- Tiêu đề trung tâm -->
                     <div style="text-align:center; padding: 8px 0 16px 0;">
-                        <div style="font-size:20px; font-weight:800; letter-spacing:1px; color:#000000;">BẢNG BÁO GIÁ</div>
+                        <div style="font-size:20px; font-weight:800; letter-spacing:1px; color:#000000; font-family:'Times New Roman', Times, serif;">BẢNG BÁO GIÁ</div>
                         <div style="font-size:12px; color:#000000; margin-top:6px;">
                             Công ty TNHH Nhôm Kính Phúc Đạt xin chân thành cảm ơn Quý khách đã quan tâm đến dịch vụ và sản phẩm của công ty.
                         </div>

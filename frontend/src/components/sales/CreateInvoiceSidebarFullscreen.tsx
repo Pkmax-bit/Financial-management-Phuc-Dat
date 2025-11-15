@@ -70,6 +70,7 @@ interface CreateInvoiceSidebarProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  invoiceId?: string // Optional: if provided, load and edit existing invoice
 }
 
 // Helper function to convert category names to Vietnamese with diacritics
@@ -87,7 +88,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
   return categoryMap[categoryName] || categoryName
 }
 
-export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSuccess }: CreateInvoiceSidebarProps) {
+export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSuccess, invoiceId }: CreateInvoiceSidebarProps) {
   const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -178,13 +179,17 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     if (isOpen) {
       fetchCustomers()
       fetchProducts()
-      generateInvoiceNumber()
+      if (invoiceId) {
+        loadInvoiceData()
+      } else {
+        generateInvoiceNumber()
+      }
     } else {
       // Reset when closing sidebar
       setSelectedItemIndex(null)
       resetForm()
     }
-  }, [isOpen])
+  }, [isOpen, invoiceId])
 
   useEffect(() => {
     calculateSubtotal()
@@ -613,6 +618,137 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     }))
   }
 
+  const loadInvoiceData = async () => {
+    if (!invoiceId) return
+    
+    try {
+      setLoading(true)
+      console.log('🔍 Loading invoice data for ID:', invoiceId)
+      
+      // Load invoice
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', invoiceId)
+        .single()
+      
+      if (invoiceError) {
+        console.error('❌ Error loading invoice:', invoiceError)
+        alert('Không thể tải hóa đơn: ' + invoiceError.message)
+        return
+      }
+      
+      console.log('✅ Invoice loaded:', invoice)
+      
+      // Fill form data
+      setFormData({
+        invoice_number: invoice.invoice_number || '',
+        customer_id: invoice.customer_id || '',
+        project_id: invoice.project_id || '',
+        invoice_type: invoice.invoice_type || 'standard',
+        issue_date: invoice.issue_date ? String(invoice.issue_date).slice(0, 10) : new Date().toISOString().split('T')[0],
+        due_date: invoice.due_date ? String(invoice.due_date).slice(0, 10) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: invoice.subtotal || 0,
+        tax_rate: invoice.tax_rate || 10,
+        tax_amount: invoice.tax_amount || 0,
+        discount_amount: invoice.discount_amount || 0,
+        total_amount: invoice.total_amount || 0,
+        currency: invoice.currency || 'VND',
+        status: invoice.status || 'draft',
+        payment_status: invoice.payment_status || 'pending',
+        payment_terms: invoice.payment_terms || 'Thanh toán trong vòng 30 ngày',
+        notes: invoice.notes || '',
+        terms_and_conditions: invoice.terms_and_conditions || 'Hóa đơn có hiệu lực từ ngày phát hành.',
+        created_by: invoice.created_by || ''
+      })
+      
+      // Load invoice items
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .order('created_at', { ascending: true })
+      
+      if (itemsError) {
+        console.error('❌ Error loading invoice items:', itemsError)
+      } else {
+        console.log('✅ Invoice items loaded:', invoiceItems?.length || 0)
+        
+        if (invoiceItems && invoiceItems.length > 0) {
+          const loadedItems: InvoiceItem[] = invoiceItems.map((item: any) => ({
+            id: item.id,
+            invoice_id: item.invoice_id,
+            product_service_id: item.product_service_id,
+            name_product: item.name_product || '',
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            unit: item.unit || '',
+            unit_price: item.unit_price || 0,
+            total_price: item.total_price || 0,
+            area: item.area,
+            volume: item.volume,
+            height: item.height,
+            length: item.length,
+            depth: item.depth,
+            // Load components from product_components JSONB column if exists
+            components: Array.isArray(item.product_components) ? item.product_components.map((comp: any) => ({
+              expense_object_id: comp.expense_object_id,
+              name: comp.name,
+              unit: comp.unit || '',
+              unit_price: comp.unit_price || 0,
+              quantity: comp.quantity || 0,
+              total_price: comp.total_price || 0
+            })) : []
+          }))
+          
+          setItems(loadedItems)
+        } else {
+          // No items, start with empty item
+          setItems([{ 
+            name_product: '', 
+            description: '', 
+            quantity: 1, 
+            unit: '', 
+            unit_price: 0, 
+            total_price: 0,
+            area: null,
+            volume: null,
+            height: null,
+            length: null,
+            depth: null
+          }])
+        }
+      }
+      
+      // Load projects for the customer
+      if (invoice.customer_id) {
+        // Fetch projects for customer
+        try {
+          setLoadingProjects(true)
+          const { data: projectsData, error: projectsError } = await supabase
+            .from('projects')
+            .select('id, project_code, name, status, start_date, end_date')
+            .eq('customer_id', invoice.customer_id)
+            .in('status', ['planning', 'active'])
+            .order('name')
+          
+          if (!projectsError && projectsData) {
+            setProjects(projectsData || [])
+          }
+        } catch (error) {
+          console.error('Error loading projects:', error)
+        } finally {
+          setLoadingProjects(false)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading invoice data:', error)
+      alert('Không thể tải dữ liệu hóa đơn: ' + (error as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const calculateSubtotal = () => {
     const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
     const tax_amount = subtotal * (formData.tax_rate / 100)
@@ -829,35 +965,150 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         payment_terms: formData.payment_terms,
         notes: formData.notes,
         terms_and_conditions: formData.terms_and_conditions,
-        created_by,
-        items: items.map(item => ({
-          name_product: item.name_product,
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-          area: item.area ?? null,
-          volume: item.volume ?? null,
-          height: item.height ?? null,
-          length: item.length ?? null,
-          depth: item.depth ?? null
-        }))
+        created_by: invoiceId ? undefined : created_by, // Don't update created_by when editing
+        items: [] // Empty JSONB field, items will be in invoice_items table
       }
 
-      const result = await apiPost('/api/sales/invoices', invoiceData)
+      let invoice: any
+      if (invoiceId) {
+        // Update existing invoice
+        const { data: updatedInvoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .update(invoiceData)
+          .eq('id', invoiceId)
+          .select()
+          .single()
+
+        if (invoiceError) {
+          console.error('Invoice update error:', invoiceError)
+          throw new Error(`Lỗi cập nhật hóa đơn: ${invoiceError.message}`)
+        }
+        
+        invoice = updatedInvoice
+        console.log('Invoice updated successfully:', invoice)
+        
+        // Delete existing invoice items
+        const { error: deleteError } = await supabase
+          .from('invoice_items')
+          .delete()
+          .eq('invoice_id', invoiceId)
+
+        if (deleteError) {
+          console.error('Error deleting old invoice items:', deleteError)
+          // Continue anyway
+        }
+      } else {
+        // Create new invoice
+        const result = await apiPost('/api/sales/invoices', {
+          ...invoiceData,
+          created_by,
+          items: items.map(item => ({
+            name_product: item.name_product,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unit_price: item.unit_price,
+            total_price: item.total_price,
+            area: item.area ?? null,
+            volume: item.volume ?? null,
+            height: item.height ?? null,
+            length: item.length ?? null,
+            depth: item.depth ?? null
+          }))
+        })
+        
+        invoice = result
+        console.log('Invoice created successfully:', invoice)
+      }
+
+      const currentInvoiceId = invoiceId || invoice.id
+
+      // Save invoice items
+      if (items.length > 0) {
+        const invoiceItems = items.map(item => {
+          // Format components as JSONB array for product_components column
+          const comps: any[] = Array.isArray((item as any).components) ? ((item as any).components as any[]) : []
+          const productComponents = comps.map((c: any) => ({
+            expense_object_id: c.expense_object_id || null,
+            name: c.name || null,
+            unit: c.unit || '',
+            unit_price: Number(c.unit_price || 0),
+            quantity: Number(c.quantity || 0),
+            total_price: Number(c.total_price || 0)
+          }))
+
+          return {
+            invoice_id: currentInvoiceId,
+            product_service_id: item.product_service_id || null,
+            name_product: item.name_product,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unit_price: item.unit_price,
+            total_price: item.total_price,
+            area: item.area,
+            volume: item.volume,
+            height: item.height,
+            length: item.length,
+            depth: item.depth,
+            product_components: productComponents.length > 0 ? productComponents : []
+          }
+        })
+
+        const { error: itemsError } = await supabase
+          .from('invoice_items')
+          .insert(invoiceItems)
+
+        if (itemsError) {
+          console.error('Error saving invoice items:', itemsError)
+          // Don't throw error here, invoice was saved successfully
+        }
+      }
         
       // If sending immediately, also send the invoice
       if (sendImmediately) {
-        await apiPost(`/api/sales/invoices/${result.id}/send`, {})
+        await apiPost(`/api/sales/invoices/${currentInvoiceId}/send`, {})
       }
+
+      // Show success notification
+      const successMessage = document.createElement('div')
+      successMessage.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 20px; 
+          right: 20px; 
+          background: #27ae60; 
+          color: white; 
+          padding: 15px 20px; 
+          border-radius: 5px; 
+          z-index: 10000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          animation: slideIn 0.3s ease-out;
+        ">
+          ✅ Hóa đơn đã được ${invoiceId ? 'cập nhật' : 'tạo'} thành công!
+        </div>
+        <style>
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        </style>
+      `
+      document.body.appendChild(successMessage)
+      
+      // Auto remove success message after 5 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage)
+        }
+      }, 5000)
 
       onSuccess()
       onClose()
       resetForm()
     } catch (error) {
-      console.error('Error creating invoice:', error)
-      alert('Có lỗi xảy ra khi tạo hóa đơn: ' + (error as Error).message)
+      console.error(`Error ${invoiceId ? 'updating' : 'creating'} invoice:`, error)
+      alert(`Có lỗi xảy ra khi ${invoiceId ? 'cập nhật' : 'tạo'} hóa đơn: ` + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -916,7 +1167,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0" data-tour-id="invoice-form-header">
           <div className="flex items-center">
             <FileText className="h-6 w-6 text-black mr-3" />
-            <h1 className="text-xl font-semibold text-black">Tạo hóa đơn mới</h1>
+            <h1 className="text-xl font-semibold text-black">{invoiceId ? 'Chỉnh sửa hóa đơn' : 'Tạo hóa đơn mới'}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button

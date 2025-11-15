@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp } from 'lucide-react'
+import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { useSidebar } from '@/components/LayoutWithSidebar'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 
 interface PaymentTermItem {
   description: string
@@ -48,6 +50,8 @@ export default function QuoteEmailPreviewModal({
   const [htmlContent, setHtmlContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false)
+  const previewRef = useRef<HTMLDivElement>(null)
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermItem[]>([
     { description: 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', amount: '', received: false },
     { description: 'CỌC ĐỢT 2: 50% KÍ HỢP ĐỒNG, RA ĐƠN SẢN XUẤT', amount: '', received: false },
@@ -690,6 +694,273 @@ export default function QuoteEmailPreviewModal({
     originalHtml
   ])
 
+  // Function to download PDF
+  const handleDownloadPDF = async () => {
+    if (!previewRef.current || !htmlContent) {
+      console.error('Preview content not available')
+      return
+    }
+
+    try {
+      setIsDownloadingPDF(true)
+
+      // Get the preview element
+      const element = previewRef.current.querySelector('.email-preview') as HTMLElement
+      if (!element) {
+        throw new Error('Preview element not found')
+      }
+
+      // Create a temporary container with the HTML content for better PDF rendering
+      const tempContainer = document.createElement('div')
+      tempContainer.style.position = 'absolute'
+      tempContainer.style.left = '-9999px'
+      tempContainer.style.width = '210mm' // A4 width
+      tempContainer.style.padding = '10mm' // Giảm padding để tiết kiệm không gian
+      tempContainer.style.backgroundColor = '#ffffff'
+      tempContainer.style.fontFamily = 'Arial, "Times New Roman", "DejaVu Sans", sans-serif' // Font tiếng Việt
+      tempContainer.style.fontSize = '11pt' // Giảm font size một chút
+      tempContainer.style.color = '#000000'
+      
+      // Ensure HTML has proper font for Vietnamese and optimize for PDF
+      let htmlWithFont = htmlContent
+      
+      // Optimize table styles for compact display
+      // Reduce padding in product table cells
+      htmlWithFont = htmlWithFont.replace(
+        /<td([^>]*style="[^"]*padding:\s*8px[^"]*"[^>]*)>/gi,
+        '<td$1 style="padding: 3px 4px;">'
+      )
+      htmlWithFont = htmlWithFont.replace(
+        /<th([^>]*style="[^"]*padding:\s*8px[^"]*"[^>]*)>/gi,
+        '<th$1 style="padding: 4px;">'
+      )
+      htmlWithFont = htmlWithFont.replace(
+        /<td([^>]*style="[^"]*padding:\s*10px[^"]*"[^>]*)>/gi,
+        '<td$1 style="padding: 5px;">'
+      )
+      htmlWithFont = htmlWithFont.replace(
+        /<th([^>]*style="[^"]*padding:\s*10px[^"]*"[^>]*)>/gi,
+        '<th$1 style="padding: 5px;">'
+      )
+      
+      // Reduce font size in product table
+      htmlWithFont = htmlWithFont.replace(
+        /<table([^>]*style="[^"]*width:\s*100%[^"]*"[^>]*)>/gi,
+        (match) => {
+          if (!match.includes('font-size')) {
+            return match.replace('style="', 'style="font-size: 9pt; ')
+          }
+          return match
+        }
+      )
+      
+      // Reduce margins between sections
+      htmlWithFont = htmlWithFont.replace(
+        /margin:\s*20px\s*0/gi,
+        'margin: 10px 0'
+      )
+      htmlWithFont = htmlWithFont.replace(
+        /margin-top:\s*20px/gi,
+        'margin-top: 10px'
+      )
+      htmlWithFont = htmlWithFont.replace(
+        /margin-bottom:\s*20px/gi,
+        'margin-bottom: 10px'
+      )
+      
+      // Reduce padding in main content div
+      htmlWithFont = htmlWithFont.replace(
+        /padding:\s*20px/gi,
+        'padding: 10px'
+      )
+      
+      // Reduce header padding
+      htmlWithFont = htmlWithFont.replace(
+        /padding:\s*12px\s*20px\s*0\s*20px/gi,
+        'padding: 8px 15px 0 15px'
+      )
+      
+      // Make product table more compact - reduce cell height
+      htmlWithFont = htmlWithFont.replace(
+        /<tr([^>]*>[\s\S]*?<td[^>]*style="[^"]*padding:\s*8px[^"]*"[^>]*>)/gi,
+        (match) => {
+          return match.replace(/padding:\s*8px/gi, 'padding: 3px 4px')
+        }
+      )
+      
+      // Reduce line-height in product description
+      htmlWithFont = htmlWithFont.replace(
+        /line-height:\s*1\.8/gi,
+        'line-height: 1.4'
+      )
+      
+      // Add font-family to body if not present
+      if (!htmlWithFont.includes('font-family')) {
+        htmlWithFont = htmlWithFont.replace(
+          /<body([^>]*)>/i,
+          '<body$1 style="font-family: Arial, \'Times New Roman\', \'DejaVu Sans\', sans-serif;">'
+        )
+      }
+      
+      // Ensure all text elements have font-family
+      htmlWithFont = htmlWithFont.replace(
+        /style="([^"]*)"/gi,
+        (match, styles) => {
+          if (!styles.includes('font-family')) {
+            return `style="${styles}; font-family: Arial, 'Times New Roman', 'DejaVu Sans', sans-serif;"`
+          }
+          return match
+        }
+      )
+      
+      tempContainer.innerHTML = htmlWithFont
+      
+      // Add CSS to make tables more compact
+      const style = document.createElement('style')
+      style.textContent = `
+        /* Make product table more compact */
+        table {
+          font-size: 9pt !important;
+          border-collapse: collapse !important;
+        }
+        table td, table th {
+          padding: 3px 4px !important;
+          font-size: 9pt !important;
+        }
+        /* Reduce spacing in product table rows */
+        table tbody tr {
+          height: auto !important;
+          min-height: 20px !important;
+        }
+        /* Make header more compact */
+        div[style*="padding: 12px"] {
+          padding: 8px 15px 0 15px !important;
+        }
+        /* Reduce margins */
+        div[style*="margin: 20px"] {
+          margin: 8px 0 !important;
+        }
+        /* Make payment terms table compact */
+        table[style*="width: 100%"] tbody tr td {
+          padding: 4px 5px !important;
+        }
+        /* Reduce line height */
+        p {
+          margin: 3px 0 !important;
+          line-height: 1.3 !important;
+        }
+        /* Compact header text */
+        div[style*="font-size:20px"] {
+          font-size: 16px !important;
+          padding: 4px 0 !important;
+        }
+        div[style*="font-size:12px"] {
+          font-size: 10pt !important;
+        }
+        div[style*="font-size:13px"] {
+          font-size: 10pt !important;
+        }
+        div[style*="font-size:14px"] {
+          font-size: 11pt !important;
+        }
+        div[style*="font-size:16px"] {
+          font-size: 12pt !important;
+        }
+      `
+      tempContainer.appendChild(style)
+      document.body.appendChild(tempContainer)
+
+      // Wait for images to load
+      await new Promise((resolve) => {
+        const images = tempContainer.querySelectorAll('img')
+        if (images.length === 0) {
+          resolve(null)
+          return
+        }
+        let loadedCount = 0
+        const totalImages = images.length
+        images.forEach((img) => {
+          if (img.complete) {
+            loadedCount++
+            if (loadedCount === totalImages) resolve(null)
+          } else {
+            img.onload = () => {
+              loadedCount++
+              if (loadedCount === totalImages) resolve(null)
+            }
+            img.onerror = () => {
+              loadedCount++
+              if (loadedCount === totalImages) resolve(null)
+            }
+          }
+        })
+        // Timeout after 5 seconds
+        setTimeout(() => resolve(null), 5000)
+      })
+
+      // Convert HTML to canvas with optimized settings for PDF
+      const canvas = await html2canvas(tempContainer, {
+        scale: 1.5, // Balanced quality and size
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: tempContainer.scrollWidth,
+        height: tempContainer.scrollHeight,
+        windowWidth: 794, // A4 width in pixels at 96 DPI (210mm)
+        windowHeight: 1123, // A4 height in pixels at 96 DPI (297mm)
+      })
+
+      // Remove temporary container
+      document.body.removeChild(tempContainer)
+
+      // Calculate PDF dimensions (A4: 210mm x 297mm)
+      const imgWidth = 210 // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      
+      // Add image to PDF
+      const imgData = canvas.toDataURL('image/png', 0.95) // Slightly lower quality for smaller file size
+      
+      // If content is taller than one page, split into multiple pages
+      const pageHeight = 297 // A4 height in mm
+      const pageWidth = 210 // A4 width in mm
+      
+      if (imgHeight <= pageHeight) {
+        // Content fits on one page - perfect!
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
+      } else {
+        // Content is taller than one page - split into multiple pages
+        let heightLeft = imgHeight
+        let position = 0
+        
+        // Add first page
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+        
+        // Add additional pages if needed
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight
+          pdf.addPage()
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+          heightLeft -= pageHeight
+        }
+      }
+
+      // Get quote number for filename
+      const quoteNumberMatch = htmlContent.match(/BÁO GIÁ[^<]*?([A-Z0-9-]+)/i)
+      const quoteNumber = quoteNumberMatch ? quoteNumberMatch[1] : 'quote'
+      const filename = `Bao-gia-${quoteNumber}-${new Date().toISOString().split('T')[0]}.pdf`
+
+      // Save PDF
+      pdf.save(filename)
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      alert('Lỗi khi tạo PDF. Vui lòng thử lại.')
+    } finally {
+      setIsDownloadingPDF(false)
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -711,6 +982,23 @@ export default function QuoteEmailPreviewModal({
             >
               <CircleHelp className="h-4 w-4" />
               <span>Hướng dẫn</span>
+            </button>
+            <button
+              onClick={handleDownloadPDF}
+              disabled={isDownloadingPDF || loading || !htmlContent}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                isDownloadingPDF || loading || !htmlContent
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                  : 'text-white bg-green-600 hover:bg-green-700'
+              }`}
+              title="Tải PDF báo giá"
+            >
+              {isDownloadingPDF ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              <span>{isDownloadingPDF ? 'Đang tạo PDF...' : 'Tải PDF'}</span>
             </button>
             <button
               onClick={async () => {
@@ -841,7 +1129,7 @@ export default function QuoteEmailPreviewModal({
           {!loading && !error && (
             <div className="flex gap-4 h-full flex-1 overflow-hidden">
               {/* Left side: Email Preview */}
-              <div className="flex-1 overflow-auto pr-4 p-4" data-tour-id="email-form-preview">
+              <div className="flex-1 overflow-auto pr-4 p-4" data-tour-id="email-form-preview" ref={previewRef}>
                 {htmlContent && (
                   <div className="bg-white rounded-lg shadow-sm p-4">
                     <div 

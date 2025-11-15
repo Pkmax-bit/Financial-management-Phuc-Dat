@@ -73,6 +73,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null)
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null)
@@ -1264,6 +1265,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     
                     <>
                       <button 
+                        onClick={() => {
+                          setEditingQuoteId(quote.id)
+                          setShowCreateModal(true)
+                        }}
                         className="text-black hover:text-blue-600" 
                         title="Chỉnh sửa"
                         data-tour-id="quote-button-edit"
@@ -1525,10 +1530,15 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
       <CreateQuoteSidebarFullscreen
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false)
+          setEditingQuoteId(null)
+        }}
         onSuccess={() => {
           fetchQuotes()
+          setEditingQuoteId(null)
         }}
+        quoteId={editingQuoteId || undefined}
       />
 
       <QuoteEmailPreviewModal

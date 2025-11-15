@@ -81,6 +81,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
@@ -230,8 +231,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   }
 
   const openEditModal = (invoice: Invoice) => {
-    setSelectedInvoice(invoice)
-    setShowEditModal(true)
+    setEditingInvoiceId(invoice.id)
+    setShowCreateModal(true)
   }
 
   const closeEditModal = () => {
@@ -908,14 +909,19 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         )}
       </div>
 
-      {/* Create Invoice Sidebar */}
+      {/* Create/Edit Invoice Sidebar */}
       <CreateInvoiceSidebarFullscreen
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false)
+          setEditingInvoiceId(null)
+        }}
         onSuccess={() => {
           fetchInvoices()
           setShowCreateModal(false)
+          setEditingInvoiceId(null)
         }}
+        invoiceId={editingInvoiceId || undefined}
       />
 
       {/* Help Sidebar */}
