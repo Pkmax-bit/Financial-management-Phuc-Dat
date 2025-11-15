@@ -22,7 +22,7 @@ from config import settings
 
 class EmailService:
     def __init__(self):
-        # Email provider: 'smtp' (default for local) or 'resend' (recommended for Render)
+        # Email provider: 'smtp' (default for local), 'resend' (recommended for Render), or 'n8n' (for n8n automation)
         self.email_provider = os.getenv("EMAIL_PROVIDER", "smtp").lower()
         
         # SMTP Configuration (for local development)
@@ -38,6 +38,11 @@ class EmailService:
         self.resend_api_key = os.getenv("RESEND_API_KEY", "")
         self.resend_from_email = os.getenv("RESEND_FROM_EMAIL", "noreply@resend.dev")
         self.resend_api_url = "https://api.resend.com/emails"
+        
+        # n8n Webhook Configuration (for n8n automation)
+        self.n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "")
+        self.n8n_webhook_id = os.getenv("N8N_WEBHOOK_ID", "")  # Optional: webhook ID for authentication
+        self.n8n_api_key = os.getenv("N8N_API_KEY", "")  # Optional: API key if n8n requires authentication
         
         # Debug flag to control verbose logging
         self.debug = os.getenv("EMAIL_DEBUG", "0") == "1"
@@ -57,6 +62,10 @@ class EmailService:
             if self.email_provider == "resend":
                 print(f"   Resend API Key: {'SET' if self.resend_api_key else 'NOT SET'}")
                 print(f"   Resend From Email: {self.resend_from_email}")
+            elif self.email_provider == "n8n":
+                print(f"   n8n Webhook URL: {'SET' if self.n8n_webhook_url else 'NOT SET'}")
+                print(f"   n8n Webhook ID: {'SET' if self.n8n_webhook_id else 'NOT SET'}")
+                print(f"   n8n API Key: {'SET' if self.n8n_api_key else 'NOT SET'}")
     
     def _send_smtp_sync(self, msg: MIMEMultipart, to_email: str) -> bool:
         """Synchronous SMTP send operation (runs in thread pool)"""
@@ -82,6 +91,73 @@ class EmailService:
             print(f"❌ Unexpected SMTP Error: {type(e).__name__}: {e}")
             raise
     
+    async def _send_via_n8n(self, to_email: str, subject: str, html_content: str, text_content: str, email_type: str = "general", attachments: Optional[List[Dict]] = None, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """Send email via n8n webhook (HTTP) - For n8n automation workflows"""
+        try:
+            if not self.n8n_webhook_url:
+                print("❌ N8N_WEBHOOK_URL not set. Please set it in environment variables.")
+                return False
+            
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            # Add API key to headers if provided
+            if self.n8n_api_key:
+                headers["X-N8N-API-KEY"] = self.n8n_api_key
+            
+            # Prepare payload for n8n webhook
+            payload = {
+                "to_email": to_email,
+                "subject": subject,
+                "html_content": html_content,
+                "text_content": text_content,
+                "email_type": email_type,  # "password_reset", "quote", "notification", etc.
+                "metadata": metadata or {}
+            }
+            
+            # Add attachments if provided
+            if attachments:
+                payload["attachments"] = attachments
+            
+            # Add webhook ID if provided (for n8n webhook authentication)
+            if self.n8n_webhook_id:
+                payload["webhook_id"] = self.n8n_webhook_id
+            
+            # Run HTTP request in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                self.executor,
+                lambda: requests.post(self.n8n_webhook_url, headers=headers, json=payload, timeout=30)
+            )
+            
+            if response.status_code in [200, 201]:
+                print(f"✅ Email sent via n8n to {to_email} (Status: {response.status_code})")
+                if self.debug:
+                    try:
+                        result = response.json()
+                        print(f"   n8n Response: {result}")
+                    except:
+                        print(f"   n8n Response: {response.text[:200]}")
+                return True
+            else:
+                error_msg = response.text
+                print(f"❌ n8n Webhook Error ({response.status_code}): {error_msg}")
+                return False
+                
+        except requests.exceptions.Timeout:
+            print(f"❌ n8n Webhook Timeout - Request took longer than 30s")
+            return False
+        except requests.exceptions.RequestException as e:
+            print(f"❌ n8n Webhook Request Error: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Unexpected n8n Webhook Error: {type(e).__name__}: {e}")
+            if self.debug:
+                import traceback
+                traceback.print_exc()
+            return False
+
     async def _send_via_resend(self, to_email: str, subject: str, html_content: str, text_content: str, attachments: Optional[List[Dict]] = None) -> bool:
         """Send email via Resend API (HTTP) - Recommended for Render"""
         try:
@@ -796,7 +872,92 @@ class EmailService:
             Đội ngũ bán hàng
             """
             
-            # Use Resend API if configured, otherwise fall back to SMTP
+            # Use n8n webhook if configured
+            if self.email_provider == "n8n":
+                # For n8n, prepare HTML with logo handling
+                n8n_html = html_body
+                
+                # Replace CID logo with base64 data URI if needed
+                if 'cid:company_logo' in n8n_html:
+                    logo_base64 = None
+                    # Try to get logo from company_info first
+                    if company_info and company_info.get("company_logo_base64"):
+                        logo_base64 = company_info.get("company_logo_base64")
+                        if ',' in logo_base64:
+                            logo_base64 = logo_base64.split(',', 1)[1]
+                    else:
+                        # Try to get default logo from file
+                        try:
+                            if os.path.exists(self.logo_path):
+                                with open(self.logo_path, 'rb') as f:
+                                    img_data = f.read()
+                                    img_data = self._resize_image(img_data, max_width=300, max_height=100)
+                                    logo_base64 = base64.b64encode(img_data).decode('utf-8')
+                        except Exception as e:
+                            print(f"⚠️ Failed to load default logo for n8n: {e}")
+                    
+                    if logo_base64:
+                        # Replace CID with base64 data URI
+                        data_uri = f"data:image/jpeg;base64,{logo_base64}"
+                        n8n_html = n8n_html.replace('cid:company_logo', data_uri)
+                        print(f"📷 Replaced CID logo with base64 data URI for n8n")
+                
+                # Prepare attachments for n8n
+                n8n_attachments = []
+                
+                # Add file attachments
+                if attachments and isinstance(attachments, list):
+                    for attachment in attachments:
+                        try:
+                            file_name = attachment.get('name', 'attachment')
+                            file_content = attachment.get('content', '')
+                            
+                            if file_content:
+                                # Content is already base64 string
+                                n8n_attachments.append({
+                                    "name": file_name,
+                                    "content": file_content,
+                                    "mimeType": attachment.get('mimeType', 'application/octet-stream')
+                                })
+                                print(f"✅ Prepared attachment for n8n: {file_name}")
+                        except Exception as e:
+                            print(f"⚠️ Failed to prepare attachment {attachment.get('name', 'unknown')} for n8n: {e}")
+                
+                # Try to add PDF version if available
+                try:
+                    pdf_bytes = self._html_to_pdf_bytes(html_body)
+                    if pdf_bytes:
+                        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+                        n8n_attachments.append({
+                            "name": f"Bao-gia-{quote_data.get('quote_number','')}.pdf",
+                            "content": pdf_base64,
+                            "mimeType": "application/pdf"
+                        })
+                        print(f"✅ Prepared PDF attachment for n8n")
+                except Exception:
+                    pass
+                
+                # Send via n8n
+                return await self._send_via_n8n(
+                    to_email=customer_email,
+                    subject=subject,
+                    html_content=n8n_html,
+                    text_content=text_body,
+                    email_type="quote",
+                    attachments=n8n_attachments if n8n_attachments else None,
+                    metadata={
+                        "quote_number": quote_data.get('quote_number'),
+                        "customer_name": customer_name,
+                        "customer_email": customer_email,
+                        "total_amount": quote_data.get('total_amount', 0),
+                        "issue_date": quote_data.get('issue_date'),
+                        "valid_until": quote_data.get('valid_until'),
+                        "employee_name": employee_name,
+                        "employee_phone": employee_phone
+                    }
+                )
+            
+            # Use Resend API if configured
             if self.email_provider == "resend":
                 # For Resend, we need to handle logo differently - convert CID to base64 data URI
                 resend_html = html_body
@@ -871,7 +1032,7 @@ class EmailService:
             # SMTP fallback - check credentials
             if not self.smtp_username or not self.smtp_password:
                 print("❌ Email credentials not configured")
-                print(f"   Please set EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                print(f"   Please set EMAIL_PROVIDER=n8n and N8N_WEBHOOK_URL, or EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
                 return False
             
             # Handle logo in HTML - ensure it uses CID for email attachment
@@ -1148,7 +1309,22 @@ Vui lòng nhấn vào nút "Đặt lại mật khẩu" trong email HTML. Liên k
 Nếu bạn không yêu cầu, hãy bỏ qua email này.
 """
 
-            # Use Resend API if configured, otherwise fall back to SMTP
+            # Use n8n webhook if configured
+            if self.email_provider == "n8n":
+                return await self._send_via_n8n(
+                    to_email=user_email,
+                    subject=subject,
+                    html_content=html_body,
+                    text_content=text_body,
+                    email_type="password_reset",
+                    metadata={
+                        "user_name": user_name,
+                        "reset_link": reset_link,
+                        "expire_minutes": expire_minutes
+                    }
+                )
+            
+            # Use Resend API if configured
             if self.email_provider == "resend":
                 return await self._send_via_resend(
                     to_email=user_email,
@@ -1160,7 +1336,7 @@ Nếu bạn không yêu cầu, hãy bỏ qua email này.
             # SMTP fallback
             if not self.smtp_username or not self.smtp_password:
                 print("❌ Email credentials not configured")
-                print(f"   Please set EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                print(f"   Please set EMAIL_PROVIDER=n8n and N8N_WEBHOOK_URL, or EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
                 return False
 
             msg = MIMEMultipart('related')
@@ -1251,7 +1427,21 @@ Mật khẩu cho tài khoản của bạn vừa được cập nhật {via_text}
 Nếu bạn không thực hiện thay đổi này, hãy đặt lại mật khẩu ngay và liên hệ quản trị viên.
 """
 
-            # Use Resend API if configured, otherwise fall back to SMTP
+            # Use n8n webhook if configured
+            if self.email_provider == "n8n":
+                return await self._send_via_n8n(
+                    to_email=user_email,
+                    subject=subject,
+                    html_content=html_body,
+                    text_content=text_body,
+                    email_type="password_change_confirmation",
+                    metadata={
+                        "user_name": user_name,
+                        "via": via
+                    }
+                )
+            
+            # Use Resend API if configured
             if self.email_provider == "resend":
                 return await self._send_via_resend(
                     to_email=user_email,
@@ -1263,7 +1453,7 @@ Nếu bạn không thực hiện thay đổi này, hãy đặt lại mật khẩ
             # SMTP fallback
             if not self.smtp_username or not self.smtp_password:
                 print("❌ Email credentials not configured")
-                print(f"   Please set EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                print(f"   Please set EMAIL_PROVIDER=n8n and N8N_WEBHOOK_URL, or EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
                 return False
 
             msg = MIMEMultipart('related')

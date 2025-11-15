@@ -1,0 +1,179 @@
+{
+  "name": "Email Báo Giá - Phúc Đạt",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "quote",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-quote",
+      "name": "Webhook - Quote",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "quote-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "to_email",
+              "name": "to_email",
+              "value": "={{ $json.body.to_email }}",
+              "type": "string"
+            },
+            {
+              "id": "subject",
+              "name": "subject",
+              "value": "={{ $json.body.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "html_content",
+              "name": "html_content",
+              "value": "={{ $json.body.html_content }}",
+              "type": "string"
+            },
+            {
+              "id": "text_content",
+              "name": "text_content",
+              "value": "={{ $json.body.text_content }}",
+              "type": "string"
+            },
+            {
+              "id": "quote_number",
+              "name": "quote_number",
+              "value": "={{ $json.body.metadata.quote_number }}",
+              "type": "string"
+            },
+            {
+              "id": "customer_name",
+              "name": "customer_name",
+              "value": "={{ $json.body.metadata.customer_name }}",
+              "type": "string"
+            },
+            {
+              "id": "attachments",
+              "name": "attachments",
+              "value": "={{ $json.body.attachments || [] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-data",
+      "name": "Set - Lấy dữ liệu",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Xử lý attachments từ base64\nconst attachments = $input.item.json.attachments || [];\nconst processedAttachments = [];\n\nfor (const att of attachments) {\n  try {\n    // Decode base64 content\n    const buffer = Buffer.from(att.content, 'base64');\n    \n    processedAttachments.push({\n      filename: att.name,\n      content: buffer,\n      contentType: att.mimeType || 'application/octet-stream'\n    });\n  } catch (error) {\n    console.error(`Error processing attachment ${att.name}:`, error);\n  }\n}\n\nreturn {\n  ...$input.item.json,\n  processedAttachments: processedAttachments\n};"
+      },
+      "id": "process-attachments",
+      "name": "Function - Xử lý Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "fromEmail": "sales@phucdat.com",
+        "toEmail": "={{ $json.to_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html_content }}",
+        "options": {
+          "text": "={{ $json.text_content }}",
+          "attachments": "={{ $json.processedAttachments }}"
+        }
+      },
+      "id": "email-send",
+      "name": "Gửi Email với Attachments",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Email báo giá đã được gửi thành công\", \"quote_number\": $json.quote_number, \"to\": $json.to_email } }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Quote": {
+      "main": [
+        [
+          {
+            "node": "Set - Lấy dữ liệu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Lấy dữ liệu": {
+      "main": [
+        [
+          {
+            "node": "Function - Xử lý Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Xử lý Attachments": {
+      "main": [
+        [
+          {
+            "node": "Gửi Email với Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi Email với Attachments": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download } from 'lucide-react'
+import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download, DollarSign } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { useSidebar } from '@/components/LayoutWithSidebar'
 import html2canvas from 'html2canvas'
@@ -39,18 +39,26 @@ interface QuoteEmailPreviewModalProps {
       mimeType: string
     }>
   }) => void
+  onQuoteStatusUpdated?: () => void // Callback để refresh danh sách quotes
+  onConvertToInvoice?: (quoteId: string) => void // Callback để chuyển đổi thành hóa đơn
 }
 
 export default function QuoteEmailPreviewModal({
   isOpen,
   onClose,
   quoteId,
-  onConfirmSend
+  onConfirmSend,
+  onQuoteStatusUpdated,
+  onConvertToInvoice
 }: QuoteEmailPreviewModalProps) {
   const [htmlContent, setHtmlContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false)
+  const [pdfDownloaded, setPdfDownloaded] = useState(false) // Track if PDF was successfully downloaded
+  const [quoteStatus, setQuoteStatus] = useState<string>('draft') // Track quote status
+  const [projectName, setProjectName] = useState<string>('') // Track project name for PDF filename
+  const [projectId, setProjectId] = useState<string>('') // Track project ID for PDF filename
   const previewRef = useRef<HTMLDivElement>(null)
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermItem[]>([
     { description: 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', amount: '', received: false },
@@ -285,6 +293,36 @@ export default function QuoteEmailPreviewModal({
       const session = await supabase.auth.getSession()
       const token = session.data.session?.access_token
 
+      // Fetch quote status, project name and project ID
+      const { data: quoteData, error: quoteError } = await supabase
+        .from('quotes')
+        .select(`
+          status,
+          project_id,
+          projects:project_id(name)
+        `)
+        .eq('id', quoteId)
+        .single()
+      
+      if (!quoteError && quoteData) {
+        setQuoteStatus(quoteData.status || 'draft')
+        setProjectId(quoteData.project_id || '')
+        
+        // Get project name
+        const project = quoteData.projects as any
+        if (project) {
+          if (Array.isArray(project) && project.length > 0 && project[0]?.name) {
+            setProjectName(String(project[0].name))
+          } else if (typeof project === 'object' && 'name' in project && project.name) {
+            setProjectName(String(project.name))
+          } else {
+            setProjectName('')
+          }
+        } else {
+          setProjectName('')
+        }
+      }
+
       const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/preview`), {
         method: 'GET',
         headers: {
@@ -378,6 +416,14 @@ export default function QuoteEmailPreviewModal({
   useEffect(() => {
     if (isOpen && quoteId) {
       fetchPreview()
+      // Reset PDF downloaded state when modal opens
+      setPdfDownloaded(false)
+    } else if (!isOpen) {
+      // Reset state when modal closes
+      setPdfDownloaded(false)
+      setQuoteStatus('draft')
+      setProjectName('')
+      setProjectId('')
     }
   }, [isOpen, quoteId, fetchPreview])
 
@@ -694,10 +740,116 @@ export default function QuoteEmailPreviewModal({
     originalHtml
   ])
 
+  // Function to update quote status to sent
+  const updateQuoteStatusToSent = async () => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      
+      // Try using Supabase client directly first (simpler and more reliable)
+      console.log('🔄 Updating quote status to sent for quote:', quoteId)
+      const { data, error } = await supabase
+        .from('quotes')
+        .update({ 
+          status: 'sent',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', quoteId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('❌ Failed to update quote status via Supabase:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        
+        // Fallback: Try using API endpoint if Supabase direct update fails
+        const session = await supabase.auth.getSession()
+        const token = session.data.session?.access_token
+
+        if (token) {
+          try {
+            const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}`), {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                status: 'sent'
+              })
+            })
+
+            if (!response.ok) {
+              // Try to get error message
+              let errorMessage = `HTTP ${response.status}`
+              try {
+                const errorData = await response.json()
+                if (errorData && errorData.detail) {
+                  errorMessage = errorData.detail
+                }
+              } catch (e) {
+                // Response might not have JSON body
+                const text = await response.text()
+                if (text) {
+                  errorMessage = text
+                }
+              }
+              console.error('Failed to update quote status via API:', errorMessage)
+              return false
+            }
+
+            // Success via API
+            setQuoteStatus('sent')
+            if (onQuoteStatusUpdated) {
+              onQuoteStatusUpdated()
+            }
+            return true
+          } catch (apiError) {
+            console.error('Error updating quote status via API:', apiError)
+            return false
+          }
+        }
+        
+        return false
+      }
+
+      // Success via Supabase direct update
+      if (data) {
+        setQuoteStatus('sent')
+        if (onQuoteStatusUpdated) {
+          onQuoteStatusUpdated()
+        }
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error('Error updating quote status:', error)
+      return false
+    }
+  }
+
   // Function to download PDF
   const handleDownloadPDF = async () => {
     if (!previewRef.current || !htmlContent) {
       console.error('Preview content not available')
+      return
+    }
+
+    // Show confirmation dialog
+    const shouldExit = window.confirm(
+      'Bạn có muốn tải PDF báo giá? Sau khi tải thành công, trạng thái báo giá sẽ được cập nhật thành "Đã gửi" và bạn có thể duyệt báo giá thành hóa đơn.\n\nBạn có muốn tiếp tục?'
+    )
+
+    if (!shouldExit) {
       return
     }
 
@@ -946,13 +1098,70 @@ export default function QuoteEmailPreviewModal({
         }
       }
 
-      // Get quote number for filename
-      const quoteNumberMatch = htmlContent.match(/BÁO GIÁ[^<]*?([A-Z0-9-]+)/i)
-      const quoteNumber = quoteNumberMatch ? quoteNumberMatch[1] : 'quote'
-      const filename = `Bao-gia-${quoteNumber}-${new Date().toISOString().split('T')[0]}.pdf`
+      // Helper function to remove Vietnamese diacritics
+      const removeVietnameseDiacritics = (str: string): string => {
+        if (!str) return ''
+        return str
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+          .replace(/đ/g, 'd')
+          .replace(/Đ/g, 'D')
+          .replace(/[^a-zA-Z0-9\s-]/g, '') // Remove special characters
+          .replace(/\s+/g, '-') // Replace spaces with hyphens
+          .toLowerCase()
+          .trim()
+      }
+      
+      // Generate filename: "Báo giá - tên dự án (không dấu) - id dự án.pdf"
+      const sanitizedProjectName = projectName ? removeVietnameseDiacritics(projectName) : 'Khong-du-an'
+      const projectIdPart = projectId ? projectId.substring(0, 8) : 'no-id' // Use first 8 characters of project ID
+      const filename = `Bao-gia-${sanitizedProjectName}-${projectIdPart}.pdf`
 
       // Save PDF
       pdf.save(filename)
+      
+      // Mark PDF as downloaded
+      setPdfDownloaded(true)
+      
+      // Update quote status to sent after successful PDF download
+      const statusUpdated = await updateQuoteStatusToSent()
+      
+      if (statusUpdated) {
+        // Show success notification
+        const successMessage = document.createElement('div')
+        successMessage.innerHTML = `
+          <div style="
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            background: #27ae60; 
+            color: white; 
+            padding: 15px 20px; 
+            border-radius: 5px; 
+            z-index: 10000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            animation: slideIn 0.3s ease-out;
+            max-width: 400px;
+          ">
+            ✅ PDF đã được tải thành công!<br>
+            Trạng thái báo giá đã được cập nhật thành "Đã gửi".
+          </div>
+          <style>
+            @keyframes slideIn {
+              from { transform: translateX(100%); opacity: 0; }
+              to { transform: translateX(0); opacity: 1; }
+            }
+          </style>
+        `
+        document.body.appendChild(successMessage)
+        
+        // Auto remove success message after 5 seconds
+        setTimeout(() => {
+          if (document.body.contains(successMessage)) {
+            document.body.removeChild(successMessage)
+          }
+        }, 5000)
+      }
     } catch (error) {
       console.error('Error generating PDF:', error)
       alert('Lỗi khi tạo PDF. Vui lòng thử lại.')
@@ -1698,6 +1907,22 @@ export default function QuoteEmailPreviewModal({
           >
             Hủy
           </button>
+          {/* Show convert to invoice button if PDF was downloaded and quote status is sent */}
+          {(pdfDownloaded || quoteStatus === 'sent') && onConvertToInvoice && (
+            <button
+              onClick={() => {
+                if (onConvertToInvoice) {
+                  onConvertToInvoice(quoteId)
+                  onClose()
+                }
+              }}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+              title="Duyệt báo giá thành hóa đơn"
+            >
+              <DollarSign className="w-4 h-4" />
+              Duyệt báo giá thành hóa đơn
+            </button>
+          )}
           <button
             onClick={async () => {
               // Convert attachments to base64 format for sending

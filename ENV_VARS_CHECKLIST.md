@@ -81,11 +81,25 @@ DIFY_API_BASE_URL=https://api.dify.ai/v1
 DIFY_API_KEY=app-8gGZ55XJ7uNafs4TRAkqO0xl
 
 # Email Configuration
+# Email provider: 'smtp' (default), 'resend', or 'n8n'
+EMAIL_PROVIDER=n8n
+
+# SMTP Configuration (for local development or fallback)
 SMTP_USER=phannguyendangkhoa0915@gmail.com
 SMTP_PASSWORD=wozhwluxehsfuqjm
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_TIMEOUT=30
+
+# Resend API Configuration (alternative to n8n)
+RESEND_API_KEY=your_resend_api_key_here
+RESEND_FROM_EMAIL=noreply@resend.dev
+
+# n8n Webhook Configuration (recommended)
+N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/email
+N8N_WEBHOOK_ID=your_webhook_id_here
+N8N_API_KEY=your_n8n_api_key_here
+
 EMAIL_DEBUG=1
 
 # JWT Configuration

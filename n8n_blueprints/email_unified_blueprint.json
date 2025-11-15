@@ -1,0 +1,376 @@
+{
+  "name": "Email Unified - Phúc Đạt (Tất cả loại email)",
+  "meta": {
+    "templateCredsSetup": true,
+    "instanceId": "7xQoffxB4DjOeeNq"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-unified",
+      "name": "Webhook - Unified",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "unified-email-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "to_email",
+              "name": "to_email",
+              "value": "={{ $json.body.to_email }}",
+              "type": "string"
+            },
+            {
+              "id": "subject",
+              "name": "subject",
+              "value": "={{ $json.body.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "html_content",
+              "name": "html_content",
+              "value": "={{ $json.body.html_content }}",
+              "type": "string"
+            },
+            {
+              "id": "text_content",
+              "name": "text_content",
+              "value": "={{ $json.body.text_content }}",
+              "type": "string"
+            },
+            {
+              "id": "email_type",
+              "name": "email_type",
+              "value": "={{ $json.body.email_type }}",
+              "type": "string"
+            },
+            {
+              "id": "metadata",
+              "name": "metadata",
+              "value": "={{ $json.body.metadata }}",
+              "type": "object"
+            },
+            {
+              "id": "attachments",
+              "name": "attachments",
+              "value": "={{ $json.body.attachments || [] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-data",
+      "name": "Set - Lấy dữ liệu",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "password-reset",
+              "leftValue": "={{ $json.email_type }}",
+              "rightValue": "password_reset",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "quote",
+              "leftValue": "={{ $json.email_type }}",
+              "rightValue": "quote",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "password-change",
+              "leftValue": "={{ $json.email_type }}",
+              "rightValue": "password_change_confirmation",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "switch-email-type",
+      "name": "Switch - Phân loại Email",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Xử lý attachments từ base64 cho email báo giá\nconst attachments = $input.item.json.attachments || [];\nconst processedAttachments = [];\n\nfor (const att of attachments) {\n  try {\n    // Decode base64 content\n    const buffer = Buffer.from(att.content, 'base64');\n    \n    processedAttachments.push({\n      filename: att.name,\n      content: buffer,\n      contentType: att.mimeType || 'application/octet-stream'\n    });\n  } catch (error) {\n    console.error(`Error processing attachment ${att.name}:`, error);\n  }\n}\n\nreturn {\n  ...$input.item.json,\n  processedAttachments: processedAttachments\n};"
+      },
+      "id": "process-attachments",
+      "name": "Function - Xử lý Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "fromEmail": "={{ $json.email_type === 'quote' ? 'sales@phucdat.com' : 'noreply@phucdat.com' }}",
+        "toEmail": "={{ $json.to_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html_content }}",
+        "options": {
+          "text": "={{ $json.text_content }}",
+          "attachments": "={{ $json.processedAttachments || [] }}"
+        }
+      },
+      "id": "email-send-quote",
+      "name": "Gửi Email Báo Giá",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1050, 400],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "fromEmail": "noreply@phucdat.com",
+        "toEmail": "={{ $json.to_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html_content }}",
+        "options": {
+          "text": "={{ $json.text_content }}"
+        }
+      },
+      "id": "email-send-password",
+      "name": "Gửi Email Password",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "fromEmail": "noreply@phucdat.com",
+        "toEmail": "={{ $json.to_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html_content }}",
+        "options": {
+          "text": "={{ $json.text_content }}"
+        }
+      },
+      "id": "email-send-confirmation",
+      "name": "Gửi Email Xác Nhận",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1050, 500],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success",
+              "name": "success",
+              "value": "=true",
+              "type": "boolean"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "=Email đã được gửi thành công",
+              "type": "string"
+            },
+            {
+              "id": "to",
+              "name": "to",
+              "value": "={{ $json.to_email }}",
+              "type": "string"
+            },
+            {
+              "id": "email_type",
+              "name": "email_type",
+              "value": "={{ $json.email_type }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-response",
+      "name": "Set - Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Unified": {
+      "main": [
+        [
+          {
+            "node": "Set - Lấy dữ liệu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Lấy dữ liệu": {
+      "main": [
+        [
+          {
+            "node": "Switch - Phân loại Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Phân loại Email": {
+      "main": [
+        [
+          {
+            "node": "Gửi Email Password",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Function - Xử lý Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gửi Email Xác Nhận",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Xử lý Attachments": {
+      "main": [
+        [
+          {
+            "node": "Gửi Email Báo Giá",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi Email Báo Giá": {
+      "main": [
+        [
+          {
+            "node": "Set - Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi Email Password": {
+      "main": [
+        [
+          {
+            "node": "Set - Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi Email Xác Nhận": {
+      "main": [
+        [
+          {
+            "node": "Set - Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

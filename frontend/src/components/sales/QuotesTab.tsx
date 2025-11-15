@@ -1616,6 +1616,16 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         }}
         quoteId={previewQuoteId || ''}
         onConfirmSend={confirmSendQuote}
+        onQuoteStatusUpdated={() => {
+          // Refresh quotes list when status is updated
+          fetchQuotes()
+        }}
+        onConvertToInvoice={(quoteId) => {
+          // Close preview modal and convert to invoice
+          setShowPreviewModal(false)
+          setPreviewQuoteId(null)
+          convertToInvoice(quoteId)
+        }}
       />
 
       {/* Help Sidebar */}
