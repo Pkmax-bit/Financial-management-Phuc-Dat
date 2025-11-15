@@ -296,13 +296,16 @@ export default function LoginPage() {
             </div>
 
             <div className="text-sm">
-              <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
+              <Link 
+                href="/forgot-password" 
+                className="font-medium text-blue-600 hover:text-blue-700 underline underline-offset-2 transition-colors"
+              >
                 Quên mật khẩu?
               </Link>
             </div>
           </div>
 
-          <div>
+          <div className="space-y-3">
             <button
               type="submit"
               disabled={loading}
@@ -317,6 +320,13 @@ export default function LoginPage() {
                 'Đăng nhập'
               )}
             </button>
+            
+            <Link
+              href="/forgot-password"
+              className="w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              Quên mật khẩu?
+            </Link>
           </div>
 
           <div className="text-center">

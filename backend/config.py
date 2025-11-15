@@ -45,6 +45,8 @@ class Settings:
     DEBUG = os.getenv("DEBUG", "True").lower() == "true"
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    FRONTEND_BASE_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "30"))
     
     # File Upload Settings
     MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "10485760"))  # 10MB

@@ -24,7 +24,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  Palette
+  Palette,
+  Lock
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
@@ -387,12 +388,19 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
             </div>
 
             {/* Support Center - Moved into scrollable area */}
-            <div className="mt-2 mb-2">
+            <div className="mt-2 mb-2 space-y-2">
               <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Hỗ trợ
               </div>
-              <div className="px-3">
+              <div className="px-3 space-y-2">
                 <SupportCenterButton />
+                <button
+                  onClick={() => handleNavigation('/change-password')}
+                  className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50 border border-gray-200"
+                >
+                  <Lock className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
+                  <span className="truncate">Đổi mật khẩu</span>
+                </button>
               </div>
             </div>
             </div>
@@ -417,7 +425,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 mt-3">
                   <div className="relative">
                     <NotificationBell />
                   </div>
