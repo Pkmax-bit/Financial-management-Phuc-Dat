@@ -6,6 +6,8 @@ import smtplib
 import os
 import base64
 import io
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -20,10 +22,15 @@ class EmailService:
     def __init__(self):
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_username = os.getenv("SMTP_USERNAME", "phannguyendangkhoa0915@gmail.com")
+        # Support both SMTP_USER (from config.py) and SMTP_USERNAME (legacy) for backward compatibility
+        self.smtp_username = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME") or "phannguyendangkhoa0915@gmail.com"
         self.smtp_password = os.getenv("SMTP_PASSWORD", "wozhwluxehsfuqjm")
+        # SMTP timeout in seconds (important for Render to avoid hanging)
+        self.smtp_timeout = int(os.getenv("SMTP_TIMEOUT", "30"))
         # Debug flag to control verbose logging
         self.debug = os.getenv("EMAIL_DEBUG", "0") == "1"
+        # Thread pool executor for running blocking SMTP operations
+        self.executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="email_smtp")
         # Resolve logo path robustly: allow env override, then project-root/image/logo_phucdat.jpg
         env_logo = os.getenv("COMPANY_LOGO_PATH")
         if env_logo and os.path.exists(env_logo):
@@ -31,6 +38,30 @@ class EmailService:
         else:
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             self.logo_path = os.path.join(project_root, 'image', 'logo_phucdat.jpg')
+    
+    def _send_smtp_sync(self, msg: MIMEMultipart, to_email: str) -> bool:
+        """Synchronous SMTP send operation (runs in thread pool)"""
+        try:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=self.smtp_timeout) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+            return True
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"❌ SMTP Authentication Error: {e}")
+            print(f"   SMTP Server: {self.smtp_server}:{self.smtp_port}")
+            print(f"   Username: {self.smtp_username}")
+            raise
+        except smtplib.SMTPConnectError as e:
+            print(f"❌ SMTP Connection Error: {e}")
+            print(f"   Failed to connect to {self.smtp_server}:{self.smtp_port}")
+            raise
+        except smtplib.SMTPException as e:
+            print(f"❌ SMTP Error: {e}")
+            raise
+        except Exception as e:
+            print(f"❌ Unexpected SMTP Error: {type(e).__name__}: {e}")
+            raise
 
     def _resize_image(self, image_data: bytes, max_width: int = 300, max_height: int = 100) -> bytes:
         """Resize image if too large. Returns resized image bytes or original if resize fails."""
@@ -811,17 +842,43 @@ class EmailService:
             except Exception:
                 pass
             
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            # Run SMTP send in thread pool to avoid blocking async event loop
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(
+                self.executor,
+                self._send_smtp_sync,
+                msg,
+                customer_email
+            )
             
-            print(f"Quote email sent successfully to {customer_email}")
-            return True
-            
+            if success:
+                print(f"✅ Quote email sent successfully to {customer_email}")
+                return True
+            else:
+                return False
+                
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"❌ SMTP Authentication Error - Failed to send quote email to {customer_email}: {e}")
+            print(f"   SMTP Server: {self.smtp_server}:{self.smtp_port}")
+            print(f"   Username: {self.smtp_username}")
+            print(f"   Check: 1) SMTP_USER/SMTP_USERNAME env var is set, 2) SMTP_PASSWORD is correct (use App Password for Gmail), 3) Gmail 'Less secure app access' is enabled if needed")
+            return False
+        except smtplib.SMTPConnectError as e:
+            print(f"❌ SMTP Connection Error - Failed to connect to {self.smtp_server}:{self.smtp_port}: {e}")
+            print(f"   Check: 1) SMTP_SERVER and SMTP_PORT env vars are correct, 2) Network/firewall allows outbound connections on port {self.smtp_port}")
+            return False
+        except smtplib.SMTPException as e:
+            print(f"❌ SMTP Error - Failed to send quote email to {customer_email}: {e}")
+            return False
+        except asyncio.TimeoutError:
+            print(f"❌ Timeout Error - SMTP operation timed out after {self.smtp_timeout}s for {customer_email}")
+            print(f"   This may happen on Render if SMTP server is slow or network is unstable")
+            return False
         except Exception as e:
-            print(f"Failed to send quote email: {e}")
+            print(f"❌ Unexpected Error - Failed to send quote email to {customer_email}: {type(e).__name__}: {e}")
+            import traceback
+            if self.debug:
+                traceback.print_exc()
             return False
 
     async def send_notification_email(self, employee_email: str, title: str, message: str, action_url: str | None = None) -> bool:
@@ -933,15 +990,43 @@ Nếu bạn không yêu cầu, hãy bỏ qua email này.
             msg.attach(alt)
             self._attach_company_logo(msg)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
-
-            print(f"Password reset email sent successfully to {user_email}")
-            return True
+            # Run SMTP send in thread pool to avoid blocking async event loop
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(
+                self.executor,
+                self._send_smtp_sync,
+                msg,
+                user_email
+            )
+            
+            if success:
+                print(f"✅ Password reset email sent successfully to {user_email}")
+                return True
+            else:
+                return False
+                
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"❌ SMTP Authentication Error - Failed to send password reset email to {user_email}: {e}")
+            print(f"   SMTP Server: {self.smtp_server}:{self.smtp_port}")
+            print(f"   Username: {self.smtp_username}")
+            print(f"   Check: 1) SMTP_USER/SMTP_USERNAME env var is set, 2) SMTP_PASSWORD is correct (use App Password for Gmail), 3) Gmail 'Less secure app access' is enabled if needed")
+            return False
+        except smtplib.SMTPConnectError as e:
+            print(f"❌ SMTP Connection Error - Failed to connect to {self.smtp_server}:{self.smtp_port}: {e}")
+            print(f"   Check: 1) SMTP_SERVER and SMTP_PORT env vars are correct, 2) Network/firewall allows outbound connections on port {self.smtp_port}")
+            return False
+        except smtplib.SMTPException as e:
+            print(f"❌ SMTP Error - Failed to send password reset email to {user_email}: {e}")
+            return False
+        except asyncio.TimeoutError:
+            print(f"❌ Timeout Error - SMTP operation timed out after {self.smtp_timeout}s for {user_email}")
+            print(f"   This may happen on Render if SMTP server is slow or network is unstable")
+            return False
         except Exception as e:
-            print(f"Failed to send password reset email: {e}")
+            print(f"❌ Unexpected Error - Failed to send password reset email to {user_email}: {type(e).__name__}: {e}")
+            import traceback
+            if self.debug:
+                traceback.print_exc()
             return False
 
     async def send_password_change_confirmation(self, user_email: str, user_name: str | None, via: str = "manual") -> bool:
@@ -997,15 +1082,43 @@ Nếu bạn không thực hiện thay đổi này, hãy đặt lại mật khẩ
             msg.attach(alt)
             self._attach_company_logo(msg)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
-
-            print(f"Password change confirmation email sent successfully to {user_email}")
-            return True
+            # Run SMTP send in thread pool to avoid blocking async event loop
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(
+                self.executor,
+                self._send_smtp_sync,
+                msg,
+                user_email
+            )
+            
+            if success:
+                print(f"✅ Password change confirmation email sent successfully to {user_email}")
+                return True
+            else:
+                return False
+                
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"❌ SMTP Authentication Error - Failed to send password change confirmation to {user_email}: {e}")
+            print(f"   SMTP Server: {self.smtp_server}:{self.smtp_port}")
+            print(f"   Username: {self.smtp_username}")
+            print(f"   Check: 1) SMTP_USER/SMTP_USERNAME env var is set, 2) SMTP_PASSWORD is correct (use App Password for Gmail)")
+            return False
+        except smtplib.SMTPConnectError as e:
+            print(f"❌ SMTP Connection Error - Failed to connect to {self.smtp_server}:{self.smtp_port}: {e}")
+            print(f"   Check: 1) SMTP_SERVER and SMTP_PORT env vars are correct, 2) Network/firewall allows outbound connections on port {self.smtp_port}")
+            return False
+        except smtplib.SMTPException as e:
+            print(f"❌ SMTP Error - Failed to send password change confirmation to {user_email}: {e}")
+            return False
+        except asyncio.TimeoutError:
+            print(f"❌ Timeout Error - SMTP operation timed out after {self.smtp_timeout}s for {user_email}")
+            print(f"   This may happen on Render if SMTP server is slow or network is unstable")
+            return False
         except Exception as e:
-            print(f"Failed to send password change confirmation email: {e}")
+            print(f"❌ Unexpected Error - Failed to send password change confirmation to {user_email}: {type(e).__name__}: {e}")
+            import traceback
+            if self.debug:
+                traceback.print_exc()
             return False
 
     async def send_quote_approved_notification_email(self, quote_data: Dict[str, Any], employee_email: str, employee_name: str, quote_items: list = None) -> bool:

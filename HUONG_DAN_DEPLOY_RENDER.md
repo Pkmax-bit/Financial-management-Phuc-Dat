@@ -83,6 +83,7 @@ SMTP_USER=phannguyendangkhoa0915@gmail.com
 SMTP_PASSWORD=wozhwluxehsfuqjm
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
+EMAIL_DEBUG=1
 SECRET_KEY=your_secret_key_here_financial_management_2025
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -181,10 +182,11 @@ Sau khi có URL frontend, quay lại backend service và cập nhật biến `CO
 | `SUPABASE_DB_PORT` | Database port | `6543` |
 | `DIFY_API_BASE_URL` | Dify API URL | `https://api.dify.ai/v1` |
 | `DIFY_API_KEY` | Dify API key | `app-xxx` |
-| `SMTP_USER` | Email user | `your-email@gmail.com` |
-| `SMTP_PASSWORD` | Email password | `app-password` |
+| `SMTP_USER` | Email user (Gmail address) | `your-email@gmail.com` |
+| `SMTP_PASSWORD` | Email password (Gmail App Password) | `app-password` |
 | `SMTP_SERVER` | SMTP server | `smtp.gmail.com` |
 | `SMTP_PORT` | SMTP port | `587` |
+| `EMAIL_DEBUG` | Enable detailed email error logging | `1` (recommended for troubleshooting) |
 | `SECRET_KEY` | JWT secret key | `your-secret-key` |
 | `ALGORITHM` | JWT algorithm | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiry | `30` |
@@ -266,6 +268,16 @@ bash: -c: line 1: unexpected EOF while looking for matching ``'
 - Đảm bảo tất cả biến môi trường đã được thêm vào Render
 - Kiểm tra tên biến có đúng không (case-sensitive)
 - Restart service sau khi thêm/sửa env vars
+
+### 7. Lỗi Gửi Email (Quên Mật Khẩu / Báo Giá)
+
+**Triệu chứng**: Không gửi được email quên mật khẩu hoặc báo giá
+
+**Giải pháp**:
+- Xem file `SUA_LOI_EMAIL_RENDER.md` để hướng dẫn chi tiết
+- Đảm bảo `SMTP_USER` và `SMTP_PASSWORD` đã được set (sử dụng Gmail App Password)
+- Kiểm tra logs trong Render Dashboard để xem lỗi cụ thể
+- Đảm bảo Gmail 2-Step Verification đã bật và đã tạo App Password
 
 ### 6. Lỗi Port Binding
 
