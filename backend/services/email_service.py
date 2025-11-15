@@ -7,12 +7,14 @@ import os
 import base64
 import io
 import asyncio
+import json
+import requests
 from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from email.mime.application import MIMEApplication
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from services.supabase_client import get_supabase_client
@@ -20,6 +22,10 @@ from config import settings
 
 class EmailService:
     def __init__(self):
+        # Email provider: 'smtp' (default for local) or 'resend' (recommended for Render)
+        self.email_provider = os.getenv("EMAIL_PROVIDER", "smtp").lower()
+        
+        # SMTP Configuration (for local development)
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         # Support both SMTP_USER (from config.py) and SMTP_USERNAME (legacy) for backward compatibility
@@ -27,6 +33,12 @@ class EmailService:
         self.smtp_password = os.getenv("SMTP_PASSWORD", "wozhwluxehsfuqjm")
         # SMTP timeout in seconds (important for Render to avoid hanging)
         self.smtp_timeout = int(os.getenv("SMTP_TIMEOUT", "30"))
+        
+        # Resend API Configuration (for Render/production)
+        self.resend_api_key = os.getenv("RESEND_API_KEY", "")
+        self.resend_from_email = os.getenv("RESEND_FROM_EMAIL", "noreply@resend.dev")
+        self.resend_api_url = "https://api.resend.com/emails"
+        
         # Debug flag to control verbose logging
         self.debug = os.getenv("EMAIL_DEBUG", "0") == "1"
         # Thread pool executor for running blocking SMTP operations
@@ -38,6 +50,13 @@ class EmailService:
         else:
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             self.logo_path = os.path.join(project_root, 'image', 'logo_phucdat.jpg')
+        
+        # Log email provider being used
+        if self.debug:
+            print(f"📧 Email Service initialized with provider: {self.email_provider}")
+            if self.email_provider == "resend":
+                print(f"   Resend API Key: {'SET' if self.resend_api_key else 'NOT SET'}")
+                print(f"   Resend From Email: {self.resend_from_email}")
     
     def _send_smtp_sync(self, msg: MIMEMultipart, to_email: str) -> bool:
         """Synchronous SMTP send operation (runs in thread pool)"""
@@ -62,6 +81,59 @@ class EmailService:
         except Exception as e:
             print(f"❌ Unexpected SMTP Error: {type(e).__name__}: {e}")
             raise
+    
+    async def _send_via_resend(self, to_email: str, subject: str, html_content: str, text_content: str, attachments: Optional[List[Dict]] = None) -> bool:
+        """Send email via Resend API (HTTP) - Recommended for Render"""
+        try:
+            if not self.resend_api_key:
+                print("❌ RESEND_API_KEY not set. Please set it in Render environment variables.")
+                return False
+            
+            headers = {
+                "Authorization": f"Bearer {self.resend_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "from": self.resend_from_email,
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content,
+                "text": text_content
+            }
+            
+            # Add attachments if provided
+            if attachments:
+                payload["attachments"] = attachments
+            
+            # Run HTTP request in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                self.executor,
+                lambda: requests.post(self.resend_api_url, headers=headers, json=payload, timeout=30)
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"✅ Email sent via Resend to {to_email} (ID: {result.get('id', 'N/A')})")
+                return True
+            else:
+                error_msg = response.text
+                print(f"❌ Resend API Error ({response.status_code}): {error_msg}")
+                return False
+                
+        except requests.exceptions.Timeout:
+            print(f"❌ Resend API Timeout - Request took longer than 30s")
+            return False
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Resend API Request Error: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Unexpected Resend API Error: {type(e).__name__}: {e}")
+            if self.debug:
+                import traceback
+                traceback.print_exc()
+            return False
 
     def _resize_image(self, image_data: bytes, max_width: int = 300, max_height: int = 100) -> bytes:
         """Resize image if too large. Returns resized image bytes or original if resize fails."""
@@ -936,10 +1008,6 @@ class EmailService:
     async def send_password_reset_email(self, user_email: str, user_name: str | None, reset_link: str) -> bool:
         """Send password reset instructions to a user"""
         try:
-            if not self.smtp_username or not self.smtp_password:
-                print("Email credentials not configured, skipping password reset email")
-                return False
-
             expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
             subject = "Hướng dẫn đặt lại mật khẩu tài khoản Phúc Đạt"
 
@@ -978,6 +1046,21 @@ Vui lòng nhấn vào nút "Đặt lại mật khẩu" trong email HTML. Liên k
 
 Nếu bạn không yêu cầu, hãy bỏ qua email này.
 """
+
+            # Use Resend API if configured, otherwise fall back to SMTP
+            if self.email_provider == "resend":
+                return await self._send_via_resend(
+                    to_email=user_email,
+                    subject=subject,
+                    html_content=html_body,
+                    text_content=text_body
+                )
+            
+            # SMTP fallback
+            if not self.smtp_username or not self.smtp_password:
+                print("❌ Email credentials not configured")
+                print(f"   Please set EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                return False
 
             msg = MIMEMultipart('related')
             msg['Subject'] = subject
@@ -1032,10 +1115,6 @@ Nếu bạn không yêu cầu, hãy bỏ qua email này.
     async def send_password_change_confirmation(self, user_email: str, user_name: str | None, via: str = "manual") -> bool:
         """Notify user that their password has been changed"""
         try:
-            if not self.smtp_username or not self.smtp_password:
-                print("Email credentials not configured, skipping password change confirmation email")
-                return False
-
             subject = "Mật khẩu của bạn đã được cập nhật"
             greeting_name = user_name or "bạn"
             via_text = "bởi chính bạn" if via == "manual" else "thông qua liên kết đặt lại mật khẩu"
@@ -1070,6 +1149,21 @@ Nếu bạn không yêu cầu, hãy bỏ qua email này.
 Mật khẩu cho tài khoản của bạn vừa được cập nhật {via_text}.
 Nếu bạn không thực hiện thay đổi này, hãy đặt lại mật khẩu ngay và liên hệ quản trị viên.
 """
+
+            # Use Resend API if configured, otherwise fall back to SMTP
+            if self.email_provider == "resend":
+                return await self._send_via_resend(
+                    to_email=user_email,
+                    subject=subject,
+                    html_content=html_body,
+                    text_content=text_body
+                )
+            
+            # SMTP fallback
+            if not self.smtp_username or not self.smtp_password:
+                print("❌ Email credentials not configured")
+                print(f"   Please set EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                return False
 
             msg = MIMEMultipart('related')
             msg['Subject'] = subject
