@@ -72,19 +72,39 @@ async def _handle_password_reset_request(email: str):
         
         user = user_result.data[0]
         token = create_password_reset_token(user["id"], user["email"])
+        
+        # Get frontend URL with validation
         frontend_base = settings.FRONTEND_BASE_URL.rstrip("/")
+        if not frontend_base or frontend_base == "http://localhost:3000":
+            # Log warning if using default localhost URL in production
+            if settings.ENVIRONMENT == "production":
+                print(f"⚠️ WARNING: FRONTEND_URL is not set or using default localhost. Current value: {frontend_base}")
+        
         reset_link = f"{frontend_base}/reset-password?token={token}"
+        print(f"📧 Password reset link generated: {reset_link[:50]}... (truncated for security)")
         
-        email_sent = await email_service.send_password_reset_email(
-            user_email=user["email"],
-            user_name=user.get("full_name"),
-            reset_link=reset_link
-        )
-        
-        if not email_sent:
+        try:
+            email_sent = await email_service.send_password_reset_email(
+                user_email=user["email"],
+                user_name=user.get("full_name"),
+                reset_link=reset_link
+            )
+            
+            if not email_sent:
+                print(f"❌ Failed to send password reset email to {user['email']}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Không thể gửi email đặt lại mật khẩu. Vui lòng kiểm tra cấu hình email hoặc thử lại sau."
+                )
+            
+            print(f"✅ Password reset email sent successfully to {user['email']}")
+        except Exception as email_error:
+            print(f"❌ Error sending password reset email: {str(email_error)}")
+            import traceback
+            traceback.print_exc()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau."
+                detail=f"Không thể gửi email đặt lại mật khẩu: {str(email_error)}"
             )
         
         return {"message": success_message}

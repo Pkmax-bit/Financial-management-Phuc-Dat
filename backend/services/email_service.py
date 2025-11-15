@@ -102,9 +102,25 @@ class EmailService:
                 "text": text_content
             }
             
-            # Add attachments if provided
+            # Add attachments if provided - Resend expects format: [{"filename": "name", "content": "base64_string"}]
             if attachments:
-                payload["attachments"] = attachments
+                resend_attachments = []
+                for att in attachments:
+                    if isinstance(att, dict):
+                        filename = att.get('name') or att.get('filename', 'attachment')
+                        content = att.get('content', '')
+                        # If content is already base64 string, use it directly
+                        # Otherwise, assume it's bytes and encode it
+                        if isinstance(content, bytes):
+                            content = base64.b64encode(content).decode('utf-8')
+                        elif not content:
+                            continue
+                        resend_attachments.append({
+                            "filename": filename,
+                            "content": content
+                        })
+                if resend_attachments:
+                    payload["attachments"] = resend_attachments
             
             # Run HTTP request in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
@@ -598,9 +614,16 @@ class EmailService:
     async def send_quote_email(self, quote_data: Dict[str, Any], customer_email: str, customer_name: str, quote_items: list = None, custom_payment_terms: list = None, additional_notes: str = None, prepared_html: str | None = None, company_info: Dict[str, Any] = None, bank_info: Dict[str, Any] = None, default_notes: list = None, attachments: list = None) -> bool:
         """Send quote email to customer"""
         try:
-            if not self.smtp_username or not self.smtp_password:
-                print("Email credentials not configured, skipping email send")
-                return False
+            # Check credentials based on email provider
+            if self.email_provider == "resend":
+                if not self.resend_api_key:
+                    print("❌ RESEND_API_KEY not set. Please set it in environment variables.")
+                    return False
+            else:
+                if not self.smtp_username or not self.smtp_password:
+                    print("❌ Email credentials not configured, skipping email send")
+                    print(f"   Please set EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                    return False
                 
             # Resolve employee in charge from created_by -> employees -> users
             employee_name = quote_data.get('employee_in_charge_name')
@@ -772,6 +795,84 @@ class EmailService:
             Trân trọng,
             Đội ngũ bán hàng
             """
+            
+            # Use Resend API if configured, otherwise fall back to SMTP
+            if self.email_provider == "resend":
+                # For Resend, we need to handle logo differently - convert CID to base64 data URI
+                resend_html = html_body
+                
+                # Replace CID logo with base64 data URI if needed
+                if 'cid:company_logo' in resend_html:
+                    logo_base64 = None
+                    # Try to get logo from company_info first
+                    if company_info and company_info.get("company_logo_base64"):
+                        logo_base64 = company_info.get("company_logo_base64")
+                        if ',' in logo_base64:
+                            logo_base64 = logo_base64.split(',', 1)[1]
+                    else:
+                        # Try to get default logo from file
+                        try:
+                            if os.path.exists(self.logo_path):
+                                with open(self.logo_path, 'rb') as f:
+                                    img_data = f.read()
+                                    img_data = self._resize_image(img_data, max_width=300, max_height=100)
+                                    logo_base64 = base64.b64encode(img_data).decode('utf-8')
+                        except Exception as e:
+                            print(f"⚠️ Failed to load default logo for Resend: {e}")
+                    
+                    if logo_base64:
+                        # Replace CID with base64 data URI
+                        data_uri = f"data:image/jpeg;base64,{logo_base64}"
+                        resend_html = resend_html.replace('cid:company_logo', data_uri)
+                        print(f"📷 Replaced CID logo with base64 data URI for Resend")
+                
+                # Prepare attachments for Resend
+                resend_attachments = []
+                
+                # Add file attachments
+                if attachments and isinstance(attachments, list):
+                    for attachment in attachments:
+                        try:
+                            file_name = attachment.get('name', 'attachment')
+                            file_content = attachment.get('content', '')
+                            
+                            if file_content:
+                                # Content is already base64 string
+                                resend_attachments.append({
+                                    "name": file_name,
+                                    "content": file_content
+                                })
+                                print(f"✅ Prepared attachment for Resend: {file_name}")
+                        except Exception as e:
+                            print(f"⚠️ Failed to prepare attachment {attachment.get('name', 'unknown')} for Resend: {e}")
+                
+                # Try to add PDF version if available
+                try:
+                    pdf_bytes = self._html_to_pdf_bytes(html_body)
+                    if pdf_bytes:
+                        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+                        resend_attachments.append({
+                            "name": f"Bao-gia-{quote_data.get('quote_number','')}.pdf",
+                            "content": pdf_base64
+                        })
+                        print(f"✅ Prepared PDF attachment for Resend")
+                except Exception:
+                    pass
+                
+                # Send via Resend
+                return await self._send_via_resend(
+                    to_email=customer_email,
+                    subject=subject,
+                    html_content=resend_html,
+                    text_content=text_body,
+                    attachments=resend_attachments if resend_attachments else None
+                )
+            
+            # SMTP fallback - check credentials
+            if not self.smtp_username or not self.smtp_password:
+                print("❌ Email credentials not configured")
+                print(f"   Please set EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                return False
             
             # Handle logo in HTML - ensure it uses CID for email attachment
             # Replace any base64 logo or URL logo with CID reference
