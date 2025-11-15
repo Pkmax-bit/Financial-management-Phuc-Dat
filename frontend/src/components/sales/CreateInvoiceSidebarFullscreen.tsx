@@ -353,15 +353,23 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.start()
   }, [isOpen])
 
-  // Fetch projects when customer changes
+  // Fetch projects when customer changes (but only if not loading invoice data)
   useEffect(() => {
+    // Skip if we're currently loading invoice data to avoid interfering
+    if (loading && invoiceId) {
+      return
+    }
+    
     if (formData.customer_id) {
       fetchProjectsByCustomer(formData.customer_id)
     } else {
       setProjects([])
-      setFormData(prev => ({ ...prev, project_id: '' }))
+      // Only reset project_id if we're not loading invoice data
+      if (!invoiceId || !loading) {
+        setFormData(prev => ({ ...prev, project_id: '' }))
+      }
     }
-  }, [formData.customer_id])
+  }, [formData.customer_id, loading, invoiceId])
 
   // Auto-start tour when form opens for the first time
   useEffect(() => {
@@ -640,7 +648,95 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       
       console.log('✅ Invoice loaded:', invoice)
       
-      // Fill form data
+      // Load invoice items FIRST before setting formData to avoid race conditions
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .order('created_at', { ascending: true })
+      
+      console.log('🔍 Invoice items query result:', { invoiceItems, itemsError, count: invoiceItems?.length || 0 })
+      
+      if (itemsError) {
+        console.error('❌ Error loading invoice items:', itemsError)
+        alert('Không thể tải danh sách sản phẩm: ' + itemsError.message)
+      } else {
+        console.log('✅ Invoice items loaded successfully:', invoiceItems?.length || 0, 'items')
+        
+        if (invoiceItems && invoiceItems.length > 0) {
+          console.log('🔍 Raw invoice items data:', invoiceItems)
+          
+          const loadedItems: InvoiceItem[] = invoiceItems.map((item: any) => {
+            console.log('🔍 Mapping invoice item:', {
+              id: item.id,
+              name_product: item.name_product,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              product_service_id: item.product_service_id
+            })
+            
+            return {
+              id: item.id,
+              invoice_id: item.invoice_id,
+              product_service_id: item.product_service_id || null,
+              name_product: item.name_product || '',
+              description: item.description || '',
+              quantity: Number(item.quantity) || 1,
+              unit: item.unit || '',
+              unit_price: Number(item.unit_price) || 0,
+              total_price: Number(item.total_price) || 0,
+              area: item.area != null ? Number(item.area) : null,
+              volume: item.volume != null ? Number(item.volume) : null,
+              height: item.height != null ? Number(item.height) : null,
+              length: item.length != null ? Number(item.length) : null,
+              depth: item.depth != null ? Number(item.depth) : null,
+              // Load components from product_components JSONB column if exists
+              components: Array.isArray(item.product_components) && item.product_components.length > 0
+                ? item.product_components.map((comp: any) => ({
+                    expense_object_id: comp.expense_object_id,
+                    name: comp.name,
+                    unit: comp.unit || '',
+                    unit_price: Number(comp.unit_price || 0),
+                    quantity: Number(comp.quantity || 0),
+                    total_price: Number(comp.total_price || 0)
+                  }))
+                : []
+            }
+          })
+          
+          console.log('🔍 Mapped invoice items:', loadedItems)
+          console.log('🔍 Setting items with', loadedItems.length, 'items')
+          
+          // Set items immediately after mapping
+          setItems(loadedItems)
+          
+          // Verify items were set
+          setTimeout(() => {
+            console.log('🔍 Items state after setItems:', loadedItems.length)
+          }, 100)
+        } else {
+          console.log('⚠️ No invoice items found, setting empty item')
+          // No items, start with empty item
+          setItems([{ 
+            name_product: '', 
+            description: '', 
+            quantity: 1, 
+            unit: '', 
+            unit_price: 0, 
+            total_price: 0,
+            area: null,
+            volume: null,
+            height: null,
+            length: null,
+            depth: null
+          }])
+        }
+      }
+      
+      // Fill form data AFTER loading items to avoid race conditions
+      // Use setTimeout to ensure items are set before formData triggers other useEffects
+      await new Promise(resolve => setTimeout(resolve, 50))
+      
       setFormData({
         invoice_number: invoice.invoice_number || '',
         customer_id: invoice.customer_id || '',
@@ -662,62 +758,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         created_by: invoice.created_by || ''
       })
       
-      // Load invoice items
-      const { data: invoiceItems, error: itemsError } = await supabase
-        .from('invoice_items')
-        .select('*')
-        .eq('invoice_id', invoiceId)
-        .order('created_at', { ascending: true })
-      
-      if (itemsError) {
-        console.error('❌ Error loading invoice items:', itemsError)
-      } else {
-        console.log('✅ Invoice items loaded:', invoiceItems?.length || 0)
-        
-        if (invoiceItems && invoiceItems.length > 0) {
-          const loadedItems: InvoiceItem[] = invoiceItems.map((item: any) => ({
-            id: item.id,
-            invoice_id: item.invoice_id,
-            product_service_id: item.product_service_id,
-            name_product: item.name_product || '',
-            description: item.description || '',
-            quantity: item.quantity || 1,
-            unit: item.unit || '',
-            unit_price: item.unit_price || 0,
-            total_price: item.total_price || 0,
-            area: item.area,
-            volume: item.volume,
-            height: item.height,
-            length: item.length,
-            depth: item.depth,
-            // Load components from product_components JSONB column if exists
-            components: Array.isArray(item.product_components) ? item.product_components.map((comp: any) => ({
-              expense_object_id: comp.expense_object_id,
-              name: comp.name,
-              unit: comp.unit || '',
-              unit_price: comp.unit_price || 0,
-              quantity: comp.quantity || 0,
-              total_price: comp.total_price || 0
-            })) : []
-          }))
-          
-          setItems(loadedItems)
-        } else {
-          // No items, start with empty item
-          setItems([{ 
-            name_product: '', 
-            description: '', 
-            quantity: 1, 
-            unit: '', 
-            unit_price: 0, 
-            total_price: 0,
-            area: null,
-            volume: null,
-            height: null,
-            length: null,
-            depth: null
-          }])
-        }
+      // Double-check items are still set after formData update
+      if (invoiceItems && invoiceItems.length > 0) {
+        setTimeout(() => {
+          console.log('🔍 Final check - items should be set:', invoiceItems.length)
+        }, 200)
       }
       
       // Load projects for the customer

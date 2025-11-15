@@ -489,30 +489,80 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       const convertedItems = []
       
       if (quote.quote_items && Array.isArray(quote.quote_items)) {
+        // Get all unique product_service_ids from quote items to validate them
+        const productServiceIds = quote.quote_items
+          .map((item: any) => item.product_service_id)
+          .filter((id: any) => id != null)
+        
+        // Validate product_service_ids exist in products_services table
+        // Note: invoice_items.product_service_id references products_services(id), not products(id)
+        let validProductIds = new Set<string>()
+        if (productServiceIds.length > 0) {
+          try {
+            // Validate against products_services table (as per foreign key constraint)
+            const { data: validProductsServices, error: productsServicesError } = await supabase
+              .from('products_services')
+              .select('id')
+              .in('id', productServiceIds)
+            
+            if (!productsServicesError && validProductsServices) {
+              validProductIds = new Set(validProductsServices.map((p: any) => p.id))
+              console.log(`✅ Validated ${validProductIds.size} out of ${productServiceIds.length} product_service_ids`)
+            } else {
+              console.warn('⚠️ Error validating product_service_ids in products_services:', productsServicesError)
+              // If validation fails, all IDs will be set to null to avoid foreign key error
+            }
+          } catch (error) {
+            console.warn('⚠️ Error validating product_service_ids:', error)
+            // Continue anyway, will set to null if invalid
+          }
+        }
+        
         for (const item of quote.quote_items) {
           // Get product_components from quote_item (copy to invoice_item, not invoice)
           const productComponents = item.product_components && Array.isArray(item.product_components) 
             ? item.product_components 
             : []
           
+          // Format product_components as JSONB array (same format as CreateInvoiceSidebarFullscreen)
+          const formattedComponents = productComponents.length > 0
+            ? productComponents.map((comp: any) => ({
+                expense_object_id: comp.expense_object_id || null,
+                name: comp.name || null,
+                unit: comp.unit || '',
+                unit_price: Number(comp.unit_price || 0),
+                quantity: Number(comp.quantity || 0),
+                total_price: Number(comp.total_price || 0)
+              }))
+            : []
+          
+          // Validate product_service_id - only use if it exists in products table
+          let productServiceId = null
+          if (item.product_service_id) {
+            if (validProductIds.has(item.product_service_id)) {
+              productServiceId = item.product_service_id
+            } else {
+              console.warn(`⚠️ Invalid product_service_id ${item.product_service_id} for item "${item.name_product}", setting to null`)
+            }
+          }
+          
           const invoiceItem = {
-            id: crypto.randomUUID(),
+            // Don't include id - let database generate it
             invoice_id: '', // Will be set after invoice creation
-            product_service_id: item.product_service_id,
+            product_service_id: productServiceId, // Only set if valid, otherwise null
+            name_product: item.name_product || '',
             description: item.description || '',
-            quantity: item.quantity || 0,
-            unit_price: item.unit_price || 0,
-            total_price: item.total_price || 0,
-            name_product: item.name_product,
-            unit: item.unit,
-            discount_rate: item.discount_rate || 0.0,
-            area: item.area,
-            volume: item.volume,
-            height: item.height,
-            length: item.length,
-            depth: item.depth,
-            product_components: productComponents, // Copy product_components to invoice_item
-            created_at: new Date().toISOString()
+            quantity: Number(item.quantity || 0),
+            unit: item.unit || '',
+            unit_price: Number(item.unit_price || 0),
+            total_price: Number(item.total_price || 0),
+            area: item.area != null ? Number(item.area) : null,
+            volume: item.volume != null ? Number(item.volume) : null,
+            height: item.height != null ? Number(item.height) : null,
+            length: item.length != null ? Number(item.length) : null,
+            depth: item.depth != null ? Number(item.depth) : null,
+            product_components: formattedComponents // JSONB array format
+            // Don't include created_at - let database use DEFAULT NOW()
           }
           convertedItems.push(invoiceItem)
         }
@@ -563,17 +613,34 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           invoice_id: newInvoice.id
         }))
         
+        console.log('🔍 Creating invoice items with data:', {
+          count: invoiceItemsData.length,
+          sample: invoiceItemsData[0],
+          allData: invoiceItemsData
+        })
+        
         const { data: invoiceItems, error: invoiceItemsError } = await supabase
           .from('invoice_items')
           .insert(invoiceItemsData)
           .select()
         
         if (invoiceItemsError) {
-          console.error('❌ Error creating invoice items:', invoiceItemsError)
+          console.error('❌ Error creating invoice items:', {
+            error: invoiceItemsError,
+            message: invoiceItemsError.message,
+            details: invoiceItemsError.details,
+            hint: invoiceItemsError.hint,
+            code: invoiceItemsError.code,
+            data: invoiceItemsData
+          })
           // Don't throw error here as invoice was created successfully
+          // But show a warning to user
+          alert(`⚠️ Hóa đơn đã được tạo nhưng có lỗi khi thêm sản phẩm: ${invoiceItemsError.message || 'Lỗi không xác định'}`)
         } else {
-          console.log('🔍 Invoice items created successfully:', invoiceItems)
+          console.log('✅ Invoice items created successfully:', invoiceItems)
         }
+      } else {
+        console.log('⚠️ No items to convert to invoice items')
       }
       
       // Update quote status to 'closed' (following backend logic)
