@@ -874,16 +874,27 @@ class EmailService:
             
             # Use n8n webhook if configured
             if self.email_provider == "n8n":
-                # For n8n, prepare HTML with logo handling
+                # For n8n, keep HTML with CID reference and send logo as inline attachment
                 n8n_html = html_body
                 
-                # Replace CID logo with base64 data URI if needed
+                # Prepare attachments for n8n
+                n8n_attachments = []
+                
+                # Add logo as inline attachment (CID) if HTML references it
                 if 'cid:company_logo' in n8n_html:
                     logo_base64 = None
+                    logo_mime_type = "image/jpeg"
+                    
                     # Try to get logo from company_info first
                     if company_info and company_info.get("company_logo_base64"):
                         logo_base64 = company_info.get("company_logo_base64")
                         if ',' in logo_base64:
+                            # Extract mime type from data URI
+                            mime_part = logo_base64.split(',', 1)[0]
+                            if 'image/png' in mime_part:
+                                logo_mime_type = "image/png"
+                            elif 'image/jpeg' in mime_part or 'image/jpg' in mime_part:
+                                logo_mime_type = "image/jpeg"
                             logo_base64 = logo_base64.split(',', 1)[1]
                     else:
                         # Try to get default logo from file
@@ -893,17 +904,22 @@ class EmailService:
                                     img_data = f.read()
                                     img_data = self._resize_image(img_data, max_width=300, max_height=100)
                                     logo_base64 = base64.b64encode(img_data).decode('utf-8')
+                                    # Detect mime type from file extension
+                                    if self.logo_path.lower().endswith('.png'):
+                                        logo_mime_type = "image/png"
                         except Exception as e:
                             print(f"⚠️ Failed to load default logo for n8n: {e}")
                     
                     if logo_base64:
-                        # Replace CID with base64 data URI
-                        data_uri = f"data:image/jpeg;base64,{logo_base64}"
-                        n8n_html = n8n_html.replace('cid:company_logo', data_uri)
-                        print(f"📷 Replaced CID logo with base64 data URI for n8n")
-                
-                # Prepare attachments for n8n
-                n8n_attachments = []
+                        # Add logo as inline attachment with CID
+                        n8n_attachments.append({
+                            "name": "company_logo.jpg",
+                            "content": logo_base64,
+                            "mimeType": logo_mime_type,
+                            "cid": "company_logo",  # Content-ID for inline attachment
+                            "inline": True  # Mark as inline attachment
+                        })
+                        print(f"📷 Added logo as inline attachment (CID: company_logo) for n8n")
                 
                 # Add file attachments
                 if attachments and isinstance(attachments, list):
@@ -1218,10 +1234,6 @@ class EmailService:
     async def send_notification_email(self, employee_email: str, title: str, message: str, action_url: str | None = None) -> bool:
         """Send a simple notification email to an employee"""
         try:
-            if not self.smtp_username or not self.smtp_password:
-                print("Email credentials not configured, skipping notification email send")
-                return False
-
             subject = title or "Thông báo"
             html_body = f"""
             <html>
@@ -1244,6 +1256,36 @@ class EmailService:
 
             text_body = f"{title or 'Thông báo'}\n\n{message or ''}\n\n{('Xem chi tiết: ' + action_url) if action_url else ''}"
 
+            # Use n8n webhook if configured
+            if self.email_provider == "n8n":
+                return await self._send_via_n8n(
+                    to_email=employee_email,
+                    subject=subject,
+                    html_content=html_body,
+                    text_content=text_body,
+                    email_type="notification",
+                    metadata={
+                        "title": title,
+                        "message": message,
+                        "action_url": action_url
+                    }
+                )
+            
+            # Use Resend API if configured
+            if self.email_provider == "resend":
+                return await self._send_via_resend(
+                    to_email=employee_email,
+                    subject=subject,
+                    html_content=html_body,
+                    text_content=text_body
+                )
+            
+            # SMTP fallback
+            if not self.smtp_username or not self.smtp_password:
+                print("❌ Email credentials not configured")
+                print(f"   Please set EMAIL_PROVIDER=n8n and N8N_WEBHOOK_URL, or EMAIL_PROVIDER=resend and RESEND_API_KEY, or configure SMTP credentials")
+                return False
+
             # Root related (for inline images)
             msg = MIMEMultipart('related')
             msg['Subject'] = subject
@@ -1256,15 +1298,24 @@ class EmailService:
             msg.attach(alt)
             self._attach_company_logo(msg)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
-
-            print(f"Notification email sent successfully to {employee_email}")
-            return True
+            # Run SMTP send in thread pool to avoid blocking async event loop
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(
+                self.executor,
+                self._send_smtp_sync,
+                msg,
+                employee_email
+            )
+            
+            if success:
+                print(f"✅ Notification email sent successfully to {employee_email}")
+                return True
+            return False
         except Exception as e:
-            print(f"Failed to send notification email: {e}")
+            print(f"❌ Failed to send notification email: {e}")
+            import traceback
+            if self.debug:
+                traceback.print_exc()
             return False
 
     async def send_password_reset_email(self, user_email: str, user_name: str | None, reset_link: str) -> bool:

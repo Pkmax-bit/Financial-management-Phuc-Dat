@@ -2,6 +2,8 @@
 
 Tài liệu này hướng dẫn cách tích hợp n8n với hệ thống để gửi email quên mật khẩu và email báo giá.
 
+> 📘 **Hướng dẫn từng bước chi tiết:** Xem [HUONG_DAN_SETUP_EMAIL_UNIFIED.md](./HUONG_DAN_SETUP_EMAIL_UNIFIED.md) để có hướng dẫn setup từng bước cho `email_unified_blueprint.json`
+
 ## Tổng quan
 
 Hệ thống đã được tích hợp với n8n để gửi email thông qua webhook. Khi bạn cấu hình `EMAIL_PROVIDER=n8n`, hệ thống sẽ gửi yêu cầu email đến n8n webhook thay vì gửi trực tiếp qua SMTP hoặc Resend.

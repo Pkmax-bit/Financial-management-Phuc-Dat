@@ -46,5 +46,8 @@ EMAIL_DEBUG=1
 
 ## ✅ Xong!
 
-Email sẽ được gửi qua n8n. Xem chi tiết trong `HUONG_DAN_KET_HOP_N8N_VAO_WEB.md`
+Email sẽ được gửi qua n8n. 
+
+📘 **Xem hướng dẫn chi tiết từng bước:** [HUONG_DAN_SETUP_EMAIL_UNIFIED.md](./HUONG_DAN_SETUP_EMAIL_UNIFIED.md)
+
 

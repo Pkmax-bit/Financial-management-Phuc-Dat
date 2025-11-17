@@ -1,0 +1,368 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "30e6046d-4568-4058-b7ee-bca2ada9ee5d",
+      "name": "Webhook - Unified",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [624, 592],
+      "webhookId": "unified-email-webhook"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.email_type }}",
+                    "rightValue": "password_reset",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "964f516c-826e-4ad8-8dd1-f209b782a9ab"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "27f8c4ca-c804-4128-8fc9-0c7b9881e802",
+                    "leftValue": "={{ $json.email_type }}",
+                    "rightValue": "quote",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "2e089718-1e19-433e-abe6-4308d648e178",
+                    "leftValue": "={{ $json.email_type }}",
+                    "rightValue": "password_change_confirmation",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d548a69e-f4ac-405e-a270-e6260ae4f82a",
+      "name": "Switch - Phân loại Email",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1024, 576]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.email_type === 'quote' ? 'sales@phucdat.com' : 'phannguyendangkhoa0915@gmail.com' }}",
+        "toEmail": "={{ $json.to_email || $json.body?.to_email || '' }}",
+        "subject": "={{ $json.subject || $json.body?.subject || '' }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html_content || $json.body?.html_content || '' }}",
+        "options": {
+          "attachments": "={{ $json.processedAttachments || [] }}"
+        }
+      },
+      "id": "cca502b4-63c3-48c4-98fc-09833ce48776",
+      "name": "Gửi Email Báo Giá",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1408, 592],
+      "webhookId": "453fdc8c-4adc-47c5-b9ae-4ffca85c46cf",
+      "credentials": {
+        "smtp": {
+          "id": "5NbVMic3vZ0KRiet",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "phannguyendangkhoa@gmail.com",
+        "toEmail": "={{ $json.to_email || $json.body?.to_email || '' }}",
+        "subject": "={{ $json.subject || $json.body?.subject || '' }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html_content || $json.body?.html_content || '' }}",
+        "options": {
+          "attachments": "={{ $json.processedAttachments || [] }}"
+        }
+      },
+      "id": "505408af-14f8-4ac3-b07b-78a91124a46e",
+      "name": "Gửi Email Password",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1408, 400],
+      "webhookId": "264f4fed-e991-4de7-ba3a-0b567add3f64",
+      "credentials": {
+        "smtp": {
+          "id": "5NbVMic3vZ0KRiet",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "phannguyendangkhoa0915@gmail.com",
+        "toEmail": "={{ $json.to_email || $json.body?.to_email || '' }}",
+        "subject": "={{ $json.subject || $json.body?.subject || '' }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html_content || $json.body?.html_content || '' }}",
+        "options": {}
+      },
+      "id": "5796fd3a-b702-4279-8370-a6a3b4514598",
+      "name": "Gửi Email Xác Nhận",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1408, 768],
+      "webhookId": "3f8d6431-bd3b-4e66-9797-1f162f86d445",
+      "credentials": {
+        "smtp": {
+          "id": "5NbVMic3vZ0KRiet",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "cdd28cd6-09e6-4eca-b362-9a26e367db7f",
+      "name": "Set - Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1616, 560]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "to_email",
+              "name": "to_email",
+              "value": "={{ $json.body.to_email }}",
+              "type": "string"
+            },
+            {
+              "id": "subject",
+              "name": "subject",
+              "value": "={{ $json.body.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "html_content",
+              "name": "html_content",
+              "value": "={{ $json.body.html_content }}",
+              "type": "string"
+            },
+            {
+              "id": "text_content",
+              "name": "text_content",
+              "value": "={{ $json.body.text_content }}",
+              "type": "string"
+            },
+            {
+              "id": "email_type",
+              "name": "email_type",
+              "value": "={{ $json.body.email_type }}",
+              "type": "string"
+            },
+            {
+              "id": "metadata",
+              "name": "metadata",
+              "value": "={{ $json.body.metadata }}",
+              "type": "object"
+            },
+            {
+              "id": "attachments",
+              "name": "attachments",
+              "value": "={{ $json.body.attachments || [] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "71687480-23d4-4750-a9f2-256471d9c919",
+      "name": "Set - Lấy dữ liệu2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [816, 592]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "849da9a7-ffdd-46ef-bb9d-ae442973f8b8",
+      "name": "Respond to Webhook2",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1808, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Xử lý attachments từ base64 (bao gồm inline attachments với CID)\n// Format cho n8n Email Send node (nodemailer)\n// Nếu CID không hoạt động, sẽ embed base64 vào HTML\nconst inputData = $input.item.json;\n\n// Debug: Log toàn bộ inputData để xem cấu trúc\nconsole.log('🔍 Input data keys:', Object.keys(inputData));\nconsole.log('🔍 Input data structure:', JSON.stringify(inputData, null, 2).substring(0, 500));\n\n// Tìm attachments ở nhiều nơi\nlet htmlContent = inputData.html_content || inputData.body?.html_content || '';\n\n// Loại bỏ \\n ở đầu HTML nếu có\nif (htmlContent && htmlContent.startsWith('\\n')) {\n  htmlContent = htmlContent.substring(1).trim();\n  console.log('🧹 Removed leading \\n from HTML');\n}\n\nlet attachments = inputData.attachments || inputData.body?.attachments || [];\n\n// Nếu không tìm thấy, thử tìm từ các vị trí khác\nif (!attachments || attachments.length === 0) {\n  console.log('⚠️ Attachments not found in default locations, trying alternatives...');\n  // Thử tìm từ body trực tiếp\n  if (inputData.body && Array.isArray(inputData.body.attachments)) {\n    attachments = inputData.body.attachments;\n    console.log('✅ Found attachments in inputData.body.attachments');\n  }\n  // Thử tìm từ root level\n  else if (Array.isArray(inputData.attachments)) {\n    attachments = inputData.attachments;\n    console.log('✅ Found attachments in inputData.attachments');\n  }\n}\n\nconst processedAttachments = [];\n\nconsole.log('📎 Total attachments to process:', attachments.length);\n\n// Kiểm tra nếu không có attachments\nif (!attachments || attachments.length === 0) {\n  console.log('ℹ️ No attachments to process');\n  return {\n    ...inputData,\n    processedAttachments: []\n  };\n}\n\nfor (const att of attachments) {\n  try {\n    // Kiểm tra content có tồn tại không\n    if (!att.content) {\n      console.warn(`⚠️ Attachment ${att.name || 'unknown'} has no content, skipping`);\n      continue;\n    }\n    \n    // Nếu là inline attachment với CID, có 2 cách:\n    // 1. Gửi như inline attachment (ưu tiên)\n    // 2. Embed base64 vào HTML (fallback nếu CID không hoạt động)\n    if (att.inline && att.cid) {\n      // Thử decode base64 để kiểm tra\n      let buffer;\n      try {\n        buffer = Buffer.from(att.content, 'base64');\n      } catch (decodeError) {\n        console.error(`❌ Failed to decode base64 for ${att.name || 'unknown'}:`, decodeError.message);\n        continue;\n      }\n      \n      if (!buffer || buffer.length === 0) {\n        console.warn(`⚠️ Attachment ${att.name || 'unknown'} has empty buffer, skipping`);\n        continue;\n      }\n      \n      // Tạo data URI để embed vào HTML (fallback)\n      const dataUri = `data:${att.mimeType || 'image/jpeg'};base64,${att.content}`;\n      \n      // Replace CID trong HTML với data URI (đảm bảo logo hiển thị)\n      // Giữ cả hai: gửi attachment VÀ embed vào HTML\n      const cidPattern = new RegExp(`cid:${att.cid.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}`, 'gi');\n      if (cidPattern.test(htmlContent)) {\n        const beforeReplace = htmlContent.substring(0, 200);\n        htmlContent = htmlContent.replace(cidPattern, dataUri);\n        const afterReplace = htmlContent.substring(0, 200);\n        console.log(`📷 Replaced CID ${att.cid} with base64 data URI in HTML`);\n        console.log(`   Before: ${beforeReplace}...`);\n        console.log(`   After: ${afterReplace}...`);\n        console.log(`   Data URI length: ${dataUri.length} chars`);\n      } else {\n        console.warn(`⚠️ CID ${att.cid} not found in HTML content`);\n        console.log(`   HTML preview: ${htmlContent.substring(0, 300)}...`);\n      }\n      \n      // Vẫn thêm vào attachments để thử gửi như inline attachment\n      const attachmentObj = {\n        filename: att.name || 'attachment',\n        content: buffer,\n        contentType: att.mimeType || 'application/octet-stream',\n        cid: att.cid // Thử với CID\n      };\n      \n      processedAttachments.push(attachmentObj);\n      console.log(`📷 Added inline attachment with CID: ${att.cid} (${att.name || 'unknown'})`);\n    } else {\n      // Regular attachment\n      let buffer;\n      try {\n        buffer = Buffer.from(att.content, 'base64');\n      } catch (decodeError) {\n        console.error(`❌ Failed to decode base64 for ${att.name || 'unknown'}:`, decodeError.message);\n        continue;\n      }\n      \n      if (!buffer || buffer.length === 0) {\n        console.warn(`⚠️ Attachment ${att.name || 'unknown'} has empty buffer, skipping`);\n        continue;\n      }\n      \n      const attachmentObj = {\n        filename: att.name || 'attachment',\n        content: buffer,\n        contentType: att.mimeType || 'application/octet-stream'\n      };\n      \n      processedAttachments.push(attachmentObj);\n      console.log(`📎 Added regular attachment: ${att.name || 'unknown'}`);\n    }\n  } catch (error) {\n    console.error(`❌ Error processing attachment ${att.name || 'unknown'}:`, error.message);\n  }\n}\n\nconsole.log(`✅ Processed ${processedAttachments.length} out of ${attachments.length} attachments`);\n\n// Log để debug\nif (processedAttachments.length > 0) {\n  processedAttachments.forEach((att, idx) => {\n    console.log(`  [${idx}] ${att.filename} - CID: ${att.cid || 'none'} - Size: ${att.content.length} bytes`);\n  });\n}\n\nreturn {\n  ...inputData,\n  html_content: htmlContent, // HTML đã được update với data URI\n  processedAttachments: processedAttachments\n};"
+      },
+      "id": "277f3e44-8d9e-4446-a79c-430e17c624ed",
+      "name": "Function - Xử lý Attachments1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1216, 592]
+    }
+  ],
+  "connections": {
+    "Webhook - Unified": {
+      "main": [
+        [
+          {
+            "node": "Set - Lấy dữ liệu2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Phân loại Email": {
+      "main": [
+        [
+          {
+            "node": "Gửi Email Password",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Function - Xử lý Attachments1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gửi Email Xác Nhận",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi Email Báo Giá": {
+      "main": [
+        [
+          {
+            "node": "Set - Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi Email Password": {
+      "main": [
+        [
+          {
+            "node": "Set - Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi Email Xác Nhận": {
+      "main": [
+        [
+          {
+            "node": "Set - Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Lấy dữ liệu2": {
+      "main": [
+        [
+          {
+            "node": "Switch - Phân loại Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function - Xử lý Attachments1": {
+      "main": [
+        [
+          {
+            "node": "Gửi Email Báo Giá",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c19a7a9fe30b7e4df4196d58dbbc0a99250b06070697134f9a4372f4a2d74fc9"
+  }
+}
+

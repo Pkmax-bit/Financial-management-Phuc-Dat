@@ -52,8 +52,14 @@ export default function NotificationsPage() {
   const [notifTitle, setNotifTitle] = useState('')
   const [notifMessage, setNotifMessage] = useState('')
   const [sendEmail, setSendEmail] = useState(false)
+  const [sendEmailViaN8n, setSendEmailViaN8n] = useState(false)
   const [user, setUser] = useState<unknown>(null)
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('')
+  // Email modal states
+  const [emailTo, setEmailTo] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailMessage, setEmailMessage] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -108,28 +114,59 @@ export default function NotificationsPage() {
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch employees
+      const { data: employeesData, error: employeesError } = await supabase
         .from('employees')
         .select(`
           id, 
           user_id, 
           first_name, 
           last_name, 
-          email,
-          users!inner(role)
+          email
         `)
         .order('first_name', { ascending: true })
-      if (error) throw error
       
-      // Flatten the data to include role from users table
-      const flattenedData = (data || []).map(emp => ({
+      if (employeesError) {
+        console.error('Error fetching employees:', employeesError)
+        throw employeesError
+      }
+
+      // Fetch users to get roles
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select(`
+          id,
+          role,
+          email
+        `)
+        .eq('is_active', true)
+      
+      if (usersError) {
+        console.error('Error fetching users:', usersError)
+        // Continue without roles if users fetch fails
+      }
+
+      // Create a map of user_id -> role for quick lookup
+      const userRoleMap = new Map<string, string>()
+      if (usersData) {
+        usersData.forEach(user => {
+          if (user.id && user.role) {
+            userRoleMap.set(user.id, user.role)
+          }
+        })
+      }
+
+      // Combine employees with roles
+      const flattenedData = (employeesData || []).map(emp => ({
         ...emp,
-        role: (emp as any).users?.role || 'employee'
+        role: emp.user_id ? (userRoleMap.get(emp.user_id) || 'employee') : 'employee'
       }))
       
       setEmployees(flattenedData)
     } catch (error) {
       console.error('Error fetching employees:', error)
+      // Set empty array on error to prevent UI issues
+      setEmployees([])
     }
   }
 
@@ -162,8 +199,8 @@ export default function NotificationsPage() {
         }
       }
 
-      // Optionally send emails
-      if (sendEmail) {
+      // Optionally send emails via SMTP/Resend
+      if (sendEmail && !sendEmailViaN8n) {
         for (const uid of selectedEmployeeUserIds) {
           const emp = employees.find(e => e.user_id === uid)
           if (emp?.email) {
@@ -188,12 +225,40 @@ export default function NotificationsPage() {
         }
       }
 
+      // Optionally send emails via n8n
+      if (sendEmailViaN8n) {
+        for (const uid of selectedEmployeeUserIds) {
+          const emp = employees.find(e => e.user_id === uid)
+          if (emp?.email) {
+            const emailRes = await fetch(getApiEndpoint('/api/notifications/notifications/email'), {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                to_email: emp.email,
+                subject: notifTitle,
+                body: notifMessage,
+                template: 'info',
+                use_n8n: true // Flag to force n8n sending
+              })
+            })
+            if (!emailRes.ok) {
+              const text = await emailRes.text()
+              throw new Error(`Send email via n8n failed: ${emailRes.status} ${text}`)
+            }
+          }
+        }
+      }
+
       // Reset and refresh
       setShowCreateNotificationModal(false)
       setNotifTitle('')
       setNotifMessage('')
       setSelectedEmployeeUserIds([])
       setSendEmail(false)
+      setSendEmailViaN8n(false)
       fetchNotifications()
     } catch (error) {
       console.error('Error creating notifications:', error)
@@ -301,6 +366,52 @@ export default function NotificationsPage() {
       )
     } catch (error) {
       console.error('Error deleting notification:', error)
+    }
+  }
+
+  const handleSendEmail = async () => {
+    if (!emailTo.trim() || !emailSubject.trim() || !emailMessage.trim()) {
+      alert('Vui lòng điền đầy đủ thông tin email')
+      return
+    }
+
+    try {
+      setSendingEmail(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Not authenticated')
+      }
+
+      const res = await fetch(getApiEndpoint('/api/notifications/notifications/email'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to_email: emailTo,
+          subject: emailSubject,
+          body: emailMessage,
+          template: 'info'
+        })
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Send email failed: ${res.status} ${text}`)
+      }
+
+      // Reset form and close modal
+      setEmailTo('')
+      setEmailSubject('')
+      setEmailMessage('')
+      setShowEmailModal(false)
+      alert('Email đã được gửi thành công!')
+    } catch (error) {
+      console.error('Error sending email:', error)
+      alert(`Lỗi khi gửi email: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setSendingEmail(false)
     }
   }
 
@@ -590,6 +701,8 @@ export default function NotificationsPage() {
                 </label>
                 <input
                   type="email"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500"
                   placeholder="recipient@example.com"
                 />
@@ -601,6 +714,8 @@ export default function NotificationsPage() {
                 </label>
                 <input
                   type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500"
                   placeholder="Nhập tiêu đề email"
                 />
@@ -611,6 +726,8 @@ export default function NotificationsPage() {
                   Nội dung
                 </label>
                 <textarea
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500 resize-none"
                   rows={5}
                   placeholder="Nhập nội dung email..."
@@ -621,14 +738,24 @@ export default function NotificationsPage() {
             {/* Footer */}
             <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
               <button
-                onClick={() => setShowEmailModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => {
+                  setShowEmailModal(false)
+                  setEmailTo('')
+                  setEmailSubject('')
+                  setEmailMessage('')
+                }}
+                disabled={sendingEmail}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 Hủy
               </button>
-              <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+              <button
+                onClick={handleSendEmail}
+                disabled={sendingEmail || !emailTo.trim() || !emailSubject.trim() || !emailMessage.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
                 <Send className="h-4 w-4" />
-                <span>Gửi email</span>
+                <span>{sendingEmail ? 'Đang gửi...' : 'Gửi email'}</span>
               </button>
             </div>
           </div>
@@ -794,15 +921,30 @@ export default function NotificationsPage() {
                   )}
                 </div>
               </div>
-              <div>
+              <div className="space-y-3">
                 <label className="inline-flex items-center">
                   <input
                     type="checkbox"
                     className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                    checked={sendEmail}
-                    onChange={(e) => setSendEmail(e.target.checked)}
+                    checked={sendEmail && !sendEmailViaN8n}
+                    onChange={(e) => {
+                      setSendEmail(e.target.checked)
+                      if (e.target.checked) setSendEmailViaN8n(false)
+                    }}
                   />
                   <span className="ml-2 text-sm text-black">Gửi kèm email (dùng cùng tiêu đề và nội dung)</span>
+                </label>
+                <label className="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-purple-600 border-gray-300 rounded"
+                    checked={sendEmailViaN8n}
+                    onChange={(e) => {
+                      setSendEmailViaN8n(e.target.checked)
+                      if (e.target.checked) setSendEmail(false)
+                    }}
+                  />
+                  <span className="ml-2 text-sm text-black font-medium">Gửi qua n8n (tích hợp n8n workflow)</span>
                 </label>
               </div>
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">

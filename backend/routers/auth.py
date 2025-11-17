@@ -11,6 +11,9 @@ import jwt
 from jwt import PyJWTError
 from pydantic import BaseModel, EmailStr
 import asyncio
+import os
+import requests
+from concurrent.futures import ThreadPoolExecutor
 
 from config import settings
 from services.supabase_client import get_supabase_client
@@ -47,6 +50,9 @@ class PasswordResetConfirm(BaseModel):
 class ChangePassword(BaseModel):
     current_password: str
     new_password: str
+
+class TestPasswordResetEmail(BaseModel):
+    test_email: EmailStr
 
 
 async def _handle_password_reset_request(email: str):
@@ -538,3 +544,208 @@ async def debug_token(credentials: HTTPAuthorizationCredentials = Depends(securi
         
     except Exception as e:
         return {"status": "error", "message": f"Debug failed: {str(e)}"}
+
+
+@router.get("/email-config")
+async def get_email_config():
+    """Get current email configuration (for debugging)"""
+    import os
+    return {
+        "email_provider": email_service.email_provider,
+        "n8n_webhook_url": email_service.n8n_webhook_url if email_service.n8n_webhook_url else "NOT SET",
+        "n8n_webhook_id": email_service.n8n_webhook_id if email_service.n8n_webhook_id else "NOT SET",
+        "n8n_api_key": "SET" if email_service.n8n_api_key else "NOT SET",
+        "resend_api_key": "SET" if email_service.resend_api_key else "NOT SET",
+        "smtp_configured": bool(email_service.smtp_username and email_service.smtp_password),
+        "debug_mode": email_service.debug,
+        "env_email_provider": os.getenv("EMAIL_PROVIDER", "NOT SET"),
+        "env_n8n_webhook_url": os.getenv("N8N_WEBHOOK_URL", "NOT SET")
+    }
+
+
+@router.post("/test-password-reset-email")
+async def test_password_reset_email(request: TestPasswordResetEmail):
+    """Test endpoint to send password reset email via n8n (for testing purposes)
+    
+    Note: This endpoint does NOT require authentication, allowing testing from forgot-password page.
+    FORCE sends via n8n regardless of EMAIL_PROVIDER setting.
+    """
+    try:
+        email_to_test = request.test_email
+        
+        # Check n8n webhook URL
+        n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "")
+        if not n8n_webhook_url:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="N8N_WEBHOOK_URL is not set. Please set it in environment variables (backend/.env file)."
+            )
+        
+        print("=" * 60)
+        print("🧪 TEST EMAIL VIA N8N (FORCE)")
+        print("=" * 60)
+        print(f"📧 Email to: {email_to_test}")
+        print(f"🔗 n8n Webhook URL: {n8n_webhook_url}")
+        print(f"⚙️  Current EMAIL_PROVIDER setting: {email_service.email_provider}")
+        print("=" * 60)
+        
+        # Generate a test reset link
+        frontend_base = settings.FRONTEND_BASE_URL.rstrip("/")
+        test_token = "test_token_" + str(datetime.now().timestamp())
+        reset_link = f"{frontend_base}/reset-password?token={test_token}"
+        
+        # Try to get user name from database (optional)
+        user_name = "Test User"
+        try:
+            supabase = get_supabase_client()
+            user_result = supabase.table("users").select("full_name").eq("email", email_to_test).limit(1).execute()
+            if user_result.data and user_result.data[0].get('full_name'):
+                user_name = user_result.data[0]['full_name']
+        except Exception:
+            pass  # Use default "Test User"
+        
+        # Prepare email content
+        expire_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+        subject = "Hướng dẫn đặt lại mật khẩu tài khoản Phúc Đạt (TEST)"
+        
+        greeting_name = user_name or "bạn"
+        html_body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="border: 1px solid #000;">
+            <div style="padding: 16px; border-bottom: 1px solid #000;">
+              <h2 style="margin: 0; color: #0f172a;">Đặt lại mật khẩu (TEST)</h2>
+            </div>
+            <div style="padding: 16px;">
+              <p>Xin chào {greeting_name},</p>
+              <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại hệ thống Quản lý tài chính Phúc Đạt.</p>
+              <p>Vui lòng nhấn nút bên dưới để đặt lại mật khẩu mới. Liên kết có hiệu lực trong {expire_minutes} phút.</p>
+              <div style="text-align:center; margin: 24px 0;">
+                <a href="{reset_link}" style="background:#0f172a;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;">
+                  Đặt lại mật khẩu
+                </a>
+              </div>
+              <p><strong>⚠️ LƯU Ý:</strong> Đây là email TEST. Link reset password không hợp lệ.</p>
+              <p>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này. Mật khẩu hiện tại của bạn vẫn an toàn.</p>
+            </div>
+            <div style="padding: 12px; border-top: 1px solid #000; text-align: center; color:#000000; font-size:12px;">
+              Bộ phận Công ty Phúc Đạt
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""Xin chào {greeting_name},
+
+Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại hệ thống Quản lý tài chính Phúc Đạt.
+
+Vui lòng nhấn vào nút "Đặt lại mật khẩu" trong email HTML. Liên kết có hiệu lực trong {expire_minutes} phút.
+
+⚠️ LƯU Ý: Đây là email TEST. Link reset password không hợp lệ.
+
+Nếu bạn không yêu cầu, hãy bỏ qua email này.
+"""
+        
+        # FORCE send via n8n (bypass EMAIL_PROVIDER setting)
+        print(f"🚀 Sending email via n8n webhook...")
+        
+        # Prepare payload for n8n webhook
+        payload = {
+            "to_email": email_to_test,
+            "subject": subject,
+            "html_content": html_body,
+            "text_content": text_body,
+            "email_type": "password_reset",
+            "metadata": {
+                "user_name": user_name,
+                "reset_link": reset_link,
+                "expire_minutes": expire_minutes
+            }
+        }
+        
+        # Prepare headers
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        # Add API key if provided
+        n8n_api_key = os.getenv("N8N_API_KEY", "")
+        if n8n_api_key:
+            headers["X-N8N-API-KEY"] = n8n_api_key
+        
+        # Add webhook ID if provided
+        n8n_webhook_id = os.getenv("N8N_WEBHOOK_ID", "")
+        if n8n_webhook_id:
+            payload["webhook_id"] = n8n_webhook_id
+        
+        # Send request to n8n webhook
+        try:
+            print(f"📤 Sending POST request to: {n8n_webhook_url}")
+            print(f"📦 Payload keys: {list(payload.keys())}")
+            
+            # Run HTTP request in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            executor = ThreadPoolExecutor(max_workers=1)
+            response = await loop.run_in_executor(
+                executor,
+                lambda: requests.post(n8n_webhook_url, headers=headers, json=payload, timeout=30)
+            )
+            
+            print(f"📥 Response Status: {response.status_code}")
+            
+            if response.status_code in [200, 201]:
+                try:
+                    result = response.json()
+                    print(f"📥 Response Body: {result}")
+                except:
+                    print(f"📥 Response Text: {response.text[:200]}")
+                email_sent = True
+            else:
+                error_msg = response.text
+                print(f"❌ n8n Webhook Error ({response.status_code}): {error_msg}")
+                email_sent = False
+                
+        except requests.exceptions.Timeout:
+            print(f"❌ n8n Webhook Timeout - Request took longer than 30s")
+            email_sent = False
+        except requests.exceptions.RequestException as e:
+            print(f"❌ n8n Webhook Request Error: {e}")
+            email_sent = False
+        except Exception as e:
+            print(f"❌ Unexpected n8n Webhook Error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            email_sent = False
+        
+        print("=" * 60)
+        if email_sent:
+            print(f"✅ Email sent successfully via n8n!")
+        else:
+            print(f"❌ Failed to send email via n8n")
+        print("=" * 60)
+        
+        if email_sent:
+            return {
+                "status": "success",
+                "message": f"Test password reset email sent successfully to {email_to_test} via n8n",
+                "email_provider": "n8n",
+                "n8n_webhook_url": n8n_webhook_url,
+                "note": "This is a test email sent via n8n. The reset link is not valid."
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to send test email to {email_to_test} via n8n. Check n8n webhook configuration."
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Test email failed: {str(e)}"
+        )

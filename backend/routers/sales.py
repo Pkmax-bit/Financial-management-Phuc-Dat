@@ -2762,6 +2762,105 @@ async def test_sales_endpoint():
     """Test endpoint to verify sales router is working"""
     return {"message": "Sales router is working!", "status": "success"}
 
+
+@router.post("/quotes/{quote_id}/test-email")
+async def test_quote_email(
+    quote_id: str,
+    test_email: Optional[str] = None,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Test endpoint to send quote email via n8n (for testing purposes)"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get quote
+        quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        if not quote_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Quote not found"
+            )
+        
+        quote = quote_result.data[0]
+        
+        # Get customer information
+        customer_id = quote.get('customer_id')
+        if not customer_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Quote has no customer assigned"
+            )
+        
+        customer_result = supabase.table("customers").select("*").eq("id", customer_id).execute()
+        if not customer_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Customer not found"
+            )
+        
+        customer = customer_result.data[0]
+        customer_email = test_email or customer.get('email')
+        customer_name = customer.get('name', 'Khách hàng')
+        
+        if not customer_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Customer email is required. Provide test_email parameter or ensure customer has email."
+            )
+        
+        # Get quote items
+        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+        quote_items = quote_items_result.data if quote_items_result.data else []
+        
+        # Prepare quote data
+        quote_data = {
+            **quote,
+            'employee_in_charge_name': None,
+            'employee_in_charge_phone': None,
+            'employee_in_charge_id': quote.get('created_by')
+        }
+        
+        # Get employee info if available
+        if quote.get('created_by'):
+            try:
+                emp_result = supabase.table("employees").select("*, users!inner(full_name)").eq("user_id", quote.get('created_by')).execute()
+                if emp_result.data:
+                    emp = emp_result.data[0]
+                    quote_data['employee_in_charge_name'] = emp.get('users', {}).get('full_name') if isinstance(emp.get('users'), dict) else None
+                    quote_data['employee_in_charge_phone'] = emp.get('phone')
+            except Exception:
+                pass
+        
+        # Send test email via email service (will use n8n if configured)
+        email_sent = await email_service.send_quote_email(
+            quote_data=quote_data,
+            customer_email=customer_email,
+            customer_name=customer_name,
+            quote_items=quote_items
+        )
+        
+        if email_sent:
+            return {
+                "status": "success",
+                "message": f"Test quote email sent successfully to {customer_email}",
+                "email_provider": email_service.email_provider,
+                "quote_number": quote.get('quote_number'),
+                "note": "This is a test email. Quote status was not changed."
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send test email to {customer_email}. Check email configuration."
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Test email failed: {str(e)}"
+        )
+
 @router.get("/dashboard/stats")
 async def get_sales_dashboard_stats(
     start_date: Optional[date] = Query(None),

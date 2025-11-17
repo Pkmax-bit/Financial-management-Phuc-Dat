@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Mail, ArrowLeft, CheckCircle, AlertCircle, Send } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, AlertCircle, Send, TestTube } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 
 type RequestState = 'idle' | 'loading' | 'success' | 'error'
@@ -63,6 +63,46 @@ export default function ForgotPasswordPage() {
 
   const handleBackToLogin = () => {
     router.push('/login')
+  }
+
+  const handleTestEmail = async () => {
+    if (!email || !email.trim()) {
+      setStatus('error')
+      setMessage('Vui lòng nhập địa chỉ email để test')
+      return
+    }
+
+    if (!validateEmail(email.trim())) {
+      setStatus('error')
+      setMessage('Vui lòng nhập địa chỉ email hợp lệ')
+      return
+    }
+
+    setStatus('loading')
+    setMessage('')
+
+    try {
+      const response = await fetch(getApiEndpoint('/api/auth/test-password-reset-email'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ test_email: email.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Gửi email test thất bại')
+      }
+
+      setStatus('success')
+      setMessage(`✅ ${data.message} (Provider: ${data.email_provider || 'N/A'})`)
+    } catch (error: any) {
+      console.error('Test email error:', error)
+      setStatus('error')
+      setMessage(error.message || 'Gửi email test thất bại, vui lòng thử lại sau.')
+    }
   }
 
   return (
@@ -125,23 +165,35 @@ export default function ForgotPasswordPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={status === 'loading'}
-            className="w-full flex justify-center items-center space-x-2 py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {status === 'loading' ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Đang gửi...</span>
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4" />
-                <span>Gửi email đặt lại mật khẩu</span>
-              </>
-            )}
-          </button>
+          <div className="space-y-3">
+            <button
+              type="submit"
+              disabled={status === 'loading'}
+              className="w-full flex justify-center items-center space-x-2 py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {status === 'loading' ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Đang gửi...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  <span>Gửi email đặt lại mật khẩu</span>
+                </>
+              )}
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleTestEmail}
+              disabled={status === 'loading'}
+              className="w-full flex justify-center items-center space-x-2 py-2 px-4 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <TestTube className="h-4 w-4" />
+              <span>Test gửi email qua n8n</span>
+            </button>
+          </div>
         </form>
 
         <div className="text-center text-sm text-gray-600">

@@ -47,6 +47,7 @@ class EmailNotification(BaseModel):
     body: str
     template: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
+    use_n8n: Optional[bool] = False  # Flag to force sending via n8n
 
 class SystemAlert(BaseModel):
     type: str  # 'invoice_due', 'expense_approval', 'project_deadline', 'system_maintenance'
@@ -185,14 +186,14 @@ def create_notification_email_template(subject: str, message: str, notification_
     return html_template
 
 async def send_email_notification(email_data: EmailNotification):
-    """Send email notification using SMTP with beautiful template"""
+    """Send email notification using EmailService (supports n8n, resend, SMTP)"""
     try:
-        # Create message
-        msg = MIMEMultipart('alternative')
-        msg['From'] = f"Hệ thống quản lý tài chính <{settings.SMTP_USER}>"
-        msg['To'] = email_data.to_email
-        msg['Subject'] = email_data.subject
-
+        from services.email_service import EmailService
+        import os
+        import requests
+        from concurrent.futures import ThreadPoolExecutor
+        import asyncio
+        
         # Create beautiful HTML template
         html_body = create_notification_email_template(
             email_data.subject, 
@@ -213,24 +214,77 @@ async def send_email_notification(email_data: EmailNotification):
         Email này được gửi tự động từ hệ thống
         """
 
-        # Add both versions
-        text_part = MIMEText(text_body, 'plain', 'utf-8')
-        html_part = MIMEText(html_body, 'html', 'utf-8')
-        
-        msg.attach(text_part)
-        msg.attach(html_part)
+        # If use_n8n flag is set, send directly via n8n webhook
+        if email_data.use_n8n:
+            n8n_webhook_url = os.getenv("N8N_WEBHOOK_URL", "")
+            if not n8n_webhook_url:
+                print("❌ N8N_WEBHOOK_URL not set. Cannot send via n8n.")
+                return False
+            
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            n8n_api_key = os.getenv("N8N_API_KEY", "")
+            if n8n_api_key:
+                headers["X-N8N-API-KEY"] = n8n_api_key
+            
+            payload = {
+                "to_email": email_data.to_email,
+                "subject": email_data.subject,
+                "html_content": html_body,
+                "text_content": text_body,
+                "email_type": "notification",
+                "metadata": {
+                    "template": email_data.template or 'info',
+                    "title": email_data.subject,
+                    "message": email_data.body.replace('<p>', '').replace('</p>', '')
+                }
+            }
+            
+            n8n_webhook_id = os.getenv("N8N_WEBHOOK_ID", "")
+            if n8n_webhook_id:
+                payload["webhook_id"] = n8n_webhook_id
+            
+            try:
+                loop = asyncio.get_event_loop()
+                executor = ThreadPoolExecutor(max_workers=1)
+                response = await loop.run_in_executor(
+                    executor,
+                    lambda: requests.post(n8n_webhook_url, headers=headers, json=payload, timeout=30)
+                )
+                
+                if response.status_code in [200, 201]:
+                    print(f"✅ Email notification sent successfully via n8n to {email_data.to_email}")
+                    return True
+                else:
+                    print(f"❌ n8n Webhook Error ({response.status_code}): {response.text[:200]}")
+                    return False
+            except Exception as e:
+                print(f"❌ Failed to send email via n8n: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return False
 
-        # Send email
-        server = smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT)
-        server.starttls()
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        text = msg.as_string()
-        server.sendmail(settings.SMTP_USER, email_data.to_email, text)
-        server.quit()
+        # Otherwise, use EmailService which supports n8n, resend, and SMTP
+        email_service = EmailService()
+        success = await email_service.send_notification_email(
+            employee_email=email_data.to_email,
+            title=email_data.subject,
+            message=email_data.body.replace('<p>', '').replace('</p>', ''),
+            action_url=None  # Can be extended to support action_url in EmailNotification model
+        )
 
-        return True
+        if success:
+            print(f"✅ Email notification sent successfully to {email_data.to_email}")
+        else:
+            print(f"❌ Failed to send email notification to {email_data.to_email}")
+
+        return success
     except Exception as e:
-        print(f"Failed to send email: {str(e)}")
+        print(f"❌ Failed to send email notification: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 @router.get("/notifications", response_model=List[Notification])

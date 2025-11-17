@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download, DollarSign } from 'lucide-react'
+import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download, DollarSign, TestTube } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { useSidebar } from '@/components/LayoutWithSidebar'
 import html2canvas from 'html2canvas'
@@ -55,6 +55,8 @@ export default function QuoteEmailPreviewModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false)
+  const [testingEmail, setTestingEmail] = useState(false)
+  const [testEmailResult, setTestEmailResult] = useState<string | null>(null)
   const [pdfDownloaded, setPdfDownloaded] = useState(false) // Track if PDF was successfully downloaded
   const [quoteStatus, setQuoteStatus] = useState<string>('draft') // Track quote status
   const [projectName, setProjectName] = useState<string>('') // Track project name for PDF filename
@@ -834,6 +836,51 @@ export default function QuoteEmailPreviewModal({
     } catch (error) {
       console.error('Error updating quote status:', error)
       return false
+    }
+  }
+
+  // Function to test send email via n8n
+  const handleTestEmail = async () => {
+    if (!quoteId) {
+      setTestEmailResult('❌ Không tìm thấy báo giá')
+      return
+    }
+
+    setTestingEmail(true)
+    setTestEmailResult(null)
+
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Bạn cần đăng nhập để test email')
+      }
+
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/test-email`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Gửi email test thất bại')
+      }
+
+      setTestEmailResult(`✅ ${data.message} (Provider: ${data.email_provider || 'N/A'})`)
+    } catch (error: any) {
+      console.error('Test email error:', error)
+      setTestEmailResult(`❌ ${error.message || 'Gửi email test thất bại'}`)
+    } finally {
+      setTestingEmail(false)
     }
   }
 
@@ -1900,71 +1947,102 @@ export default function QuoteEmailPreviewModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Hủy
-          </button>
-          {/* Show convert to invoice button if PDF was downloaded and quote status is sent */}
-          {(pdfDownloaded || quoteStatus === 'sent') && onConvertToInvoice && (
-            <button
-              onClick={() => {
-                if (onConvertToInvoice) {
-                  onConvertToInvoice(quoteId)
-                  onClose()
-                }
-              }}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-              title="Duyệt báo giá thành hóa đơn"
-            >
-              <DollarSign className="w-4 h-4" />
-              Duyệt báo giá thành hóa đơn
-            </button>
+        <div className="space-y-2">
+          {/* Test email result message */}
+          {testEmailResult && (
+            <div className={`px-4 py-2 mx-4 rounded-lg text-sm ${
+              testEmailResult.startsWith('✅') 
+                ? 'bg-green-50 text-green-800 border border-green-200' 
+                : 'bg-red-50 text-red-800 border border-red-200'
+            }`}>
+              {testEmailResult}
+            </div>
           )}
-          <button
-            onClick={async () => {
-              // Convert attachments to base64 format for sending
-              const attachmentData = await Promise.all(
-                attachments.map(async (attachment) => {
-                  // Get MIME type from file
-                  const mimeType = attachment.file.type || 'application/octet-stream'
-                  return {
-                    name: attachment.name,
-                    content: attachment.base64 || '',
-                    mimeType: mimeType
+          
+          <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Hủy
+            </button>
+            {/* Show convert to invoice button if PDF was downloaded and quote status is sent */}
+            {(pdfDownloaded || quoteStatus === 'sent') && onConvertToInvoice && (
+              <button
+                onClick={() => {
+                  if (onConvertToInvoice) {
+                    onConvertToInvoice(quoteId)
+                    onClose()
                   }
-                })
-              )
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                title="Duyệt báo giá thành hóa đơn"
+              >
+                <DollarSign className="w-4 h-4" />
+                Duyệt báo giá thành hóa đơn
+              </button>
+            )}
+            <button
+              onClick={handleTestEmail}
+              disabled={loading || testingEmail || !!error}
+              className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              title="Test gửi email qua n8n (không thay đổi trạng thái báo giá)"
+            >
+              {testingEmail ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Đang test...</span>
+                </>
+              ) : (
+                <>
+                  <TestTube className="w-4 h-4" />
+                  <span>Test n8n</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={async () => {
+                // Convert attachments to base64 format for sending
+                const attachmentData = await Promise.all(
+                  attachments.map(async (attachment) => {
+                    // Get MIME type from file
+                    const mimeType = attachment.file.type || 'application/octet-stream'
+                    return {
+                      name: attachment.name,
+                      content: attachment.base64 || '',
+                      mimeType: mimeType
+                    }
+                  })
+                )
 
-              // Send with all current customization data
-              onConfirmSend({
-                paymentTerms,
-                additionalNotes,
-                defaultNotes: defaultNotes.filter(note => note && note.trim()),
-                companyName,
-                companyShowroom,
-                companyFactory,
-                companyWebsite,
-                companyHotline,
-                companyLogoUrl,
-                companyLogoBase64,
-                bankAccountName,
-                bankAccountNumber,
-                bankName,
-                bankBranch,
-                rawHtml: htmlContent,
-                attachments: attachmentData.length > 0 ? attachmentData : undefined
-              })
-            }}
-            disabled={loading || !!error}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-            data-tour-id="email-form-send"
-          >
-            <Send className="w-4 h-4" />
-            Gửi email
-          </button>
+                // Send with all current customization data
+                onConfirmSend({
+                  paymentTerms,
+                  additionalNotes,
+                  defaultNotes: defaultNotes.filter(note => note && note.trim()),
+                  companyName,
+                  companyShowroom,
+                  companyFactory,
+                  companyWebsite,
+                  companyHotline,
+                  companyLogoUrl,
+                  companyLogoBase64,
+                  bankAccountName,
+                  bankAccountNumber,
+                  bankName,
+                  bankBranch,
+                  rawHtml: htmlContent,
+                  attachments: attachmentData.length > 0 ? attachmentData : undefined
+                })
+              }}
+              disabled={loading || !!error}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              data-tour-id="email-form-send"
+            >
+              <Send className="w-4 h-4" />
+              Gửi email
+            </button>
+          </div>
         </div>
       </div>
     </div>
