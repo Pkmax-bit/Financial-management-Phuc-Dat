@@ -874,13 +874,16 @@ class EmailService:
             
             # Use n8n webhook if configured
             if self.email_provider == "n8n":
-                # For n8n, keep HTML with CID reference and send logo as inline attachment
+                # For n8n, use Supabase URL directly for logo (simpler and more reliable)
                 n8n_html = html_body
                 
                 # Prepare attachments for n8n
                 n8n_attachments = []
                 
-                # Add logo as inline attachment (CID) if HTML references it
+                # Default Supabase logo URL
+                default_logo_url = "https://mfmijckzlhevduwfigkl.supabase.co/storage/v1/object/public/minhchung_chiphi/logo_phucdat.jpg"
+                
+                # Handle logo in HTML - replace CID with URL or base64
                 if 'cid:company_logo' in n8n_html:
                     logo_base64 = None
                     logo_mime_type = "image/jpeg"
@@ -896,30 +899,16 @@ class EmailService:
                             elif 'image/jpeg' in mime_part or 'image/jpg' in mime_part:
                                 logo_mime_type = "image/jpeg"
                             logo_base64 = logo_base64.split(',', 1)[1]
+                        
+                        # If we have base64 logo, use it as data URI in HTML
+                        if logo_base64:
+                            data_uri = f"data:{logo_mime_type};base64,{logo_base64}"
+                            n8n_html = n8n_html.replace('cid:company_logo', data_uri)
+                            print(f"📷 Replaced CID with base64 data URI for n8n")
                     else:
-                        # Try to get default logo from file
-                        try:
-                            if os.path.exists(self.logo_path):
-                                with open(self.logo_path, 'rb') as f:
-                                    img_data = f.read()
-                                    img_data = self._resize_image(img_data, max_width=300, max_height=100)
-                                    logo_base64 = base64.b64encode(img_data).decode('utf-8')
-                                    # Detect mime type from file extension
-                                    if self.logo_path.lower().endswith('.png'):
-                                        logo_mime_type = "image/png"
-                        except Exception as e:
-                            print(f"⚠️ Failed to load default logo for n8n: {e}")
-                    
-                    if logo_base64:
-                        # Add logo as inline attachment with CID
-                        n8n_attachments.append({
-                            "name": "company_logo.jpg",
-                            "content": logo_base64,
-                            "mimeType": logo_mime_type,
-                            "cid": "company_logo",  # Content-ID for inline attachment
-                            "inline": True  # Mark as inline attachment
-                        })
-                        print(f"📷 Added logo as inline attachment (CID: company_logo) for n8n")
+                        # Use Supabase URL directly in HTML (no download needed)
+                        n8n_html = n8n_html.replace('cid:company_logo', default_logo_url)
+                        print(f"📷 Replaced CID with Supabase URL for n8n: {default_logo_url}")
                 
                 # Add file attachments
                 if attachments and isinstance(attachments, list):
