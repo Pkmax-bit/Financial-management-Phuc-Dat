@@ -132,8 +132,8 @@ class EmailService:
             )
             
             if response.status_code in [200, 201]:
-                print(f"✅ Email sent via n8n to {to_email} (Status: {response.status_code})")
                 if self.debug:
+                    print(f"✅ Email sent via n8n to {to_email} (Status: {response.status_code})")
                     try:
                         result = response.json()
                         print(f"   n8n Response: {result}")
@@ -207,7 +207,8 @@ class EmailService:
             
             if response.status_code == 200:
                 result = response.json()
-                print(f"✅ Email sent via Resend to {to_email} (ID: {result.get('id', 'N/A')})")
+                if self.debug:
+                    print(f"✅ Email sent via Resend to {to_email} (ID: {result.get('id', 'N/A')})")
                 return True
             else:
                 error_msg = response.text
@@ -767,7 +768,6 @@ class EmailService:
             # Use prepared_html if provided (from email_customizations table)
             if prepared_html and prepared_html.strip():
                 html_body = prepared_html.strip()
-                print(f"📝 Using prepared_html (raw_html from email_customizations)")
                 
                 # Replace logo in prepared_html if needed
                 if company_info and company_info.get("company_logo_base64"):
@@ -783,12 +783,10 @@ class EmailService:
                         ]
                         for pattern in patterns:
                             html_body = re.sub(pattern, 'cid:company_logo', html_body)
-                    print(f"📷 Replaced base64 logo with CID in prepared_html")
                 elif company_info and company_info.get("company_logo_url"):
                     # Replace URL logo with CID
                     logo_url = company_info.get("company_logo_url")
                     html_body = html_body.replace(logo_url, 'cid:company_logo')
-                    print(f"📷 Replaced URL logo with CID in prepared_html")
                 
                 # Inject additional notes if available and not present
                 try:
@@ -821,7 +819,6 @@ class EmailService:
                     bank_info=bank_info,
                     default_notes=default_notes
                 )
-                print(f"📝 Generated HTML with customization data")
             
             # Ensure additional notes are present in HTML if available
             try:
@@ -904,11 +901,9 @@ class EmailService:
                         if logo_base64:
                             data_uri = f"data:{logo_mime_type};base64,{logo_base64}"
                             n8n_html = n8n_html.replace('cid:company_logo', data_uri)
-                            print(f"📷 Replaced CID with base64 data URI for n8n")
                     else:
                         # Use Supabase URL directly in HTML (no download needed)
                         n8n_html = n8n_html.replace('cid:company_logo', default_logo_url)
-                        print(f"📷 Replaced CID with Supabase URL for n8n: {default_logo_url}")
                 
                 # Add file attachments
                 if attachments and isinstance(attachments, list):
@@ -924,9 +919,9 @@ class EmailService:
                                     "content": file_content,
                                     "mimeType": attachment.get('mimeType', 'application/octet-stream')
                                 })
-                                print(f"✅ Prepared attachment for n8n: {file_name}")
                         except Exception as e:
-                            print(f"⚠️ Failed to prepare attachment {attachment.get('name', 'unknown')} for n8n: {e}")
+                            if self.debug:
+                                print(f"⚠️ Failed to prepare attachment {attachment.get('name', 'unknown')} for n8n: {e}")
                 
                 # Try to add PDF version if available
                 try:
@@ -938,7 +933,6 @@ class EmailService:
                             "content": pdf_base64,
                             "mimeType": "application/pdf"
                         })
-                        print(f"✅ Prepared PDF attachment for n8n")
                 except Exception:
                     pass
                 
@@ -990,7 +984,6 @@ class EmailService:
                         # Replace CID with base64 data URI
                         data_uri = f"data:image/jpeg;base64,{logo_base64}"
                         resend_html = resend_html.replace('cid:company_logo', data_uri)
-                        print(f"📷 Replaced CID logo with base64 data URI for Resend")
                 
                 # Prepare attachments for Resend
                 resend_attachments = []
@@ -1008,9 +1001,9 @@ class EmailService:
                                     "name": file_name,
                                     "content": file_content
                                 })
-                                print(f"✅ Prepared attachment for Resend: {file_name}")
                         except Exception as e:
-                            print(f"⚠️ Failed to prepare attachment {attachment.get('name', 'unknown')} for Resend: {e}")
+                            if self.debug:
+                                print(f"⚠️ Failed to prepare attachment {attachment.get('name', 'unknown')} for Resend: {e}")
                 
                 # Try to add PDF version if available
                 try:
@@ -1021,7 +1014,6 @@ class EmailService:
                             "name": f"Bao-gia-{quote_data.get('quote_number','')}.pdf",
                             "content": pdf_base64
                         })
-                        print(f"✅ Prepared PDF attachment for Resend")
                 except Exception:
                     pass
                 
@@ -1065,27 +1057,24 @@ class EmailService:
                         for pattern in patterns:
                             html_body = re.sub(pattern, 'cid:company_logo', html_body)
                     logo_should_attach = True
-                    print(f"📷 Replaced base64 logo with CID in HTML")
                 elif company_info and company_info.get("company_logo_url"):
                     # Replace URL logo with CID
                     logo_url = company_info.get("company_logo_url")
                     html_body = html_body.replace(logo_url, 'cid:company_logo')
                     logo_should_attach = False  # URL logo won't be attached, use default
-                    print(f"📷 Replaced URL logo with CID in HTML")
             
             # Check if CID is now in HTML
             if 'cid:company_logo' in html_body:
                 logo_should_attach = True
-                print(f"📷 HTML uses CID, will attach logo")
             else:
-                print(f"⚠️ Warning: CID not found in HTML after replacement")
+                if self.debug:
+                    print(f"⚠️ Warning: CID not found in HTML after replacement")
                 # Force add CID if we have logo to attach
                 if company_info and company_info.get("company_logo_base64"):
                     # Try to find img tag and replace src
                     html_body = re.sub(r'<img[^>]*src=["\'][^"\']*["\']', r'<img src="cid:company_logo"', html_body, count=1)
                     if 'cid:company_logo' in html_body:
                         logo_should_attach = True
-                        print(f"📷 Force added CID to HTML")
             
             # Create message
             # Root related (for inline images)
@@ -1122,22 +1111,16 @@ class EmailService:
                         img.add_header('Content-ID', '<company_logo>')
                         img.add_header('Content-Disposition', 'inline', filename='company_logo.jpg')
                         msg.attach(img)
-                        print(f"✅ Attached base64 logo (resized) with CID: company_logo")
                     except Exception as e:
-                        print(f"⚠️ Failed to attach base64 logo: {e}")
-                        import traceback
-                        traceback.print_exc()
+                        if self.debug:
+                            print(f"⚠️ Failed to attach base64 logo: {e}")
+                            import traceback
+                            traceback.print_exc()
                         # Fallback to default logo
                         self._attach_company_logo(msg)
                 else:
                     # Use default logo from file
-                    logo_attached = self._attach_company_logo(msg)
-                    if logo_attached:
-                        print(f"✅ Attached default logo with CID: company_logo")
-                    else:
-                        print(f"⚠️ Failed to attach default logo")
-            else:
-                print(f"ℹ️ No CID reference in HTML and no logo to attach, skipping logo attachment")
+                    self._attach_company_logo(msg)
 
             # Attach file attachments if provided
             if attachments and isinstance(attachments, list):
@@ -1165,11 +1148,11 @@ class EmailService:
                             
                             attachment_part.add_header('Content-Disposition', 'attachment', filename=file_name)
                             msg.attach(attachment_part)
-                            print(f"✅ Attached file: {file_name} ({len(file_bytes)} bytes)")
                     except Exception as e:
-                        print(f"⚠️ Failed to attach file {attachment.get('name', 'unknown')}: {e}")
-                        import traceback
-                        traceback.print_exc()
+                        if self.debug:
+                            print(f"⚠️ Failed to attach file {attachment.get('name', 'unknown')}: {e}")
+                            import traceback
+                            traceback.print_exc()
             
             # Try attach PDF version of the quote
             try:
@@ -1191,7 +1174,8 @@ class EmailService:
             )
             
             if success:
-                print(f"✅ Quote email sent successfully to {customer_email}")
+                if self.debug:
+                    print(f"✅ Quote email sent successfully to {customer_email}")
                 return True
             else:
                 return False
@@ -1297,7 +1281,8 @@ class EmailService:
             )
             
             if success:
-                print(f"✅ Notification email sent successfully to {employee_email}")
+                if self.debug:
+                    print(f"✅ Notification email sent successfully to {employee_email}")
                 return True
             return False
         except Exception as e:
@@ -1400,7 +1385,8 @@ Nếu bạn không yêu cầu, hãy bỏ qua email này.
             )
             
             if success:
-                print(f"✅ Password reset email sent successfully to {user_email}")
+                if self.debug:
+                    print(f"✅ Password reset email sent successfully to {user_email}")
                 return True
             else:
                 return False
@@ -1517,7 +1503,8 @@ Nếu bạn không thực hiện thay đổi này, hãy đặt lại mật khẩ
             )
             
             if success:
-                print(f"✅ Password change confirmation email sent successfully to {user_email}")
+                if self.debug:
+                    print(f"✅ Password change confirmation email sent successfully to {user_email}")
                 return True
             else:
                 return False

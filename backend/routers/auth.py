@@ -550,8 +550,54 @@ async def debug_token(credentials: HTTPAuthorizationCredentials = Depends(securi
 async def get_email_config():
     """Get current email configuration (for debugging)"""
     import os
+    
+    # Determine daily email limit based on provider
+    email_provider = email_service.email_provider
+    daily_limit = "Unknown"
+    limit_details = {}
+    
+    if email_provider == "n8n":
+        # n8n limit depends on SMTP provider configured in n8n workflow
+        # Most common: Gmail SMTP (~500 emails/day)
+        daily_limit = "~500 emails/ngày"
+        limit_details = {
+            "provider": "n8n",
+            "note": "Giới hạn phụ thuộc vào SMTP provider trong n8n workflow",
+            "common_limits": {
+                "Gmail SMTP": "~500 emails/ngày",
+                "Resend": "~100 emails/ngày (free tier)",
+                "SendGrid": "100 emails/ngày (free tier)",
+                "Mailgun": "~166 emails/ngày (free tier)"
+            },
+            "recommendation": "Kiểm tra SMTP provider trong n8n workflow để biết chính xác"
+        }
+    elif email_provider == "resend":
+        daily_limit = "~100 emails/ngày"
+        limit_details = {
+            "provider": "resend",
+            "free_tier": "3,000 emails/tháng (~100 emails/ngày)",
+            "note": "Free tier limit. Có thể nâng cấp gói paid để tăng giới hạn"
+        }
+    elif email_provider == "smtp":
+        # Gmail SMTP default
+        daily_limit = "~500 emails/ngày"
+        limit_details = {
+            "provider": "smtp (Gmail)",
+            "personal_gmail": "~500 emails/ngày",
+            "workspace": "~2,000 emails/ngày",
+            "note": "⚠️ Không hoạt động trên Render (SMTP bị chặn)"
+        }
+    else:
+        daily_limit = "Unknown"
+        limit_details = {
+            "provider": email_provider,
+            "note": "Provider không xác định"
+        }
+    
     return {
-        "email_provider": email_service.email_provider,
+        "email_provider": email_provider,
+        "daily_email_limit": daily_limit,
+        "limit_details": limit_details,
         "n8n_webhook_url": email_service.n8n_webhook_url if email_service.n8n_webhook_url else "NOT SET",
         "n8n_webhook_id": email_service.n8n_webhook_id if email_service.n8n_webhook_id else "NOT SET",
         "n8n_api_key": "SET" if email_service.n8n_api_key else "NOT SET",

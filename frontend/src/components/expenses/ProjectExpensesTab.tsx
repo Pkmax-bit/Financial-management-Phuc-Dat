@@ -64,7 +64,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [userRole, setUserRole] = useState<string>('employee')
-  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('active') // Mặc định: đang thực hiện
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all') // Mặc định: tất cả trạng thái
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
 

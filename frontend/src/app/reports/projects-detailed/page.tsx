@@ -1332,7 +1332,7 @@ export default function ProjectsDetailedReportPage() {
                         Trạng thái
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Hóa đơn
+                        Doanh thu
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Chi phí
