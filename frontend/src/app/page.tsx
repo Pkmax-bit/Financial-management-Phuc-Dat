@@ -162,6 +162,12 @@ export default function HomePage() {
             </div>
             <nav className="flex space-x-6">
               <Link 
+                href="/gioi-thieu" 
+                className="text-gray-700 hover:text-blue-600 font-semibold transition-colors"
+              >
+                Giới thiệu
+              </Link>
+              <Link 
                 href="/login" 
                 className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
               >
@@ -256,6 +262,16 @@ export default function HomePage() {
                 </div>
               </Link>
             ))}
+          </div>
+          
+          <div className="text-center mt-12">
+            <Link 
+              href="/gioi-thieu" 
+              className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-full font-semibold text-lg hover:shadow-2xl hover:scale-105 transition-all duration-300"
+            >
+              <span>Xem chi tiết tất cả tính năng và lợi ích</span>
+              <ArrowRight className="h-5 w-5" />
+            </Link>
           </div>
         </div>
       </section>

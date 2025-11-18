@@ -258,6 +258,10 @@ async def create_employee(
 ):
     """Create a new employee with default password 123456"""
     try:
+        # Log current user info for debugging
+        print(f"[CREATE_EMPLOYEE] Current user: {current_user.email}, Role: {current_user.role}")
+        print(f"[CREATE_EMPLOYEE] Creating employee: {employee_data.email}")
+        
         supabase = get_supabase_client()
         
         # Check if email already exists in users table
@@ -327,37 +331,63 @@ async def create_employee(
                 print(f"Created new user: {employee_data.email}")
                 
             except Exception as create_error:
+                error_str = str(create_error).lower()
+                
                 # If user already exists, try to get user by listing all users
-                if "already been registered" in str(create_error) or "already exists" in str(create_error):
+                if "already been registered" in error_str or "already exists" in error_str or "user already registered" in error_str:
                     print(f"User already exists, trying to find: {employee_data.email}")
                     
-                    # List all users and find by email
-                    users_response = supabase.auth.admin.list_users()
-                    user_id = None
-                    
-                    for user in users_response:
-                        if user.email == employee_data.email:
-                            user_id = user.id
-                            print(f"Found existing user: {employee_data.email}")
-                            break
-                    
-                    if not user_id:
+                    try:
+                        # List all users and find by email
+                        users_response = supabase.auth.admin.list_users()
+                        user_id = None
+                        
+                        for user in users_response:
+                            if user.email == employee_data.email:
+                                user_id = user.id
+                                print(f"Found existing user: {employee_data.email}")
+                                break
+                        
+                        if not user_id:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"User {employee_data.email} exists but cannot be found"
+                            )
+                    except Exception as list_error:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"User {employee_data.email} exists but cannot be found"
+                            detail=f"Failed to list users: {str(list_error)}"
                         )
+                elif "not allowed" in error_str or "user not allowed" in error_str:
+                    # This is a permission issue with Supabase Auth
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Không có quyền tạo tài khoản người dùng. Vui lòng kiểm tra cấu hình SUPABASE_SERVICE_KEY trong file .env. Service key phải có quyền admin để tạo user."
+                    )
                 else:
-                    # Re-raise if it's a different error
-                    raise create_error
+                    # Re-raise if it's a different error with more details
+                    print(f"Error creating user in Supabase Auth: {create_error}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Failed to create user account: {str(create_error)}"
+                    )
             
         except HTTPException:
             # Re-raise HTTP exceptions as they are
             raise
         except Exception as auth_error:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create user account: {str(auth_error)}"
-            )
+            error_str = str(auth_error).lower()
+            # Check for specific Supabase Auth permission errors
+            if "not allowed" in error_str or "user not allowed" in error_str or "forbidden" in error_str:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Không có quyền tạo tài khoản người dùng. Vui lòng kiểm tra:\n1. SUPABASE_SERVICE_KEY trong file .env có đúng không\n2. Service key phải có quyền admin (service_role)\n3. Kiểm tra cấu hình trong Supabase Dashboard"
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to create user account: {str(auth_error)}"
+                )
         
         try:
             # Check if user already exists in users table

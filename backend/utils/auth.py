@@ -91,6 +91,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """Get current authenticated user using Supabase token"""
     try:
         token = credentials.credentials
+        print(f"[AUTH] Received token: {token[:20]}..." if token else "[AUTH] No token provided")
         
         # Use anon client to verify JWT tokens from frontend
         from services.supabase_client import get_supabase_anon_client
@@ -178,6 +179,20 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User account is deactivated"
             )
+        
+        # Ensure role is converted to UserRole enum
+        role_value = user_data.get("role")
+        if isinstance(role_value, str):
+            try:
+                user_data["role"] = UserRole(role_value.lower())
+            except ValueError:
+                print(f"[AUTH] Invalid role '{role_value}', defaulting to EMPLOYEE")
+                user_data["role"] = UserRole.EMPLOYEE
+        elif not isinstance(role_value, UserRole):
+            print(f"[AUTH] Role is not string or enum: {type(role_value)}, defaulting to EMPLOYEE")
+            user_data["role"] = UserRole.EMPLOYEE
+        
+        print(f"[AUTH] User role after conversion: {user_data['role']} (type: {type(user_data['role'])})")
         
         return User(**user_data)
         

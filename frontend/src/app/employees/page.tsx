@@ -35,7 +35,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('active')
   const [filterDepartment, setFilterDepartment] = useState('all')
   const [departments, setDepartments] = useState<{id: string; name: string; code?: string}[]>([])
   const [sortBy, setSortBy] = useState('name')

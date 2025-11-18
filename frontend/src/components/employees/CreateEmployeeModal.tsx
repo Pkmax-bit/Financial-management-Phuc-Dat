@@ -41,6 +41,7 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<{ email?: string; role?: string; full_name?: string } | null>(null)
 
   // Form data - simplified
   const [formData, setFormData] = useState({
@@ -57,10 +58,31 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
 
   useEffect(() => {
     if (isOpen) {
+      fetchCurrentUser()
       fetchDepartments()
       fetchPositions()
     }
   }, [isOpen])
+
+  const fetchCurrentUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (authUser) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authUser.id)
+          .single()
+        
+        if (userData) {
+          setCurrentUser(userData)
+          console.log('Current user for employee creation:', userData)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error)
+    }
+  }
 
   useEffect(() => {
     // Filter positions by selected department
@@ -139,6 +161,26 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
       }
 
       console.log('Creating employee via API with data:', employeeData)
+      console.log('Current user:', currentUser)
+      
+      // Check if user has permission
+      if (!currentUser) {
+        setError('Không thể xác thực người dùng. Vui lòng đăng nhập lại.')
+        return
+      }
+      
+      if (currentUser.role !== 'admin' && currentUser.role !== 'sales' && currentUser.role !== 'accountant') {
+        setError(`Bạn không có quyền tạo nhân viên. Quyền hiện tại: ${currentUser.role}. Cần quyền: admin, sales, hoặc accountant.`)
+        return
+      }
+
+      // Check session and token before making request
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+        return
+      }
+      console.log('Session token available:', session.access_token ? 'Yes' : 'No')
 
       // Use API to create employee
       const result = await employeeApi.createEmployee(employeeData)
@@ -169,6 +211,10 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
         setError('Có lỗi xảy ra với dữ liệu liên kết. Vui lòng thử lại.')
       } else if (error.message?.includes('Failed to create user account')) {
         setError('Không thể tạo tài khoản người dùng. Vui lòng thử lại.')
+      } else if (error.message?.includes('User not allowed') || error.message?.includes('not allowed') || error.message?.includes('Không có quyền')) {
+        setError('Không có quyền tạo tài khoản người dùng. Vui lòng kiểm tra:\n1. SUPABASE_SERVICE_KEY trong backend/.env có đúng không\n2. Service key phải có quyền admin (service_role)\n3. Kiểm tra cấu hình trong Supabase Dashboard')
+      } else if (error.message?.includes('Manager or admin access required') || error.message?.includes('403')) {
+        setError(`Bạn không có quyền tạo nhân viên. Quyền hiện tại: ${currentUser?.role || 'N/A'}. Cần quyền: admin, sales, hoặc accountant.`)
       } else {
         setError(error.message || 'Có lỗi xảy ra khi tạo nhân viên')
       }
@@ -201,6 +247,14 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
           <div>
             <h2 className="text-xl font-bold text-gray-900">Tạo nhân viên mới</h2>
             <p className="text-sm font-semibold text-gray-700">Thêm nhân viên vào hệ thống</p>
+            {currentUser && (
+              <div className="mt-2 text-xs text-gray-600">
+                <span className="font-semibold">Người tạo:</span> {currentUser.full_name || currentUser.email} 
+                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-semibold">
+                  {currentUser.role || 'N/A'}
+                </span>
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}

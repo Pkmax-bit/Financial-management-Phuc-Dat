@@ -175,12 +175,21 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 def require_manager_or_admin(current_user: User = Depends(get_current_user)) -> User:
     """Require manager (sales/accountant) or admin role"""
+    # Convert role to string for comparison (UserRole enum has string value)
+    user_role_str = str(current_user.role.value) if isinstance(current_user.role, UserRole) else str(current_user.role)
+    print(f"[RBAC] Checking permissions for user: {current_user.email}, Role: {current_user.role} (value: {user_role_str})")
+    
     allowed_roles = [UserRole.ADMIN, UserRole.SALES, UserRole.ACCOUNTANT]
-    if current_user.role not in allowed_roles:
+    allowed_role_values = [role.value for role in allowed_roles]  # Get string values: ["admin", "sales", "accountant"]
+    
+    # Compare by value (string) instead of enum object
+    if user_role_str not in allowed_role_values:
+        print(f"[RBAC] Access denied. User role '{user_role_str}' not in allowed roles: {allowed_role_values}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Manager or admin access required"
+            detail=f"Manager or admin access required. Current role: {user_role_str}"
         )
+    print(f"[RBAC] Access granted for user: {current_user.email} with role: {user_role_str}")
     return current_user
 
 def require_employee_or_higher(current_user: User = Depends(get_current_user)) -> User:
