@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { 
   Plus, 
   DollarSign,
@@ -24,7 +25,9 @@ import {
   RefreshCw,
   Activity,
   Zap,
-  RotateCcw
+  RotateCcw,
+  Info,
+  BookOpen
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
@@ -182,6 +185,12 @@ export default function DashboardPage() {
       icon: CreditCard,
       color: 'bg-green-500',
       onClick: () => router.push('/sales?tab=payments&action=create')
+    },
+    {
+      title: 'Giới thiệu hệ thống',
+      icon: BookOpen,
+      color: 'bg-purple-500',
+      onClick: () => router.push('/gioi-thieu')
     }
   ]
 
@@ -250,6 +259,14 @@ export default function DashboardPage() {
                     </div>
                   )}
 
+                  <Link
+                    href="/gioi-thieu"
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-md hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  >
+                    <Info className="h-4 w-4" />
+                    <span>Giới thiệu</span>
+                  </Link>
+
                   <button
                     onClick={handleManualRefresh}
                     disabled={isLoading}
@@ -265,7 +282,7 @@ export default function DashboardPage() {
           {/* Quick Actions */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Lối tắt truy cập nhanh</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {quickActions.map((action, index) => (
                 <button
                   key={index}

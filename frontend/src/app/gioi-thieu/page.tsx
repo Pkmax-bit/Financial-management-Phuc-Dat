@@ -7,6 +7,8 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import { 
   Users, 
   Building2, 
@@ -20,6 +22,7 @@ import {
   Clock,
   CheckCircle,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   Zap,
   Target,
@@ -51,10 +54,30 @@ interface Feature {
 
 export default function IntroductionPage() {
   const [isVisible, setIsVisible] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     setIsVisible(true)
+    checkAuth()
   }, [])
+
+  const checkAuth = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      setIsAuthenticated(!!user)
+    } catch (error) {
+      setIsAuthenticated(false)
+    }
+  }
+
+  const handleBack = () => {
+    if (isAuthenticated) {
+      router.push('/dashboard')
+    } else {
+      router.push('/')
+    }
+  }
 
   const features: Feature[] = [
     {
@@ -322,28 +345,23 @@ export default function IntroductionPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-3">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg blur opacity-75"></div>
-                <TrendingUp className="relative h-8 w-8 text-white" />
+              <button
+                onClick={handleBack}
+                className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 font-semibold transition-colors group"
+              >
+                <ArrowLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
+                <span>Quay lại</span>
+              </button>
+              <div className="flex items-center space-x-3 ml-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg blur opacity-75"></div>
+                  <TrendingUp className="relative h-8 w-8 text-white" />
+                </div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Hệ thống Quản lý Tài chính
+                </h1>
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Hệ thống Quản lý Tài chính
-              </h1>
             </div>
-            <nav className="flex space-x-6">
-              <Link 
-                href="/" 
-                className="text-gray-700 hover:text-blue-600 font-semibold transition-colors"
-              >
-                Trang chủ
-              </Link>
-              <Link 
-                href="/login" 
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
-              >
-                Đăng nhập
-              </Link>
-            </nav>
           </div>
         </div>
       </header>
