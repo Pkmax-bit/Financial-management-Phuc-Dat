@@ -2408,13 +2408,45 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     displayFractionDigits?: number
   }) => {
     const [text, setText] = useState<string>('')
+    const inputRef = useRef<HTMLInputElement>(null)
+    const cursorPositionRef = useRef<number | null>(null)
+    const isInitializedRef = useRef(false)
     const isEditing = editingCell && editingCell.index === index && editingCell.field === field
 
+    // Initialize text when starting to edit (only once when entering edit mode)
     useEffect(() => {
-      if (isEditing) {
-        setText(value == null ? '' : String(value))
+      if (isEditing && !isInitializedRef.current) {
+        const initialValue = value == null ? '' : String(value)
+        setText(initialValue)
+        isInitializedRef.current = true
+        // Focus and set cursor at end
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus()
+            const len = initialValue.length
+            inputRef.current.setSelectionRange(len, len)
+          }
+        }, 0)
+      } else if (!isEditing) {
+        // Reset when exiting edit mode
+        isInitializedRef.current = false
+        cursorPositionRef.current = null
       }
-    }, [isEditing])
+    }, [isEditing, value])
+
+    // Restore focus and cursor position after re-render when commitOnChange is enabled
+    useEffect(() => {
+      if (isEditing && inputRef.current && cursorPositionRef.current !== null) {
+        const pos = cursorPositionRef.current
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus()
+            inputRef.current.setSelectionRange(pos, pos)
+            cursorPositionRef.current = null
+          }
+        }, 0)
+      }
+    }, [text, isEditing])
 
     if (!isEditing) {
       const display = value == null
@@ -2437,10 +2469,15 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
     return (
       <input
+        ref={inputRef}
         type={format === 'number' ? 'number' : 'text'}
         value={text}
         onChange={(e) => {
           const nvRaw = e.target.value
+          // Save cursor position before state update
+          if (e.target instanceof HTMLInputElement) {
+            cursorPositionRef.current = e.target.selectionStart
+          }
           setText(nvRaw)
           if (commitOnChange) {
             const parsed = nvRaw.trim() === '' ? null : (format === 'number' ? Number(nvRaw) : parseNumber(nvRaw))
@@ -2451,14 +2488,20 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           const nv = text.trim() === '' ? null : parseNumber(text)
           onChange(nv)
           setEditingCell(null)
+          cursorPositionRef.current = null
+          isInitializedRef.current = false
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             const nv = text.trim() === '' ? null : parseNumber(text)
             onChange(nv)
             setEditingCell(null)
+            cursorPositionRef.current = null
+            isInitializedRef.current = false
           } else if (e.key === 'Escape') {
             setEditingCell(null)
+            cursorPositionRef.current = null
+            isInitializedRef.current = false
           }
         }}
         className="w-full border border-blue-400 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"

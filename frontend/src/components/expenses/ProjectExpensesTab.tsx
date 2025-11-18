@@ -28,6 +28,7 @@ import CreateExpenseObjectDialog from './CreateExpenseObjectDialog'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
 import { supabase } from '@/lib/supabase'
 import { getApiUrl } from '@/lib/apiUrl'
+import { PROJECT_STATUS_FILTER_OPTIONS } from '@/config/projectStatus'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || getApiUrl()
 
 interface ProjectExpense {
@@ -1070,12 +1071,11 @@ return (
           onChange={(e) => setProjectStatusFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="all">Tất cả trạng thái</option>
-          <option value="planning">Lập kế hoạch</option>
-          <option value="active">Đang hoạt động</option>
-          <option value="on_hold">Tạm dừng</option>
-          <option value="completed">Hoàn thành</option>
-          <option value="cancelled">Đã hủy</option>
+          {PROJECT_STATUS_FILTER_OPTIONS.map((status) => (
+            <option key={status.value} value={status.value}>
+              {status.label}
+            </option>
+          ))}
         </select>
       </div>
     </div>
@@ -1239,9 +1239,12 @@ return (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Trạng thái
                 </th>
+                {/* Thao tác - chỉ hiển thị khi không phải tab "Tất cả" */}
+                {viewMode !== 'all' && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Thao tác
                 </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1287,6 +1290,8 @@ return (
                       <span className="ml-1">{project.variance_percentage > 0 ? 'Vượt chi phí kế hoạch' : 'Đã duyệt'}</span>
                     </span>
                   </td>
+                  {/* Thao tác - chỉ hiển thị khi không phải tab "Tất cả" */}
+                  {viewMode !== 'all' && (
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
@@ -1310,6 +1315,7 @@ return (
                       </button>
                     </div>
                   </td>
+                  )}
                 </tr>
                 ))
               ) : (

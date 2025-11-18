@@ -25,6 +25,7 @@ import QuoteEmailPreviewModal from './QuoteEmailPreviewModal'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { getApiEndpoint } from '@/lib/apiUrl'
+import { PROJECT_STATUS_FILTER_OPTIONS } from '@/config/projectStatus'
 
 interface Quote {
   id: string
@@ -1232,12 +1233,11 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             onChange={(e) => setProjectStatusFilter(e.target.value)}
             className="px-3 py-1 rounded-md text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="planning">Lập kế hoạch</option>
-            <option value="active">Đang hoạt động</option>
-            <option value="on_hold">Tạm dừng</option>
-            <option value="completed">Hoàn thành</option>
-            <option value="cancelled">Đã hủy</option>
+            {PROJECT_STATUS_FILTER_OPTIONS.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
           </select>
         </div>
 

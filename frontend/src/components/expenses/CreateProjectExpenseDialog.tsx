@@ -19,7 +19,8 @@ import {
   CheckCircle,
   Clock,
   Eye,
-  CircleHelp
+  CircleHelp,
+  RefreshCw
 } from 'lucide-react'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -195,6 +196,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const [parentExpenses, setParentExpenses] = useState<{ id: string; expense_code?: string; description: string; amount: number }[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [descriptionIsManual, setDescriptionIsManual] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
     amounts: true,
@@ -4600,7 +4602,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           value={formData.project_id}
                           onChange={async (e) => {
                             const value = e.target.value
-                            setFormData({ ...formData, project_id: value })
+                            const selectedProject = projects.find(p => p.id === value)
+                            // Tự động điền mô tả khi chọn dự án
+                            const newDescription = value && selectedProject
+                              ? `${selectedProject.name} - chi phí ${category === 'planned' ? 'kế hoạch' : 'thực tế'}`
+                              : formData.description
+                            setFormData({ ...formData, project_id: value, description: newDescription })
+                            // Reset flag khi chọn dự án mới
+                            if (value) {
+                              setDescriptionIsManual(false)
+                            }
                             if (value) {
                               await loadInvoiceItemsForProject(value)
                             } else {
@@ -4904,42 +4915,6 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       )}
                     </div>
                   </div>
-
-                  <div data-tour-id={category === 'planned' ? 'planned-expense-field-description' : 'actual-expense-field-description'}>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Mô tả <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => {
-                        setFormData({ ...formData, description: e.target.value })
-                        // Clear system notification when user starts typing
-                        if (systemNotification && e.target.value.trim()) {
-                          setSystemNotification('')
-                        }
-                      }}
-                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                        errors.description ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                      }`}
-                      rows={3}
-                      placeholder="Mô tả chi tiết về chi phí dự án..."
-                    />
-                    {errors.description && (
-                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="flex items-start">
-                          <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
-                          <div>
-                            <p className="text-red-700 text-sm font-medium">
-                              {errors.description}
-                            </p>
-                            <p className="text-red-600 text-xs mt-1">
-                              Mô tả chi phí giúp quản lý và theo dõi ngân sách dự án hiệu quả hơn.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
@@ -4973,6 +4948,31 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     <h3 className="text-lg font-semibold text-gray-900">Chi tiết hóa đơn</h3>
                     <div className="flex items-center space-x-2">
                       <div className="text-sm text-gray-600">100% Đối tượng chi phí</div>
+                      {/* Load lại chi phí button - chỉ hiển thị khi đang edit và có project_id */}
+                      {isEdit && formData.project_id && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setLoading(true)
+                              showNotification('Đang tải lại chi phí từ dự án...', 'info')
+                              await loadInvoiceItemsForProject(formData.project_id)
+                              showNotification('Đã tải lại chi phí thành công!', 'success')
+                            } catch (error) {
+                              console.error('❌ Error reloading expenses:', error)
+                              showNotification('Lỗi khi tải lại chi phí: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'), 'error')
+                            } finally {
+                              setLoading(false)
+                            }
+                          }}
+                          disabled={loading || submitting}
+                          className="flex items-center px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Tải lại chi phí từ dự án (kế hoạch/thực tế)"
+                        >
+                          <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                          Load lại chi phí
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setShowColumnDialog(true)}
@@ -5842,19 +5842,6 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      URL hóa đơn/chứng từ
-                    </label>
-                    <input
-                      type="url"
-                      value={formData.receipt_url}
-                      onChange={(e) => setFormData({ ...formData, receipt_url: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      placeholder="https://example.com/receipt.pdf"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
                       Ghi chú
                     </label>
                     <textarea
@@ -5864,6 +5851,45 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       rows={3}
                       placeholder="Ghi chú thêm về chi phí dự án..."
                     />
+                  </div>
+
+                  {/* Mô tả - di chuyển xuống cuối */}
+                  <div data-tour-id={category === 'planned' ? 'planned-expense-field-description' : 'actual-expense-field-description'}>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Mô tả <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => {
+                        setFormData({ ...formData, description: e.target.value })
+                        // Đánh dấu là người dùng đã chỉnh sửa thủ công
+                        setDescriptionIsManual(true)
+                        // Clear system notification when user starts typing
+                        if (systemNotification && e.target.value.trim()) {
+                          setSystemNotification('')
+                        }
+                      }}
+                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
+                        errors.description ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                      rows={3}
+                      placeholder="Mô tả chi tiết về chi phí dự án..."
+                    />
+                    {errors.description && (
+                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="flex items-start">
+                          <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                          <div>
+                            <p className="text-red-700 text-sm font-medium">
+                              {errors.description}
+                            </p>
+                            <p className="text-red-600 text-xs mt-1">
+                              Mô tả chi phí giúp quản lý và theo dõi ngân sách dự án hiệu quả hơn.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

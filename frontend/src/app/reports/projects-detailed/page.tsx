@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
 import * as XLSX from 'xlsx'
+import { PROJECT_STATUS_FILTER_OPTIONS, getProjectStatusBadgeClass, getProjectStatusLabel } from '@/config/projectStatus'
 
 interface ProjectSummary {
   id: string
@@ -594,28 +595,6 @@ export default function ProjectsDetailedReportPage() {
     }).format(amount)
   }
 
-  const getStatusColor = (status: string) => {
-    const colors: { [key: string]: string } = {
-      'planning': 'bg-blue-100 text-blue-800',
-      'active': 'bg-green-100 text-green-800',
-      'on_hold': 'bg-yellow-100 text-yellow-800',
-      'completed': 'bg-gray-100 text-gray-800',
-      'cancelled': 'bg-red-100 text-red-800'
-    }
-    return colors[status] || 'bg-gray-100 text-gray-800'
-  }
-
-  const getStatusText = (status: string) => {
-    const texts: { [key: string]: string } = {
-      'planning': 'Lập kế hoạch',
-      'active': 'Đang hoạt động',
-      'on_hold': 'Tạm dừng',
-      'completed': 'Hoàn thành',
-      'cancelled': 'Đã hủy'
-    }
-    return texts[status] || status
-  }
-
   const filteredProjects = projects.filter(project => {
     const matchesSearch = 
       project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -655,7 +634,7 @@ export default function ProjectsDetailedReportPage() {
         'Mã dự án': project.project_code,
         'Tên dự án': project.name,
         'Khách hàng': project.customer_name,
-        'Trạng thái': getStatusText(project.status),
+        'Trạng thái': getProjectStatusLabel(project.status),
         'Doanh thu thực tế (VND)': project.actual_revenue,
         'Chi phí thực tế (VND)': project.actual_costs,
         'Lợi nhuận (VND)': project.actual_profit,
@@ -716,7 +695,7 @@ export default function ProjectsDetailedReportPage() {
         detailData.push({ 'A': 'Mã dự án:', 'B': project.project_code, 'C': '', 'D': '', 'E': '' })
         detailData.push({ 'A': 'Tên dự án:', 'B': project.name, 'C': '', 'D': '', 'E': '' })
         detailData.push({ 'A': 'Khách hàng:', 'B': project.customer_name, 'C': '', 'D': '', 'E': '' })
-        detailData.push({ 'A': 'Trạng thái:', 'B': getStatusText(project.status), 'C': '', 'D': '', 'E': '' })
+        detailData.push({ 'A': 'Trạng thái:', 'B': getProjectStatusLabel(project.status), 'C': '', 'D': '', 'E': '' })
         detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
 
         // Financial Summary
@@ -789,7 +768,7 @@ export default function ProjectsDetailedReportPage() {
               'A': quote.quote_number,
               'B': new Date(quote.issue_date).toLocaleDateString('vi-VN'),
               'C': quote.total_amount,
-              'D': quote.status === 'draft' ? 'Nháp' : quote.status === 'sent' ? 'Đã gửi' : quote.status === 'accepted' ? 'Đã chấp nhận' : getStatusText(quote.status),
+              'D': quote.status === 'draft' ? 'Nháp' : quote.status === 'sent' ? 'Đã gửi' : quote.status === 'accepted' ? 'Đã chấp nhận' : getProjectStatusLabel(quote.status),
               'E': productsList || 'Không có sản phẩm'
             })
           }
@@ -1240,12 +1219,11 @@ export default function ProjectsDetailedReportPage() {
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900 font-medium"
                   >
-                    <option value="all">Tất cả trạng thái</option>
-                    <option value="planning">Lập kế hoạch</option>
-                    <option value="active">Đang hoạt động</option>
-                    <option value="on_hold">Tạm dừng</option>
-                    <option value="completed">Hoàn thành</option>
-                    <option value="cancelled">Đã hủy</option>
+                    {PROJECT_STATUS_FILTER_OPTIONS.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1368,8 +1346,8 @@ export default function ProjectsDetailedReportPage() {
                           {project.customer_name}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(project.status)}`}>
-                            {getStatusText(project.status)}
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getProjectStatusBadgeClass(project.status)}`}>
+                            {getProjectStatusLabel(project.status)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
