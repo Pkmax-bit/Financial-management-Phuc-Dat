@@ -70,6 +70,7 @@ class ProjectUpdate(BaseModel):
     budget: Optional[float] = None
     actual_cost: Optional[float] = None
     status: Optional[ProjectStatus] = None
+    status_id: Optional[str] = None  # Support dynamic status via status_id
     priority: Optional[ProjectPriority] = None
     progress: Optional[float] = None
     billing_type: Optional[str] = None

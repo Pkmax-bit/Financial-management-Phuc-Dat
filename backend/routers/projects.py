@@ -216,6 +216,284 @@ async def debug_auth_optional(request: Request):
             "message": "No authorization header found"
         }
 
+# ============================================================================
+# Project Statuses Management
+# Must be defined BEFORE /{project_id} route to avoid route conflicts
+# ============================================================================
+
+class ProjectStatus(BaseModel):
+    """Project status model"""
+    id: str
+    name: str
+    display_order: int
+    description: Optional[str] = None
+    color_class: str = "bg-gray-100 text-gray-800"
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+class ProjectStatusCreate(BaseModel):
+    """Project status creation model"""
+    name: str
+    display_order: int
+    description: Optional[str] = None
+    color_class: Optional[str] = "bg-gray-100 text-gray-800"
+
+class ProjectStatusUpdate(BaseModel):
+    """Project status update model"""
+    name: Optional[str] = None
+    display_order: Optional[int] = None
+    description: Optional[str] = None
+    color_class: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@router.get("/statuses", response_model=List[ProjectStatus])
+async def get_project_statuses(
+    current_user: User = Depends(get_current_user)
+):
+    """Get all project statuses ordered by display_order"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("project_statuses")\
+            .select("*")\
+            .eq("is_active", True)\
+            .order("display_order", desc=False)\
+            .execute()
+        
+        if result.data:
+            return result.data
+        
+        return []
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch project statuses: {str(e)}"
+        )
+
+@router.post("/statuses", response_model=ProjectStatus)
+async def create_project_status(
+    status_data: ProjectStatusCreate,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Create a new project status"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if name already exists
+        existing = supabase.table("project_statuses")\
+            .select("id")\
+            .eq("name", status_data.name)\
+            .execute()
+        
+        if existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project status with name '{status_data.name}' already exists"
+            )
+        
+        # Check if display_order already exists
+        existing_order = supabase.table("project_statuses")\
+            .select("id")\
+            .eq("display_order", status_data.display_order)\
+            .execute()
+        
+        if existing_order.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project status with display_order '{status_data.display_order}' already exists"
+            )
+        
+        # Create new status
+        result = supabase.table("project_statuses")\
+            .insert({
+                "name": status_data.name,
+                "display_order": status_data.display_order,
+                "description": status_data.description,
+                "color_class": status_data.color_class or "bg-gray-100 text-gray-800",
+                "is_active": True
+            })\
+            .execute()
+        
+        if result.data:
+            return result.data[0]
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to create project status"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create project status: {str(e)}"
+        )
+
+@router.put("/statuses/{status_id}", response_model=ProjectStatus)
+async def update_project_status_item(
+    status_id: str,
+    status_data: ProjectStatusUpdate,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Update a project status"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if status exists
+        existing = supabase.table("project_statuses")\
+            .select("*")\
+            .eq("id", status_id)\
+            .execute()
+        
+        if not existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project status not found"
+            )
+        
+        # Check name uniqueness if name is being updated
+        if status_data.name:
+            name_check = supabase.table("project_statuses")\
+                .select("id")\
+                .eq("name", status_data.name)\
+                .neq("id", status_id)\
+                .execute()
+            
+            if name_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Project status with name '{status_data.name}' already exists"
+                )
+        
+        # Check display_order uniqueness if order is being updated
+        # Note: We allow temporary conflicts during shifting operations
+        # The frontend handles shifting statuses before creating/updating
+        if status_data.display_order is not None:
+            order_check = supabase.table("project_statuses")\
+                .select("id")\
+                .eq("display_order", status_data.display_order)\
+                .neq("id", status_id)\
+                .execute()
+            
+            if order_check.data:
+                # If we're just incrementing by 1 (likely a shift operation), allow it
+                # by first shifting the conflicting status
+                current_order = existing.data[0].get('display_order')
+                if current_order is not None and status_data.display_order == current_order + 1:
+                    # This is likely a shift operation, check if we can shift the conflicting status
+                    conflicting_status = order_check.data[0]
+                    # Try to shift the conflicting status up by 1
+                    try:
+                        supabase.table("project_statuses")\
+                            .update({"display_order": status_data.display_order + 1})\
+                            .eq("id", conflicting_status['id'])\
+                            .execute()
+                    except:
+                        # If shift fails, raise the original error
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Project status with display_order '{status_data.display_order}' already exists"
+                        )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Project status with display_order '{status_data.display_order}' already exists"
+                    )
+        
+        # Build update data
+        update_data = {}
+        if status_data.name is not None:
+            update_data["name"] = status_data.name
+        if status_data.display_order is not None:
+            update_data["display_order"] = status_data.display_order
+        if status_data.description is not None:
+            update_data["description"] = status_data.description
+        if status_data.color_class is not None:
+            update_data["color_class"] = status_data.color_class
+        if status_data.is_active is not None:
+            update_data["is_active"] = status_data.is_active
+        
+        # Update status
+        result = supabase.table("project_statuses")\
+            .update(update_data)\
+            .eq("id", status_id)\
+            .execute()
+        
+        if result.data:
+            return result.data[0]
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to update project status"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update project status: {str(e)}"
+        )
+
+@router.delete("/statuses/{status_id}")
+async def delete_project_status(
+    status_id: str,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Delete a project status permanently from database"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if status exists
+        existing = supabase.table("project_statuses")\
+            .select("*")\
+            .eq("id", status_id)\
+            .execute()
+        
+        if not existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project status not found"
+            )
+        
+        # Check if any projects are using this status
+        projects_using_status = supabase.table("projects")\
+            .select("id")\
+            .eq("status_id", status_id)\
+            .limit(1)\
+            .execute()
+        
+        if projects_using_status.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete project status that is in use by projects"
+            )
+        
+        # Hard delete - permanently remove from database
+        result = supabase.table("project_statuses")\
+            .delete()\
+            .eq("id", status_id)\
+            .execute()
+        
+        if result.data:
+            return {"message": "Project status deleted successfully"}
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to delete project status"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete project status: {str(e)}"
+        )
+
 @router.get("/{project_id}", response_model=Project)
 async def get_project(
     project_id: str
@@ -460,14 +738,15 @@ async def update_project(
         if 'priority' in update_data and hasattr(update_data['priority'], 'value'):
             update_data['priority'] = update_data['priority'].value
         
-        # Auto-update status based on progress
-        if 'progress' in update_data:
+        # Auto-update status based on progress (only if status_id is not being updated)
+        # If status_id is provided, respect it and don't auto-update status enum
+        if 'progress' in update_data and 'status_id' not in update_data:
             progress = update_data['progress']
             # Get current project status
             current_project = supabase.table("projects").select("status").eq("id", project_id).execute()
             current_status = current_project.data[0]['status'] if current_project.data else 'planning'
             
-            # Auto-change status based on progress
+            # Auto-change status based on progress (only for legacy status enum)
             if progress > 0 and current_status == 'planning':
                 update_data['status'] = 'active'
             elif progress >= 100 and current_status not in ['completed', 'cancelled']:

@@ -10,7 +10,7 @@ interface ProjectCardProps {
   progress?: number
   priority?: 'low' | 'medium' | 'high' | 'urgent'
   onClick?: () => void
-  onDragStart?: (project: any) => void
+  onDragStart?: () => void
 }
 
 const priorityColors: Record<string, string> = {
@@ -33,14 +33,7 @@ export default function KanbanCard({
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', id)
-    onDragStart?.({
-      id,
-      name,
-      project_code: projectCode,
-      customer_name: customerName,
-      progress,
-      priority
-    })
+    onDragStart?.()
   }
 
   return (
