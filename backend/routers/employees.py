@@ -64,15 +64,18 @@ async def get_employees_public():
         processed_employees = []
         for emp in result.data or []:
             emp_data = dict(emp)
-            # Add department_name if department exists
-            if emp.get('departments'):
-                emp_data['department_name'] = emp['departments'].get('name')
+            
+            # Handle department_name - Supabase join returns dict or None
+            departments = emp.get('departments')
+            if departments and isinstance(departments, dict):
+                emp_data['department_name'] = departments.get('name')
             else:
                 emp_data['department_name'] = None
             
-            # Add position_name if position exists
-            if emp.get('positions'):
-                emp_data['position_name'] = emp['positions'].get('name')
+            # Handle position_name - Supabase join returns dict or None
+            positions = emp.get('positions')
+            if positions and isinstance(positions, dict):
+                emp_data['position_name'] = positions.get('name')
             else:
                 emp_data['position_name'] = None
             
@@ -171,15 +174,18 @@ async def get_employees(
         processed_employees = []
         for emp in result.data:
             emp_data = dict(emp)
-            # Add department_name if department exists
-            if emp.get('departments'):
-                emp_data['department_name'] = emp['departments'].get('name')
+            
+            # Handle department_name - Supabase join returns dict or None
+            departments = emp.get('departments')
+            if departments and isinstance(departments, dict):
+                emp_data['department_name'] = departments.get('name')
             else:
                 emp_data['department_name'] = None
             
-            # Add position_name if position exists
-            if emp.get('positions'):
-                emp_data['position_name'] = emp['positions'].get('name')
+            # Handle position_name - Supabase join returns dict or None
+            positions = emp.get('positions')
+            if positions and isinstance(positions, dict):
+                emp_data['position_name'] = positions.get('name')
             else:
                 emp_data['position_name'] = None
             
@@ -224,16 +230,21 @@ async def get_employees_simple(current_user: User = Depends(get_current_user_sim
             detail=f"Failed to fetch employees: {str(e)}"
         )
 
-@router.get("/{employee_id}", response_model=Employee)
+@router.get("/{employee_id}")
 async def get_employee(
     employee_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get employee by ID"""
+    """Get employee by ID with department and position names"""
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table("employees").select("*").eq("id", employee_id).execute()
+        # Select with JOIN to get department and position names
+        result = supabase.table("employees").select("""
+            *,
+            departments:department_id(id, name, code),
+            positions:position_id(id, name, code)
+        """).eq("id", employee_id).execute()
         
         if not result.data:
             raise HTTPException(
@@ -241,7 +252,24 @@ async def get_employee(
                 detail="Employee not found"
             )
         
-        return Employee(**result.data[0])
+        emp = result.data[0]
+        emp_data = dict(emp)
+        
+        # Handle department_name - Supabase join returns dict or None
+        departments = emp.get('departments')
+        if departments and isinstance(departments, dict):
+            emp_data['department_name'] = departments.get('name')
+        else:
+            emp_data['department_name'] = None
+        
+        # Handle position_name - Supabase join returns dict or None
+        positions = emp.get('positions')
+        if positions and isinstance(positions, dict):
+            emp_data['position_name'] = positions.get('name')
+        else:
+            emp_data['position_name'] = None
+        
+        return emp_data
         
     except HTTPException:
         raise
