@@ -48,13 +48,9 @@ class EmailService:
         self.debug = os.getenv("EMAIL_DEBUG", "0") == "1"
         # Thread pool executor for running blocking SMTP operations
         self.executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="email_smtp")
-        # Resolve logo path robustly: allow env override, then project-root/image/logo_phucdat.jpg
-        env_logo = os.getenv("COMPANY_LOGO_PATH")
-        if env_logo and os.path.exists(env_logo):
-            self.logo_path = env_logo
-        else:
-            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-            self.logo_path = os.path.join(project_root, 'image', 'logo_phucdat.jpg')
+        # Resolve logo path robustly
+        from utils.file_utils import get_company_logo_path
+        self.logo_path = get_company_logo_path()
         
         # Log email provider being used
         if self.debug:
@@ -331,97 +327,41 @@ class EmailService:
         # Create simple HTML email body with quote details
         quote_items_html = ""
         if quote_items:
-            # Get category names for items from product_service_id -> products -> product_categories
-            category_map = {}
-            product_category_map = {}  # Map product_id -> category_id
-            supabase = get_supabase_client()
-            try:
-                # Get product_service_ids from quote_items
-                product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
-                if product_ids:
-                    # Get products with their category_id
-                    products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
-                    if products_result.data:
-                        # Map product_id -> category_id
-                        product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
-                        # Get unique category_ids
-                        category_ids = list(set([cat_id for cat_id in product_category_map.values() if cat_id]))
-                        if category_ids:
-                            # Get category names
-                            categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
-                            if categories_result.data:
-                                # Map category_id -> category_name
-                                category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
-            except Exception as e:
-                print(f"Error fetching category names from product_service_id: {e}")
-                pass
-            
             quote_items_html = """
-                <div style=\"margin: 20px 0;\">
-                    <table style=\"width: 100%; border-collapse: collapse; border: 1px solid #000;\">
+                <div style="margin: 20px 0;">
+                    <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
                         <thead>
-                            <tr style=\"background: #1e40af; color: #fff;\">
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\">STT</th>
-                                <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\">HẠNG MỤC</th>
-                                <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\">MÔ TẢ CHI TIẾT</th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\">ĐVT</th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\" colspan=\"3\">QUY CÁCH</th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\">KHỐI LƯỢNG (m)</th>
-                                <th style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;\">ĐƠN GIÁ</th>
-                                <th style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;\">THÀNH TIỀN</th>
-                                <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\">GHI CHÚ</th>
+                            <tr style="background: #1e40af; color: #fff;">
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">STT</th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">HẠNG MỤC</th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">MÔ TẢ CHI TIẾT</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">ĐVT</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;" colspan="3">QUY CÁCH</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">KHỐI LƯỢNG (m)</th>
+                                <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">ĐƠN GIÁ</th>
+                                <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">THÀNH TIỀN</th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">GHI CHÚ</th>
                             </tr>
-                            <tr style=\"background: #1e40af; color: #fff;\">
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\"></th>
-                                <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\"></th>
-                                <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\"></th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\"></th>
+                            <tr style="background: #1e40af; color: #fff;">
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">NGANG (mm)</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">SÂU (mm)</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">CAO (mm)</th>
-                                <th style=\"padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;\"></th>
-                                <th style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;\"></th>
-                                <th style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;\"></th>
-                                <th style=\"padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;\"></th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;"></th>
                             </tr>
                         </thead>
                         <tbody>
                 """
             
             for idx, item in enumerate(quote_items, 1):
-                # Lấy category_name từ product_service_id -> products -> product_categories
+                # Category name is now expected to be pre-populated in item['category_name']
                 category_name = item.get('category_name', '')
-                
-                # Nếu chưa có, lấy từ product_service_id sử dụng product_category_map đã tạo sẵn
-                if not category_name:
-                    product_service_id = item.get('product_service_id')
-                    if product_service_id and product_service_id in product_category_map:
-                        category_id = product_category_map[product_service_id]
-                        if category_id and category_id in category_map:
-                            category_name = category_map[category_id]
-                        elif category_id:
-                            try:
-                                cat_result = supabase.table("product_categories").select("name").eq("id", category_id).single().execute()
-                                if cat_result.data:
-                                    category_name = cat_result.data.get('name', '')
-                                    category_map[category_id] = category_name
-                            except Exception:
-                                pass
-                
-                # Fallback: nếu vẫn chưa có, thử lấy từ product_category_id (backward compatibility)
-                if not category_name:
-                    product_category_id = item.get('product_category_id')
-                    if product_category_id:
-                        if product_category_id in category_map:
-                            category_name = category_map[product_category_id]
-                        else:
-                            try:
-                                cat_result = supabase.table("product_categories").select("name").eq("id", product_category_id).single().execute()
-                                if cat_result.data:
-                                    category_name = cat_result.data.get('name', '')
-                                    category_map[product_category_id] = category_name
-                            except Exception:
-                                pass
                 
                 length = item.get('length') or ''
                 depth = item.get('depth') or ''

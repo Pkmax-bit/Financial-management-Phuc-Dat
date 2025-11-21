@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Background
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 import uuid
+import asyncio
 from pydantic import BaseModel
 
 from models.quote import Quote, QuoteCreate, QuoteUpdate, QuoteConvertToInvoice
@@ -22,10 +23,11 @@ from services.journal_service import journal_service
 from services.project_validation_service import ProjectValidationService
 from services.email_service import email_service
 from services.notification_service import notification_service
+from services.quote_service import quote_service
+from utils.file_utils import get_company_logo_path
 
 router = APIRouter()
 
-# ============================================================================
 # HELPER FUNCTIONS - Hàm hỗ trợ
 # ============================================================================
 
@@ -656,52 +658,8 @@ async def approve_quote(
                     
                     # Send email notification to employee
                     try:
-                        # Get quote items for email
-                        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
-                        quote_items = quote_items_result.data if quote_items_result.data else []
-                        
-                        # Get category names from product_service_id -> products -> product_categories
-                        category_map = {}
-                        product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
-                        if product_ids:
-                            try:
-                                # Get products with their category_id
-                                products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
-                                if products_result.data:
-                                    # Map product_id -> category_id
-                                    product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
-                                    # Get unique category_ids
-                                    category_ids = list(set([cat_id for cat_id in product_category_map.values() if cat_id]))
-                                    if category_ids:
-                                        # Get category names
-                                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
-                                        if categories_result.data:
-                                            # Map category_id -> category_name
-                                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
-                                            # Add category_name to each item based on product_service_id
-                                            for item in quote_items:
-                                                product_id = item.get('product_service_id')
-                                                if product_id and product_id in product_category_map:
-                                                    category_id = product_category_map[product_id]
-                                                    if category_id and category_id in category_map:
-                                                        item['category_name'] = category_map[category_id]
-                            except Exception as e:
-                                print(f"Error fetching category names from product_service_id: {e}")
-                                pass
-                        
-                        # Fallback: if category_name not set, try to get from product_category_id (backward compatibility)
-                        for item in quote_items:
-                            if not item.get('category_name') and item.get('product_category_id'):
-                                # Try to get from product_category_id if not already set
-                                if item.get('product_category_id') not in category_map:
-                                    try:
-                                        cat_result = supabase.table("product_categories").select("name").eq("id", item.get('product_category_id')).single().execute()
-                                        if cat_result.data:
-                                            category_map[item.get('product_category_id')] = cat_result.data.get('name', '')
-                                    except Exception:
-                                        pass
-                                if item.get('product_category_id') in category_map:
-                                    item['category_name'] = category_map[item.get('product_category_id')]
+                        # Get quote items with categories using optimized service
+                        quote_items = await quote_service.get_quote_items_with_categories(quote_id)
                         
                         # Send email to employee
                         await email_service.send_quote_approved_notification_email(
@@ -757,17 +715,8 @@ async def get_default_logo(
     import os
     
     try:
-        # Use same logo path as email_service
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        logo_path = os.path.join(project_root, 'image', 'logo_phucdat.jpg')
-        
-        # Try different extensions
-        if not os.path.exists(logo_path):
-            for ext in ['.jpg', '.png', '.jpeg', '.svg']:
-                logo_path_with_ext = os.path.join(project_root, 'image', f'logo_phucdat{ext}')
-                if os.path.exists(logo_path_with_ext):
-                    logo_path = logo_path_with_ext
-                    break
+        # Use centralized logo path logic
+        logo_path = get_company_logo_path()
         
         if os.path.exists(logo_path):
             return FileResponse(
@@ -791,7 +740,7 @@ async def get_default_logo(
 async def preview_quote_email(
     quote_id: str,
     request: Optional[QuoteSendRequest] = None,
-    current_user: User = Depends(require_manager_or_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Preview quote email HTML before sending (GET for load, POST for preview with custom data)"""
     try:
@@ -807,45 +756,35 @@ async def preview_quote_email(
         
         quote = quote_result.data[0]
         
-        # Get customer information
+        # Fetch quote items with categories concurrently with other data if possible
+        # But here we need quote first to get customer_id (though we could fetch quote items in parallel with customer info)
+        
+        # Parallel fetch: Customer Info and Quote Items
+        async def get_customer_info(c_id):
+            if not c_id: return None
+            try:
+                res = supabase.table("customers").select("*").eq("id", c_id).single().execute()
+                return res.data
+            except Exception:
+                return None
+
+        # Execute parallel tasks
+        customer_task = get_customer_info(quote.get("customer_id"))
+        items_task = quote_service.get_quote_items_with_categories(quote_id)
+        
+        customer_data, quote_items = await asyncio.gather(customer_task, items_task)
+        
+        # Process customer data
         customer_name = ""
         customer_email = ""
         customer_phone = ""
         customer_address = ""
-        if quote.get("customer_id"):
-            customer_result = supabase.table("customers").select("*").eq("id", quote.get("customer_id")).single().execute()
-            if customer_result.data:
-                customer = customer_result.data
-                customer_name = customer.get("name", "")
-                customer_email = customer.get("email", "")
-                customer_phone = customer.get("phone", "")
-                customer_address = customer.get("address", "")
         
-        # Get quote items
-        quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
-        quote_items = quote_items_result.data if quote_items_result.data else []
-        
-        # Get category names from product_service_id -> products -> product_categories
-        category_map = {}
-        product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
-        if product_ids:
-            try:
-                products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
-                if products_result.data:
-                    product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
-                    category_ids = list(set([cat_id for cat_id in product_category_map.values() if cat_id]))
-                    if category_ids:
-                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
-                        if categories_result.data:
-                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
-                            for item in quote_items:
-                                product_id = item.get('product_service_id')
-                                if product_id and product_id in product_category_map:
-                                    category_id = product_category_map[product_id]
-                                    if category_id and category_id in category_map:
-                                        item['category_name'] = category_map[category_id]
-            except Exception as e:
-                print(f"Error fetching category names: {e}")
+        if customer_data:
+            customer_name = customer_data.get("name", "")
+            customer_email = customer_data.get("email", "")
+            customer_phone = customer_data.get("phone", "")
+            customer_address = customer_data.get("address", "")
         
         # Get employee information from created_by -> employees -> users
         employee_name = None
@@ -1216,7 +1155,7 @@ async def send_quote_to_customer(
     quote_id: str,
     background_tasks: BackgroundTasks,
     request: Optional[QuoteSendRequest] = None,
-    current_user: User = Depends(require_manager_or_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Send quote to customer via email"""
     try:
