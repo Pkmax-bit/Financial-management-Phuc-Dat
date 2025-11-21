@@ -20,8 +20,14 @@ class UserRole(str, Enum):
     @classmethod
     def _missing_(cls, value):
         """Handle aliases for role values"""
-        if value == "Admin User":
-            return cls.ADMIN
+        if isinstance(value, str):
+            value_lower = value.lower()
+            alias_map = {
+                "admin user": cls.ADMIN,
+                "sale": cls.SALES,  # Some legacy records use "sale" without the trailing s
+            }
+            if value_lower in alias_map:
+                return alias_map[value_lower]
         return None
 
 class User(BaseModel):
