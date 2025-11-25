@@ -740,7 +740,7 @@ async def get_default_logo(
 async def preview_quote_email(
     quote_id: str,
     request: Optional[QuoteSendRequest] = None,
-    current_user: User = Depends(require_manager_or_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Preview quote email HTML before sending (GET for load, POST for preview with custom data)"""
     try:
@@ -1155,7 +1155,7 @@ async def send_quote_to_customer(
     quote_id: str,
     background_tasks: BackgroundTasks,
     request: Optional[QuoteSendRequest] = None,
-    current_user: User = Depends(require_manager_or_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Send quote to customer via email"""
     try:
