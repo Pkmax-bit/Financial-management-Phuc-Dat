@@ -118,7 +118,7 @@ cp env.local.example .env.local
 
 Edit `.env.local`:
 ```env
-NEXT_PUBLIC_SUPABASE_URL="https://mfmijckzlhevduwfigkl.supabase.co"
+NEXT_PUBLIC_SUPABASE_URL="https://........supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your_anon_key_here"
 NEXT_PUBLIC_API_URL="http://localhost:8000"
 NEXT_PUBLIC_DIFY_API_BASE_URL="https://api.dify.ai/v1"
