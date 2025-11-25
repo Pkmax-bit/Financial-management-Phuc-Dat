@@ -61,33 +61,28 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
   const generateProjectCode = async () => {
     try {
-      // Get all existing project codes from database
+      // Get the last project code from database ordered by created_at
       const { data, error } = await supabase
         .from('projects')
         .select('project_code')
         .order('created_at', { ascending: false })
+        .limit(1)
 
       if (error) throw error
 
-      // Extract all existing numbers
-      const existingNumbers = new Set<number>()
-      if (data && data.length > 0) {
-        data.forEach(project => {
-          // Check for both #PRJ and PRJ formats
-          const match1 = project.project_code.match(/#PRJ(\d+)/)
-          const match2 = project.project_code.match(/PRJ(\d+)/)
-          if (match1) {
-            existingNumbers.add(parseInt(match1[1]))
-          } else if (match2) {
-            existingNumbers.add(parseInt(match2[1]))
-          }
-        })
-      }
-
-      // Find the next available number
       let nextNumber = 1
-      while (existingNumbers.has(nextNumber)) {
-        nextNumber++
+      
+      if (data && data.length > 0 && data[0].project_code) {
+        // Extract number from the last project code
+        const lastCode = data[0].project_code
+        const match1 = lastCode.match(/#PRJ(\d+)/)
+        const match2 = lastCode.match(/PRJ(\d+)/)
+        
+        if (match1) {
+          nextNumber = parseInt(match1[1]) + 1
+        } else if (match2) {
+          nextNumber = parseInt(match2[1]) + 1
+        }
       }
 
       // Format as PRJXXX (3 digits)
@@ -340,26 +335,15 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                 Mã dự án *
               </label>
               <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    name="project_code"
-                    value={formData.project_code}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                    placeholder="VD: PRJ001"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={generateProjectCode}
-                  className="px-3 py-2.5 bg-blue-100 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
-                  title="Tạo mã mới"
-                >
-                  <Plus className="h-4 w-4" />
-                  Tạo mới
-                </button>
+                <input
+                  type="text"
+                  name="project_code"
+                  value={formData.project_code}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
+                  placeholder="VD: PRJ001"
+                />
               </div>
             </div>
 

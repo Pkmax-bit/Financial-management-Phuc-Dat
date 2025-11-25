@@ -1,30 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ProjectTeamDialog } from './ProjectTeamDialog'
-import { 
-  FolderOpen, 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Eye,
-  Calendar,
-  DollarSign,
-  Users,
-  Target,
-  Clock,
-  TrendingUp,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  Pause,
-  X,
-  Save
-} from 'lucide-react'
+import { Search, Eye, Edit, Trash2, Calendar, DollarSign, Users, Target, MoreVertical, Filter, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { projectApi } from '@/lib/api'
-import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface Project {
   id: string
@@ -53,342 +31,268 @@ interface ProjectsTabProps {
   onEditProject: (project: Project) => void
   onViewProject: (project: Project) => void
   onDeleteProject: (project: Project) => void
-  user?: {
-    full_name?: string
-    email?: string
-    id?: string
-  }
 }
 
-const statusColors = {
-  planning: 'bg-blue-100 text-blue-800',
-  active: 'bg-green-100 text-green-800',
-  on_hold: 'bg-yellow-100 text-yellow-800',
-  completed: 'bg-gray-100 text-gray-800',
-  cancelled: 'bg-red-100 text-red-800'
+const statusColors: Record<string, string> = {
+  planning: 'bg-gray-100 text-gray-700',
+  active: 'bg-green-100 text-green-700',
+  on_hold: 'bg-yellow-100 text-yellow-700',
+  completed: 'bg-blue-100 text-blue-700',
+  cancelled: 'bg-red-100 text-red-700'
 }
 
-const priorityColors = {
-  low: 'bg-gray-100 text-gray-800',
-  medium: 'bg-blue-100 text-blue-800',
-  high: 'bg-orange-100 text-orange-800',
-  urgent: 'bg-red-100 text-red-800'
+const statusLabels: Record<string, string> = {
+  planning: 'Lập kế hoạch',
+  active: 'Đang hoạt động',
+  on_hold: 'Tạm dừng',
+  completed: 'Hoàn thành',
+  cancelled: 'Đã hủy'
 }
 
-const getStatusText = (status: string) => {
-  const statusMap: { [key: string]: string } = {
-    'planning': 'Lập kế hoạch',
-    'active': 'Đang hoạt động',
-    'on_hold': 'Tạm dừng',
-    'completed': 'Hoàn thành',
-    'cancelled': 'Đã hủy'
-  }
-  return statusMap[status] || status
+const priorityColors: Record<string, string> = {
+  low: 'bg-gray-200 text-gray-700',
+  medium: 'bg-blue-100 text-blue-700',
+  high: 'bg-yellow-100 text-yellow-800',
+  urgent: 'bg-red-100 text-red-700'
 }
 
-const getPriorityText = (priority: string) => {
-  const priorityMap: { [key: string]: string } = {
-    'low': 'Thấp',
-    'medium': 'Trung bình',
-    'high': 'Cao',
-    'urgent': 'Khẩn cấp'
-  }
-  return priorityMap[priority] || priority
+const priorityLabels: Record<string, string> = {
+  low: 'Thấp',
+  medium: 'Trung bình',
+  high: 'Cao',
+  urgent: 'Khẩn cấp'
 }
 
-const statusIcons = {
-  planning: Target,
-  active: CheckCircle,
-  on_hold: Pause,
-  completed: CheckCircle,
-  cancelled: XCircle
-}
-
-export default function ProjectsTab({ 
-  onCreateProject, 
-  onEditProject, 
-  onViewProject, 
-  onDeleteProject,
-  user
+export default function ProjectsTab({
+  onCreateProject,
+  onEditProject,
+  onViewProject,
+  onDeleteProject
 }: ProjectsTabProps) {
-  const { sidebarOpen } = useSidebar()
   const [projects, setProjects] = useState<Project[]>([])
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [priorityFilter, setPriorityFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('name')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [error, setError] = useState<string | null>(null)
-  const [generatedCode, setGeneratedCode] = useState<string>('')
-  const [teamDialogOpen, setTeamDialogOpen] = useState(false)
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
-  const [selectedProjectName, setSelectedProjectName] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [showFilter, setShowFilter] = useState(false)
+  const [dateFilter, setDateFilter] = useState({
+    from: '',
+    to: ''
+  })
 
   useEffect(() => {
     fetchProjects()
   }, [])
 
-  const generateProjectCode = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('project_code')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-
-      const existingNumbers = new Set<number>()
-      if (data && data.length > 0) {
-        data.forEach(project => {
-          const match1 = project.project_code.match(/#PRJ(\d+)/)
-          const match2 = project.project_code.match(/PRJ(\d+)/)
-          if (match1) {
-            existingNumbers.add(parseInt(match1[1]))
-          } else if (match2) {
-            existingNumbers.add(parseInt(match2[1]))
-          }
-        })
-      }
-
-      let nextNumber = 1
-      while (existingNumbers.has(nextNumber)) {
-        nextNumber++
-      }
-
-      const newCode = `PRJ${nextNumber.toString().padStart(3, '0')}`
-      setGeneratedCode(newCode)
-      
-      await navigator.clipboard.writeText(newCode)
-      
-      alert(`Mã dự án mới: ${newCode}\nĐã sao chép vào clipboard!`)
-      
-    } catch (error) {
-      console.error('Error generating project code:', error)
-      const timestamp = Date.now().toString().slice(-6)
-      const fallbackCode = `PRJ${timestamp}`
-      setGeneratedCode(fallbackCode)
-      await navigator.clipboard.writeText(fallbackCode)
-      alert(`Mã dự án mới: ${fallbackCode}\nĐã sao chép vào clipboard!`)
-    }
-  }
+  useEffect(() => {
+    filterProjects()
+  }, [projects, searchQuery, statusFilter, dateFilter])
 
   const fetchProjects = async () => {
     try {
       setLoading(true)
-      setError(null)
-      
-      try {
-        const data = await projectApi.getProjects()
-        setProjects(data || [])
-      } catch (apiError) {
-        console.log('API failed, falling back to Supabase:', apiError)
-        
-        const { data, error } = await supabase
-          .from('projects')
-          .select(`
-            *,
-            customers:customer_id(name),
-            employees:manager_id(first_name, last_name)
-          `)
-          .order('created_at', { ascending: false })
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          id,
+          project_code,
+          name,
+          description,
+          customer_id,
+          manager_id,
+          start_date,
+          end_date,
+          budget,
+          actual_cost,
+          status,
+          priority,
+          progress,
+          billing_type,
+          hourly_rate,
+          created_at,
+          updated_at,
+          customers(name),
+          employees!manager_id(
+            id,
+            first_name,
+            last_name
+          )
+        `)
+        .order('created_at', { ascending: false })
 
-        if (error) throw error
+      if (error) throw error
 
-        const projects = data?.map(project => ({
-          ...project,
-          customer_name: project.customers?.name,
-          manager_name: project.employees ? `${project.employees.first_name} ${project.employees.last_name}` : 'Unknown'
-        })) || []
+      const mappedProjects: Project[] = (data || []).map((p: any) => ({
+        id: p.id,
+        project_code: p.project_code,
+        name: p.name,
+        description: p.description,
+        customer_id: p.customer_id,
+        customer_name: p.customers?.name,
+        manager_id: p.manager_id,
+        manager_name: p.employees
+          ? `${p.employees.first_name || ''} ${p.employees.last_name || ''}`.trim()
+          : undefined,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        budget: p.budget,
+        actual_cost: p.actual_cost,
+        status: p.status,
+        priority: p.priority,
+        progress: typeof p.progress === 'number' ? p.progress : Number(p.progress ?? 0),
+        billing_type: p.billing_type,
+        hourly_rate: p.hourly_rate,
+        created_at: p.created_at,
+        updated_at: p.updated_at
+      }))
 
-        setProjects(projects)
-      }
+      setProjects(mappedProjects)
     } catch (error) {
       console.error('Error fetching projects:', error)
-      setError('Failed to fetch projects')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async (project: Project) => {
-    if (window.confirm(`Are you sure you want to delete project "${project.name}"?`)) {
-      try {
-        try {
-          await projectApi.deleteProject(project.id)
-        } catch (apiError) {
-          console.log('API failed, falling back to Supabase:', apiError)
+  const filterProjects = () => {
+    let filtered = [...projects]
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.project_code.toLowerCase().includes(query) ||
+          p.customer_name?.toLowerCase().includes(query) ||
+          p.manager_name?.toLowerCase().includes(query)
+      )
+    }
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((p) => p.status === statusFilter)
+    }
+
+    // Filter by date range (start_date and end_date)
+    if (dateFilter.from || dateFilter.to) {
+      filtered = filtered.filter((p) => {
+        // Check if project's start_date or end_date falls within the range
+        const projectStartDate = p.start_date ? new Date(p.start_date) : null
+        const projectEndDate = p.end_date ? new Date(p.end_date) : null
+        const fromDate = dateFilter.from ? new Date(dateFilter.from) : null
+        const toDate = dateFilter.to ? new Date(dateFilter.to) : null
+
+        // Normalize dates (ignore time)
+        if (projectStartDate) projectStartDate.setHours(0, 0, 0, 0)
+        if (projectEndDate) projectEndDate.setHours(0, 0, 0, 0)
+        if (fromDate) fromDate.setHours(0, 0, 0, 0)
+        if (toDate) toDate.setHours(0, 0, 0, 0)
+
+        // If both from and to are set, check if project dates overlap with range
+        if (fromDate && toDate) {
+          // Project is included if:
+          // - Project start_date is within range, OR
+          // - Project end_date is within range, OR
+          // - Project spans the entire range
+          const startInRange = projectStartDate && projectStartDate >= fromDate && projectStartDate <= toDate
+          const endInRange = projectEndDate && projectEndDate >= fromDate && projectEndDate <= toDate
+          const spansRange = projectStartDate && projectEndDate && projectStartDate <= fromDate && projectEndDate >= toDate
           
-          const { error } = await supabase
-            .from('projects')
-            .delete()
-            .eq('id', project.id)
-
-          if (error) throw error
+          return startInRange || endInRange || spansRange
+        } else if (fromDate) {
+          // Only from date: include projects that start on or after this date
+          return projectStartDate && projectStartDate >= fromDate
+        } else if (toDate) {
+          // Only to date: include projects that end on or before this date
+          return projectEndDate && projectEndDate <= toDate
         }
-
-        setProjects(projects.filter(p => p.id !== project.id))
-      } catch (error) {
-        console.error('Error deleting project:', error)
-        alert('Failed to delete project')
-      }
+        
+        return true
+      })
     }
+
+    setFilteredProjects(filtered)
   }
 
-  const handleQuickSave = async (project: Project) => {
+  const handleDelete = async (project: Project) => {
     try {
-      const updateData = {
-        name: project.name,
-        description: project.description,
-        customer_id: project.customer_id,
-        manager_id: project.manager_id,
-        start_date: project.start_date,
-        end_date: project.end_date,
-        budget: project.budget,
-        status: project.status,
-        priority: project.priority,
-        progress: project.progress,
-        billing_type: project.billing_type,
-        hourly_rate: project.hourly_rate
-      }
+      const { error } = await supabase.from('projects').delete().eq('id', project.id)
 
-      await projectApi.updateProject(project.id, updateData)
-      alert('Dự án đã được lưu thành công!')
-      fetchProjects()
+      if (error) throw error
+
+      setProjects(projects.filter((p) => p.id !== project.id))
+      setShowDeleteConfirm(null)
+      onDeleteProject(project)
     } catch (error) {
-      console.error('Error saving project:', error)
-      alert('Có lỗi xảy ra khi lưu dự án')
+      console.error('Error deleting project:', error)
+      alert('Lỗi khi xóa dự án')
     }
   }
 
-  const filteredProjects = projects.filter(project => {
-    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.project_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter
-    const matchesPriority = priorityFilter === 'all' || project.priority === priorityFilter
-    
-    return matchesSearch && matchesStatus && matchesPriority
-  })
+  const formatCurrency = (amount?: number) => {
+    if (!amount) return 'N/A'
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount)
+  }
 
-  const sortedProjects = [...filteredProjects].sort((a, b) => {
-    let aValue = a[sortBy as keyof Project] || ''
-    let bValue = b[sortBy as keyof Project] || ''
-    
-    if (typeof aValue === 'string') aValue = aValue.toLowerCase()
-    if (typeof bValue === 'string') bValue = bValue.toLowerCase()
-    
-    if (sortOrder === 'asc') {
-      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-    } else {
-      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
-    }
-  })
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A'
+    return new Date(dateString).toLocaleDateString('vi-VN')
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
-  if (error) {
-    return (
-      <div className="text-center py-8">
-        <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-        <p className="text-red-600">{error}</p>
-        <button 
-          onClick={fetchProjects}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+  return (
+    <div className="p-6" data-tour-id="projects-grid">
+      {/* Header with Search and Filter Toggle */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+        <div className="flex-1 relative w-full sm:w-auto">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Tìm kiếm dự án, mã dự án, khách hàng..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+          />
+        </div>
+        <button
+          onClick={() => setShowFilter(!showFilter)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+            showFilter
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
         >
-          Thử lại
+          {showFilter ? <X className="h-5 w-5" /> : <Filter className="h-5 w-5" />}
+          {showFilter ? 'Ẩn bộ lọc' : 'Hiện bộ lọc'}
         </button>
       </div>
-    )
-  }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Tất cả dự án</h2>
-            <p className="text-black mt-1">Quản lý và theo dõi dự án một cách hiệu quả</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-black">
-              {sortedProjects.length} dự án
-            </div>
-            <button
-              onClick={generateProjectCode}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm hover:shadow-md"
-              title="Tạo mã dự án mới"
-            >
-              <Target className="h-4 w-4" />
-              Tạo mã
-            </button>
-            <button
-              onClick={onCreateProject}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
-            >
-              <Plus className="h-4 w-4" />
-              Dự án mới
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Generated Code Display */}
-      {generatedCode && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Target className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-green-800">Mã dự án đã tạo</p>
-                <p className="text-lg font-bold text-green-900">{generatedCode}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setGeneratedCode('')}
-              className="text-green-600 hover:text-green-800 transition-colors"
-              title="Đóng"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200" data-tour-id="projects-filters">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-black mb-2">Tìm kiếm dự án</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
-              <input
-                type="text"
-                placeholder="Tìm theo tên, mã hoặc khách hàng..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-black mb-2">Trạng thái</label>
-            <div className="relative">
+      {/* Main Content: Filter + Projects */}
+      <div className={`flex gap-6 ${showFilter ? 'flex-row' : ''}`}>
+        {/* Filter Sidebar */}
+        {showFilter && (
+          <div className="w-1/3 bg-white border border-gray-200 rounded-lg p-6 h-fit sticky top-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Bộ lọc</h3>
+            
+            {/* Status Filter */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-black mb-2">Trạng thái</label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white text-black"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
               >
                 <option value="all">Tất cả trạng thái</option>
                 <option value="planning">Lập kế hoạch</option>
@@ -398,223 +302,335 @@ export default function ProjectsTab({
                 <option value="cancelled">Đã hủy</option>
               </select>
             </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-black mb-2">Độ ưu tiên</label>
-            <div className="relative">
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white text-black"
-              >
-                <option value="all">Tất cả độ ưu tiên</option>
-                <option value="low">Thấp</option>
-                <option value="medium">Trung bình</option>
-                <option value="high">Cao</option>
-                <option value="urgent">Khẩn cấp</option>
-              </select>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-black mb-2">Sắp xếp theo</label>
-            <div className="relative">
-              <select
-                value={`${sortBy}-${sortOrder}`}
-                onChange={(e) => {
-                  const [field, order] = e.target.value.split('-')
-                  setSortBy(field)
-                  setSortOrder(order as 'asc' | 'desc')
-                }}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white text-black"
-              >
-                <option value="name-asc">Tên (A-Z)</option>
-                <option value="name-desc">Tên (Z-A)</option>
-                <option value="start_date-asc">Ngày bắt đầu (Cũ nhất)</option>
-                <option value="start_date-desc">Ngày bắt đầu (Mới nhất)</option>
-                <option value="budget-asc">Ngân sách (Thấp đến cao)</option>
-                <option value="budget-desc">Ngân sách (Cao đến thấp)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Projects Grid */}
-      <div className="p-4 sm:p-6 lg:p-8">
-        <div
-          className={`grid gap-6 ${
-          sidebarOpen 
-            ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-8'
-            : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10'
-        }`}
-          data-tour-id="projects-grid"
-        >
-        {sortedProjects.map((project) => {
-          const StatusIcon = statusIcons[project.status]
-          return (
-             <div 
-               key={project.id} 
-               onClick={() => onViewProject(project)}
-               className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 group relative cursor-pointer"
-             >
-               {/* Custom Tooltip */}
-               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
-                 <div className="text-center">
-                   <div className="font-semibold">{project.name}</div>
-                   <div className="text-gray-300 text-xs mt-1">
-                     {project.customer_name || 'Chưa xác định khách hàng'}
-                   </div>
-                   <div className="text-xs text-gray-400 mt-1">
-                     {project.project_code} • {project.progress}%
-                   </div>
-                 </div>
-                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-               </div>
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-4 gap-3">
-                  <div className="flex items-start gap-4 flex-1 min-w-0">
-                    <div className="p-2.5 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg group-hover:from-blue-200 group-hover:to-blue-300 transition-colors flex-shrink-0">
-                      <FolderOpen className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 
-                        className="font-semibold text-gray-900 text-base group-hover:text-blue-700 transition-colors break-words leading-tight"
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          wordWrap: 'break-word',
-                          hyphens: 'auto',
-                          lineHeight: '1.3',
-                          maxHeight: '2.6em'
-                        }}
-                        title={project.name}
-                      >
-                        {project.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 font-medium mt-1">{project.customer_name || 'Khách hàng'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedProjectId(project.id);
-                        setSelectedProjectName(project.name);
-                        setTeamDialogOpen(true);
-                      }}
-                      className="p-1.5 text-black hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-110"
-                      title="Thêm thành viên"
-                    >
-                      <Users className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditProject(project);
-                      }}
-                      className="p-1.5 text-black hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 hover:scale-110"
-                      title="Chỉnh sửa dự án"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(project);
-                      }}
-                      className="p-1.5 text-black hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
-                      title="Xóa dự án"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[project.status]}`}>
-                      {getStatusText(project.status)}
-                    </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[project.priority]}`}>
-                      {getPriorityText(project.priority)}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1 text-xs text-gray-600">
-                      <Calendar className="h-3 w-3" />
-                      <span>{new Date(project.start_date).toLocaleDateString()}</span>
-                    </div>
-                    {project.budget && (
-                      <div className="flex items-center gap-1 text-xs text-gray-600">
-                        <DollarSign className="h-3 w-3" />
-                        <span>VND {project.budget.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t border-gray-100">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-gray-600">Tiến độ</span>
-                      <span className="font-medium text-gray-900">{project.progress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div 
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-1.5 rounded-full transition-all duration-700"
-                        style={{ width: `${project.progress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
+            {/* Date Range Filter */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-black mb-2">Khoảng thời gian</label>
+              <div className="space-y-3">
+                <input
+                  type="date"
+                  placeholder="Từ ngày"
+                  value={dateFilter.from}
+                  onChange={(e) => setDateFilter({ 
+                    ...dateFilter, 
+                    from: e.target.value 
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                />
+                <input
+                  type="date"
+                  placeholder="Đến ngày"
+                  value={dateFilter.to}
+                  onChange={(e) => setDateFilter({ 
+                    ...dateFilter, 
+                    to: e.target.value 
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                />
+                {(dateFilter.from || dateFilter.to) && (
+                  <button
+                    onClick={() => setDateFilter({ 
+                      from: '', 
+                      to: '' 
+                    })}
+                    className="w-full px-3 py-2 text-sm text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Xóa bộ lọc thời gian
+                  </button>
+                )}
               </div>
             </div>
-          )
-        })}
+          </div>
+        )}
+
+        {/* Projects Section */}
+        <div className={`${showFilter ? 'w-2/3' : 'w-full'}`}>
+
+          {/* Projects Grid */}
+          {filteredProjects.length === 0 ? (
+            <div className="text-center py-12">
+              <Target className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchQuery || statusFilter !== 'all' || dateFilter.from || dateFilter.to ? 'Không tìm thấy dự án' : 'Chưa có dự án nào'}
+              </h3>
+              <p className="text-gray-600 mb-4">
+                {searchQuery || statusFilter !== 'all' || dateFilter.from || dateFilter.to
+                  ? 'Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm'
+                  : 'Bắt đầu bằng cách tạo dự án mới'}
+              </p>
+              {!searchQuery && statusFilter === 'all' && !dateFilter.from && !dateFilter.to && (
+                <button
+                  onClick={onCreateProject}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Tạo dự án mới
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className={`grid gap-6 ${showFilter ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+              {filteredProjects.map((project) => (
+                <div
+                  key={project.id}
+                  className={`bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow ${
+                    showFilter ? 'p-6' : 'p-6'
+                  }`}
+                >
+                  {showFilter ? (
+                    // Horizontal card layout when filter is shown
+                    <div className="flex flex-col lg:flex-row gap-6">
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-1 whitespace-normal break-words">
+                              {project.name}
+                            </h3>
+                            <p className="text-sm text-gray-500">{project.project_code}</p>
+                          </div>
+                          <div className="relative group ml-4">
+                            <button className="p-1 hover:bg-gray-100 rounded">
+                              <MoreVertical className="h-5 w-5 text-gray-400" />
+                            </button>
+                            <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
+                              <button
+                                onClick={() => onViewProject(project)}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                              >
+                                <Eye className="h-4 w-4" />
+                                Xem chi tiết
+                              </button>
+                              <button
+                                onClick={() => onEditProject(project)}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                              >
+                                <Edit className="h-4 w-4" />
+                                Chỉnh sửa
+                              </button>
+                              <button
+                                onClick={() => setShowDeleteConfirm(project.id)}
+                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Xóa
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 mb-4">
+                          <span
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[project.status] || statusColors.planning}`}
+                          >
+                            {statusLabels[project.status] || project.status}
+                          </span>
+                          <span
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${priorityColors[project.priority] || priorityColors.medium}`}
+                          >
+                            {priorityLabels[project.priority] || project.priority}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                          {project.customer_name && (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                              <span className="break-words">{project.customer_name}</span>
+                            </div>
+                          )}
+                          {project.manager_name && (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                              <span className="break-words">QL: {project.manager_name}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span>{formatDate(project.start_date)}</span>
+                            {project.end_date && <span> - {formatDate(project.end_date)}</span>}
+                          </div>
+                          {project.budget && (
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                              <span>{formatCurrency(project.budget)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="lg:w-80 flex-shrink-0">
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                            <span>Tiến độ</span>
+                            <span className="font-medium">{project.progress}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-500 transition-all"
+                              style={{ width: `${Math.max(0, Math.min(100, project.progress))}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => onViewProject(project)}
+                            className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            Xem
+                          </button>
+                          <button
+                            onClick={() => onEditProject(project)}
+                            className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            Sửa
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    // Vertical card layout when filter is hidden (3 cards per row)
+                    <>
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1 whitespace-normal break-words">
+                            {project.name}
+                          </h3>
+                          <p className="text-sm text-gray-500">{project.project_code}</p>
+                        </div>
+                        <div className="relative group">
+                          <button className="p-1 hover:bg-gray-100 rounded">
+                            <MoreVertical className="h-5 w-5 text-gray-400" />
+                          </button>
+                          <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
+                            <button
+                              onClick={() => onViewProject(project)}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Eye className="h-4 w-4" />
+                              Xem chi tiết
+                            </button>
+                            <button
+                              onClick={() => onEditProject(project)}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Edit className="h-4 w-4" />
+                              Chỉnh sửa
+                            </button>
+                            <button
+                              onClick={() => setShowDeleteConfirm(project.id)}
+                              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Xóa
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 mb-4">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[project.status] || statusColors.planning}`}
+                        >
+                          {statusLabels[project.status] || project.status}
+                        </span>
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${priorityColors[project.priority] || priorityColors.medium}`}
+                        >
+                          {priorityLabels[project.priority] || project.priority}
+                        </span>
+                      </div>
+
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                          <span>Tiến độ</span>
+                          <span className="font-medium">{project.progress}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 transition-all"
+                            style={{ width: `${Math.max(0, Math.min(100, project.progress))}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-sm text-gray-600 mb-4">
+                        {project.customer_name && (
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="break-words">{project.customer_name}</span>
+                          </div>
+                        )}
+                        {project.manager_name && (
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="break-words">QL: {project.manager_name}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                          <span>{formatDate(project.start_date)}</span>
+                          {project.end_date && <span> - {formatDate(project.end_date)}</span>}
+                        </div>
+                        {project.budget && (
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span>{formatCurrency(project.budget)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-4 border-t border-gray-200 flex gap-2">
+                        <button
+                          onClick={() => onViewProject(project)}
+                          className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          Xem
+                        </button>
+                        <button
+                          onClick={() => onEditProject(project)}
+                          className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          Sửa
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {sortedProjects.length === 0 && (
-        <div className="p-6">
-          <div className="text-center py-12">
-            <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4">
-              <FolderOpen className="h-8 w-8 text-black" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy dự án</h3>
-            <p className="text-black mb-6">
-              {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' 
-                ? 'Thử điều chỉnh bộ lọc của bạn' 
-                : 'Bắt đầu bằng cách tạo dự án đầu tiên'
-              }
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Xác nhận xóa</h3>
+            <p className="text-gray-600 mb-6">
+              Bạn có chắc chắn muốn xóa dự án này? Hành động này không thể hoàn tác.
             </p>
-            {(!searchTerm && statusFilter === 'all' && priorityFilter === 'all') && (
+            <div className="flex gap-3 justify-end">
               <button
-                onClick={onCreateProject}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto shadow-lg hover:shadow-xl"
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
-                <Plus className="h-5 w-5" />
-                Tạo dự án
+                Hủy
               </button>
-            )}
+              <button
+                onClick={() => {
+                  const project = projects.find((p) => p.id === showDeleteConfirm)
+                  if (project) handleDelete(project)
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Xóa
+              </button>
+            </div>
           </div>
         </div>
       )}
-
-      {/* Team Dialog */}
-      <ProjectTeamDialog
-        open={teamDialogOpen}
-        onClose={() => setTeamDialogOpen(false)}
-        projectId={selectedProjectId}
-        projectName={selectedProjectName}
-        currentUser={user}
-        onSuccess={() => {
-          setTeamDialogOpen(false);
-          fetchProjects();
-        }}
-      />
     </div>
   )
 }
+
