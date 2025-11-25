@@ -15,7 +15,8 @@ import {
   FileText,
   Eye,
   Filter,
-  Star
+  Star,
+  DollarSign
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Customer } from '@/types'
@@ -32,6 +33,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
   const [filterStatus, setFilterStatus] = useState('all')
   const [sortBy, setSortBy] = useState('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [unpaidAmounts, setUnpaidAmounts] = useState<Record<string, number>>({})
   const router = useRouter()
 
   useEffect(() => {
@@ -97,10 +99,43 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
 
       if (error) throw error
       setCustomers(data || [])
+      
+      // Fetch unpaid amounts from invoices
+      await fetchUnpaidAmounts(data || [])
     } catch (error) {
       console.error('Error fetching customers:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchUnpaidAmounts = async (customersList: Customer[]) => {
+    try {
+      const customerIds = customersList.map(c => c.id)
+      if (customerIds.length === 0) return
+
+      // Fetch all invoices for these customers
+      const { data: invoices, error } = await supabase
+        .from('invoices')
+        .select('customer_id, total_amount, paid_amount, payment_status')
+        .in('customer_id', customerIds)
+        .in('payment_status', ['pending', 'partial', 'overdue'])
+
+      if (error) throw error
+
+      // Calculate unpaid amount for each customer
+      const unpaidMap: Record<string, number> = {}
+      
+      invoices?.forEach((invoice: any) => {
+        const unpaid = (invoice.total_amount || 0) - (invoice.paid_amount || 0)
+        if (unpaid > 0) {
+          unpaidMap[invoice.customer_id] = (unpaidMap[invoice.customer_id] || 0) + unpaid
+        }
+      })
+
+      setUnpaidAmounts(unpaidMap)
+    } catch (error) {
+      console.error('Error fetching unpaid amounts:', error)
     }
   }
 
@@ -300,11 +335,13 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
         
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center">
-            <FileText className="h-8 w-8 text-orange-500" />
+            <DollarSign className="h-8 w-8 text-red-500" />
             <div className="ml-3">
-              <p className="text-sm font-medium text-black">Tổng hạn mức</p>
+              <p className="text-sm font-medium text-black">Chưa thanh toán</p>
               <p className="text-2xl font-bold text-gray-900">
-                {formatCurrency(filteredCustomers.reduce((sum, c) => sum + c.credit_limit, 0))}
+                {formatCurrency(
+                  filteredCustomers.reduce((sum, c) => sum + (unpaidAmounts[c.id] || 0), 0)
+                )}
               </p>
             </div>
           </div>
@@ -398,6 +435,11 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                         Hạn mức: {formatCurrency(customer.credit_limit)}
                       </div>
                       <div className="text-xs text-black">Thanh toán: {customer.payment_terms} ngày</div>
+                      {unpaidAmounts[customer.id] && unpaidAmounts[customer.id] > 0 && (
+                        <div className="text-xs font-semibold text-red-600 mt-1">
+                          Chưa thanh toán: {formatCurrency(unpaidAmounts[customer.id])}
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -497,7 +539,9 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
       <div className="flex justify-between items-center text-sm text-black">
         <span>Hiển thị {filteredCustomers.length} khách hàng</span>
         <span>
-          Tổng hạn mức: {formatCurrency(filteredCustomers.reduce((sum, c) => sum + c.credit_limit, 0))}
+          Chưa thanh toán: {formatCurrency(
+            filteredCustomers.reduce((sum, c) => sum + (unpaidAmounts[c.id] || 0), 0)
+          )}
         </span>
       </div>
     </div>

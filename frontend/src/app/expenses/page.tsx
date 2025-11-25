@@ -34,7 +34,7 @@ interface User {
 }
 
 function ExpensesPageContent() {
-  const [activeTab, setActiveTab] = useState('expenses')
+  const [activeTab, setActiveTab] = useState('project-expenses')
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
@@ -340,6 +340,17 @@ function ExpensesPageContent() {
                 <div className="px-6 py-3">
                   <nav className="flex space-x-8">
                     <button
+                      onClick={() => setActiveTab('project-expenses')}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === 'project-expenses'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <DollarSign className="w-4 h-4 inline mr-1" />
+                      Chi phí dự án
+                    </button>
+                    <button
                       onClick={() => setActiveTab('expenses')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'expenses'
@@ -371,17 +382,6 @@ function ExpensesPageContent() {
                     >
                       <Building2 className="w-4 h-4 inline mr-1" />
                       Nhà cung cấp ({((expensesStats as Record<string, unknown>).vendors_count as number) || 0})
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('project-expenses')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'project-expenses'
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      <DollarSign className="w-4 h-4 inline mr-1" />
-                      Chi phí dự án
                     </button>
                   </nav>
                 </div>
@@ -471,6 +471,12 @@ function ExpensesPageContent() {
 
               {/* Tab Content */}
               <div className="p-6">
+                {activeTab === 'project-expenses' && (
+                  <ProjectExpensesTab 
+                    searchTerm={searchTerm}
+                    onCreateExpense={handleCreateProjectExpense}
+                  />
+                )}
                 {activeTab === 'expenses' && (
                   <ExpensesTab 
                     searchTerm={searchTerm}
@@ -488,12 +494,6 @@ function ExpensesPageContent() {
                   <VendorsTab 
                     searchTerm={searchTerm}
                     onCreateVendor={handleCreateVendor}
-                  />
-                )}
-                {activeTab === 'project-expenses' && (
-                  <ProjectExpensesTab 
-                    searchTerm={searchTerm}
-                    onCreateExpense={handleCreateProjectExpense}
                   />
                 )}
               </div>
