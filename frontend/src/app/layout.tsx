@@ -4,6 +4,8 @@ import './globals.css'
 import '../styles/animations.css'
 import 'shepherd.js/dist/css/shepherd.css'
 import BackgroundProviderWrapper from '@/components/BackgroundProviderWrapper'
+import QueryProvider from '@/providers/QueryProvider'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,13 +22,15 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body className={inter.className}>
-        <BackgroundProviderWrapper>
-          {children}
-          
-          {/* Dify Chatbot */}
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
+        <ErrorBoundary>
+          <QueryProvider>
+            <BackgroundProviderWrapper>
+              {children}
+
+              {/* Dify Chatbot */}
+              <script
+                dangerouslySetInnerHTML={{
+                  __html: `
                 window.difyChatbotConfig = {
                   token: 'P2wx7PzPhhTT1S0U',
                   inputs: {
@@ -45,16 +49,16 @@ export default function RootLayout({
                   },
                 }
               `
-            }}
-          />
-          <script
-            src="https://udify.app/embed.min.js"
-            id="P2wx7PzPhhTT1S0U"
-            defer
-          />
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
+                }}
+              />
+              <script
+                src="https://udify.app/embed.min.js"
+                id="P2wx7PzPhhTT1S0U"
+                defer
+              />
+              <style
+                dangerouslySetInnerHTML={{
+                  __html: `
                 #dify-chatbot-bubble-button {
                   background-color: #1C64F2 !important;
                 }
@@ -63,9 +67,11 @@ export default function RootLayout({
                   height: 40rem !important;
                 }
               `
-            }}
-          />
-        </BackgroundProviderWrapper>
+                }}
+              />
+            </BackgroundProviderWrapper>
+          </QueryProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )
