@@ -83,7 +83,7 @@ cp env.example .env
 Edit `.env` with your configuration:
 ```env
 # Supabase Configuration
-SUPABASE_URL="https://mfmijckzlhevduwfigkl.supabase.co"
+SUPABASE_URL="https://.................supabase.co"
 SUPABASE_SERVICE_KEY="your_service_key_here"
 SUPABASE_ANON_KEY="your_anon_key_here"
 
