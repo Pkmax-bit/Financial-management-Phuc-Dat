@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { 
-  Plus, 
+import {
+  Plus,
   DollarSign,
   Receipt,
   FileText,
@@ -67,14 +67,14 @@ export default function DashboardPage() {
   const checkUser = useCallback(async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
-      
+
       if (authUser) {
         const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('id', authUser.id)
           .single()
-        
+
         if (userData) {
           setUser(userData)
           return true
@@ -163,28 +163,22 @@ export default function DashboardPage() {
 
   const quickActions = [
     {
-      title: 'Tạo Hóa đơn mới',
+      title: 'Tạo Báo giá mới',
       icon: FileText,
       color: 'bg-blue-500',
-      onClick: () => router.push('/sales?tab=invoices&action=create')
+      onClick: () => router.push('/sales?tab=quotes&action=create')
     },
     {
-      title: 'Tạo Chi phí mới', 
+      title: 'Tạo Chi phí dự án kế hoạch mới',
       icon: Receipt,
       color: 'bg-red-500',
-      onClick: () => router.push('/expenses?tab=expenses&action=create')
-    },
-    {
-      title: 'Tạo Hóa đơn phải trả',
-      icon: Building2,
-      color: 'bg-orange-500',
-      onClick: () => router.push('/expenses?tab=bills&action=create')
+      onClick: () => router.push('/expenses?tab=project-expenses&action=create')
     },
     {
       title: 'Ghi nhận Thanh toán',
       icon: CreditCard,
       color: 'bg-green-500',
-      onClick: () => router.push('/sales?tab=payments&action=create')
+      onClick: () => router.push('/sales?tab=invoices')
     },
     {
       title: 'Giới thiệu hệ thống',
@@ -196,7 +190,7 @@ export default function DashboardPage() {
 
   // Optimized initial loading: show layout as soon as user state is ready
   const isInitialLoading = userLoading
-  
+
   if (isInitialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -211,73 +205,73 @@ export default function DashboardPage() {
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
-          <div className="space-y-8">
+        <div className="space-y-8">
 
-            {/* Header */}
-            <div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Tổng quan kinh doanh</h1>
-                  <p className="mt-2 text-black">
-                    Nắm bắt tình hình tài chính và thực hiện các công việc hàng ngày
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  {(stats.error || hasErrors) && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <AlertCircle className="h-5 w-5 text-red-400" />
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm text-red-800">
-                            {stats.error || 'Có lỗi xảy ra khi tải dữ liệu'}
-                          </p>
-                        </div>
+          {/* Header */}
+          <div>
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Tổng quan kinh doanh</h1>
+                <p className="mt-2 text-black">
+                  Nắm bắt tình hình tài chính và thực hiện các công việc hàng ngày
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                {(stats.error || hasErrors) && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <AlertCircle className="h-5 w-5 text-red-400" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-red-800">
+                          {stats.error || 'Có lỗi xảy ra khi tải dữ liệu'}
+                        </p>
                       </div>
                     </div>
-                  )}
-                  
-                  {stats.lastUpdated && (
-                    <div className="text-sm text-black flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      Cập nhật: {stats.lastUpdated.toLocaleTimeString('vi-VN')}
-                    </div>
-                  )}
+                  </div>
+                )}
 
-                  {refreshCount > 0 && (
-                    <div className="text-sm text-gray-600 flex items-center gap-1">
-                      <RefreshCw className="h-4 w-4" />
-                      Đã làm mới: {refreshCount} lần
-                    </div>
-                  )}
+                {stats.lastUpdated && (
+                  <div className="text-sm text-black flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    Cập nhật: {stats.lastUpdated.toLocaleTimeString('vi-VN')}
+                  </div>
+                )}
 
-                  {autoRefresh && (
-                    <div className="text-sm text-green-600 flex items-center gap-1">
-                      <Activity className="h-4 w-4" />
-                      Tự động làm mới mỗi 30s
-                    </div>
-                  )}
+                {refreshCount > 0 && (
+                  <div className="text-sm text-gray-600 flex items-center gap-1">
+                    <RefreshCw className="h-4 w-4" />
+                    Đã làm mới: {refreshCount} lần
+                  </div>
+                )}
 
-                  <Link
-                    href="/gioi-thieu"
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-md hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
-                  >
-                    <Info className="h-4 w-4" />
-                    <span>Giới thiệu</span>
-                  </Link>
+                {autoRefresh && (
+                  <div className="text-sm text-green-600 flex items-center gap-1">
+                    <Activity className="h-4 w-4" />
+                    Tự động làm mới mỗi 30s
+                  </div>
+                )}
 
-                  <button
-                    onClick={handleManualRefresh}
-                    disabled={isLoading}
-                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                    Làm mới
-                  </button>
-                </div>
+                <Link
+                  href="/gioi-thieu"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-md hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                >
+                  <Info className="h-4 w-4" />
+                  <span>Giới thiệu</span>
+                </Link>
+
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isLoading}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  Làm mới
+                </button>
               </div>
             </div>
+          </div>
 
           {/* Quick Actions */}
           <div className="bg-white rounded-lg shadow p-6">
@@ -294,7 +288,6 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-900">{action.title}</h3>
-                    <p className="text-sm text-black">Tạo nhanh</p>
                   </div>
                 </button>
               ))}
@@ -405,7 +398,7 @@ export default function DashboardPage() {
                   <span className="font-medium text-red-600">{stats.stats?.overdueInvoices || 0} hóa đơn</span>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => router.push('/sales')}
                 className="w-full mt-4 py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
@@ -429,12 +422,12 @@ export default function DashboardPage() {
                     <span className="font-medium">{formatCurrency(expense.amount)}</span>
                   </div>
                 )) || (
-                  <div className="text-sm text-black text-center py-4">
-                    Chưa có dữ liệu chi phí
-                  </div>
-                )}
+                    <div className="text-sm text-black text-center py-4">
+                      Chưa có dữ liệu chi phí
+                    </div>
+                  )}
               </div>
-              <button 
+              <button
                 onClick={() => router.push('/expenses')}
                 className="w-full mt-4 py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
@@ -468,35 +461,35 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )) || (
-                <div className="col-span-3 text-center py-8 text-black">
-                  <Building2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>Chưa có tài khoản ngân hàng nào được kết nối</p>
-                  <button className="mt-2 text-blue-600 hover:text-blue-800 font-medium">
-                    Kết nối ngay
-                  </button>
-                </div>
-              )}
+                  <div className="col-span-3 text-center py-8 text-black">
+                    <Building2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Chưa có tài khoản ngân hàng nào được kết nối</p>
+                    <button className="mt-2 text-blue-600 hover:text-blue-800 font-medium">
+                      Kết nối ngay
+                    </button>
+                  </div>
+                )}
             </div>
           </div>
 
           {/* Advanced Analytics Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Cashflow Projection */}
-            <CashflowWidget 
+            <CashflowWidget
               projection={cashflow.projection}
               loading={cashflow.loading}
               error={cashflow.error}
             />
-            
+
             {/* Upcoming Events */}
-            <EventsWidget 
+            <EventsWidget
               events={events.events}
               loading={events.loading}
               error={events.error}
             />
-            
+
             {/* Monthly Chart */}
-            <MonthlyChartWidget 
+            <MonthlyChartWidget
               monthlyData={stats.stats?.monthlyRevenueData || []}
               loading={stats.loading}
             />
@@ -514,7 +507,7 @@ export default function DashboardPage() {
                       {stats.stats.overdueInvoices} hóa đơn đã quá hạn thanh toán
                     </span>
                   </div>
-                  <button 
+                  <button
                     onClick={() => router.push('/sales?tab=invoices&filter=overdue')}
                     className="text-red-600 hover:text-red-800 font-medium"
                   >
@@ -522,7 +515,7 @@ export default function DashboardPage() {
                   </button>
                 </div>
               )}
-              
+
               {stats.stats?.pendingBills && stats.stats.pendingBills > 0 && (
                 <div className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg">
                   <div className="flex items-center">
@@ -531,7 +524,7 @@ export default function DashboardPage() {
                       {stats.stats.pendingBills} hóa đơn phải trả cần xử lý
                     </span>
                   </div>
-                  <button 
+                  <button
                     onClick={() => router.push('/expenses?tab=bills&filter=pending')}
                     className="text-orange-600 hover:text-orange-800 font-medium"
                   >
@@ -540,13 +533,13 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {(!stats.stats?.overdueInvoices || stats.stats.overdueInvoices === 0) && 
-               (!stats.stats?.pendingBills || stats.stats.pendingBills === 0) && (
-                <div className="text-center py-4 text-black">
-                  <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                  Tuyệt vời! Không có vấn đề nào cần xử lý ngay.
-                </div>
-              )}
+              {(!stats.stats?.overdueInvoices || stats.stats.overdueInvoices === 0) &&
+                (!stats.stats?.pendingBills || stats.stats.pendingBills === 0) && (
+                  <div className="text-center py-4 text-black">
+                    <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                    Tuyệt vời! Không có vấn đề nào cần xử lý ngay.
+                  </div>
+                )}
             </div>
           </div>
         </div>

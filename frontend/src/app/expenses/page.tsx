@@ -1,11 +1,11 @@
 ﻿'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
-import { 
-  Receipt, 
-  Plus, 
-  Search, 
+import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  Receipt,
+  Plus,
+  Search,
   DollarSign,
   Calendar,
   Clock,
@@ -41,47 +41,49 @@ function ExpensesPageContent() {
   const [expensesStats, setExpensesStats] = useState<unknown>({})
   const [shouldOpenCreateModal, setShouldOpenCreateModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     checkUser()
   }, [])
 
-  // Create handlers for the tab components
-  const handleCreateExpense = () => {
-    setActiveTab('expenses')
-    setShouldOpenCreateModal(true)
-  }
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab && ['project-expenses', 'expenses', 'bills', 'vendors'].includes(tab)) {
+      setActiveTab(tab)
+    }
 
-  const handleCreateBill = () => {
-    // Navigate to create bill page or open modal
-    console.log('Create bill')
-  }
+    const action = searchParams.get('action')
+    if (action === 'create') {
+      if (tab === 'project-expenses' || tab === 'expenses') {
+        setShouldOpenCreateModal(true)
+      }
+    }
+  }, [searchParams])
 
-  const handleCreateVendor = () => {
-    // Navigate to create vendor page or open modal
-    console.log('Create vendor')
-  }
-
-  const handleCreateProjectExpense = () => {
-    setShouldOpenCreateModal(true)
-  }
-
-  const handleCloseCreateModal = () => {
-    setShouldOpenCreateModal(false)
-  }
+  // Reset modal flag after it opens to allow re-triggering
+  useEffect(() => {
+    if (shouldOpenCreateModal) {
+      const timer = setTimeout(() => {
+        setShouldOpenCreateModal(false)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [shouldOpenCreateModal])
 
   const checkUser = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
-      
+
       if (authUser) {
         const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('id', authUser.id)
           .single()
-        
+
         if (userData) {
           setUser(userData)
           // Fetch expenses stats after user is set
@@ -105,7 +107,7 @@ function ExpensesPageContent() {
       setLoading(true)
       setError(null)
       console.log('Fetching expenses stats...')
-      
+
       // Try authenticated endpoint first
       try {
         // Fetch expenses data via API
@@ -139,7 +141,7 @@ function ExpensesPageContent() {
         return
       } catch (authError) {
         console.log('Authenticated API failed, using fallback data:', authError)
-        
+
         // Fallback to default stats
         setExpensesStats({
           total_expenses: 0,
@@ -155,7 +157,7 @@ function ExpensesPageContent() {
         console.log('Using fallback expenses stats')
         return
       }
-      
+
     } catch (error: unknown) {
       console.error('Error fetching expenses stats:', error)
       setError(`Lỗi không thể tải thống kê chi phí: ${(error as Error)?.message || 'Không thể kết nối'}`)
@@ -177,6 +179,25 @@ function ExpensesPageContent() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  const handleCreateExpense = () => {
+    setActiveTab('expenses')
+    setShouldOpenCreateModal(true)
+  }
+
+  const handleCreateBill = () => {
+    // Navigate to create bill page or open modal
+    console.log('Create bill')
+  }
+
+  const handleCreateVendor = () => {
+    // Navigate to create vendor page or open modal
+    console.log('Create vendor')
+  }
+
+  const handleCreateProjectExpense = () => {
+    setShouldOpenCreateModal(true)
   }
 
   const formatCurrency = (amount: number) => {
@@ -201,8 +222,8 @@ function ExpensesPageContent() {
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full">
         {/* Sticky Top Navigation */}
-        <StickyTopNav 
-          title="Quản lý Chi phí" 
+        <StickyTopNav
+          title="Quản lý Chi phí"
           subtitle="Theo dõi và quản lý chi phí, hóa đơn nhà cung cấp"
         >
           <div className="flex space-x-2">
@@ -231,39 +252,39 @@ function ExpensesPageContent() {
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           <div className="space-y-8">
 
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3 flex-1">
-                  <p className="text-sm text-red-700">{error}</p>
-                  {error.includes('đăng nhập') && (
-                    <p className="text-xs text-red-600 mt-1">
-                      <button
-                        onClick={() => router.push('/login')}
-                        className="underline hover:no-underline"
-                      >
-                        Nhấn vào đây để đăng nhập
-                      </button>
-                    </p>
-                  )}
-                </div>
-                <div className="ml-auto pl-3">
-                  <button
-                    onClick={fetchExpensesStats}
-                    className="text-sm text-red-600 hover:text-red-500 font-medium"
-                  >
-                    Thử lại
-                  </button>
+            {/* Error Message */}
+            {error && (
+              <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <p className="text-sm text-red-700">{error}</p>
+                    {error.includes('đăng nhập') && (
+                      <p className="text-xs text-red-600 mt-1">
+                        <button
+                          onClick={() => router.push('/login')}
+                          className="underline hover:no-underline"
+                        >
+                          Nhấn vào đây để đăng nhập
+                        </button>
+                      </p>
+                    )}
+                  </div>
+                  <div className="ml-auto pl-3">
+                    <button
+                      onClick={fetchExpensesStats}
+                      className="text-sm text-red-600 hover:text-red-500 font-medium"
+                    >
+                      Thử lại
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
@@ -283,7 +304,7 @@ function ExpensesPageContent() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-3 rounded-lg bg-orange-500">
@@ -298,7 +319,7 @@ function ExpensesPageContent() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-3 rounded-lg bg-yellow-500">
@@ -315,7 +336,7 @@ function ExpensesPageContent() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-3 rounded-lg bg-purple-500">
@@ -341,44 +362,40 @@ function ExpensesPageContent() {
                   <nav className="flex space-x-8">
                     <button
                       onClick={() => setActiveTab('project-expenses')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'project-expenses'
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'project-expenses'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
                     >
                       <DollarSign className="w-4 h-4 inline mr-1" />
                       Chi phí dự án
                     </button>
                     <button
                       onClick={() => setActiveTab('expenses')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'expenses'
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'expenses'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
                     >
                       <Receipt className="w-4 h-4 inline mr-1" />
                       Chi phí ({((expensesStats as Record<string, unknown>).expenses_count as number) || 0})
                     </button>
                     <button
                       onClick={() => setActiveTab('bills')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'bills'
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'bills'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
                     >
                       <FileText className="w-4 h-4 inline mr-1" />
                       Hóa đơn NCC ({((expensesStats as Record<string, unknown>).bills_count as number) || 0})
                     </button>
                     <button
                       onClick={() => setActiveTab('vendors')}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === 'vendors'
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'vendors'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
                     >
                       <Building2 className="w-4 h-4 inline mr-1" />
                       Nhà cung cấp ({((expensesStats as Record<string, unknown>).vendors_count as number) || 0})
@@ -398,100 +415,100 @@ function ExpensesPageContent() {
                       <input
                         type="text"
                         placeholder={
-                          activeTab === 'expenses' 
-                            ? 'Tìm kiếm chi phí...' 
-                            : activeTab === 'bills' 
-                            ? 'Tìm kiếm hóa đơn NCC...' 
-                            : activeTab === 'vendors'
-                            ? 'Tìm kiếm nhà cung cấp...'
-                            : 'Tìm kiếm...'
+                          activeTab === 'expenses'
+                            ? 'Tìm kiếm chi phí...'
+                            : activeTab === 'bills'
+                              ? 'Tìm kiếm hóa đơn NCC...'
+                              : activeTab === 'vendors'
+                                ? 'Tìm kiếm nhà cung cấp...'
+                                : 'Tìm kiếm...'
                         }
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
-                  
-                  {/* Action Buttons */}
-                  <div className="flex space-x-2">
-                    {/* AI Analysis Button - Always visible */}
-                    <button 
-                      onClick={() => router.push('/ai-analysis')}
-                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors"
-                      title="Phân tích chi phí bằng AI"
-                    >
-                      <Brain className="h-4 w-4 mr-2" />
-                      AI Analysis
-                    </button>
-                    
-                    {activeTab === 'expenses' && (
-                      <>
-                        <button 
-                          onClick={handleCreateExpense}
-                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+
+                    {/* Action Buttons */}
+                    <div className="flex space-x-2">
+                      {/* AI Analysis Button - Always visible */}
+                      <button
+                        onClick={() => router.push('/ai-analysis')}
+                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+                        title="Phân tích chi phí bằng AI"
+                      >
+                        <Brain className="h-4 w-4 mr-2" />
+                        AI Analysis
+                      </button>
+
+                      {activeTab === 'expenses' && (
+                        <>
+                          <button
+                            onClick={handleCreateExpense}
+                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Tạo chi phí
+                          </button>
+                          <button
+                            onClick={() => {
+                              // This will be handled by ExpensesTab component
+                              console.log('Create expense category')
+                            }}
+                            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                          >
+                            <Tag className="h-4 w-4 mr-2" />
+                            Loại chi phí
+                          </button>
+                        </>
+                      )}
+                      {activeTab === 'bills' && (
+                        <button
+                          onClick={handleCreateBill}
+                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
                         >
                           <Plus className="h-4 w-4 mr-2" />
-                          Tạo chi phí
+                          Tạo hóa đơn NCC
                         </button>
-                        <button 
-                          onClick={() => {
-                            // This will be handled by ExpensesTab component
-                            console.log('Create expense category')
-                          }}
-                          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                      )}
+                      {activeTab === 'vendors' && (
+                        <button
+                          onClick={handleCreateVendor}
+                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
                         >
-                          <Tag className="h-4 w-4 mr-2" />
-                          Loại chi phí
+                          <Plus className="h-4 w-4 mr-2" />
+                          Thêm nhà cung cấp
                         </button>
-                      </>
-                    )}
-                    {activeTab === 'bills' && (
-                      <button 
-                        onClick={handleCreateBill}
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Tạo hóa đơn NCC
-                      </button>
-                    )}
-                    {activeTab === 'vendors' && (
-                      <button 
-                        onClick={handleCreateVendor}
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Thêm nhà cung cấp
-                      </button>
-                    )}
-                    {/* project-expenses buttons are now in ProjectExpensesTab component */}
+                      )}
+                      {/* project-expenses buttons are now in ProjectExpensesTab component */}
+                    </div>
                   </div>
                 </div>
-              </div>
               )}
 
               {/* Tab Content */}
               <div className="p-6">
                 {activeTab === 'project-expenses' && (
-                  <ProjectExpensesTab 
+                  <ProjectExpensesTab
                     searchTerm={searchTerm}
                     onCreateExpense={handleCreateProjectExpense}
                   />
                 )}
                 {activeTab === 'expenses' && (
-                  <ExpensesTab 
+                  <ExpensesTab
                     searchTerm={searchTerm}
                     onCreateExpense={handleCreateExpense}
                     shouldOpenCreateModal={shouldOpenCreateModal}
                   />
                 )}
                 {activeTab === 'bills' && (
-                  <BillsTab 
+                  <BillsTab
                     searchTerm={searchTerm}
                     onCreateBill={handleCreateBill}
                   />
                 )}
                 {activeTab === 'vendors' && (
-                  <VendorsTab 
+                  <VendorsTab
                     searchTerm={searchTerm}
                     onCreateVendor={handleCreateVendor}
                   />
