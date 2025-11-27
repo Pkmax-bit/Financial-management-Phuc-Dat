@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   DollarSign,
   TrendingUp,
@@ -9,7 +10,6 @@ import {
   FileText,
   Receipt,
   Users,
-  ShoppingCart,
   ArrowUpRight,
   ArrowDownRight,
   Plus
@@ -22,6 +22,8 @@ interface OverviewTabProps {
 }
 
 export default function OverviewTab({ quotesStats, invoicesStats, revenue }: OverviewTabProps) {
+  const router = useRouter()
+  
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
@@ -51,28 +53,21 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
       description: 'Xuất hóa đơn cho khách hàng',
       icon: FileText,
       color: 'bg-blue-500',
-      onClick: () => console.log('Create invoice')
+      onClick: () => router.push('/sales?tab=invoices&action=create')
     },
     {
       title: 'Tạo báo giá',
       description: 'Gửi báo giá cho khách hàng',
       icon: Receipt,
       color: 'bg-green-500',
-      onClick: () => console.log('Create quote')
+      onClick: () => router.push('/sales?tab=quotes&action=create')
     },
     {
       title: 'Ghi nhận thanh toán',
       description: 'Cập nhật thanh toán từ khách hàng',
       icon: DollarSign,
       color: 'bg-purple-500',
-      onClick: () => console.log('Create payment')
-    },
-    {
-      title: 'Tạo phiếu bán hàng',
-      description: 'Bán hàng và thu tiền ngay',
-      icon: ShoppingCart,
-      color: 'bg-orange-500',
-      onClick: () => console.log('Create sales receipt')
+      onClick: () => router.push('/sales?tab=invoices')
     }
   ]
 
