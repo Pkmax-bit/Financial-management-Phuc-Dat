@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { 
-  X, 
-  FileText, 
-  User, 
-  Calendar, 
-  DollarSign, 
-  Plus, 
-  Trash2, 
-  ChevronDown, 
+import {
+  X,
+  FileText,
+  User,
+  Calendar,
+  DollarSign,
+  Plus,
+  Trash2,
+  ChevronDown,
   ChevronRight,
   Save,
   Send,
@@ -105,7 +105,7 @@ interface CreateQuoteSidebarProps {
 // Helper function to convert category names to Vietnamese with diacritics
 const getCategoryDisplayName = (categoryName: string | undefined) => {
   if (!categoryName) return 'Khác'
-  
+
   const categoryMap: Record<string, string> = {
     'Thiet bi dien tu': 'Thiết bị điện tử',
     'Noi that': 'Nội thất',
@@ -113,7 +113,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
     'Thiet bi van phong': 'Thiết bị văn phòng',
     'Phan mem': 'Phần mềm'
   }
-  
+
   return categoryMap[categoryName] || categoryName
 }
 
@@ -142,7 +142,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [autoCalcDimensions, setAutoCalcDimensions] = useState(true)
   // Always-on auto adjustment
   const autoAdjustEnabled = true
-  
+
   // Preloaded adjustment rules for instant access
   const adjustmentRulesMap = useRef<Map<string, any[]>>(new Map())
   const [rulesLoaded, setRulesLoaded] = useState(false)
@@ -150,7 +150,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const adjustmentTimersRef = useRef<Map<string, any>>(new Map())
   const [showRulesDialog, setShowRulesDialog] = useState(false)
   const [manualAdjusting, setManualAdjusting] = useState(false)
-  
+
   // Tour state
   const QUOTE_FORM_TOUR_STORAGE_KEY = 'quote-form-tour-status-v1'
   const [isQuoteTourRunning, setIsQuoteTourRunning] = useState(false)
@@ -180,7 +180,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           beforeMap.set(key, Number(c.quantity || 0))
         })
       })
-      const dims: Array<'area'|'volume'|'height'|'length'|'depth'|'quantity'> = ['area','volume','height','length','depth','quantity']
+      const dims: Array<'area' | 'volume' | 'height' | 'length' | 'depth' | 'quantity'> = ['area', 'volume', 'height', 'length', 'depth', 'quantity']
       for (let i = 0; i < items.length; i++) {
         const it = items[i]
         const comps: any[] = Array.isArray((it as any).components) ? ((it as any).components as any[]) : []
@@ -224,8 +224,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         </div>`
         document.body.appendChild(msg)
         setTimeout(() => { if (document.body.contains(msg)) document.body.removeChild(msg) }, 2500)
-      } catch (_) {}
-    } catch (_) {}
+      } catch (_) { }
+    } catch (_) { }
     finally {
       setManualAdjusting(false)
     }
@@ -236,13 +236,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     try {
       console.log('[Adjust] Manual row apply clicked', rowIndex)
       if (!rulesLoaded) return
-      // Clear pending timers for this row
-      ;(['area','volume','height','length','depth','quantity'] as const).forEach(dim => {
-        const key = `${rowIndex}_${dim}`
-        const t = adjustmentTimersRef.current.get(key)
-        if (t) clearTimeout(t)
-        adjustmentTimersRef.current.delete(key)
-      })
+        // Clear pending timers for this row
+        ; (['area', 'volume', 'height', 'length', 'depth', 'quantity'] as const).forEach(dim => {
+          const key = `${rowIndex}_${dim}`
+          const t = adjustmentTimersRef.current.get(key)
+          if (t) clearTimeout(t)
+          adjustmentTimersRef.current.delete(key)
+        })
 
       // Snapshot before
       const beforeMap = new Map<string, number>()
@@ -250,7 +250,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       const compsBefore: any[] = Array.isArray((it as any)?.components) ? ((it as any).components as any[]) : []
       compsBefore.forEach((c: any) => beforeMap.set(`${rowIndex}__${String(c.expense_object_id)}`, Number(c.quantity || 0)))
 
-      for (const d of ['area','volume','height','length','depth','quantity'] as const) {
+      for (const d of ['area', 'volume', 'height', 'length', 'depth', 'quantity'] as const) {
         const curr = (it as any)[d]
         const currNum = curr == null ? null : Number(curr)
         if (currNum == null || !isFinite(currNum)) continue
@@ -285,12 +285,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         </div>`
         document.body.appendChild(msg)
         setTimeout(() => { if (document.body.contains(msg)) document.body.removeChild(msg) }, 2500)
-      } catch (_) {}
+      } catch (_) { }
     } catch (e) {
       console.error('[Adjust] Row apply failed', e)
     }
   }
-  
+
   // Toggle category expansion
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
@@ -308,8 +308,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const filteredProducts = products.filter(product => {
     const searchTerm = productSearch.toLowerCase()
     return product.name.toLowerCase().includes(searchTerm) ||
-           (product.description || '').toLowerCase().includes(searchTerm) ||
-           (product.category || '').toLowerCase().includes(searchTerm)
+      (product.description || '').toLowerCase().includes(searchTerm) ||
+      (product.category || '').toLowerCase().includes(searchTerm)
   })
 
   // Helper function to extract base product name (remove size/dimension info)
@@ -326,12 +326,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       .replace(/\s+\d+x\d+/gi, '') // Remove patterns like "2x2", "3x2"
       .replace(/\s+\d+\s*x\s*\d+/gi, '') // Remove patterns like "2 x 2", "3 x 2"
       .trim()
-    
+
     // If after removing size info, name is too short, use original name
     if (baseName.length < 3) {
       return productName
     }
-    
+
     return baseName
   }
 
@@ -352,7 +352,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const handleProductClick = (product: Product) => {
     const baseName = getBaseProductName(product.name)
     const variants = filteredProducts.filter(p => getBaseProductName(p.name) === baseName)
-    
+
     if (variants.length > 1) {
       // Has multiple variants, show dialog
       setSelectedProductVariants(variants)
@@ -405,12 +405,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   })
 
   const [items, setItems] = useState<QuoteItem[]>([
-    { 
-      name_product: '', 
-      description: '', 
-      quantity: 1, 
-      unit: '', 
-      unit_price: 0, 
+    {
+      name_product: '',
+      description: '',
+      quantity: 1,
+      unit: '',
+      unit_price: 0,
       total_price: 0,
       area: null,
       baseline_area: null,
@@ -439,12 +439,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (isOpen) {
       // Use setTimeout to ensure sidebar is hidden after component renders
       const timer = setTimeout(() => {
-      hideSidebar(true)
+        hideSidebar(true)
       }, 0)
       return () => {
         clearTimeout(timer)
-      hideSidebar(false)
-    }
+        hideSidebar(false)
+      }
     } else {
       hideSidebar(false)
       return undefined
@@ -485,7 +485,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           list.push({ expense_object_id: eid, name: nameFromItems })
         }
       })
-    } catch (_) {}
+    } catch (_) { }
     return list
   })()
 
@@ -519,7 +519,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         generateQuoteNumber()
       }
       // Preload all active adjustment rules once when opening
-      ;(async () => {
+      ; (async () => {
         try {
           adjustmentRulesMap.current.clear()
           const { data: allRules } = await supabase
@@ -909,7 +909,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   useEffect(() => {
     const calculatedTotal = formData.subtotal + formData.tax_amount - formData.discount_amount
     setTotalAmount(calculatedTotal)
-    
+
     if (selectedProject && selectedProject.budget) {
       const overBudget = calculatedTotal > selectedProject.budget
       setIsOverBudget(overBudget)
@@ -924,21 +924,21 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     try {
       setLoading(true)
       console.log('🔍 Fetching customers from database...')
-      
+
       // Use Supabase client directly to get real data
       const { data, error } = await supabase
         .from('customers')
         .select('*')
         .limit(10)
-      
+
       if (error) {
         console.error('❌ Supabase error:', error)
         throw error
       }
-      
+
       console.log('🔍 Real customers data from database:', data)
       setCustomers(data || [])
-      
+
       if (!data || data.length === 0) {
         alert('Không có khách hàng nào trong database. Vui lòng tạo khách hàng trước.')
       }
@@ -959,7 +959,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     try {
       setLoadingProjects(true)
       console.log('🔍 Fetching projects for customer:', customerId)
-      
+
       // Use Supabase directly to get projects for the customer
       const { data: projects, error } = await supabase
         .from('projects')
@@ -967,12 +967,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         .eq('customer_id', customerId)
         .in('status', ['planning', 'active'])
         .order('name')
-      
+
       if (error) {
         console.error('❌ Supabase error fetching projects:', error)
         throw error
       }
-      
+
       console.log('🔍 Projects data for customer:', projects)
       setProjects(projects || [])
     } catch (error) {
@@ -988,7 +988,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     try {
       setLoadingProducts(true)
       console.log('🔍 Fetching products from database...')
-      
+
       // Use Supabase client directly to get products with categories
       const { data, error } = await supabase
         .from('products')
@@ -999,14 +999,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         .eq('is_active', true)
         .order('name')
         .limit(50)
-      
+
       if (error) {
         console.error('❌ Supabase error:', error)
         throw error
       }
-      
+
       console.log('🔍 Products data from database:', data)
-      
+
       if (data && data.length > 0) {
         // Transform data to match the expected format
         const transformedProducts = data.map(product => ({
@@ -1025,8 +1025,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         }))
         setProducts(transformedProducts)
         console.log('🔍 Using real products data:', transformedProducts)
-      } 
-      
+      }
+
     } catch (error) {
       console.error('❌ Error fetching products:', error)
       setProducts([])
@@ -1039,7 +1039,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     try {
       setLoadingEmployees(true)
       console.log('🔍 Fetching employees from database...')
-      
+
       // Use Supabase client directly to get employees with user info
       const { data, error } = await supabase
         .from('employees')
@@ -1054,12 +1054,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         .eq('status', 'active')
         .order('first_name')
         .limit(50)
-      
+
       if (error) {
         console.error('❌ Supabase error fetching employees:', error)
         throw error
       }
-      
+
       if (data && data.length > 0) {
         const transformedEmployees = data.map((emp: any) => {
           const usersRel = emp.users
@@ -1097,26 +1097,26 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
   const loadQuoteData = async () => {
     if (!quoteId) return
-    
+
     try {
       setLoading(true)
       console.log('🔍 Loading quote data for ID:', quoteId)
-      
+
       // Load quote
       const { data: quote, error: quoteError } = await supabase
         .from('quotes')
         .select('*')
         .eq('id', quoteId)
         .single()
-      
+
       if (quoteError) {
         console.error('❌ Error loading quote:', quoteError)
         alert('Không thể tải báo giá: ' + quoteError.message)
         return
       }
-      
+
       console.log('✅ Quote loaded:', quote)
-      
+
       // Fill form data
       setFormData({
         quote_number: quote.quote_number || '',
@@ -1135,19 +1135,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         notes: quote.notes || '',
         terms: quote.terms || 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
       })
-      
+
       // Load quote items
       const { data: quoteItems, error: itemsError } = await supabase
         .from('quote_items')
         .select('*')
         .eq('quote_id', quoteId)
         .order('created_at', { ascending: true })
-      
+
       if (itemsError) {
         console.error('❌ Error loading quote items:', itemsError)
       } else {
         console.log('✅ Quote items loaded:', quoteItems?.length || 0)
-        
+
         if (quoteItems && quoteItems.length > 0) {
           const loadedItems: QuoteItem[] = quoteItems.map((item: any) => ({
             id: item.id,
@@ -1180,16 +1180,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               baseline_quantity: comp.quantity || 0 // Store baseline for quantity adjustments
             })) : []
           }))
-          
+
           setItems(loadedItems)
         } else {
           // No items, start with empty item
-          setItems([{ 
-            name_product: '', 
-            description: '', 
-            quantity: 1, 
-            unit: '', 
-            unit_price: 0, 
+          setItems([{
+            name_product: '',
+            description: '',
+            quantity: 1,
+            unit: '',
+            unit_price: 0,
             total_price: 0,
             area: null,
             baseline_area: null,
@@ -1203,7 +1203,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           }])
         }
       }
-      
+
       // Load projects for the customer
       if (quote.customer_id) {
         await fetchProjectsByCustomer(quote.customer_id)
@@ -1220,12 +1220,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
     const tax_amount = subtotal * (formData.tax_rate / 100)
     const total_amount = subtotal + tax_amount
-    
-    setFormData(prev => ({ 
-      ...prev, 
-      subtotal, 
-      tax_amount, 
-      total_amount 
+
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
+      tax_amount,
+      total_amount
     }))
   }
 
@@ -1242,12 +1242,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   }
 
   const addItem = () => {
-    setItems([...items, { 
-      name_product: '', 
-      description: '', 
-      quantity: 1, 
-      unit: '', 
-      unit_price: 0, 
+    setItems([...items, {
+      name_product: '',
+      description: '',
+      quantity: 1,
+      unit: '',
+      unit_price: 0,
       total_price: 0,
       area: null,
       baseline_area: null,
@@ -1293,7 +1293,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   }
 
   // Helper functions for different rule types
-  
+
   // Check if a rule is applicable based on change direction and threshold
   const checkRuleApplicable = (
     rule: any,
@@ -1304,7 +1304,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     // Special case: if rule has negative adjustment_value and change_direction is 'decrease',
     // it likely means "apply when dimension increases" (e.g., area increases → labor decreases)
     const isInverseRule = rule.change_direction === 'decrease' && Number(rule.adjustment_value || 0) < 0
-    
+
     if (isInverseRule) {
       // Apply when dimension INCREASES (opposite of change_direction)
       if (changeDirection !== 'increase') {
@@ -1332,7 +1332,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     rule: any
   ): number => {
     const adjustmentValue = Number(rule.adjustment_value || 0)
-    
+
     if (rule.adjustment_type === 'percentage') {
       const adjustmentFactor = 1 + (adjustmentValue / 100)
       return adjustedQuantity * adjustmentFactor
@@ -1348,7 +1348,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     rule: any
   ): number => {
     const adjustmentValue = Number(rule.adjustment_value || 0)
-    
+
     if (rule.adjustment_type === 'percentage') {
       const adjustmentFactor = 1 + (adjustmentValue / 100)
       return adjustedQuantity * adjustmentFactor
@@ -1365,7 +1365,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     changeDirection: 'increase' | 'decrease'
   ): number => {
     const adjustmentValue = Number(rule.adjustment_value || 0)
-    
+
     if (rule.adjustment_type === 'percentage') {
       const adjustmentFactor = 1 + (adjustmentValue / 100)
       return adjustedQuantity * adjustmentFactor
@@ -1384,7 +1384,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   ): number => {
     // Check if this is an inverse rule (e.g., area increases → material decreases)
     const isInverseRule = rule.change_direction === 'decrease' && Number(rule.adjustment_value || 0) < 0
-    
+
     if (rule.change_direction === 'increase') {
       return applyIncreaseRule(adjustedQuantity, rule)
     } else if (rule.change_direction === 'decrease' && !isInverseRule) {
@@ -1395,7 +1395,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       // Inverse rule: apply when dimension increases but material decreases
       return applyDecreaseRule(adjustedQuantity, rule)
     }
-    
+
     return adjustedQuantity
   }
 
@@ -1433,15 +1433,15 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             const changePercentage = oldValue > 0 ? ((newValue - oldValue) / oldValue) * 100 : 0
             const changeAbsolute = newValue - oldValue
             const changeDirection = changeAbsolute > 0 ? 'increase' : 'decrease'
-            console.log('[Adjust] Calculate change', { 
-              itemIndex, 
-              expenseObjectId, 
-              dimensionType, 
-              baselineValue: oldValue, 
-              currentValue: newValue, 
-              changePercentage: `${changePercentage.toFixed(2)}%`, 
+            console.log('[Adjust] Calculate change', {
+              itemIndex,
+              expenseObjectId,
+              dimensionType,
+              baselineValue: oldValue,
+              currentValue: newValue,
+              changePercentage: `${changePercentage.toFixed(2)}%`,
               changeAbsolute: changeAbsolute,
-              changeDirection 
+              changeDirection
             })
 
             // Find applicable rules using the new checkRuleApplicable function
@@ -1469,10 +1469,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               }
               const isApplicable = checkRuleApplicable(rule, changeDirection, changePercentage, changeAbsolute)
               if (isApplicable) {
-                console.log('[Adjust] Rule applicable', { 
+                console.log('[Adjust] Rule applicable', {
                   ruleId: rule.id || 'unknown',
                   ruleName: rule.name,
-                  changeDirection: rule.change_direction, 
+                  changeDirection: rule.change_direction,
                   adjustmentValue: rule.adjustment_value,
                   productCategoryId: prodCatId,
                   allowedCategories: allowedCats,
@@ -1490,19 +1490,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             // baseline_quantity là số lượng vật tư cho 1 đơn vị sản phẩm (từ product)
             // Cần nhân với số lượng sản phẩm hiện tại để có số lượng vật tư cơ sở
             const currentProductQuantity = Number(item.quantity || 1)
-            
+
             // Lấy baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm)
             // Nếu không có, tính từ quantity hiện tại chia cho số lượng sản phẩm
-            const baselineQuantityPerUnit = component.baseline_quantity != null 
-              ? Number(component.baseline_quantity) 
+            const baselineQuantityPerUnit = component.baseline_quantity != null
+              ? Number(component.baseline_quantity)
               : (Number(component.quantity || 0) / currentProductQuantity)
-            
+
             // Tính số lượng vật tư cơ sở = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm hiện tại
             const baselineQuantity = baselineQuantityPerUnit * currentProductQuantity
             const originalQuantity = baselineQuantity
             let adjustedQuantity = originalQuantity
             let adjustedUnitPrice = Number(component.unit_price || 0)
-            
+
             console.log('[Adjust] Using baseline quantity', {
               expenseObjectId,
               currentQuantity: Number(component.quantity || 0),
@@ -1511,27 +1511,27 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               baselineQuantity,
               hasBaseline: component.baseline_quantity != null
             })
-            
+
             // Track total adjustment percentage for max limit
             let totalAdjustmentPercentage = 0
 
             for (const rule of applicableRules.sort((a: any, b: any) => a.priority - b.priority)) {
               const beforeAdjustment = adjustedQuantity
               const adjustmentValue = Number(rule.adjustment_value || 0)
-              
+
               // Check if rule has max_adjustment_value or max_adjustment_percentage limit
               const maxAdjustmentPercentage = rule.max_adjustment_percentage != null ? Number(rule.max_adjustment_percentage) : null
               const maxAdjustmentValue = rule.max_adjustment_value != null ? Number(rule.max_adjustment_value) : null
-              
+
               // Apply adjustment
               let newAdjustedQuantity = applyRuleAdjustment(adjustedQuantity, rule, changeDirection)
-              
+
               // Calculate adjustment percentage applied
               let adjustmentPercentageApplied = 0
               if (rule.adjustment_type === 'percentage' && adjustedQuantity > 0) {
                 adjustmentPercentageApplied = ((newAdjustedQuantity - adjustedQuantity) / adjustedQuantity) * 100
               }
-              
+
               // Apply max limit if specified
               if (rule.adjustment_type === 'percentage') {
                 // For percentage adjustments, check max_adjustment_percentage
@@ -1541,7 +1541,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   // Calculate how much adjustment has been applied so far (from original)
                   const adjustmentFromOriginal = ((adjustedQuantity - originalQuantity) / originalQuantity) * 100
                   const newAdjustmentFromOriginal = ((newAdjustedQuantity - originalQuantity) / originalQuantity) * 100
-                  
+
                   // Check if adding this adjustment would exceed the max limit
                   // Max limit is based on the sign of the adjustment (increase or decrease)
                   if (adjustmentValue < 0) {
@@ -1575,16 +1575,16 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   console.log('[Adjust] Max limit applied (absolute)', { maxAdjustmentValue, currentAdjustment })
                 }
               }
-              
+
               adjustedQuantity = newAdjustedQuantity
-              console.log('[Adjust] Apply rule', { 
-                expenseObjectId, 
+              console.log('[Adjust] Apply rule', {
+                expenseObjectId,
                 ruleId: rule.id || 'unknown',
                 ruleDirection: rule.change_direction,
-                ruleType: rule.adjustment_type, 
-                adjustmentValue, 
-                priority: rule.priority, 
-                before: beforeAdjustment, 
+                ruleType: rule.adjustment_type,
+                adjustmentValue,
+                priority: rule.priority,
+                before: beforeAdjustment,
                 after: adjustedQuantity,
                 isInverse: rule.change_direction === 'decrease' && adjustmentValue < 0,
                 maxAdjustmentPercentage,
@@ -1662,13 +1662,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         await applyMaterialAdjustmentRules(index, dimension, oldNum, newNum)
       }, 5000)
       adjustmentTimersRef.current.set(key, t)
-    } catch (_) {}
+    } catch (_) { }
   }
 
   const updateItem = async (index: number, field: keyof QuoteItem, value: string | number | null) => {
     const updatedItems = [...items]
     const oldItem = { ...updatedItems[index] }
-    
+
     // Store old values for dimension fields
     const oldArea = oldItem.area
     const oldVolume = oldItem.volume
@@ -1685,7 +1685,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     } else if (field === 'volume') {
       updatedItems[index].volume_is_manual = value != null
     }
-    
+
     // Recalculate total_price for this item
     if (field === 'quantity' || field === 'unit_price' || field === 'area') {
       updatedItems[index].total_price = computeItemTotal(updatedItems[index])
@@ -1705,7 +1705,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     if (field === 'quantity') {
       const newQuantity = Number(value || 0)
       const oldQty = Number(oldQuantity || 1)
-      
+
       // Adjust area proportionally to quantity (if baseline_area exists)
       // area = baseline_area * quantity (e.g., if quantity x2, area x2)
       if (curr.baseline_area != null && curr.baseline_area > 0 && !curr.area_is_manual) {
@@ -1718,7 +1718,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       }
       // After auto area update, refresh total
       updatedItems[index].total_price = computeItemTotal(updatedItems[index])
-      
+
       // Adjust volume proportionally to quantity (if baseline_volume exists)
       // volume = baseline_volume * quantity (e.g., if quantity x2, volume x2)
       if (curr.baseline_volume != null && curr.baseline_volume > 0 && !curr.volume_is_manual) {
@@ -1729,7 +1729,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           autoVolumeChanged = true
         }
       }
-      
+
       // Adjust components quantity proportionally to product quantity
       // Công thức: Khi số lượng sản phẩm tăng thì số lượng vật tư tăng theo tỷ lệ
       // Ví dụ: Sản phẩm A số lượng 1, vật tư số lượng 1
@@ -1739,14 +1739,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         const updatedComponents = curr.components.map((component: any) => {
           // Lấy baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm)
           // Nếu chưa có baseline_quantity, tính từ quantity hiện tại chia cho số lượng sản phẩm cũ
-          const baselineQuantityPerUnit = component.baseline_quantity != null 
-            ? Number(component.baseline_quantity) 
+          const baselineQuantityPerUnit = component.baseline_quantity != null
+            ? Number(component.baseline_quantity)
             : Number(component.quantity || 0) / oldQty
-          
+
           // Tính số lượng vật tư mới = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm mới
           const newComponentQuantity = baselineQuantityPerUnit * newQuantity
           const adjustedUnitPrice = Number(component.unit_price || 0)
-          
+
           console.log('[Quantity] Adjusting component quantity from baseline', {
             expenseObjectId: component.expense_object_id,
             name: component.name,
@@ -1756,7 +1756,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             oldComponentQuantity: Number(component.quantity || 0),
             newComponentQuantity
           })
-          
+
           return {
             ...component,
             // Giữ nguyên baseline_quantity (số lượng vật tư cho 1 đơn vị sản phẩm)
@@ -1767,7 +1767,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             total_price: Math.max(0, newComponentQuantity) * adjustedUnitPrice
           }
         })
-        
+
         // Cập nhật components với số lượng mới
         curr.components = updatedComponents
       }
@@ -1782,7 +1782,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         curr.volume_is_manual = false
       }
 
-    // Recompute area when length/height changes and area is not manual
+      // Recompute area when length/height changes and area is not manual
       // Formula: area = (length × height / 1_000_000) × quantity (integrate quantity into calculation)
       if ((field === 'length' || field === 'height') && !curr.area_is_manual) {
         if (lengthMm != null && heightMm != null) {
@@ -1817,7 +1817,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         const quantity = Number(curr.quantity || 1)
         let computedVolume: number | null = null
         let baselineVolumePerUnit: number | null = null
-        
+
         if (lengthMm != null && heightMm != null && depthMm != null) {
           baselineVolumePerUnit = (lengthMm * heightMm * depthMm) / 1_000_000_000 // mm^3 -> m^3 per unit
           computedVolume = baselineVolumePerUnit * quantity // Multiply by quantity
@@ -1827,7 +1827,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           baselineVolumePerUnit = baselineAreaPerUnit * (heightMm / 1000)
           computedVolume = baselineVolumePerUnit * quantity // Multiply by quantity
         }
-        
+
         if (computedVolume != null && isFinite(computedVolume)) {
           const roundedV = Math.round(computedVolume * 1e9) / 1e9
           if (curr.volume == null || Math.abs(Number(curr.volume) - roundedV) > 1e-12) {
@@ -1846,7 +1846,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         }
       }
     }
-    
+
     setItems(updatedItems)
 
     // Apply material adjustment rules when dimensions or quantity change (if enabled)
@@ -1897,7 +1897,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
 
     // Schedule auto adjust 5s after last change
-    if (['area','volume','height','length','depth','quantity'].includes(field as string)) {
+    if (['area', 'volume', 'height', 'length', 'depth', 'quantity'].includes(field as string)) {
       if (field === 'length' || field === 'height') {
         // if area auto-changed, schedule for area using baseline
         if (autoAreaChanged && curr.area != null) {
@@ -1924,7 +1924,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         const baselineVolume = Number((curr as any).baseline_volume ?? 0)
         oldValueForSchedule = baselineVolume > 0 ? baselineVolume : oldVolume
       } else {
-      const oldMap: any = { area: oldArea, volume: oldVolume, height: oldHeight, length: oldLength, depth: oldDepth, quantity: oldQuantity }
+        const oldMap: any = { area: oldArea, volume: oldVolume, height: oldHeight, length: oldLength, depth: oldDepth, quantity: oldQuantity }
         oldValueForSchedule = oldMap[field as any]
       }
       scheduleAutoAdjust(index, field as any, oldValueForSchedule, newValue as any)
@@ -1953,7 +1953,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     comp.total_price = qty * price
     if (idx >= 0) comps[idx] = comp
     else comps.push(comp)
-    ;(updated[itemIndex] as any).components = comps
+      ; (updated[itemIndex] as any).components = comps
     // Recalculate item total_price using unit price × quantity × area logic
     updated[itemIndex].total_price = computeItemTotal(updated[itemIndex])
     setItems(updated)
@@ -1973,7 +1973,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       length: product.length,
       depth: product.depth
     })
-    
+
     const fillFromProductComponents = async () => {
       try {
         // Load product with components (in case not included)
@@ -2089,14 +2089,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   // Hàm kiểm tra tỷ lệ lợi nhuận thấp
   const checkLowProfitItems = (): Array<{ name: string; percentage: number }> => {
     const lowProfit: Array<{ name: string; percentage: number }> = []
-    
+
     items.forEach((item) => {
       const components = Array.isArray(item.components) ? item.components : []
       const materialCost = components.reduce((sum, comp) => sum + (Number(comp.total_price) || 0), 0)
       const productPrice = Number(item.total_price) || 0
       const itemProfit = productPrice - materialCost
       const itemProfitPercentage = productPrice > 0 ? (itemProfit / productPrice) * 100 : 0
-      
+
       // Kiểm tra nếu tỷ lệ lợi nhuận < 10%
       if (itemProfitPercentage < 10) {
         lowProfit.push({
@@ -2105,18 +2105,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         })
       }
     })
-    
+
     return lowProfit
   }
 
   // Hàm thực hiện tạo báo giá (tách ra để có thể gọi lại sau khi cảnh báo)
   const doCreateQuote = async () => {
     setSubmitting(true)
-    
+
     try {
       // Use created_by from form selection
       const created_by = formData.created_by || null
-      
+
       // Create or update quote directly in Supabase
       const quoteData = {
         quote_number: formData.quote_number,
@@ -2138,7 +2138,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
       // Debug logging
       console.log(quoteId ? 'Updating quote with data:' : 'Creating quote with data:', quoteData)
-      
+
       let quote: any
       if (quoteId) {
         // Update existing quote
@@ -2153,7 +2153,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           console.error('Quote update error:', quoteError)
           throw new Error(`Lỗi cập nhật báo giá: ${quoteError.message}`)
         }
-        
+
         quote = updatedQuote
         console.log('Quote updated successfully:', quote)
       } else {
@@ -2168,7 +2168,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           console.error('Quote creation error:', quoteError)
           throw new Error(`Lỗi tạo báo giá: ${quoteError.message}`)
         }
-        
+
         quote = newQuote
         console.log('Quote created successfully:', quote)
       }
@@ -2258,7 +2258,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         </style>
       `
       document.body.appendChild(successMessage)
-      
+
       // Auto remove success message after 5 seconds
       setTimeout(() => {
         if (document.body.contains(successMessage)) {
@@ -2298,17 +2298,17 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       if (!formData.created_by) {
         throw new Error('Vui lòng chọn nhân viên tạo báo giá')
       }
-      
+
       // Kiểm tra tỷ lệ lợi nhuận thấp
       const lowProfit = checkLowProfitItems()
-      
+
       if (lowProfit.length > 0) {
         // Hiển thị dialog cảnh báo
         setLowProfitItems(lowProfit)
         setShowProfitWarningDialog(true)
         return // Dừng lại, không tạo báo giá
       }
-      
+
       // Nếu không có cảnh báo, tiếp tục tạo báo giá
       await doCreateQuote()
     } catch (error) {
@@ -2335,12 +2335,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       notes: '',
       terms: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
     })
-    setItems([{ 
-      name_product: '', 
-      description: '', 
-      quantity: 1, 
-      unit: '', 
-      unit_price: 0, 
+    setItems([{
+      name_product: '',
+      description: '',
+      quantity: 1,
+      unit: '',
+      unit_price: 0,
       total_price: 0,
       area: null,
       volume: null,
@@ -2452,10 +2452,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       const display = value == null
         ? ''
         : (format === 'currency'
-            ? formatCurrency(value)
-            : (displayFractionDigits != null
-                ? new Intl.NumberFormat('vi-VN', { minimumFractionDigits: displayFractionDigits, maximumFractionDigits: displayFractionDigits }).format(value)
-                : formatNumber(value)))
+          ? formatCurrency(value)
+          : (displayFractionDigits != null
+            ? new Intl.NumberFormat('vi-VN', { minimumFractionDigits: displayFractionDigits, maximumFractionDigits: displayFractionDigits }).format(value)
+            : formatNumber(value)))
       return (
         <div
           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text"
@@ -2529,22 +2529,21 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             <button
               onClick={() => startQuoteTour()}
               disabled={isQuoteTourRunning || submitting}
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                isQuoteTourRunning || submitting
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${isQuoteTourRunning || submitting
                   ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
                   : 'text-white bg-blue-600 hover:bg-blue-700'
-              }`}
+                }`}
               title="Bắt đầu hướng dẫn tạo báo giá"
             >
               <CircleHelp className="h-4 w-4" />
               <span>Hướng dẫn</span>
             </button>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md"
-          >
-            <X className="h-5 w-5 text-black" />
-          </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-md"
+            >
+              <X className="h-5 w-5 text-black" />
+            </button>
           </div>
         </div>
 
@@ -2693,25 +2692,25 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             <div className="mb-8" data-tour-id="quote-form-items">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium text-black">Sản phẩm/Dịch vụ</h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={manualAdjustAll}
-                  disabled={!rulesLoaded || manualAdjusting}
-                  data-tour-id="quote-form-area-rules"
-                  className={`flex items-center px-3 py-2 rounded-md text-sm ${(!rulesLoaded || manualAdjusting) ? 'bg-purple-400 text-white opacity-70 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
-                  title="Áp dụng điều chỉnh ngay cho tất cả dòng"
-                >
-                  {manualAdjusting ? 'Đang áp dụng...' : 'Áp dụng điều chỉnh'}
-                </button>
-                {rulesLoaded && (
+                <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => setShowRulesDialog(true)}
-                    className="flex items-center px-3 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 text-sm border"
-                    title="Xem các quy tắc điều chỉnh đã tải"
+                    onClick={manualAdjustAll}
+                    disabled={!rulesLoaded || manualAdjusting}
+                    data-tour-id="quote-form-area-rules"
+                    className={`flex items-center px-3 py-2 rounded-md text-sm ${(!rulesLoaded || manualAdjusting) ? 'bg-purple-400 text-white opacity-70 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                    title="Áp dụng điều chỉnh ngay cho tất cả dòng"
                   >
-                    Quy tắc đã tải: {Array.from(adjustmentRulesMap.current.values()).reduce((sum, arr) => sum + (arr?.length || 0), 0)}
+                    {manualAdjusting ? 'Đang áp dụng...' : 'Áp dụng điều chỉnh'}
                   </button>
-                )}
+                  {rulesLoaded && (
+                    <button
+                      onClick={() => setShowRulesDialog(true)}
+                      className="flex items-center px-3 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 text-sm border"
+                      title="Xem các quy tắc điều chỉnh đã tải"
+                    >
+                      Quy tắc đã tải: {Array.from(adjustmentRulesMap.current.values()).reduce((sum, arr) => sum + (arr?.length || 0), 0)}
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowColumnDialog(true)}
                     className="flex items-center px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm"
@@ -2761,7 +2760,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               </div>
                             ))}
                           </div>
-                          <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{ 
+                          <div className="mt-1 grid gap-2 text-xs text-gray-600" style={{
                             // Repeat 4 fixed columns per component to match expense layout
                             gridTemplateColumns: `repeat(${(headerComponents.length || 1)}, 80px 100px 80px 120px)`
                           }}>
@@ -2791,9 +2790,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                   type="text"
                                   value={item.name_product}
                                   onChange={(e) => updateItem(index, 'name_product', e.target.value)}
-                                className="flex-1 border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  className="flex-1 border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                                   placeholder="Tên sản phẩm"
-                                title={item.name_product}
+                                  title={item.name_product}
                                 />
                                 <button
                                   type="button"
@@ -2828,8 +2827,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 min={0}
                                 placeholder="0"
                                 index={index}
-                            field={'quantity'}
-                            commitOnChange
+                                field={'quantity'}
+                                commitOnChange
                               />
                             </div>
                           )}
@@ -2855,8 +2854,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 min={0}
                                 placeholder="0 ₫"
                                 index={index}
-                            field={'unit_price'}
-                            commitOnChange
+                                field={'unit_price'}
+                                commitOnChange
                               />
                             </div>
                           )}
@@ -2906,8 +2905,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 min={0}
                                 placeholder="m³"
                                 index={index}
-                            field={'volume'}
-                            commitOnChange
+                                field={'volume'}
+                                commitOnChange
                               />
                             </div>
                           )}
@@ -2917,7 +2916,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 value={item.height ?? null}
                                 onChange={(v) => updateItem(index, 'height', v == null ? null : Number(v))}
                                 format="number"
-                            step={100}
+                                step={100}
                                 min={0}
                                 placeholder="mm"
                                 index={index}
@@ -2932,7 +2931,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 value={item.length ?? null}
                                 onChange={(v) => updateItem(index, 'length', v == null ? null : Number(v))}
                                 format="number"
-                            step={100}
+                                step={100}
                                 min={0}
                                 placeholder="mm"
                                 index={index}
@@ -2947,7 +2946,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 value={item.depth ?? null}
                                 onChange={(v) => updateItem(index, 'depth', v == null ? null : Number(v))}
                                 format="number"
-                            step={100}
+                                step={100}
                                 min={0}
                                 placeholder="mm"
                                 index={index}
@@ -2958,7 +2957,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           )}
                           {visibleColumns.components_block && (
                             <div className="text-sm text-black w-full">
-                              <div className="grid gap-2" style={{ 
+                              <div className="grid gap-2" style={{
                                 // Body grid for components: fixed widths like header
                                 gridTemplateColumns: `repeat(${(headerComponents.length || 1)}, 80px 100px 80px 120px)`
                               }}>
@@ -3055,13 +3054,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       </div>
                       <div className="flex justify-between items-center py-2 border-b border-gray-300">
                         <span className="text-base font-semibold text-black">Tổng cộng:</span>
-                        <span className={`text-base font-semibold ${
-                          isOverBudget ? 'text-red-600' : 'text-black'
-                        }`}>
+                        <span className={`text-base font-semibold ${isOverBudget ? 'text-red-600' : 'text-black'
+                          }`}>
                           {formatCurrency(formData.total_amount)}
                         </span>
                       </div>
-                      
+
                       {/* Profit Analysis */}
                       {(() => {
                         // Calculate total material cost (from components)
@@ -3072,14 +3070,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           }, 0)
                           return sum + materialCost
                         }, 0)
-                        
+
                         // Calculate total product price
                         const totalProductPrice = items.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0)
-                        
+
                         // Calculate profit
                         const profit = totalProductPrice - totalMaterialCost
                         const profitPercentage = totalProductPrice > 0 ? (profit / totalProductPrice) * 100 : 0
-                        
+
                         return (
                           <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                             <div className="text-sm font-medium text-blue-800 mb-2">Phân tích lợi nhuận</div>
@@ -3094,9 +3092,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               </div>
                               <div className="flex justify-between pt-1 border-t border-blue-200">
                                 <span className="text-gray-700 font-medium">Lợi nhuận:</span>
-                                <span className={`font-semibold ${
-                                  profit >= 0 ? 'text-green-600' : 'text-red-600'
-                                }`}>
+                                <span className={`font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}>
                                   {formatCurrency(profit)}
                                 </span>
                               </div>
@@ -3107,63 +3104,62 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 </span>
                               </div>
                             </div>
-                            
+
                             {/* Per-product breakdown */}
                             {items.length > 0 && items.some(item => {
                               const components = Array.isArray(item.components) ? item.components : []
                               return components.length > 0
                             }) && (
-                              <div className="mt-3 pt-3 border-t border-blue-200">
-                                <div className="text-xs font-medium text-blue-800 mb-2">Chi tiết theo sản phẩm:</div>
-                                <div className="space-y-2 max-h-32 overflow-y-auto">
-                                  {items.map((item, idx) => {
-                                    const components = Array.isArray(item.components) ? item.components : []
-                                    const materialCost = components.reduce((sum, comp) => sum + (Number(comp.total_price) || 0), 0)
-                                    const productPrice = Number(item.total_price) || 0
-                                    const itemProfit = productPrice - materialCost
-                                    const itemProfitPercentage = productPrice > 0 ? (itemProfit / productPrice) * 100 : 0
-                                    
-                                    if (components.length === 0) return null
-                                    
-                                    return (
-                                      <div key={idx} className="text-xs bg-white p-2 rounded border border-blue-100">
-                                        <div className="font-medium text-gray-800 mb-1">
-                                          {item.name_product || item.description || `Sản phẩm #${idx + 1}`}
+                                <div className="mt-3 pt-3 border-t border-blue-200">
+                                  <div className="text-xs font-medium text-blue-800 mb-2">Chi tiết theo sản phẩm:</div>
+                                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                                    {items.map((item, idx) => {
+                                      const components = Array.isArray(item.components) ? item.components : []
+                                      const materialCost = components.reduce((sum, comp) => sum + (Number(comp.total_price) || 0), 0)
+                                      const productPrice = Number(item.total_price) || 0
+                                      const itemProfit = productPrice - materialCost
+                                      const itemProfitPercentage = productPrice > 0 ? (itemProfit / productPrice) * 100 : 0
+
+                                      if (components.length === 0) return null
+
+                                      return (
+                                        <div key={idx} className="text-xs bg-white p-2 rounded border border-blue-100">
+                                          <div className="font-medium text-gray-800 mb-1">
+                                            {item.name_product || item.description || `Sản phẩm #${idx + 1}`}
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-2 text-gray-600">
+                                            <div>
+                                              <span>Vật tư: </span>
+                                              <span className="font-medium">{formatCurrency(materialCost)}</span>
+                                            </div>
+                                            <div>
+                                              <span>Giá SP: </span>
+                                              <span className="font-medium">{formatCurrency(productPrice)}</span>
+                                            </div>
+                                            <div>
+                                              <span>Lợi nhuận: </span>
+                                              <span className={`font-semibold ${itemProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                                                }`}>
+                                                {formatCurrency(itemProfit)}
+                                              </span>
+                                            </div>
+                                            <div>
+                                              <span>Tỷ lệ: </span>
+                                              <span className={`font-semibold ${getProfitPercentageColor(itemProfitPercentage)}`}>
+                                                {itemProfitPercentage.toFixed(2)}%
+                                              </span>
+                                            </div>
+                                          </div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2 text-gray-600">
-                                          <div>
-                                            <span>Vật tư: </span>
-                                            <span className="font-medium">{formatCurrency(materialCost)}</span>
-                                          </div>
-                                          <div>
-                                            <span>Giá SP: </span>
-                                            <span className="font-medium">{formatCurrency(productPrice)}</span>
-                                          </div>
-                                          <div>
-                                            <span>Lợi nhuận: </span>
-                                            <span className={`font-semibold ${
-                                              itemProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                                            }`}>
-                                              {formatCurrency(itemProfit)}
-                                            </span>
-                                          </div>
-                                          <div>
-                                            <span>Tỷ lệ: </span>
-                                            <span className={`font-semibold ${getProfitPercentageColor(itemProfitPercentage)}`}>
-                                              {itemProfitPercentage.toFixed(2)}%
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
+                                      )
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
                           </div>
                         )
                       })()}
-                      
+
                       {/* Budget Warning */}
                       {selectedProject && selectedProject.budget && (
                         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -3179,16 +3175,15 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               </h3>
                               <div className="mt-1 text-sm text-yellow-700">
                                 <p>
-                                  Ngân sách dự án <strong>{selectedProject.name}</strong>: 
+                                  Ngân sách dự án <strong>{selectedProject.name}</strong>:
                                   <span className="font-semibold ml-1">
                                     {formatCurrency(selectedProject.budget)}
                                   </span>
                                 </p>
                                 <p className="mt-1">
-                                  Tổng báo giá hiện tại: 
-                                  <span className={`font-semibold ml-1 ${
-                                    isOverBudget ? 'text-red-600' : 'text-green-600'
-                                  }`}>
+                                  Tổng báo giá hiện tại:
+                                  <span className={`font-semibold ml-1 ${isOverBudget ? 'text-red-600' : 'text-green-600'
+                                    }`}>
                                     {formatCurrency(totalAmount)}
                                   </span>
                                 </p>
@@ -3276,7 +3271,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   <p className="text-sm text-gray-600">Có sản phẩm có tỷ lệ lợi nhuận dưới 10%</p>
                 </div>
               </div>
-              
+
               <div className="mb-4 max-h-60 overflow-y-auto">
                 <div className="space-y-2">
                   {lowProfitItems.map((item, idx) => (
@@ -3291,7 +3286,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   ))}
                 </div>
               </div>
-              
+
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => {
@@ -3331,7 +3326,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             {/* Search Bar */}
             <div className="p-4 border-b border-gray-100 bg-gray-50">
               <div className="relative">
@@ -3345,7 +3340,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 />
               </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto bg-gray-50">
               {loadingProducts ? (
                 <div className="text-center py-8">
@@ -3372,10 +3367,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
                     return Object.entries(groupedProducts).map(([category, categoryProducts]) => {
                       const isExpanded = expandedCategories.has(category)
-                      
+
                       return (
                         <div key={category} className="mb-4">
-                          <div 
+                          <div
                             className="text-sm font-semibold text-gray-600 mb-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm cursor-pointer hover:bg-gray-50 transition-colors flex items-center justify-between"
                             onClick={() => toggleCategory(category)}
                           >
@@ -3389,86 +3384,86 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               <span className="ml-2 text-xs text-gray-500">({categoryProducts.length} sản phẩm)</span>
                             </div>
                           </div>
-                          
+
                           {isExpanded && (
-                        <div className="space-y-2">
-                          {categoryProducts.map((product) => (
-                            <label
-                              key={product.id}
-                              className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-3"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedProductIds.includes(product.id)}
-                                onChange={(e) => {
-                                  setSelectedProductIds(prev => e.target.checked ? [...prev, product.id] : prev.filter(id => id !== product.id))
-                                }}
-                                className="h-4 w-4"
-                              />
-                              <div className="grid grid-cols-6 gap-3 items-center w-full">
-                                <div className="col-span-2">
-                                  <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
-                                  <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
-                                    {category}
-                                  </div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleProductClick(product)
+                            <div className="space-y-2">
+                              {categoryProducts.map((product) => (
+                                <label
+                                  key={product.id}
+                                  className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-3"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProductIds.includes(product.id)}
+                                    onChange={(e) => {
+                                      setSelectedProductIds(prev => e.target.checked ? [...prev, product.id] : prev.filter(id => id !== product.id))
                                     }}
-                                    className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                                  >
-                                    {(() => {
-                                      const baseName = getBaseProductName(product.name)
-                                      const variants = filteredProducts.filter(p => getBaseProductName(p.name) === baseName)
-                                      return variants.length > 1 ? `Chọn biến thể (${variants.length})` : 'Chọn sản phẩm này'
-                                    })()}
-                                  </button>
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
-                                    <span className="font-medium">Đơn vị:</span><br/>
-                                    {product.unit || 'Chưa có'}
-                                  </span>
-                                </div>
-                                <div className="col-span-1">
-                                  {product.unit_price ? (
-                                    <span className="text-sm font-bold text-green-600">
-                                      <span className="font-medium">Đơn giá:</span><br/>
-                                      {formatCurrency(product.unit_price)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-sm text-gray-400">
-                                      <span className="font-medium">Đơn giá:</span><br/>
-                                      Chưa có
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
-                                    <span className="font-medium">Kích thước:</span><br/>
-                                    <div className="text-xs space-y-1">
-                                      {product.area && <div>📐 Diện tích: {product.area} m²</div>}
-                                      {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
-                                      {product.height && <div>📏 Cao: {product.height} mm</div>}
-                                      {product.length && <div>📏 Dài: {product.length} mm</div>}
-                                      {product.depth && <div>📏 Sâu: {product.depth} mm</div>}
-                                      {!product.area && !product.volume && !product.height && !product.length && !product.depth && 
-                                        <div className="text-gray-400">Chưa có kích thước</div>
-                                      }
+                                    className="h-4 w-4"
+                                  />
+                                  <div className="grid grid-cols-6 gap-3 items-center w-full">
+                                    <div className="col-span-2">
+                                      <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
+                                      <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
+                                        {category}
+                                      </div>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleProductClick(product)
+                                        }}
+                                        className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                                      >
+                                        {(() => {
+                                          const baseName = getBaseProductName(product.name)
+                                          const variants = filteredProducts.filter(p => getBaseProductName(p.name) === baseName)
+                                          return variants.length > 1 ? `Chọn biến thể (${variants.length})` : 'Chọn sản phẩm này'
+                                        })()}
+                                      </button>
                                     </div>
-                                  </span>
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
-                                    <span className="font-medium">Mô tả:</span><br/>
-                                    {product.description || 'Không có mô tả'}
-                                  </span>
-                                </div>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Đơn vị:</span><br />
+                                        {product.unit || 'Chưa có'}
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1">
+                                      {product.unit_price ? (
+                                        <span className="text-sm font-bold text-green-600">
+                                          <span className="font-medium">Đơn giá:</span><br />
+                                          {formatCurrency(product.unit_price)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-sm text-gray-400">
+                                          <span className="font-medium">Đơn giá:</span><br />
+                                          Chưa có
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Kích thước:</span><br />
+                                        <div className="text-xs space-y-1">
+                                          {product.area && <div>📐 Diện tích: {product.area} m²</div>}
+                                          {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
+                                          {product.height && <div>📏 Cao: {product.height} mm</div>}
+                                          {product.length && <div>📏 Dài: {product.length} mm</div>}
+                                          {product.depth && <div>📏 Sâu: {product.depth} mm</div>}
+                                          {!product.area && !product.volume && !product.height && !product.length && !product.depth &&
+                                            <div className="text-gray-400">Chưa có kích thước</div>
+                                          }
+                                        </div>
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Mô tả:</span><br />
+                                        {product.description || 'Không có mô tả'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
                           )}
                         </div>
                       )
@@ -3671,7 +3666,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         onToggleColumn={toggleColumn}
         onReset={resetColumns}
       />
-      
+
       {/* Product Variant Selection Dialog */}
       {showVariantDialog && selectedProductVariants.length > 0 && (
         <div className="fixed inset-0 z-70 bg-black bg-opacity-50 flex items-center justify-center">
@@ -3696,7 +3691,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-4">
               <div className="space-y-3">
                 {selectedProductVariants.map((variant) => (
@@ -3776,7 +3771,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                 ))}
               </div>
             </div>
-            
+
             <div className="p-4 border-t bg-gray-50 flex justify-end">
               <button
                 onClick={() => {
@@ -3835,8 +3830,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         // Baseline area is per unit, so no multiplication needed for display
                         const baseArea = it.baseline_area != null ? Number(it.baseline_area) : ((lengthMm != null && heightMm != null) ? Math.round(((lengthMm * heightMm) / 1_000_000) * 1e6) / 1e6 : null)
                         // Area value should include quantity (integrate quantity into calculation)
-                        const areaVal = (lengthMm != null && heightMm != null) 
-                          ? Math.round(((lengthMm * heightMm * qty) / 1_000_000) * 1e6) / 1e6 
+                        const areaVal = (lengthMm != null && heightMm != null)
+                          ? Math.round(((lengthMm * heightMm * qty) / 1_000_000) * 1e6) / 1e6
                           : (it.area ?? null)
                         // Volume value should include quantity (integrate quantity into calculation)
                         const volumeVal = (lengthMm != null && heightMm != null && depthMm != null)
@@ -3844,7 +3839,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           : (it.area != null && heightMm != null ? Math.round((Number(it.area) * (heightMm / 1000)) * 1e9) / 1e9 : (it.volume ?? null))
                         const compIds = Array.isArray((it as any).components) ? ((it as any).components as any[]).map(c => c.expense_object_id).filter(Boolean) : []
                         return (
-                          <tr key={`snap-${idx}`}> 
+                          <tr key={`snap-${idx}`}>
                             <td className="px-2 py-1">#{idx + 1}</td>
                             <td className="px-2 py-1">{it.name_product || ''}</td>
                             <td className="px-2 py-1 text-right">{lengthMm ?? ''}</td>

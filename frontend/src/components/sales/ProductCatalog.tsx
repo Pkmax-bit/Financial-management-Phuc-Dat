@@ -304,12 +304,26 @@ export default function ProductCatalog() {
                         </tr>
                       </thead>
                       <tbody>
-                        {list.map(p => (
+                        {list.map(p => {
+                          // Tính diện tích m²: ưu tiên tính từ height × length (mm) để đảm bảo đúng đơn vị m²
+                          // Công thức: (length_mm / 1000) × (height_mm / 1000) = diện tích m²
+                          let areaInM2: number | null = null
+                          if (p.height != null && p.length != null) {
+                            // Tính từ mm sang m²: (length_mm / 1000) × (height_mm / 1000)
+                            areaInM2 = Number(((Number(p.length) / 1000) * (Number(p.height) / 1000)).toFixed(6))
+                          } else if (p.area != null) {
+                            // Nếu không có height/length, dùng p.area (đã là m²)
+                            areaInM2 = Number(p.area)
+                          }
+                          const totalPrice = areaInM2 != null && areaInM2 > 0
+                            ? (Number(p.price) || 0) * areaInM2
+                            : null
+                          return (
                           <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium text-gray-900">{p.name}</td>
                             <td className="px-3 py-2 text-right">{formatNumber(Number(p.price) || 0)}</td>
                             <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                              {p.area != null ? formatNumber((Number(p.price) || 0) * (Number(p.area) || 0)) : '-'}
+                              {totalPrice != null ? formatNumber(totalPrice) : '-'}
                             </td>
                             <td className="px-3 py-2">{p.unit}</td>
                             <td className="px-3 py-2 text-right">{p.area ? `${formatNumber(p.area)} m²` : '-'}</td>
@@ -349,7 +363,8 @@ export default function ProductCatalog() {
                               <button onClick={() => deleteItem(p)} className="text-red-600 hover:underline text-xs">Xóa</button>
                             </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
