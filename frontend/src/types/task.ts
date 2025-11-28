@@ -25,6 +25,7 @@ export interface Task {
   project_name?: string
   comment_count?: number
   attachment_count?: number
+  parent_id?: string
 }
 
 export interface TaskChecklistItem {
@@ -123,6 +124,7 @@ export interface TaskResponse {
   participants: TaskParticipant[]
   notes: TaskNote[]
   assignments?: TaskAssignment[]
+  sub_tasks?: Task[]
 }
 
 

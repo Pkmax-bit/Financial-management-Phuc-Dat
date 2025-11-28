@@ -105,6 +105,7 @@ class Task(BaseModel):
     project_name: Optional[str] = None
     comment_count: Optional[int] = 0
     attachment_count: Optional[int] = 0
+    parent_id: Optional[str] = None
 
 class TaskCreate(BaseModel):
     """Task creation model"""
@@ -119,6 +120,7 @@ class TaskCreate(BaseModel):
     project_id: Optional[str] = None
     assignee_ids: Optional[List[str]] = []  # Multiple assignees
     estimated_time: Optional[int] = 0
+    parent_id: Optional[str] = None
 
 class TaskUpdate(BaseModel):
     """Task update model"""
@@ -316,5 +318,7 @@ class TaskResponse(BaseModel):
     checklists: List[TaskChecklist] = []
     time_logs: List[TaskTimeLog] = []
     participants: List[TaskParticipant] = []
+    participants: List[TaskParticipant] = []
     notes: List[TaskNote] = []
+    sub_tasks: List[Task] = []
 

@@ -190,6 +190,7 @@ export default function TaskDetailPage() {
 
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [checklistItemsDraft, setChecklistItemsDraft] = useState<Record<string, string>>({})
+  const [checklistError, setChecklistError] = useState<string | null>(null)
   const [newNote, setNewNote] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteContent, setEditingNoteContent] = useState('')
@@ -408,12 +409,37 @@ export default function TaskDetailPage() {
     }
   }
 
+  const calculateChecklistProgress = (items: TaskChecklistItem[]) => {
+    if (!items || items.length === 0) return 0
+    const completed = items.filter(item => item.is_completed).length
+    return completed / items.length
+  }
+
   const handleCreateChecklist = async () => {
-    if (!newChecklistTitle.trim()) return
+    if (!newChecklistTitle.trim()) {
+      setChecklistError('Vui lòng nhập tên nhóm việc trước khi thêm.')
+      return
+    }
     try {
-      await apiPost(`/api/tasks/${taskId}/checklists`, { title: newChecklistTitle.trim() })
+      const createdChecklist = await apiPost(`/api/tasks/${taskId}/checklists`, { title: newChecklistTitle.trim() })
       setNewChecklistTitle('')
-      loadTaskDetails()
+      setChecklistError(null)
+      if (createdChecklist) {
+        setTaskData(prev => {
+          if (!prev) return prev
+          const newChecklist = {
+            ...createdChecklist,
+            items: createdChecklist.items || [],
+            progress: typeof createdChecklist.progress === 'number'
+              ? createdChecklist.progress
+              : calculateChecklistProgress(createdChecklist.items || [])
+          }
+          return {
+            ...prev,
+            checklists: [newChecklist, ...prev.checklists]
+          }
+        })
+      }
     } catch (err) {
       alert(getErrorMessage(err, 'Không thể tạo checklist'))
     }
@@ -423,9 +449,21 @@ export default function TaskDetailPage() {
     const content = checklistItemsDraft[checklistId]?.trim()
     if (!content) return
     try {
-      await apiPost(`/api/tasks/checklists/${checklistId}/items`, { content })
+      const newItem = await apiPost(`/api/tasks/checklists/${checklistId}/items`, { content })
       setChecklistItemsDraft(prev => ({ ...prev, [checklistId]: '' }))
-      loadTaskDetails()
+      setTaskData(prev => {
+        if (!prev) return prev
+        const updatedChecklists = prev.checklists.map(checklist => {
+          if (checklist.id !== checklistId) return checklist
+          const updatedItems = [...(checklist.items || []), newItem]
+          return {
+            ...checklist,
+            items: updatedItems,
+            progress: calculateChecklistProgress(updatedItems)
+          }
+        })
+        return { ...prev, checklists: updatedChecklists }
+      })
     } catch (err) {
       alert(getErrorMessage(err, 'Không thể thêm mục checklist'))
     }
@@ -879,17 +917,23 @@ export default function TaskDetailPage() {
                   <CheckSquare className="h-5 w-5 text-blue-600" /> Việc cần làm
                 </h3>
                 <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Tên nhóm việc..."
-                  value={newChecklistTitle}
-                  onChange={(e) => setNewChecklistTitle(e.target.value)}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-40 text-black placeholder:text-gray-500"
-                />
+                  <input
+                    type="text"
+                    placeholder="Tên nhóm việc..."
+                    value={newChecklistTitle}
+                    onChange={(e) => {
+                      setNewChecklistTitle(e.target.value)
+                      if (checklistError) setChecklistError(null)
+                    }}
+                    className={`px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-40 text-black placeholder:text-gray-500 ${checklistError ? 'border-red-500' : 'border-gray-300'}`}
+                  />
                   <button onClick={handleCreateChecklist} className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
+                {checklistError && (
+                  <p className="text-red-600 text-xs mt-1">{checklistError}</p>
+                )}
               </div>
 
               <div className="space-y-4">

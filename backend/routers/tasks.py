@@ -833,8 +833,12 @@ async def create_task(
             "assigned_to": task_data.assigned_to,
             "project_id": task_data.project_id,
             "estimated_time": task_data.estimated_time or 0,
-            "time_spent": 0
+            "time_spent": 0,
+            "parent_id": task_data.parent_id
         }
+        
+        # Remove None values
+        task_record = {k: v for k, v in task_record.items() if v is not None}
         
         result = supabase.table("tasks").insert(task_record).execute()
         
@@ -1015,6 +1019,17 @@ async def get_task(
         # Get notes
         notes = _fetch_task_notes(supabase, task_id, current_user.id)
         
+        # Get sub-tasks
+        sub_tasks_result = supabase.table("tasks").select("*").eq("parent_id", task_id).is_("deleted_at", "null").order("created_at", desc=True).execute()
+        sub_tasks = []
+        for sub_task in sub_tasks_result.data or []:
+            # Process assigned_to for sub-tasks
+            if sub_task.get("assigned_to"):
+                emp = supabase.table("employees").select("first_name, last_name").eq("id", sub_task.get("assigned_to")).single().execute()
+                if emp.data:
+                    sub_task["assigned_to_name"] = f"{emp.data.get('first_name', '')} {emp.data.get('last_name', '')}".strip()
+            sub_tasks.append(sub_task)
+
         return TaskResponse(
             task=task,
             assignments=assignments,
@@ -1023,7 +1038,8 @@ async def get_task(
             checklists=checklists,
             time_logs=time_logs,
             participants=participants,
-            notes=notes
+            notes=notes,
+            sub_tasks=sub_tasks
         )
     except HTTPException:
         raise
