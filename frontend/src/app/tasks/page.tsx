@@ -43,6 +43,7 @@ interface Task {
   status: TaskStatus
   priority: TaskPriority
   due_date?: string
+  start_date?: string
   group_id?: string
   created_by?: string
   assigned_to?: string
@@ -56,7 +57,10 @@ interface Task {
   project_name?: string
   comment_count?: number
   attachment_count?: number
+  assignee_count?: number
+  assignee_ids?: string[]
   restore_hours_remaining?: number
+  estimated_time?: number
 }
 
 interface TaskGroup {
@@ -1313,6 +1317,13 @@ function TaskCard({
 
   const priorityBadge = getPriorityBadge(task.priority)
   const timeRemaining = getTimeRemaining()
+  const memberCount = typeof task.assignee_count === 'number'
+    ? task.assignee_count
+    : task.assignee_ids?.length
+      ? task.assignee_ids.length
+      : task.assigned_to_name
+        ? 1
+        : 0
 
   return (
     <div
@@ -1359,6 +1370,15 @@ function TaskCard({
           <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 border border-blue-200">
             <CheckSquare className="h-2.5 w-2.5" />
             <span className="font-medium">Checklist</span>
+          </span>
+        )}
+        {memberCount > 0 && (
+          <span
+            className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 border border-teal-200"
+            title={`Số thành viên được giao: ${memberCount}`}
+          >
+            <Users className="h-2.5 w-2.5" />
+            <span className="font-medium">TV: {memberCount}</span>
           </span>
         )}
         {task.attachment_count && task.attachment_count > 0 && (

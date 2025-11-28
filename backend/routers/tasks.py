@@ -165,10 +165,9 @@ def _fetch_task_participants(supabase, task_id: str) -> List[TaskParticipant]:
         participants.append(participant)
     return participants
 
-    return participants
 
-
-def _fetch_task_notes(supabase, task_id: str) -> List[TaskNote]:
+def _fetch_task_notes(supabase, task_id: str, current_user_id: Optional[str] = None) -> List[TaskNote]:
+    """Fetch task notes with visibility filtering based on user permissions"""
     notes_result = (
         supabase.table("task_notes")
         .select("""
@@ -179,13 +178,71 @@ def _fetch_task_notes(supabase, task_id: str) -> List[TaskNote]:
         .order("created_at", desc=True)
         .execute()
     )
-    notes = []
+    
+    if not current_user_id:
+        # If no user context, return all notes (for internal use)
+        notes = []
+        for note in notes_result.data or []:
+            user = note.get("users")
+            if user:
+                note["created_by_name"] = user.get("full_name")
+            notes.append(note)
+        return notes
+    
+    # Get task details to know group_id
+    task_result = supabase.table("tasks").select("id, group_id").eq("id", task_id).single().execute()
+    if not task_result.data:
+        return []
+    
+    task = task_result.data
+    group_id = task.get("group_id")
+    
+    # Get task participants
+    participants_result = (
+        supabase.table("task_participants")
+        .select("employee_id")
+        .eq("task_id", task_id)
+        .execute()
+    )
+    participant_ids = {p["employee_id"] for p in (participants_result.data or [])}
+    
+    # Get group members if group exists
+    group_member_ids = set()
+    if group_id:
+        members_result = (
+            supabase.table("task_group_members")
+            .select("employee_id")
+            .eq("group_id", group_id)
+            .execute()
+        )
+        group_member_ids = {m["employee_id"] for m in (members_result.data or [])}
+    
+    # Filter notes based on visibility
+    filtered_notes = []
     for note in notes_result.data or []:
         user = note.get("users")
         if user:
             note["created_by_name"] = user.get("full_name")
-        notes.append(note)
-    return notes
+        
+        visibility = note.get("visibility", "task")
+        created_by = note.get("created_by")
+        
+        # Private notes: only creator can see
+        if visibility == "private":
+            if current_user_id == created_by:
+                filtered_notes.append(note)
+        
+        # Task notes: all participants can see
+        elif visibility == "task":
+            if current_user_id in participant_ids or current_user_id == created_by:
+                filtered_notes.append(note)
+        
+        # Group notes: all group members can see
+        elif visibility == "group":
+            if current_user_id in group_member_ids or current_user_id == created_by:
+                filtered_notes.append(note)
+    
+    return filtered_notes
 
 @router.get("/groups", response_model=List[TaskGroup])
 async def get_task_groups(
@@ -640,6 +697,9 @@ async def get_tasks(
             
             attachment_count = supabase.table("task_attachments").select("id", count="exact").eq("task_id", task["id"]).execute()
             task["attachment_count"] = attachment_count.count if hasattr(attachment_count, 'count') else 0
+
+            assignment_count = supabase.table("task_assignments").select("id", count="exact").eq("task_id", task["id"]).execute()
+            task["assignee_count"] = assignment_count.count if hasattr(assignment_count, 'count') else 0
             
             tasks.append(task)
         
@@ -809,6 +869,36 @@ async def create_task(
                 "status": task_data.status.value
             }).execute()
         
+        # Create task participants
+        participants = []
+        participant_ids = set()  # Track IDs to avoid duplicates
+        
+        # Add assigned_to as responsible participant
+        if task_data.assigned_to:
+            participant_ids.add(task_data.assigned_to)
+            participants.append({
+                "task_id": task["id"],
+                "employee_id": task_data.assigned_to,
+                "role": "responsible",
+                "added_by": current_user.id
+            })
+        
+        # Add assignee_ids as participants (skip if already added as responsible)
+        if task_data.assignee_ids:
+            for employee_id in task_data.assignee_ids:
+                if employee_id not in participant_ids:
+                    participant_ids.add(employee_id)
+                    participants.append({
+                        "task_id": task["id"],
+                        "employee_id": employee_id,
+                        "role": "participant",
+                        "added_by": current_user.id
+                    })
+        
+        # Insert participants if any
+        if participants:
+            supabase.table("task_participants").insert(participants).execute()
+        
         return task
     except HTTPException:
         raise
@@ -923,7 +1013,7 @@ async def get_task(
         participants = _fetch_task_participants(supabase, task_id)
         
         # Get notes
-        notes = _fetch_task_notes(supabase, task_id)
+        notes = _fetch_task_notes(supabase, task_id, current_user.id)
         
         return TaskResponse(
             task=task,
@@ -1972,7 +2062,7 @@ async def get_task_notes(
 ):
     try:
         supabase = get_supabase_client()
-        return _fetch_task_notes(supabase, task_id)
+        return _fetch_task_notes(supabase, task_id, current_user.id)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1991,6 +2081,7 @@ async def create_task_note(
         insert_data = {
             "task_id": task_id,
             "content": note_data.content,
+            "visibility": note_data.visibility.value,
             "created_by": current_user.id
         }
         result = supabase.table("task_notes").insert(insert_data).execute()
@@ -2029,12 +2120,15 @@ async def update_task_note(
         if existing.data["created_by"] != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to update this note")
 
+        update_data = {"updated_at": datetime.utcnow().isoformat()}
+        if note_data.content is not None:
+            update_data["content"] = note_data.content
+        if note_data.visibility is not None:
+            update_data["visibility"] = note_data.visibility.value
+        
         result = (
             supabase.table("task_notes")
-            .update({
-                "content": note_data.content,
-                "updated_at": datetime.utcnow().isoformat()
-            })
+            .update(update_data)
             .eq("id", note_id)
             .execute()
         )

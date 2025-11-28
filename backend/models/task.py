@@ -29,6 +29,11 @@ class TaskGroupRole(str, Enum):
     ADMIN = "admin"
     MEMBER = "member"
 
+class NoteVisibility(str, Enum):
+    PRIVATE = "private"  # Only creator can see
+    TASK = "task"        # All task participants can see
+    GROUP = "group"      # All group members can see
+
 class TaskGroup(BaseModel):
     """Task Group model"""
     id: str
@@ -283,6 +288,7 @@ class TaskNote(BaseModel):
     id: str
     task_id: str
     content: str
+    visibility: NoteVisibility = NoteVisibility.TASK
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -292,11 +298,13 @@ class TaskNote(BaseModel):
 class TaskNoteCreate(BaseModel):
     """Task Note creation model"""
     content: str
+    visibility: NoteVisibility = NoteVisibility.TASK
 
 
 class TaskNoteUpdate(BaseModel):
     """Task Note update model"""
-    content: str
+    content: Optional[str] = None
+    visibility: Optional[NoteVisibility] = None
 
 
 class TaskResponse(BaseModel):

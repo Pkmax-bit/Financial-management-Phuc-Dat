@@ -63,36 +63,36 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 // Get file icon based on file type
 const getFileIcon = (fileType: string) => {
   if (!fileType) return FileText
-  
+
   const type = fileType.toLowerCase()
-  
+
   // Images
   if (type.startsWith('image/')) {
     return ImageIcon
   }
-  
+
   // PDF
   if (type === 'application/pdf') {
     return FileText
   }
-  
+
   // Excel files
-  if (type.includes('spreadsheet') || type === 'application/vnd.ms-excel' || 
-      type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+  if (type.includes('spreadsheet') || type === 'application/vnd.ms-excel' ||
+    type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
     return FileSpreadsheet
   }
-  
+
   // Word files
   if (type.includes('word') || type === 'application/msword' ||
-      type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     return FileType
   }
-  
+
   // Text files
   if (type.startsWith('text/')) {
     return FileText
   }
-  
+
   // Default
   return File
 }
@@ -210,30 +210,30 @@ export default function TaskDetailPage() {
   const [editGroupName, setEditGroupName] = useState('')
   const [editGroupDescription, setEditGroupDescription] = useState('')
 
-const quickSections = [
-  { id: 'overview', label: 'Thông tin', icon: AlertCircle },
-  { id: 'checklists', label: 'Checklist', icon: CheckSquare },
-  { id: 'notes', label: 'Ghi chú', icon: StickyNote },
-  { id: 'chat', label: 'Trao đổi', icon: MessageSquare }
-] as const
+  const quickSections = [
+    { id: 'overview', label: 'Thông tin', icon: AlertCircle },
+    { id: 'checklists', label: 'Checklist', icon: CheckSquare },
+    { id: 'notes', label: 'Ghi chú', icon: StickyNote },
+    { id: 'chat', label: 'Trao đổi', icon: MessageSquare }
+  ] as const
 
-type SectionKey = typeof quickSections[number]['id']
+  type SectionKey = typeof quickSections[number]['id']
 
-const overviewRef = useRef<HTMLDivElement | null>(null)
-const checklistRef = useRef<HTMLDivElement | null>(null)
-const notesRef = useRef<HTMLDivElement | null>(null)
-const chatRef = useRef<HTMLDivElement | null>(null)
+  const overviewRef = useRef<HTMLDivElement | null>(null)
+  const checklistRef = useRef<HTMLDivElement | null>(null)
+  const notesRef = useRef<HTMLDivElement | null>(null)
+  const chatRef = useRef<HTMLDivElement | null>(null)
 
   const sectionRefs: Record<SectionKey, React.RefObject<HTMLDivElement | null>> = {
-  overview: overviewRef,
-  checklists: checklistRef,
-  notes: notesRef,
-  chat: chatRef
-}
+    overview: overviewRef,
+    checklists: checklistRef,
+    notes: notesRef,
+    chat: chatRef
+  }
 
-const handleSectionJump = (key: SectionKey) => {
-  sectionRefs[key].current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
+  const handleSectionJump = (key: SectionKey) => {
+    sectionRefs[key].current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const canModerateComments = useMemo(() => {
     const role = user?.role?.toLowerCase()
@@ -282,15 +282,15 @@ const handleSectionJump = (key: SectionKey) => {
       setLoadingTask(true)
       setError(null)
       const data = await apiGet(`/api/tasks/${taskId}`)
-      
+
       if (!data || !data.task) {
         setError('Nhiệm vụ không tồn tại hoặc đã bị xóa')
         setTaskData(null)
         return
       }
-      
+
       setTaskData(data)
-      
+
       // Load group members if task has group_id
       if (data?.task?.group_id) {
         try {
@@ -307,7 +307,7 @@ const handleSectionJump = (key: SectionKey) => {
       console.error('Failed to load task', err)
       const status = err?.status || err?.response?.status
       const message = err?.message || err?.response?.data?.detail || 'Không thể tải nhiệm vụ'
-      
+
       if (status === 404) {
         setError('Nhiệm vụ không tồn tại hoặc đã bị xóa')
       } else if (status === 401 || status === 403) {
@@ -634,8 +634,8 @@ const handleSectionJump = (key: SectionKey) => {
             <span>Tasks</span>
             <span>/</span>
             <span className="font-medium text-gray-900 max-w-[200px] truncate">{task?.title}</span>
-                </div>
-              </div>
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           {/* Task Actions */}
           <div className="flex items-center gap-2">
@@ -714,7 +714,7 @@ const handleSectionJump = (key: SectionKey) => {
                     {(() => {
                       const timeRemaining = calculateTimeRemaining(task?.due_date)
                       const timeLimit = formatTimeLimit(task?.estimated_time)
-                      
+
                       if (timeRemaining !== null) {
                         const remainingText = timeRemaining >= 0 ? `${timeRemaining}h` : `-${Math.abs(timeRemaining)}h`
                         return `${remainingText} / ${timeLimit}`
@@ -730,7 +730,7 @@ const handleSectionJump = (key: SectionKey) => {
             {(() => {
               // Lấy danh sách người phụ trách từ assignments hoặc group members
               const assignees: Array<{ id: string; name: string; email?: string }> = []
-              
+
               // Ưu tiên lấy từ assignments (nếu có)
               if (assignments && assignments.length > 0) {
                 assignments.forEach(assignment => {
@@ -761,19 +761,27 @@ const handleSectionJump = (key: SectionKey) => {
                   name: task.assigned_to_name
                 })
               }
-              
-              if (assignees.length === 0) {
+
+              const assigneeTotal = assignees.length
+
+              if (assigneeTotal === 0) {
                 return (
                   <div className="pt-4 border-t border-gray-200">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Người phụ trách</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Người phụ trách</h3>
+                      <span className="text-[11px] font-semibold text-gray-500">0 thành viên</span>
+                    </div>
                     <p className="text-sm text-gray-500 italic">Thành viên được chọn làm nhiệm vụ</p>
                   </div>
                 )
               }
-              
+
               return (
                 <div className="pt-4 border-t border-gray-200">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Người phụ trách</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Người phụ trách</h3>
+                    <span className="text-[11px] font-semibold text-gray-600">{assigneeTotal} thành viên</span>
+                  </div>
                   <div className="space-y-3">
                     {assignees.map((assignee) => (
                       <div key={assignee.id} className="flex items-center gap-3">
@@ -871,13 +879,13 @@ const handleSectionJump = (key: SectionKey) => {
                   <CheckSquare className="h-5 w-5 text-blue-600" /> Việc cần làm
                 </h3>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Tên nhóm việc..."
-                    value={newChecklistTitle}
-                    onChange={(e) => setNewChecklistTitle(e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
-                  />
+                <input
+                  type="text"
+                  placeholder="Tên nhóm việc..."
+                  value={newChecklistTitle}
+                  onChange={(e) => setNewChecklistTitle(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-40 text-black placeholder:text-gray-500"
+                />
                   <button onClick={handleCreateChecklist} className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                     <Plus className="h-4 w-4" />
                   </button>
@@ -906,20 +914,27 @@ const handleSectionJump = (key: SectionKey) => {
                           </button>
                           <span className={`text-sm flex-1 leading-snug ${item.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
                             {item.content}
-                      </span>
+                          </span>
                           <button onClick={() => handleDeleteChecklistItem(item.id)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition-opacity">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                    </div>
+                        </div>
                       ))}
 
                       {/* Add Item Input */}
                       <div className="flex items-center gap-3 px-2 py-1.5 mt-1">
-                        <Plus className="h-4 w-4 text-gray-400" />
+                        <button
+                          type="button"
+                          onClick={() => handleAddChecklistItem(checklist.id)}
+                          className="p-1 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="Thêm việc cần làm"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
                         <input
                           type="text"
                           placeholder="Thêm việc cần làm..."
-                          className="flex-1 text-sm bg-transparent border-none focus:ring-0 placeholder-gray-400"
+                          className="flex-1 text-sm bg-transparent border-none focus:ring-0 text-black placeholder:text-gray-500"
                           value={checklistItemsDraft[checklist.id] || ''}
                           onChange={(e) => setChecklistItemsDraft(prev => ({ ...prev, [checklist.id]: e.target.value }))}
                           onKeyDown={(e) => {
@@ -928,15 +943,15 @@ const handleSectionJump = (key: SectionKey) => {
                         />
                       </div>
                     </div>
-                          </div>
-                        ))}
+                  </div>
+                ))}
                 {checklists?.length === 0 && (
                   <div className="text-center py-8 border-2 border-dashed border-gray-100 rounded-xl">
                     <p className="text-sm text-gray-500">Chưa có công việc nào.</p>
-                      </div>
-                    )}
                   </div>
-                    </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* BOTTOM HALF: CHAT (~50%) */}
@@ -964,21 +979,21 @@ const handleSectionJump = (key: SectionKey) => {
                   <div key={comment.id} className={`flex gap-3 ${comment.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
                     <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
                       {comment.user_name?.charAt(0)}
-                            </div>
+                    </div>
                     <div className={`max-w-[80%] space-y-1 ${comment.user_id === user?.id ? 'items-end' : 'items-start'}`}>
                       <div className={`flex items-center gap-2 text-xs text-gray-500 ${comment.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
                         <span className="font-medium text-gray-900">{comment.user_name}</span>
                         <span>{formatDate(comment.created_at, true)}</span>
                       </div>
                       <div className={`p-3 rounded-2xl text-sm ${comment.user_id === user?.id
-                          ? 'bg-blue-600 text-white rounded-tr-none'
-                          : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none shadow-sm'
+                        ? 'bg-blue-600 text-white rounded-tr-none'
+                        : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none shadow-sm'
                         }`}>
                         {comment.type === 'image' && comment.file_url && (
                           <img src={comment.file_url} alt="Attachment" className="max-w-full rounded-lg mb-2" />
                         )}
                         <p className="whitespace-pre-wrap">{comment.comment}</p>
-                  </div>
+                      </div>
                       {/* Actions */}
                       <div className={`flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${comment.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
                         {canManageComment(comment) && (
@@ -987,7 +1002,7 @@ const handleSectionJump = (key: SectionKey) => {
                         <button onClick={() => handleTogglePin(comment)} className="text-xs text-gray-500 hover:text-blue-600">
                           {comment.is_pinned ? 'Bỏ ghim' : 'Ghim'}
                         </button>
-                </div>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1002,7 +1017,7 @@ const handleSectionJump = (key: SectionKey) => {
                   <button onClick={() => { setPendingFile(null); setPendingPreview(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5">
                     <Trash2 className="h-3 w-3" />
                   </button>
-                  </div>
+                </div>
               )}
               <div className="flex gap-2 items-end">
                 <label className="p-2 text-gray-400 hover:text-blue-600 cursor-pointer transition-colors">
@@ -1028,7 +1043,7 @@ const handleSectionJump = (key: SectionKey) => {
                     value={chatMessage}
                     onChange={(e) => setChatMessage(e.target.value)}
                     placeholder="Nhập tin nhắn..."
-                    className="w-full bg-transparent border-none focus:ring-0 text-sm max-h-24 resize-none p-0"
+                    className="w-full bg-transparent border-none focus:ring-0 text-sm max-h-24 resize-none p-0 text-black placeholder:text-gray-500"
                     rows={1}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -1062,64 +1077,64 @@ const handleSectionJump = (key: SectionKey) => {
             <div className="mb-6 pb-6 border-b border-gray-200">
               <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm focus-within:ring-2 focus-within:ring-yellow-400 transition-all">
                   <textarea
-                  placeholder="Viết ghi chú mới..."
+                    placeholder="Viết ghi chú mới..."
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
-                  className="w-full text-sm border-none focus:ring-0 resize-none p-0 placeholder-gray-400"
+                    className="w-full text-sm border-none focus:ring-0 resize-none p-0 text-black placeholder:text-gray-500"
                     rows={3}
                   />
                 <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
                   <button onClick={handleCreateNote} disabled={!newNote.trim()} className="text-xs font-semibold bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg hover:bg-yellow-200 transition-colors disabled:opacity-50">
                     Lưu ghi chú
-                    </button>
-                  </div>
+                  </button>
                 </div>
+              </div>
             </div>
 
             {/* Notes List */}
             <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-1">
               {notes?.map(note => (
                 <div key={note.id} className="bg-yellow-50/50 border border-yellow-100 rounded-xl p-4 hover:shadow-sm transition-shadow group relative">
-                        {editingNoteId === note.id ? (
+                  {editingNoteId === note.id ? (
                     <div className="space-y-2">
                             <textarea
                               value={editingNoteContent}
                               onChange={(e) => setEditingNoteContent(e.target.value)}
-                        className="w-full text-sm bg-white border-yellow-200 rounded-md p-2 focus:ring-yellow-400"
+                              className="w-full text-sm bg-white border-yellow-200 rounded-md p-2 focus:ring-yellow-400 text-black placeholder:text-gray-500"
                               rows={3}
                             />
-                            <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2">
                         <button onClick={() => setEditingNoteId(null)} className="text-xs text-gray-500">Hủy</button>
                         <button onClick={handleSaveNote} className="text-xs font-semibold text-blue-600">Lưu</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                      <p className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">{note.content}</p>
-                      <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-900 font-medium whitespace-pre-line leading-relaxed">{note.content}</p>
+                      <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                         <span>{formatDate(note.created_at)}</span>
-                              {canEditNote(note) && (
+                        {canEditNote(note) && (
                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => handleEditNote(note)} className="hover:text-blue-600">Sửa</button>
                             <button onClick={() => handleDeleteNote(note.id)} className="hover:text-red-600">Xóa</button>
-                                </div>
-                              )}
-                            </div>
-                          </>
+                          </div>
                         )}
                       </div>
-                    ))}
+                    </>
+                  )}
+                </div>
+              ))}
               {notes?.length === 0 && (
-                <div className="text-center text-gray-400 mt-10">
-                  <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">Chưa có ghi chú nào</p>
-                  </div>
-                )}
+                <div className="text-center text-gray-700 mt-10">
+                  <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm font-semibold">Chưa có ghi chú nào</p>
+                </div>
+              )}
             </div>
           </div>
         </aside>
 
-                    </div>
+      </div>
 
       {/* Edit Task Modal */}
       {isEditingTask && (
@@ -1129,8 +1144,8 @@ const handleSectionJump = (key: SectionKey) => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Tiêu đề *</label>
-                    <input
-                      type="text"
+                <input
+                  type="text"
                   value={editTaskTitle}
                   onChange={(e) => setEditTaskTitle(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
@@ -1149,7 +1164,7 @@ const handleSectionJump = (key: SectionKey) => {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-                    <button
+              <button
                 onClick={() => setIsEditingTask(false)}
                 className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
@@ -1160,9 +1175,9 @@ const handleSectionJump = (key: SectionKey) => {
                 className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Lưu
-                    </button>
-                  </div>
-                </div>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1181,8 +1196,8 @@ const handleSectionJump = (key: SectionKey) => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
                   placeholder="Nhập tên nhóm"
                 />
-                  </div>
-                          <div>
+              </div>
+              <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Mô tả</label>
                 <textarea
                   value={editGroupDescription}
@@ -1191,10 +1206,10 @@ const handleSectionJump = (key: SectionKey) => {
                   rows={4}
                   placeholder="Nhập mô tả nhóm"
                 />
-                          </div>
-                          </div>
+              </div>
+            </div>
             <div className="flex justify-end gap-3 mt-6">
-                              <button
+              <button
                 onClick={() => setIsEditingGroup(false)}
                 className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
@@ -1206,8 +1221,8 @@ const handleSectionJump = (key: SectionKey) => {
               >
                 Lưu
               </button>
-      </div>
-      </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
