@@ -25,6 +25,7 @@ import {
   Clock,
   Download,
   Edit,
+  Edit2,
   FileText,
   File,
   Image as ImageIcon,
@@ -194,6 +195,8 @@ export default function TaskDetailPage() {
   const [newNote, setNewNote] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteContent, setEditingNoteContent] = useState('')
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null)
+  const [editingChecklistItemContent, setEditingChecklistItemContent] = useState('')
   const [groupMembers, setGroupMembers] = useState<Array<{ employee_id: string; employee_name?: string; employee_email?: string }>>([])
 
   const [chatMessage, setChatMessage] = useState('')
@@ -202,6 +205,21 @@ export default function TaskDetailPage() {
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+
+  // Resizable layout states
+  const [leftColumnWidth, setLeftColumnWidth] = useState(320)
+  const [rightColumnWidth, setRightColumnWidth] = useState(320)
+  const [middleSplitRatio, setMiddleSplitRatio] = useState(0.55)
+  const middleColumnRef = useRef<HTMLDivElement | null>(null)
+  const resizeStateRef = useRef<{
+    type: 'left' | 'right' | 'middle'
+    startX: number
+    startY: number
+    startLeftWidth: number
+    startRightWidth: number
+    startSplit: number
+    containerHeight: number
+  } | null>(null)
 
   // Edit/Delete states
   const [isEditingTask, setIsEditingTask] = useState(false)
@@ -234,6 +252,66 @@ export default function TaskDetailPage() {
 
   const handleSectionJump = (key: SectionKey) => {
     sectionRefs[key].current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+  const handleMouseMove = useCallback((event: MouseEvent) => {
+    const state = resizeStateRef.current
+    if (!state) return
+    if (state.type === 'left') {
+      const delta = event.clientX - state.startX
+      const newWidth = clamp(state.startLeftWidth + delta, 240, 520)
+      setLeftColumnWidth(newWidth)
+    } else if (state.type === 'right') {
+      const delta = state.startX - event.clientX
+      const newWidth = clamp(state.startRightWidth + delta, 240, 520)
+      setRightColumnWidth(newWidth)
+    } else if (state.type === 'middle') {
+      if (!state.containerHeight || state.containerHeight <= 0) return
+      const delta = event.clientY - state.startY
+      const newRatio = clamp(state.startSplit + delta / state.containerHeight, 0.2, 0.8)
+      setMiddleSplitRatio(newRatio)
+    }
+  }, [])
+
+  const handleMouseUp = useCallback(() => {
+    resizeStateRef.current = null
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [handleMouseMove, handleMouseUp])
+
+  const startResize = (type: 'left' | 'right' | 'middle', event: React.MouseEvent) => {
+    event.preventDefault()
+    if (type === 'middle' && middleColumnRef.current) {
+      const rect = middleColumnRef.current.getBoundingClientRect()
+      resizeStateRef.current = {
+        type,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeftWidth: leftColumnWidth,
+        startRightWidth: rightColumnWidth,
+        startSplit: middleSplitRatio,
+        containerHeight: rect.height
+      }
+    } else {
+      resizeStateRef.current = {
+        type,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeftWidth: leftColumnWidth,
+        startRightWidth: rightColumnWidth,
+        startSplit: middleSplitRatio,
+        containerHeight: middleColumnRef.current?.getBoundingClientRect().height || 0
+      }
+    }
   }
 
   const canModerateComments = useMemo(() => {
@@ -469,6 +547,38 @@ export default function TaskDetailPage() {
     }
   }
 
+  const startEditChecklistItem = (item: TaskChecklistItem) => {
+    setEditingChecklistItemId(item.id)
+    setEditingChecklistItemContent(item.content)
+  }
+
+  const handleSaveChecklistItem = async () => {
+    if (!editingChecklistItemId || !editingChecklistItemContent.trim()) {
+      setEditingChecklistItemId(null)
+      setEditingChecklistItemContent('')
+      return
+    }
+    try {
+      const updatedItem = await apiPut(`/api/tasks/checklist-items/${editingChecklistItemId}`, {
+        content: editingChecklistItemContent.trim()
+      })
+      setTaskData(prev => {
+        if (!prev) return prev
+        const updatedChecklists = prev.checklists.map(checklist => {
+          if (!checklist.items?.length) return checklist
+          const items = checklist.items.map(item => item.id === editingChecklistItemId ? { ...item, ...updatedItem } : item)
+          if (items === checklist.items) return checklist
+          return { ...checklist, items }
+        })
+        return { ...prev, checklists: updatedChecklists }
+      })
+      setEditingChecklistItemId(null)
+      setEditingChecklistItemContent('')
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không thể cập nhật việc cần làm'))
+    }
+  }
+
   const handleToggleChecklistItem = async (item: TaskChecklistItem) => {
     try {
       await apiPut(`/api/tasks/checklist-items/${item.id}`, { is_completed: !item.is_completed })
@@ -699,11 +809,14 @@ export default function TaskDetailPage() {
         </div>
       </header>
 
-      {/* Main 3-Column Layout */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 gap-0">
+      {/* Main Layout with Resizable Panels */}
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
 
-        {/* LEFT COLUMN: INFO (~25%) */}
-        <aside className="hidden lg:block lg:col-span-3 border-r border-gray-200 bg-gray-50/50 flex flex-col min-h-0">
+        {/* LEFT COLUMN: INFO */}
+        <aside
+          className="hidden lg:flex flex-col border-r border-gray-200 bg-gray-50/50 min-h-0"
+          style={{ width: leftColumnWidth, minWidth: 240, maxWidth: 520 }}
+        >
           <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
             {/* Title & Status */}
             <div className="pb-4 border-b border-gray-200">
@@ -893,11 +1006,20 @@ export default function TaskDetailPage() {
           </div>
         </aside>
 
-        {/* MIDDLE COLUMN: WORK AREA (~50%) */}
-        <main className="col-span-1 lg:col-span-6 flex flex-col min-h-0 bg-white relative border-x border-gray-200">
+        {/* Left Resize Handle */}
+        <div
+          className="hidden lg:block w-1 bg-gray-200 hover:bg-gray-300 cursor-col-resize"
+          onMouseDown={(e) => startResize('left', e)}
+        ></div>
+
+        {/* MIDDLE COLUMN */}
+        <main ref={middleColumnRef} className="flex flex-1 min-w-0 flex-col bg-white relative">
 
           {/* TOP HALF: CHECKLISTS & DESCRIPTION */}
-          <div className="flex-1 min-h-0 overflow-y-auto border-b border-gray-200 p-6 custom-scrollbar space-y-6">
+          <div
+            className="flex flex-col min-h-0 border-b border-gray-200 p-6 custom-scrollbar space-y-6 bg-white overflow-y-auto"
+            style={{ flex: middleSplitRatio, minHeight: 220 }}
+          >
             {/* Description */}
             {task?.description && (
               <div>
@@ -956,12 +1078,47 @@ export default function TaskDetailPage() {
                           >
                             {item.is_completed && <Check className="h-3 w-3 text-white" />}
                           </button>
-                          <span className={`text-sm flex-1 leading-snug ${item.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                            {item.content}
-                          </span>
-                          <button onClick={() => handleDeleteChecklistItem(item.id)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition-opacity">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {editingChecklistItemId === item.id ? (
+                            <div className="flex flex-1 items-center gap-2">
+                              <input
+                                type="text"
+                                value={editingChecklistItemContent}
+                                onChange={(e) => setEditingChecklistItemContent(e.target.value)}
+                                className="flex-1 text-sm bg-white border border-blue-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                              />
+                              <button
+                                onClick={handleSaveChecklistItem}
+                                className="text-xs font-semibold text-blue-600 hover:underline"
+                              >
+                                Lưu
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingChecklistItemId(null)
+                                  setEditingChecklistItemContent('')
+                                }}
+                                className="text-xs text-gray-500 hover:underline"
+                              >
+                                Hủy
+                              </button>
+                            </div>
+                          ) : (
+                            <span className={`text-sm flex-1 leading-snug ${item.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                              {item.content}
+                            </span>
+                          )}
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => startEditChecklistItem(item)}
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Chỉnh sửa việc cần làm"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteChecklistItem(item.id)} className="text-gray-400 hover:text-red-600 transition-colors" title="Xóa việc cần làm">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
 
@@ -998,8 +1155,17 @@ export default function TaskDetailPage() {
             </div>
           </div>
 
-          {/* BOTTOM HALF: CHAT (~50%) */}
-          <div className="flex-1 min-h-0 flex flex-col bg-gray-50/30 border-t border-gray-200">
+          {/* Middle Resize Handle */}
+          <div
+            className="hidden lg:block h-1 bg-gray-200 hover:bg-gray-300 cursor-row-resize"
+            onMouseDown={(e) => startResize('middle', e)}
+          ></div>
+
+          {/* BOTTOM HALF: CHAT */}
+          <div
+            className="flex min-h-0 flex-col border-t border-gray-200 bg-white overflow-y-auto"
+            style={{ flex: 1 - middleSplitRatio, minHeight: 220 }}
+          >
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-blue-600" /> Trao đổi
@@ -1012,7 +1178,7 @@ export default function TaskDetailPage() {
             </div>
 
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar min-h-0">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar min-h-0 bg-white">
               {filteredComments?.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-400">
                   <MessageSquare className="h-8 w-8 mb-2 opacity-20" />
@@ -1109,8 +1275,17 @@ export default function TaskDetailPage() {
           </div>
         </main>
 
-        {/* RIGHT COLUMN: NOTES (~25%) */}
-        <aside className="hidden lg:block lg:col-span-3 border-l border-gray-200 bg-gray-50/50 flex flex-col min-h-0">
+        {/* Right Resize Handle */}
+        <div
+          className="hidden lg:block w-1 bg-gray-200 hover:bg-gray-300 cursor-col-resize"
+          onMouseDown={(e) => startResize('right', e)}
+        ></div>
+
+        {/* RIGHT COLUMN: NOTES */}
+        <aside
+          className="hidden lg:flex flex-col border-l border-gray-200 bg-gray-50/50 min-h-0"
+          style={{ width: rightColumnWidth, minWidth: 240, maxWidth: 520 }}
+        >
           <div className="p-6 h-full flex flex-col">
             <div className="flex items-center gap-2 mb-6 pb-4 border-b border-gray-200">
               <StickyNote className="h-5 w-5 text-yellow-500" />
