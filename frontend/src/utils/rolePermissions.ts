@@ -108,6 +108,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'management'
   },
   {
+    name: 'Nhiệm vụ',
+    href: '/tasks',
+    icon: 'CheckSquare',
+    description: 'Quản lý nhiệm vụ và nhóm làm việc',
+    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker', 'customer'],
+    category: 'system'
+  },
+  {
     name: 'Thông báo',
     href: '/notifications',
     icon: 'Bell',

@@ -19,7 +19,8 @@ import {
   Brain,
   TestTube,
   Camera,
-  Lock
+  Lock,
+  CheckSquare
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
@@ -79,6 +80,12 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       href: '/employees',
       icon: Users,
       description: 'Quản lý nhân viên và phân quyền'
+    },
+    {
+      name: 'Nhiệm vụ',
+      href: '/tasks',
+      icon: CheckSquare,
+      description: 'Quản lý nhiệm vụ và nhóm làm việc'
     },
     {
       name: 'Thông báo',

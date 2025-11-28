@@ -25,7 +25,8 @@ import {
   ChevronRight,
   Eye,
   Palette,
-  Lock
+  Lock,
+  CheckSquare
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
@@ -284,7 +285,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     Camera,
     TestTube,
     Settings,
-    HelpCircle
+    HelpCircle,
+    CheckSquare
   }
 
   const handleNavigation = (href: string) => {

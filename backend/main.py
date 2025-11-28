@@ -10,9 +10,35 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 from dotenv import load_dotenv
 import os
+import asyncio
+from contextlib import asynccontextmanager
 
 # Load environment variables
 load_dotenv()
+
+# Background task for cleanup
+async def periodic_cleanup():
+    """Periodically cleanup old deleted tasks and groups"""
+    from services.task_cleanup_service import task_cleanup_service
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Run every hour
+            await task_cleanup_service.cleanup_old_deleted_items()
+        except Exception as e:
+            print(f"Cleanup error: {str(e)}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    # Startup: Start background cleanup task
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+    yield
+    # Shutdown: Cancel cleanup task
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -20,7 +46,8 @@ app = FastAPI(
     description="API for Financial Management System - Phuc Dat",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS middleware - Dynamic configuration based on environment
@@ -155,7 +182,7 @@ async def health_check():
     return {"status": "healthy", "service": "financial-management-api"}
 
 # Import routers
-from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload
+from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -196,6 +223,7 @@ app.include_router(system_feedback.router, tags=["System Feedback"])
 app.include_router(product_import.router, prefix="/api/sales/products", tags=["Product Import"])
 app.include_router(material_adjustment_rules.router, prefix="/api/material-adjustment-rules", tags=["Material Adjustment Rules"])
 app.include_router(file_upload.router, tags=["File Upload"])
+app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
 
 if __name__ == "__main__":
     uvicorn.run(

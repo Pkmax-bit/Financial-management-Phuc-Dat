@@ -92,7 +92,8 @@ class FileUploadService:
         folder_path: str,
         max_size: Optional[int] = None,
         allowed_types: Optional[List[str]] = None,
-        generate_unique_name: bool = True
+        generate_unique_name: bool = True,
+        custom_filename: Optional[str] = None
     ) -> Dict[str, Any]:
         """Upload file to Supabase Storage
         
@@ -146,7 +147,9 @@ class FileUploadService:
                 )
             
             # Generate filename
-            if generate_unique_name:
+            if custom_filename:
+                unique_filename = custom_filename
+            elif generate_unique_name:
                 file_ext = file.filename.split('.')[-1] if '.' in file.filename else ''
                 unique_filename = f"{uuid.uuid4()}.{file_ext}" if file_ext else str(uuid.uuid4())
             else:
@@ -164,33 +167,48 @@ class FileUploadService:
                 upload_result = None
                 error_msg = None
                 
-                # Strategy 1: Upload without content-type (let Supabase auto-detect)
+                # Strategy 1: Upload with original content-type
                 try:
                     upload_result = supabase.storage.from_(self.bucket_name).upload(
                         file_path,
-                        content
+                        content,
+                        file_options={"content-type": file.content_type}
                     )
                     # Check if successful
                     if hasattr(upload_result, 'error') and upload_result.error:
                         raise Exception(str(upload_result.error))
                 except Exception as e1:
-                    logger.warning(f"Upload without content-type failed: {e1}")
+                    logger.warning(f"Upload with content-type failed: {e1}")
                     
-                    # Strategy 2: Upload with original content-type
+                    # Strategy 2: Upload without content-type (let Supabase auto-detect)
                     try:
                         upload_result = supabase.storage.from_(self.bucket_name).upload(
                             file_path,
-                            content,
-                            file_options={"content-type": file.content_type}
+                            content
                         )
                         if hasattr(upload_result, 'error') and upload_result.error:
                             raise Exception(str(upload_result.error))
+                        logger.info(f"Uploaded {file.content_type} without content-type option as workaround")
                     except Exception as e2:
-                        logger.warning(f"Upload with content-type failed: {e2}")
+                        logger.warning(f"Upload without content-type failed: {e2}")
                         
-                        # Strategy 3: Upload with generic binary content-type (workaround for PDF restrictions)
+                        # Strategy 3: Upload with generic binary content-type (workaround for restricted MIME types)
                         # This bypasses MIME type restrictions but preserves file extension
-                        if file.content_type == "application/pdf":
+                        # Try for all document types that might be restricted
+                        restricted_types = [
+                            "application/pdf",
+                            "text/plain",
+                            "text/html",
+                            "text/csv",
+                            "application/msword",
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            "application/vnd.ms-excel",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            "application/vnd.ms-powerpoint",
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                        ]
+                        error_str = str(e1).lower() + " " + str(e2).lower()
+                        if file.content_type in restricted_types or "mime type" in error_str or "not supported" in error_str:
                             try:
                                 upload_result = supabase.storage.from_(self.bucket_name).upload(
                                     file_path,
@@ -199,9 +217,11 @@ class FileUploadService:
                                 )
                                 if hasattr(upload_result, 'error') and upload_result.error:
                                     raise Exception(str(upload_result.error))
-                                logger.info(f"Uploaded PDF with generic content-type as workaround")
+                                logger.info(f"Uploaded {file.content_type} with generic content-type (application/octet-stream) as workaround")
                             except Exception as e3:
-                                error_msg = f"All upload strategies failed. Last error: {str(e3)}"
+                                logger.warning(f"Upload with application/octet-stream also failed: {e3}")
+                                # If application/octet-stream is also blocked, we need to inform user to configure bucket
+                                error_msg = f"All upload strategies failed. Bucket 'minhchung_chiphi' is blocking file type '{file.content_type}'. Last error: {str(e3)}"
                         else:
                             error_msg = f"Upload failed: {str(e2)}"
                 
@@ -220,19 +240,57 @@ class FileUploadService:
                     if "mime type" in error_lower or "not supported" in error_lower or "invalidrequest" in error_lower:
                         # Try to extract the mime type from error message
                         mime_type_match = None
-                        if "application/pdf" in error_lower:
+                        if "application/pdf" in error_lower or file.content_type == "application/pdf":
                             mime_type_match = "application/pdf"
+                        elif "text/plain" in error_lower or file.content_type == "text/plain":
+                            mime_type_match = "text/plain"
                         elif "image/" in error_lower:
                             # Extract image type if mentioned
                             match = re.search(r'image/\w+', error_lower)
                             if match:
                                 mime_type_match = match.group()
                         
-                        detail_msg = f"File type '{file.content_type}' is not allowed by Supabase Storage bucket policy."
-                        if mime_type_match:
-                            detail_msg += f" The bucket 'minhchung_chiphi' needs to be configured to allow '{mime_type_match}' files. Please check Supabase Dashboard → Storage → Bucket Settings."
-                        else:
-                            detail_msg += " Please check Supabase Dashboard → Storage → Bucket Settings to allow this file type."
+                        # Build list of all MIME types that failed
+                        failed_types = []
+                        if "application/pdf" in error_lower or file.content_type == "application/pdf":
+                            failed_types.append("application/pdf")
+                        if "text/plain" in error_lower or file.content_type == "text/plain":
+                            failed_types.append("text/plain")
+                        if "spreadsheetml" in error_lower or file.content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                            failed_types.append("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                        if "wordprocessingml" in error_lower or "msword" in error_lower:
+                            failed_types.append("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        if not failed_types:
+                            failed_types.append(file.content_type)
+                        
+                        detail_msg = f"Không thể upload file: Loại file '{file.content_type}' không được phép bởi cấu hình Supabase Storage bucket."
+                        detail_msg += f"\n\n📋 CÁCH KHẮC PHỤC (BẮT BUỘC):"
+                        detail_msg += f"\n\n1️⃣ Vào Supabase Dashboard:"
+                        detail_msg += f"\n   https://supabase.com/dashboard → Chọn project → Storage → Buckets → 'minhchung_chiphi'"
+                        detail_msg += f"\n\n2️⃣ Vào tab 'Settings' (KHÔNG phải Policies)"
+                        detail_msg += f"\n\n3️⃣ Tìm phần 'File type restrictions' hoặc 'Allowed MIME types'"
+                        detail_msg += f"\n\n4️⃣ Chọn một trong hai cách:"
+                        detail_msg += f"\n   ✅ CÁCH A (Khuyến nghị cho Development):"
+                        detail_msg += f"\n      - Xóa TẤT CẢ MIME types trong danh sách (để trống)"
+                        detail_msg += f"\n      - Hoặc tắt 'Restrict file types'"
+                        detail_msg += f"\n      - Click 'Save'"
+                        detail_msg += f"\n\n   ✅ CÁCH B (Cho Production):"
+                        detail_msg += f"\n      - Thêm các MIME types sau vào danh sách"
+                        detail_msg += f"\n      ⚠️ QUAN TRỌNG: Mỗi MIME type trên MỘT DÒNG RIÊNG (nhấn Enter sau mỗi type)"
+                        detail_msg += f"\n      - KHÔNG nhập dạng comma-separated như: 'application/pdf, text/plain' ❌"
+                        detail_msg += f"\n      - Danh sách MIME types cần thêm (mỗi dòng một type):"
+                        for mime_type in failed_types:
+                            detail_msg += f"\n         {mime_type}"
+                        detail_msg += f"\n      - Thêm thêm các types khác nếu cần (mỗi dòng một type):"
+                        detail_msg += f"\n         application/octet-stream"
+                        detail_msg += f"\n         application/msword"
+                        detail_msg += f"\n         application/vnd.ms-excel"
+                        detail_msg += f"\n         text/csv"
+                        detail_msg += f"\n         image/jpeg"
+                        detail_msg += f"\n         image/png"
+                        detail_msg += f"\n      - Click 'Save'"
+                        detail_msg += f"\n\n5️⃣ Sau khi lưu, thử upload lại file"
+                        detail_msg += f"\n\n⚠️ LƯU Ý: MIME type restrictions được cấu hình trong Dashboard, KHÔNG thể thay đổi qua SQL!"
                         
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
