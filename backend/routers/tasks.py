@@ -159,9 +159,27 @@ def _fetch_task_participants(supabase, task_id: str) -> List[TaskParticipant]:
 
     participants = []
     for participant in participants_result.data or []:
+        # Try to get employee name from join first
         employee = participant.get("employees")
         if employee:
-            participant["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+            # Handle both array and object responses
+            if isinstance(employee, list):
+                employee = employee[0] if employee else None
+            
+            if employee:
+                participant["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+        
+        # If join didn't work, query directly
+        if not participant.get("employee_name") and participant.get("employee_id"):
+            try:
+                emp_result = supabase.table("employees").select("first_name, last_name").eq("id", participant.get("employee_id")).single().execute()
+                if emp_result.data:
+                    emp_data = emp_result.data
+                    participant["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+            except Exception:
+                # Employee not found or query failed
+                pass
+        
         participants.append(participant)
     return participants
 
@@ -569,10 +587,29 @@ async def get_group_members(
         
         members = []
         for member in result.data or []:
+            # Try to get employee name from join first
             employee = member.get("employees")
             if employee:
-                member["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
-                member["employee_email"] = employee.get("email")
+                # Handle both array and object responses
+                if isinstance(employee, list):
+                    employee = employee[0] if employee else None
+                
+                if employee:
+                    member["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                    member["employee_email"] = employee.get("email")
+            
+            # If join didn't work, query directly
+            if not member.get("employee_name") and member.get("employee_id"):
+                try:
+                    emp_result = supabase.table("employees").select("first_name, last_name, email").eq("id", member.get("employee_id")).single().execute()
+                    if emp_result.data:
+                        emp_data = emp_result.data
+                        member["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                        member["employee_email"] = emp_data.get("email")
+                except Exception:
+                    # Employee not found or query failed
+                    pass
+            
             members.append(member)
         
         return members
@@ -964,22 +1001,90 @@ async def get_task(
         
         assignments = []
         for assignment in assignments_result.data or []:
+            # Try to get employee name from join first
             emp = assignment.get("employees")
             if emp:
-                assignment["assigned_to_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                # Handle both array and object responses
+                if isinstance(emp, list):
+                    emp = emp[0] if emp else None
+                
+                if emp:
+                    assignment["assigned_to_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
             
+            # If join didn't work, query directly
+            if not assignment.get("assigned_to_name") and assignment.get("assigned_to"):
+                try:
+                    emp_result = supabase.table("employees").select("first_name, last_name").eq("id", assignment.get("assigned_to")).single().execute()
+                    if emp_result.data:
+                        emp_data = emp_result.data
+                        assignment["assigned_to_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                except Exception:
+                    # Employee not found or query failed
+                    pass
+            
+            # Get assigned_by name
             usr = assignment.get("users")
             if usr:
-                assignment["assigned_by_name"] = usr.get("full_name")
+                if isinstance(usr, list):
+                    usr = usr[0] if usr else None
+                if usr:
+                    assignment["assigned_by_name"] = usr.get("full_name")
+            
+            # If join didn't work, query directly
+            if not assignment.get("assigned_by_name") and assignment.get("assigned_by"):
+                try:
+                    user_result = supabase.table("users").select("full_name").eq("id", assignment.get("assigned_by")).single().execute()
+                    if user_result.data:
+                        assignment["assigned_by_name"] = user_result.data.get("full_name")
+                except Exception:
+                    pass
             
             assignments.append(assignment)
         
         # Get comments
-        comments_result = supabase.table("task_comments").select("""
-            *,
-            users:user_id(id, full_name),
-            employees:employee_id(id, first_name, last_name)
-        """).eq("task_id", task_id).order("created_at", desc=False).execute()
+        # Try to get only top-level comments (parent_id is NULL) if column exists
+        # Otherwise get all comments (for backward compatibility)
+        try:
+            comments_result = supabase.table("task_comments").select("""
+                *,
+                users:user_id(id, full_name),
+                employees:employee_id(id, first_name, last_name)
+            """).eq("task_id", task_id).is_("parent_id", "null").order("created_at", desc=False).execute()
+        except Exception:
+            # Fallback: parent_id column doesn't exist yet, get all comments
+            comments_result = supabase.table("task_comments").select("""
+                *,
+                users:user_id(id, full_name),
+                employees:employee_id(id, first_name, last_name)
+            """).eq("task_id", task_id).order("created_at", desc=False).execute()
+        
+        def get_replies(parent_id: str) -> List[dict]:
+            """Recursively get replies for a comment"""
+            try:
+                replies_result = supabase.table("task_comments").select("""
+                    *,
+                    users:user_id(id, full_name),
+                    employees:employee_id(id, first_name, last_name)
+                """).eq("parent_id", parent_id).order("created_at", desc=False).execute()
+            except Exception:
+                # parent_id column doesn't exist, return empty list
+                return []
+            
+            replies = []
+            for reply in replies_result.data or []:
+                usr = reply.get("users")
+                if usr:
+                    reply["user_name"] = usr.get("full_name")
+                
+                emp = reply.get("employees")
+                if emp:
+                    reply["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                
+                # Recursively get nested replies
+                reply["replies"] = get_replies(reply["id"])
+                replies.append(reply)
+            
+            return replies
         
         comments = []
         for comment in comments_result.data or []:
@@ -991,6 +1096,11 @@ async def get_task(
             if emp:
                 comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
             
+            # Get replies for this comment (only if parent_id column exists)
+            try:
+                comment["replies"] = get_replies(comment["id"])
+            except Exception:
+                comment["replies"] = []
             comments.append(comment)
         
         # Get attachments
@@ -1281,6 +1391,118 @@ def _has_comment_moderation_rights(current_user: User) -> bool:
     return False
 
 
+@router.get("/{task_id}/comments", response_model=List[TaskComment])
+async def get_task_comments(
+    task_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get all comments for a task with nested replies"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get comments (only top-level comments, parent_id is NULL)
+        try:
+            comments_result = supabase.table("task_comments").select("""
+                *,
+                users:user_id(id, full_name),
+                employees:employee_id(id, first_name, last_name)
+            """).eq("task_id", task_id).is_("parent_id", "null").order("created_at", desc=False).execute()
+        except Exception:
+            # Fallback: parent_id column doesn't exist yet, get all comments
+            comments_result = supabase.table("task_comments").select("""
+                *,
+                users:user_id(id, full_name),
+                employees:employee_id(id, first_name, last_name)
+            """).eq("task_id", task_id).order("created_at", desc=False).execute()
+        
+        def get_replies(parent_id: str) -> List[dict]:
+            """Recursively get replies for a comment"""
+            try:
+                replies_result = supabase.table("task_comments").select("""
+                    *,
+                    users:user_id(id, full_name),
+                    employees:employee_id(id, first_name, last_name)
+                """).eq("parent_id", parent_id).order("created_at", desc=False).execute()
+            except Exception:
+                # parent_id column doesn't exist, return empty list
+                return []
+            
+            replies = []
+            for reply in replies_result.data or []:
+                # Get user name
+                usr = reply.get("users")
+                if usr:
+                    if isinstance(usr, list):
+                        usr = usr[0] if usr else None
+                    if usr:
+                        reply["user_name"] = usr.get("full_name")
+                
+                # Get employee name
+                emp = reply.get("employees")
+                if emp:
+                    if isinstance(emp, list):
+                        emp = emp[0] if emp else None
+                    if emp:
+                        reply["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                
+                # If join didn't work, query directly for employee
+                if not reply.get("employee_name") and reply.get("employee_id"):
+                    try:
+                        emp_result = supabase.table("employees").select("first_name, last_name").eq("id", reply.get("employee_id")).single().execute()
+                        if emp_result.data:
+                            emp_data = emp_result.data
+                            reply["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                    except Exception:
+                        pass
+                
+                # Recursively get nested replies
+                reply["replies"] = get_replies(reply["id"])
+                replies.append(reply)
+            
+            return replies
+        
+        comments = []
+        for comment in comments_result.data or []:
+            # Get user name
+            usr = comment.get("users")
+            if usr:
+                if isinstance(usr, list):
+                    usr = usr[0] if usr else None
+                if usr:
+                    comment["user_name"] = usr.get("full_name")
+            
+            # Get employee name
+            emp = comment.get("employees")
+            if emp:
+                if isinstance(emp, list):
+                    emp = emp[0] if emp else None
+                if emp:
+                    comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+            
+            # If join didn't work, query directly for employee
+            if not comment.get("employee_name") and comment.get("employee_id"):
+                try:
+                    emp_result = supabase.table("employees").select("first_name, last_name").eq("id", comment.get("employee_id")).single().execute()
+                    if emp_result.data:
+                        emp_data = emp_result.data
+                        comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                except Exception:
+                    pass
+            
+            # Get replies for this comment (only if parent_id column exists)
+            try:
+                comment["replies"] = get_replies(comment["id"])
+            except Exception:
+                comment["replies"] = []
+            comments.append(comment)
+        
+        return comments
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch comments: {str(e)}"
+        )
+
 @router.post("/{task_id}/comments", response_model=TaskComment)
 async def create_task_comment(
     task_id: str,
@@ -1291,9 +1513,20 @@ async def create_task_comment(
     try:
         supabase = get_supabase_client()
         
-        # Get employee_id from user_id
-        employee_result = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
-        employee_id = employee_result.data[0]["id"] if employee_result.data else None
+        # Get employee_id: ưu tiên từ request, nếu không có thì lấy từ user_id
+        employee_id = comment_data.employee_id
+        if not employee_id:
+            employee_result = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
+            employee_id = employee_result.data[0]["id"] if employee_result.data else None
+        
+        # Validate parent_id if provided
+        if comment_data.parent_id:
+            parent_result = supabase.table("task_comments").select("id").eq("id", comment_data.parent_id).eq("task_id", task_id).execute()
+            if not parent_result.data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Parent comment not found"
+                )
         
         comment_record = {
             "task_id": task_id,
@@ -1302,7 +1535,8 @@ async def create_task_comment(
             "comment": comment_data.comment,
             "type": comment_data.type,
             "file_url": comment_data.file_url,
-            "is_pinned": comment_data.is_pinned
+            "is_pinned": comment_data.is_pinned,
+            "parent_id": comment_data.parent_id
         }
         
         result = supabase.table("task_comments").insert(comment_record).execute()

@@ -65,7 +65,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [userRole, setUserRole] = useState<string>('employee')
-  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all') // Mặc định: tất cả trạng thái
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all') // Mặc định: tất cả trạng thái (đang cố định, không lọc)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
 
@@ -527,13 +527,7 @@ const startApproveExpenseTour = useCallback(async () => {
         filtered = expenses
     }
     
-    // Filter by project status if needed
-    if (projectStatusFilter !== 'all') {
-      filtered = filtered.filter(e => {
-        const project = projectsMap.get(e.project_id)
-        return project && project.status === projectStatusFilter
-      })
-    }
+    // KHÔNG lọc theo trạng thái dự án nữa: luôn hiển thị tất cả trạng thái
     
     // Build tree structure and flatten for display
     const tree = buildTree(filtered)
@@ -908,10 +902,8 @@ const startApproveExpenseTour = useCallback(async () => {
     
     const matchesProject = selectedProjectId === 'all' || expense.project_id === selectedProjectId
     
-    const matchesProjectStatus = projectStatusFilter === 'all' || (() => {
-      const project = projectsMap.get(expense.project_id)
-      return project && project.status === projectStatusFilter
-    })()
+    // Không lọc theo trạng thái dự án -> luôn true
+    const matchesProjectStatus = true
     
     return matchesSearch && matchesView && matchesProject && matchesProjectStatus
   })
@@ -922,10 +914,10 @@ const startApproveExpenseTour = useCallback(async () => {
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 khi filter thay đổi (không còn phụ thuộc trạng thái dự án)
   useEffect(() => {
     setCurrentPage(1)
-  }, [viewMode, selectedProjectId, projectStatusFilter, searchTerm])
+  }, [viewMode, selectedProjectId, searchTerm])
 
   // Calculate summary statistics
   const totalPlanned = expenses
@@ -1064,9 +1056,9 @@ return (
             </option>
           ))}
         </select>
-        
-        {/* Project Status Filter */}
-        <select
+
+        {/* Project Status Filter - luôn hiển thị tất cả trạng thái, nên ẩn dropdown này */}
+        {/* <select
           value={projectStatusFilter}
           onChange={(e) => setProjectStatusFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1076,7 +1068,7 @@ return (
               {status.label}
             </option>
           ))}
-        </select>
+        </select> */}
       </div>
     </div>
 

@@ -34,13 +34,15 @@ import {
   Pin,
   PinOff,
   Plus,
+  Reply,
   Send,
   StickyNote,
   Trash2,
   User,
   Users,
   FileSpreadsheet,
-  FileType
+  FileType,
+  X
 } from 'lucide-react'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -205,6 +207,9 @@ export default function TaskDetailPage() {
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<TaskComment | null>(null)  // Comment being replied to
+  const [draggedComment, setDraggedComment] = useState<TaskComment | null>(null)  // Comment being dragged
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('')  // Selected member for sending message
 
   // Resizable layout states
   const [leftColumnWidth, setLeftColumnWidth] = useState(320)
@@ -399,6 +404,20 @@ export default function TaskDetailPage() {
       setLoadingTask(false)
     }
   }, [taskId])
+
+  const loadComments = useCallback(async () => {
+    if (!taskId) return
+    try {
+      const comments = await apiGet(`/api/tasks/${taskId}/comments`)
+      setTaskData(prev => prev ? { ...prev, comments } : null)
+    } catch (err) {
+      console.error('Failed to load comments', err)
+      // Fallback: reload full task if comments endpoint fails
+      if (taskData) {
+        loadTaskDetails()
+      }
+    }
+  }, [taskId, loadTaskDetails])
 
   useEffect(() => {
     loadTaskDetails()
@@ -666,6 +685,10 @@ export default function TaskDetailPage() {
 
   const handleSendMessage = async () => {
     if (!chatMessage.trim() && !pendingFile) return
+    if (!selectedMemberId && availableMembers.length > 0) {
+      alert('Vui lòng chọn thành viên để gửi tin nhắn')
+      return
+    }
     try {
       setSendingMessage(true)
       let fileUrl: string | undefined
@@ -676,17 +699,24 @@ export default function TaskDetailPage() {
         messageType = pendingFile.type.startsWith('image/') ? 'image' : 'file'
       }
 
+      // Tìm thông tin thành viên được chọn
+      const selectedMember = availableMembers.find(m => (m.employee_id || m.id) === selectedMemberId)
+
       await apiPost(`/api/tasks/${taskId}/comments`, {
         comment: chatMessage.trim() || pendingFile?.name || 'File đính kèm',
         type: messageType,
         file_url: fileUrl,
-        is_pinned: false
+        is_pinned: false,
+        parent_id: replyingTo?.id || null,
+        employee_id: selectedMember?.employee_id || selectedMemberId  // Gửi employee_id của thành viên được chọn
       })
 
       setChatMessage('')
       setPendingFile(null)
       setPendingPreview(null)
-      loadTaskDetails()
+      setReplyingTo(null)
+      // Only reload comments, not the entire task
+      await loadComments()
     } catch (err) {
       alert(getErrorMessage(err, 'Không thể gửi tin nhắn'))
     } finally {
@@ -694,10 +724,24 @@ export default function TaskDetailPage() {
     }
   }
 
+  const handleReply = (comment: TaskComment) => {
+    setReplyingTo(comment)
+    // Scroll to input area
+    setTimeout(() => {
+      const inputArea = document.querySelector('[data-input-area]')
+      inputArea?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 100)
+  }
+
+  const handleCancelReply = () => {
+    setReplyingTo(null)
+  }
+
   const handleTogglePin = async (comment: TaskComment) => {
     try {
       await apiPut(`/api/tasks/comments/${comment.id}`, { is_pinned: !comment.is_pinned })
-      loadTaskDetails()
+      // Only reload comments, not the entire task
+      loadComments()
     } catch (err) {
       alert(getErrorMessage(err, 'Không thể ghim tin nhắn'))
     }
@@ -707,18 +751,92 @@ export default function TaskDetailPage() {
     if (!confirm('Xóa tin nhắn này?')) return
     try {
       await apiDelete(`/api/tasks/comments/${commentId}`)
-      loadTaskDetails()
+      // Only reload comments, not the entire task
+      loadComments()
     } catch (err) {
       alert(getErrorMessage(err, 'Không thể xóa tin nhắn'))
     }
   }
 
+  // Lấy danh sách thành viên để chọn khi nhắn tin (lấy từ tất cả nguồn)
+  // Phải đặt trước early returns để tuân thủ Rules of Hooks
+  const availableMembers = useMemo(() => {
+    if (!taskData) return []
+    
+    const { assignments, participants } = taskData
+    const members: Array<{ id: string; name: string; employee_id?: string; user_id?: string }> = []
+    const memberIds = new Set<string>()
+
+    // Lấy từ assignments
+    if (assignments && assignments.length > 0) {
+      assignments.forEach(assignment => {
+        if (assignment.assigned_to_name && assignment.assigned_to && !memberIds.has(assignment.assigned_to)) {
+          members.push({
+            id: assignment.assigned_to,
+            name: assignment.assigned_to_name,
+            employee_id: assignment.assigned_to
+          })
+          memberIds.add(assignment.assigned_to)
+        }
+      })
+    }
+
+    // Lấy từ participants
+    if (participants && participants.length > 0) {
+      participants.forEach(participant => {
+        if (participant.employee_name && participant.employee_id && !memberIds.has(participant.employee_id)) {
+          members.push({
+            id: participant.employee_id,
+            name: participant.employee_name,
+            employee_id: participant.employee_id
+          })
+          memberIds.add(participant.employee_id)
+        }
+      })
+    }
+
+    // Lấy từ group members
+    if (groupMembers.length > 0) {
+      groupMembers.forEach(member => {
+        if (member.employee_name && member.employee_id && !memberIds.has(member.employee_id)) {
+          members.push({
+            id: member.employee_id,
+            name: member.employee_name,
+            employee_id: member.employee_id
+          })
+          memberIds.add(member.employee_id)
+        }
+      })
+    }
+
+    // Fallback: dùng assigned_to_name từ task
+    if (taskData?.task?.assigned_to_name && taskData?.task?.assigned_to && !memberIds.has(taskData.task.assigned_to)) {
+      members.push({
+        id: taskData.task.assigned_to,
+        name: taskData.task.assigned_to_name,
+        employee_id: taskData.task.assigned_to
+      })
+      memberIds.add(taskData.task.assigned_to)
+    }
+
+    return members
+  }, [taskData, groupMembers])
+
+  // Set default selected member (first member)
+  useEffect(() => {
+    if (availableMembers.length > 0 && !selectedMemberId) {
+      setSelectedMemberId(availableMembers[0].employee_id || availableMembers[0].id)
+    }
+  }, [availableMembers, selectedMemberId])
+
   const filteredComments = useMemo(() => {
     if (!taskData?.comments) return []
+    // Only show top-level comments (no parent_id)
+    const topLevelComments = taskData.comments.filter(comment => !comment.parent_id)
     if (chatFilter === 'pinned') {
-      return taskData.comments.filter(comment => comment.is_pinned)
+      return topLevelComments.filter(comment => comment.is_pinned)
     }
-    return taskData.comments
+    return topLevelComments
   }, [taskData, chatFilter])
 
   const pendingAttachmentName = pendingFile ? `${pendingFile.name} (${formatFileSize(pendingFile.size)})` : null
@@ -833,15 +951,6 @@ export default function TaskDetailPage() {
 
             {/* Meta Info List */}
             <div className="space-y-4 pt-4">
-              <div className="flex items-center gap-3 text-sm pb-3">
-                <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
-                  <User className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 mb-1">Người phụ trách</p>
-                  <p className="font-medium text-gray-900 truncate">{task?.assigned_to_name || 'Thành viên được chọn làm nhiệm vụ'}</p>
-                </div>
-              </div>
 
               <div className="flex items-center gap-3 text-sm pb-3">
                 <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
@@ -877,80 +986,6 @@ export default function TaskDetailPage() {
               </div>
             </div>
 
-            {/* Assignees (Người phụ trách) */}
-            {(() => {
-              // Lấy danh sách người phụ trách từ assignments hoặc group members
-              const assignees: Array<{ id: string; name: string; email?: string }> = []
-
-              // Ưu tiên lấy từ assignments (nếu có)
-              if (assignments && assignments.length > 0) {
-                assignments.forEach(assignment => {
-                  if (assignment.assigned_to_name) {
-                    assignees.push({
-                      id: assignment.assigned_to,
-                      name: assignment.assigned_to_name
-                    })
-                  }
-                })
-              }
-              // Nếu không có assignments, lấy từ group members có role là 'responsible' hoặc tất cả nếu không có role
-              else if (groupMembers.length > 0) {
-                groupMembers.forEach(member => {
-                  if (member.employee_name) {
-                    assignees.push({
-                      id: member.employee_id,
-                      name: member.employee_name,
-                      email: member.employee_email
-                    })
-                  }
-                })
-              }
-              // Fallback: dùng assigned_to_name từ task
-              else if (task?.assigned_to_name) {
-                assignees.push({
-                  id: task.assigned_to || '',
-                  name: task.assigned_to_name
-                })
-              }
-
-              const assigneeTotal = assignees.length
-
-              if (assigneeTotal === 0) {
-                return (
-                  <div className="pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Người phụ trách</h3>
-                      <span className="text-[11px] font-semibold text-gray-500">0 thành viên</span>
-                    </div>
-                    <p className="text-sm text-gray-500 italic">Thành viên được chọn làm nhiệm vụ</p>
-                  </div>
-                )
-              }
-
-              return (
-                <div className="pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Người phụ trách</h3>
-                    <span className="text-[11px] font-semibold text-gray-600">{assigneeTotal} thành viên</span>
-                  </div>
-                  <div className="space-y-3">
-                    {assignees.map((assignee) => (
-                      <div key={assignee.id} className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full ring-2 ring-white bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0" title={assignee.name}>
-                          {assignee.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-900 truncate">{assignee.name}</p>
-                          {assignee.email && (
-                            <p className="text-xs text-gray-500 truncate">{assignee.email}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
 
             {/* Group Info (if exists) */}
             {task?.group_id && task?.group_name && (
@@ -1166,15 +1201,68 @@ export default function TaskDetailPage() {
             className="flex min-h-0 flex-col border-t border-gray-200 bg-white overflow-y-auto"
             style={{ flex: 1 - middleSplitRatio, minHeight: 220 }}
           >
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-blue-600" /> Trao đổi
-              </h3>
-              <div className="flex gap-2">
-                <button onClick={() => setChatFilter(chatFilter === 'all' ? 'pinned' : 'all')} className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${chatFilter === 'pinned' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-                  {chatFilter === 'pinned' ? 'Đang xem ghim' : 'Ghim'}
-                </button>
+            <div className="p-4 border-b border-gray-200 bg-white shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-blue-600" /> Trao đổi
+                </h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setChatFilter(chatFilter === 'all' ? 'pinned' : 'all')} className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${chatFilter === 'pinned' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                    {chatFilter === 'pinned' ? 'Đang xem ghim' : 'Ghim'}
+                  </button>
+                </div>
               </div>
+              {/* Thành viên của nhiệm vụ */}
+              {(() => {
+                // Lấy danh sách thành viên từ assignments hoặc group members
+                const members: Array<{ id: string; name: string; email?: string }> = []
+                
+                if (assignments && assignments.length > 0) {
+                  assignments.forEach(assignment => {
+                    if (assignment.assigned_to_name) {
+                      members.push({
+                        id: assignment.assigned_to,
+                        name: assignment.assigned_to_name
+                      })
+                    }
+                  })
+                } else if (groupMembers.length > 0) {
+                  groupMembers.forEach(member => {
+                    if (member.employee_name) {
+                      members.push({
+                        id: member.employee_id,
+                        name: member.employee_name,
+                        email: member.employee_email
+                      })
+                    }
+                  })
+                } else if (task?.assigned_to_name) {
+                  members.push({
+                    id: task.assigned_to || '',
+                    name: task.assigned_to_name
+                  })
+                }
+                
+                if (members.length === 0) return null
+                
+                return (
+                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                    <Users className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs text-gray-500 font-medium">Thành viên:</span>
+                      {members.map((member, index) => (
+                        <div key={member.id} className="flex items-center gap-1.5">
+                          <div className="h-5 w-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-[10px] font-bold shadow-sm" title={member.name}>
+                            {member.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-xs text-gray-700 font-medium">{member.name}</span>
+                          {index < members.length - 1 && <span className="text-gray-300">•</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Messages List */}
@@ -1185,42 +1273,160 @@ export default function TaskDetailPage() {
                   <p className="text-sm">Chưa có tin nhắn nào</p>
                 </div>
               ) : (
-                filteredComments?.map(comment => (
-                  <div key={comment.id} className={`flex gap-3 ${comment.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
-                      {comment.user_name?.charAt(0)}
+                filteredComments?.map(comment => {
+                  // Helper function to find parent comment
+                  const findParentComment = (parentId: string | null | undefined): TaskComment | null => {
+                    if (!parentId || !taskData?.comments) return null
+                    // Search in all comments (including nested replies)
+                    const searchInComments = (comments: TaskComment[]): TaskComment | null => {
+                      for (const c of comments) {
+                        if (c.id === parentId) return c
+                        if (c.replies && c.replies.length > 0) {
+                          const found = searchInComments(c.replies)
+                          if (found) return found
+                        }
+                      }
+                      return null
+                    }
+                    return searchInComments(taskData.comments)
+                  }
+
+                  const renderComment = (c: TaskComment, isReply = false) => {
+                    const parentComment = isReply && c.parent_id ? findParentComment(c.parent_id) : null
+                    
+                    return (
+                      <div key={c.id} className={`group ${isReply ? 'ml-8 mt-2' : ''}`}>
+                        <div className={`flex gap-3 ${c.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0" title={c.user_name || c.employee_name || 'Người dùng'}>
+                          {(c.user_name || c.employee_name || 'U')?.charAt(0).toUpperCase()}
+                        </div>
+                          <div className={`max-w-[80%] space-y-1 ${c.user_id === user?.id ? 'items-end' : 'items-start'}`}>
+                            {/* Parent comment preview (Messenger style) */}
+                            {parentComment && (
+                              <div className={`mb-1.5 ${c.user_id === user?.id ? 'flex justify-end' : 'flex justify-start'}`}>
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50/70 border-l-[3px] border-gray-300/60 rounded-md text-xs text-gray-500 max-w-[85%] hover:bg-gray-100/70 transition-colors">
+                                  <Reply className="h-3 w-3 text-gray-400 shrink-0 opacity-70" />
+                                  <span className="font-medium text-gray-600/80">{parentComment.user_name || parentComment.employee_name || 'Người dùng'}</span>
+                                  <span className="text-gray-400/70 line-clamp-1">: {parentComment.comment.length > 40 ? parentComment.comment.substring(0, 40) + '...' : parentComment.comment}</span>
+                                </div>
+                              </div>
+                            )}
+                            <div className={`flex items-center gap-2 text-xs mb-1 ${c.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
+                              <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">{c.user_name || c.employee_name || 'Người dùng'}</span>
+                              <span className="text-gray-500">{formatDate(c.created_at, true)}</span>
+                            </div>
+                            <div 
+                              className={`p-3 rounded-2xl text-sm relative transition-all cursor-pointer hover:shadow-md ${c.user_id === user?.id
+                                ? 'bg-blue-600 text-white rounded-tr-none'
+                                : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none shadow-sm'
+                              } ${draggedComment?.id === c.id ? 'translate-x-2 opacity-80' : ''}`}
+                            onMouseDown={(e) => {
+                              // Enable drag to reply (swipe right)
+                              if (e.button === 0) { // Left mouse button
+                                setDraggedComment(c)
+                              }
+                            }}
+                            onMouseUp={(e) => {
+                              if (draggedComment?.id === c.id) {
+                                // Check if dragged enough to trigger reply
+                                const element = e.currentTarget
+                                const rect = element.getBoundingClientRect()
+                                const dragDistance = e.clientX - rect.left
+                                if (dragDistance > 50) {
+                                  handleReply(c)
+                                }
+                                setDraggedComment(null)
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              if (draggedComment?.id === c.id) {
+                                setDraggedComment(null)
+                              }
+                            }}
+                          >
+                            {c.type === 'image' && c.file_url && (
+                              <img src={c.file_url} alt="Attachment" className="max-w-full rounded-lg mb-2" />
+                            )}
+                            <p className="whitespace-pre-wrap">{c.comment}</p>
+                            {/* Reply button - appears on hover */}
+                            <button
+                              onClick={() => handleReply(c)}
+                              className={`absolute ${c.user_id === user?.id ? '-left-8' : '-right-8'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-white shadow-md hover:bg-gray-50 border border-gray-200`}
+                              title="Trả lời"
+                            >
+                              <Reply className="h-3.5 w-3.5 text-gray-600" />
+                            </button>
+                          </div>
+                          {/* Actions */}
+                          <div className={`flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${c.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
+                            <button 
+                              onClick={() => handleReply(c)} 
+                              className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1"
+                            >
+                              <Reply className="h-3 w-3" />
+                              Trả lời
+                            </button>
+                            {canManageComment(c) && (
+                              <button onClick={() => handleDeleteComment(c.id)} className="text-xs text-red-500 hover:underline">Xóa</button>
+                            )}
+                            <button onClick={() => handleTogglePin(c)} className="text-xs text-gray-500 hover:text-blue-600">
+                              {c.is_pinned ? 'Bỏ ghim' : 'Ghim'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Render replies */}
+                      {c.replies && c.replies.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {c.replies.map(reply => renderComment(reply, true))}
+                        </div>
+                      )}
                     </div>
-                    <div className={`max-w-[80%] space-y-1 ${comment.user_id === user?.id ? 'items-end' : 'items-start'}`}>
-                      <div className={`flex items-center gap-2 text-xs text-gray-500 ${comment.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
-                        <span className="font-medium text-gray-900">{comment.user_name}</span>
-                        <span>{formatDate(comment.created_at, true)}</span>
-                      </div>
-                      <div className={`p-3 rounded-2xl text-sm ${comment.user_id === user?.id
-                        ? 'bg-blue-600 text-white rounded-tr-none'
-                        : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none shadow-sm'
-                        }`}>
-                        {comment.type === 'image' && comment.file_url && (
-                          <img src={comment.file_url} alt="Attachment" className="max-w-full rounded-lg mb-2" />
-                        )}
-                        <p className="whitespace-pre-wrap">{comment.comment}</p>
-                      </div>
-                      {/* Actions */}
-                      <div className={`flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${comment.user_id === user?.id ? 'flex-row-reverse' : ''}`}>
-                        {canManageComment(comment) && (
-                          <button onClick={() => handleDeleteComment(comment.id)} className="text-xs text-red-500 hover:underline">Xóa</button>
-                        )}
-                        <button onClick={() => handleTogglePin(comment)} className="text-xs text-gray-500 hover:text-blue-600">
-                          {comment.is_pinned ? 'Bỏ ghim' : 'Ghim'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                    )
+                  }
+                  return renderComment(comment)
+                })
               )}
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-white border-t border-gray-200 shrink-0">
+            <div className="p-4 bg-white border-t border-gray-200 shrink-0" data-input-area>
+              {/* Reply Preview */}
+              {replyingTo && (
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg relative">
+                  <div className="flex items-start gap-2">
+                    <Reply className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-blue-900 mb-1">Trả lời {replyingTo.user_name || replyingTo.employee_name || 'Người dùng'}</div>
+                      <p className="text-xs text-gray-600 line-clamp-2">{replyingTo.comment}</p>
+                    </div>
+                    <button
+                      onClick={handleCancelReply}
+                      className="p-1 hover:bg-blue-100 rounded-full transition-colors shrink-0"
+                      title="Hủy trả lời"
+                    >
+                      <X className="h-3.5 w-3.5 text-blue-600" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              {/* Chọn thành viên để nhắn tin */}
+              {availableMembers.length > 0 && (
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Chọn thành viên nhắn tin:</label>
+                  <select
+                    value={selectedMemberId}
+                    onChange={(e) => setSelectedMemberId(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-black"
+                  >
+                    {availableMembers.map((member) => (
+                      <option key={member.id} value={member.employee_id || member.id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {pendingPreview && (
                 <div className="mb-2 relative inline-block">
                   <img src={pendingPreview} alt="Preview" className="h-20 rounded-lg border border-gray-200" />
@@ -1252,13 +1458,15 @@ export default function TaskDetailPage() {
                   <textarea
                     value={chatMessage}
                     onChange={(e) => setChatMessage(e.target.value)}
-                    placeholder="Nhập tin nhắn..."
+                    placeholder={replyingTo ? `Trả lời ${replyingTo.user_name}...` : "Nhập tin nhắn..."}
                     className="w-full bg-transparent border-none focus:ring-0 text-sm max-h-24 resize-none p-0 text-black placeholder:text-gray-500"
                     rows={1}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
                         handleSendMessage()
+                      } else if (e.key === 'Escape' && replyingTo) {
+                        handleCancelReply()
                       }
                     }}
                   />

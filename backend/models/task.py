@@ -161,6 +161,8 @@ class TaskComment(BaseModel):
     type: str = "text"  # text, file, image
     file_url: Optional[str] = None
     is_pinned: bool = False
+    parent_id: Optional[str] = None  # ID of parent comment if this is a reply
+    replies: Optional[List['TaskComment']] = []  # Nested replies
 
 class TaskCommentCreate(BaseModel):
     """Task Comment creation model"""
@@ -168,6 +170,8 @@ class TaskCommentCreate(BaseModel):
     type: str = "text"
     file_url: Optional[str] = None
     is_pinned: bool = False
+    parent_id: Optional[str] = None  # ID of parent comment if this is a reply
+    employee_id: Optional[str] = None  # Employee ID của thành viên được chọn để nhắn tin
 
 class TaskCommentUpdate(BaseModel):
     """Task Comment update model"""

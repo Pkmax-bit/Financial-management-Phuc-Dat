@@ -101,6 +101,8 @@ export interface TaskComment {
   is_pinned: boolean
   created_at: string
   updated_at: string
+  parent_id?: string | null  // ID of parent comment if this is a reply
+  replies?: TaskComment[]  // Nested replies
 }
 
 export interface TaskAssignment {

@@ -2142,233 +2142,24 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Update existing expense
   const updateExistingExpense = async (expenseData: any) => {
     try {
-      console.log('🔍 Updating existing expense with new logic:', selectedExpenseToUpdate?.id)
-      
+      console.log('🔍 Updating existing expense (overwrite mode):', selectedExpenseToUpdate?.id)
+
       if (!selectedExpenseToUpdate) {
         console.error('❌ No expense selected for update')
         return false
       }
-      
+
       const dataToUse = expenseData || pendingExpenseData
-      
+
       if (!dataToUse || !dataToUse.formData) {
         console.error('❌ Missing required data in updateExistingExpense')
         return false
       }
-      
-      // Điều kiện 1: Đã chọn chi phí thực tế của dự án
-      if (!selectedExpenseToUpdate.id || !dataToUse.formData.project_id) {
-        console.error('❌ Missing selected expense or project ID')
-        return false
-      }
-      
-      console.log('✅ Điều kiện 1: Đã chọn chi phí thực tế của dự án')
-      
-      // Điều kiện 2: Trong dự án đó có chi phí đối tượng cha trùng với đối tượng cha cần cập nhật
-      const newParentObjectId = dataToUse.workshopParentObject?.id
-      if (!newParentObjectId) {
-        console.error('❌ Missing new parent object ID')
-        return false
-      }
-      
-      console.log('🔍 Checking for existing parent object in project:', newParentObjectId)
-      
-      // Tìm chi phí đối tượng cha trùng trong dự án
-      const { data: existingParentExpenses, error: searchError } = await supabase
-        .from('project_expenses')
-        .select('*')
-        .eq('project_id', dataToUse.formData.project_id)
-        .eq('expense_object_id', newParentObjectId)
-        .is('id_parent', null) // Chỉ tìm parent expenses
-        .neq('id', selectedExpenseToUpdate.id) // Loại trừ expense đang update
-      
-      if (searchError) {
-        console.error('❌ Error searching for existing parent expenses:', searchError)
-        return false
-      }
-      
-      console.log('📊 Found existing parent expenses:', existingParentExpenses?.length || 0)
-      
-      if (!existingParentExpenses || existingParentExpenses.length === 0) {
-        console.log('❌ Không tìm thấy chi phí đối tượng cha trùng trong dự án')
-        console.log('🔄 Cập nhật trực tiếp vào expense đã chọn thay vì tạo mới')
-        
-        // Fallback: Cập nhật trực tiếp vào expense đã chọn
-        return await updateSelectedExpenseDirectly(expenseData)
-      }
-      
-      console.log('✅ Điều kiện 2: Tìm thấy chi phí đối tượng cha trùng trong dự án')
-      
-      // Bước thực hiện: Thay thế chi phí đối tượng cha mới vào đối tượng cha cũ
-      const targetParentExpense = existingParentExpenses[0] // Lấy parent expense đầu tiên
-      console.log('🎯 Target parent expense for replacement:', targetParentExpense.id)
-      
-      // Calculate total amount
-      const totalAmount = Object.values(dataToUse.directObjectTotals || {}).reduce((sum: number, amount: any) => sum + (Number(amount) || 0), 0)
-      
-      if (totalAmount <= 0) {
-        console.error('❌ Total amount must be greater than 0')
-        return false
-      }
-      
-      console.log('💰 Total amount to update:', totalAmount)
-      
-      // Load current target parent to merge (avoid overwriting existing data)
-      const { data: currentTargetArr, error: loadTargetErr } = await supabase
-        .from('project_expenses')
-        .select('id, amount, invoice_items, expense_object_columns')
-        .eq('id', targetParentExpense.id)
-        .limit(1)
 
-      if (loadTargetErr) {
-        console.error('❌ Error loading current target parent before update:', loadTargetErr)
-        return false
-      }
-
-      const currentTarget = currentTargetArr?.[0] || {}
-      const oldTargetItems = Array.isArray(currentTarget?.invoice_items) ? currentTarget.invoice_items : []
-      const newTargetItems = Array.isArray(dataToUse.invoiceItems) ? dataToUse.invoiceItems : []
-      const mergedTargetInvoiceItems = [...oldTargetItems, ...newTargetItems]
-
-      const oldTargetColumns = Array.isArray(currentTarget?.expense_object_columns) ? currentTarget.expense_object_columns : []
-      const newTargetColumns = Array.isArray(dataToUse.selectedExpenseObjectIds) ? dataToUse.selectedExpenseObjectIds : []
-      const mergedTargetColumns = Array.from(new Set([...(oldTargetColumns as any[]), ...(newTargetColumns as any[])]))
-
-      const updatedParentData = {
-        description: dataToUse.formData.description,
-        amount: Number(currentTarget?.amount || 0) + Number(totalAmount || 0),
-        expense_date: dataToUse.formData.expense_date,
-        status: 'pending',
-        employee_id: dataToUse.formData.employee_id,
-        expense_object_columns: mergedTargetColumns,
-        invoice_items: mergedTargetInvoiceItems.map((item: any) => ({
-          ...item,
-          components_pct: item.componentsPct || {},
-          components_quantity: item.componentsQuantity || {},
-          components_unit_price: item.componentsUnitPrice || {},
-          components_amount: item.componentsAmt || {}
-        })),
-        updated_at: new Date().toISOString()
-      }
-      
-      console.log('🔄 Updating target parent expense (additive):', targetParentExpense.id)
-      
-      const { error: updateParentError } = await supabase
-        .from('project_expenses')
-        .update(updatedParentData)
-        .eq('id', targetParentExpense.id)
-      
-      if (updateParentError) {
-        console.error('❌ Error updating target parent expense:', updateParentError)
-        return false
-      }
-      
-      console.log('✅ Target parent expense updated successfully')
-      
-      // Kiểm tra có đối tượng bên trong target parent không
-      const newTargetParentObjectId = dataToUse.workshopParentObject?.id
-      
-      // Lấy danh sách children hiện tại của target parent
-      const { data: existingTargetChildren, error: fetchTargetChildrenError } = await supabase
-        .from('project_expenses')
-        .select('*')
-        .eq('id_parent', targetParentExpense.id)
-      
-      if (fetchTargetChildrenError) {
-        console.error('❌ Error fetching existing target children:', fetchTargetChildrenError)
-        return false
-      }
-      
-      console.log('📊 Existing target children count:', existingTargetChildren?.length || 0)
-      
-      // Kiểm tra xem có children với đối tượng cha mới trong target parent không
-      const hasExistingTargetObject = existingTargetChildren?.some(child => 
-        child.expense_object_id === newTargetParentObjectId
-      ) || false
-      
-      console.log('🔍 Has existing object in target children:', hasExistingTargetObject)
-      console.log('🎯 New target parent object ID:', newTargetParentObjectId)
-      
-      if (hasExistingTargetObject) {
-        // Trường hợp 2: Nếu có thì chỉ thêm vào target parent (không xóa gì)
-        console.log('🔄 Case 2: Object exists in target, adding new children while keeping old ones')
-        
-        // Tạo children mới cho đối tượng cha này trong target parent (không xóa children cũ)
-        const newChildExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
-          id: crypto.randomUUID(),
-          project_id: dataToUse.formData.project_id,
-          description: `${dataToUse.formData.description} - Child`,
-          expense_object_id: objectId,
-          amount: Number(amount),
-          expense_date: dataToUse.formData.expense_date,
-          status: 'pending',
-          employee_id: dataToUse.formData.employee_id,
-          id_parent: targetParentExpense.id,
-          expense_object_columns: [objectId],
-          invoice_items: dataToUse.invoiceItems?.map((item: any) => ({
-            ...item,
-            components_pct: item.componentsPct || {},
-            components_quantity: item.componentsQuantity || {},
-            components_unit_price: item.componentsUnitPrice || {},
-            components_amount: item.componentsAmt || {}
-          })) || []
-        }))
-        
-        if (newChildExpenses.length > 0) {
-          const { error: createNewChildrenError } = await supabase
-            .from('project_expenses')
-            .insert(newChildExpenses)
-          
-          if (createNewChildrenError) {
-            console.error('❌ Error creating new children for existing target object:', createNewChildrenError)
-            return false
-          }
-          
-          console.log('✅ New children created for existing target object successfully')
-        }
-      } else {
-        // Trường hợp 1: Nếu không có thì thêm vào target parent và giữ nguyên các chi phí cũ
-        console.log('🔄 Case 1: Object does not exist in target, adding new children while keeping old ones')
-        
-        // Tạo children mới cho đối tượng cha mới trong target parent (không xóa children cũ)
-        const newChildExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
-          id: crypto.randomUUID(),
-          project_id: dataToUse.formData.project_id,
-          description: `${dataToUse.formData.description} - Child`,
-          expense_object_id: objectId,
-          amount: Number(amount),
-          expense_date: dataToUse.formData.expense_date,
-          status: 'pending',
-          employee_id: dataToUse.formData.employee_id,
-          id_parent: targetParentExpense.id,
-          expense_object_columns: [objectId],
-          invoice_items: dataToUse.invoiceItems?.map((item: any) => ({
-            ...item,
-            components_pct: item.componentsPct || {},
-            components_quantity: item.componentsQuantity || {},
-            components_unit_price: item.componentsUnitPrice || {},
-            components_amount: item.componentsAmt || {}
-          })) || []
-        }))
-        
-        if (newChildExpenses.length > 0) {
-          const { error: createNewChildrenError } = await supabase
-            .from('project_expenses')
-            .insert(newChildExpenses)
-          
-          if (createNewChildrenError) {
-            console.error('❌ Error creating new children for new target object:', createNewChildrenError)
-            return false
-          }
-          
-          console.log('✅ New children created for new target object successfully')
-        }
-      }
-      
-      // KHÔNG xóa expense đã chọn ban đầu (additive update giữ nguyên bản ghi cũ)
-      
-      console.log('✅ Expense updated successfully - replaced parent object')
-      return true
+      // YÊU CẦU MỚI: Không tạo chi phí mới, chỉ cập nhật vào bản ghi hiện tại
+      // → luôn dùng đường "cập nhật trực tiếp" thay vì logic cộng dồn / tạo children mới
+      console.log('🔄 Overwriting existing expense directly (no new rows created)')
+      return await updateSelectedExpenseDirectly(dataToUse)
     } catch (error) {
       console.error('❌ Error in updateExistingExpense:', error)
       return false
