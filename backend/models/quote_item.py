@@ -18,6 +18,7 @@ class QuoteItem(BaseModel):
     height: Optional[float] = None
     length: Optional[float] = None
     depth: Optional[float] = None
+    vat_rate: Optional[float] = 10.0
 
 class QuoteItemCreate(BaseModel):
     """Quote item creation model"""
@@ -30,6 +31,7 @@ class QuoteItemCreate(BaseModel):
     height: Optional[float] = None
     length: Optional[float] = None
     depth: Optional[float] = None
+    vat_rate: Optional[float] = 10.0
 
 class QuoteItemUpdate(BaseModel):
     """Quote item update model"""
@@ -41,3 +43,4 @@ class QuoteItemUpdate(BaseModel):
     height: Optional[float] = None
     length: Optional[float] = None
     depth: Optional[float] = None
+    vat_rate: Optional[float] = None

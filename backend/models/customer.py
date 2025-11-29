@@ -36,6 +36,7 @@ class Customer(BaseModel):
     notes: Optional[str] = None
     assigned_to: Optional[str] = None
     level: Optional[str] = None  # Customer level (bronze, silver, gold, platinum)
+    alternative_name: Optional[str] = None  # Alternative customer name
     created_at: datetime
     updated_at: datetime
 
@@ -54,6 +55,7 @@ class CustomerCreate(BaseModel):
     payment_terms: int = 30
     notes: Optional[str] = None
     assigned_to: Optional[str] = None
+    alternative_name: Optional[str] = None
     
     @field_validator('name')
     @classmethod
@@ -102,6 +104,7 @@ class CustomerUpdate(BaseModel):
     payment_terms: Optional[int] = None
     notes: Optional[str] = None
     assigned_to: Optional[str] = None
+    alternative_name: Optional[str] = None
     
     @field_validator('name')
     @classmethod

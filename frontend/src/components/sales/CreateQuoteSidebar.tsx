@@ -183,12 +183,18 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
       const itemTotal = item.quantity * item.unit_price
       return sum + itemTotal
     }, 0)
-    const tax_amount = subtotal * (formData.tax_rate / 100)
-    const total_amount = subtotal + tax_amount
+    // Calculate total tax from all items (each item has its own tax_rate)
+    const total_tax = items.reduce((sum, item) => {
+      const itemTaxRate = (item as any).tax_rate ?? formData.tax_rate ?? 10
+      const itemTotal = item.quantity * item.unit_price
+      return sum + (itemTotal * (itemTaxRate / 100))
+    }, 0)
+    // Total amount = subtotal + total tax from all items
+    const total_amount = subtotal + total_tax
     setFormData(prev => ({ 
       ...prev, 
       subtotal, 
-      tax_amount, 
+      tax_amount: total_tax,  // Store total tax for reference
       total_amount 
     }))
   }
@@ -392,8 +398,14 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
 
   if (!isOpen) return null
 
-  const tax_amount = formData.subtotal * (formData.tax_rate / 100)
-  const total_amount = formData.subtotal + tax_amount
+  // Calculate total tax from all items
+  const total_tax = items.reduce((sum, item) => {
+    const itemTaxRate = (item as any).tax_rate ?? formData.tax_rate ?? 10
+    const itemTotal = item.quantity * item.unit_price
+    return sum + (itemTotal * (itemTaxRate / 100))
+  }, 0)
+  // Total amount = subtotal + total tax from all items
+  const total_amount = formData.subtotal + total_tax
 
   return (
     <>
@@ -632,9 +644,19 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                               <div className="flex justify-between items-center mb-2">
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs font-semibold text-black">Mục {index + 1}</span>
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                    {formatCurrency(item.total_price)}
-                                  </span>
+                                  <div className="flex flex-col items-end">
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                      {formatCurrency(item.total_price)}
+                                    </span>
+                                    <span className="text-xs text-gray-500 mt-0.5">
+                                      + Thuế: {((item as any).tax_rate ?? formData.tax_rate ?? 10)}%
+                                    </span>
+                                  </div>
+                                    <span className="text-xs text-gray-500 mt-0.5">
+                                      + Thuế ({formData.tax_rate || 10}%): {formatCurrency(item.total_price * (formData.tax_rate || 10) / 100)}
+                                    </span>
+                                  </div>
                                 </div>
                                 <button
                                   type="button"
@@ -730,6 +752,27 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                                       {formatCurrency(item.total_price)}
                                     </span>
                                   </div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-xs text-gray-600">+ Thuế:</span>
+                                    <input
+                                      type="number"
+                                      value={(item as any).tax_rate ?? formData.tax_rate ?? 10}
+                                      onChange={(e) => {
+                                        const newTaxRate = parseFloat(e.target.value) || 0
+                                        const updatedItems = [...items]
+                                        updatedItems[index] = { ...updatedItems[index], tax_rate: newTaxRate } as any
+                                        setItems(updatedItems)
+                                      }}
+                                      className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs text-center text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                    />
+                                    <span className="text-xs text-gray-600">%</span>
+                                    <span className="text-xs text-gray-600">
+                                      = {formatCurrency(item.total_price * (((item as any).tax_rate ?? formData.tax_rate ?? 10) / 100))}
+                                    </span>
+                                  </div>
                                   <div className="text-xs text-black mt-0.5">
                                     {item.quantity} {item.unit ? item.unit : ''} × {formatCurrency(item.unit_price)} = {formatCurrency(item.quantity * item.unit_price)}
                                   </div>
@@ -762,45 +805,15 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                     {expandedSections.totals && (
                       <div className="px-4 pb-4 space-y-3">
                         {/* Summary Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                          {/* Subtotal */}
-                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-semibold text-black">Tổng phụ:</span>
-                              <span className="text-sm font-bold text-black">{formatCurrency(formData.subtotal)}</span>
-                            </div>
-                          </div>
-                          
-                          {/* VAT Section */}
-                          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-xs font-semibold text-black">Thuế VAT</span>
-                              <div className="flex items-center space-x-1">
-                                <input
-                                  type="number"
-                                  value={formData.tax_rate}
-                                  onChange={(e) => setFormData({ ...formData, tax_rate: parseFloat(e.target.value) || 0 })}
-                                  className="w-16 border border-blue-300 rounded-md px-2 py-1 text-xs text-center font-semibold text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                  min="0"
-                                  max="100"
-                                  step="0.1"
-                                  placeholder="10"
-                                />
-                                <span className="text-xs font-semibold text-black">%</span>
-                              </div>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-semibold text-black">Số tiền thuế:</span>
-                              <span className="text-sm font-bold text-black">
-                                {formatCurrency(tax_amount)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                        {/* Subtotal removed - only show total */}
 
 
                         {/* Total Section */}
                         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium opacity-90">Tạm tính:</span>
+                            <span className="text-sm font-medium">{formatCurrency(formData.subtotal)}</span>
+                          </div>
                           <div className="flex justify-between items-center">
                             <span className="text-lg font-bold">Tổng cộng:</span>
                             <span className="text-2xl font-bold">
@@ -808,9 +821,8 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                             </span>
                           </div>
                           <div className="mt-2 text-sm opacity-90">
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <span>Tổng phụ: {formatCurrency(formData.subtotal)}</span>
-                              <span>+ Thuế: {formatCurrency(tax_amount)}</span>
+                            <div className="text-xs">
+                              * Thuế đã được tính và cộng vào tổng cộng
                             </div>
                           </div>
                         </div>

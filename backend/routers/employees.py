@@ -290,7 +290,13 @@ async def create_employee(
         print(f"[CREATE_EMPLOYEE] Current user: {current_user.email}, Role: {current_user.role}")
         print(f"[CREATE_EMPLOYEE] Creating employee: {employee_data.email}")
         
-        supabase = get_supabase_client()
+        # Get service key and create a fresh client for admin operations
+        from config import settings
+        from supabase import create_client as create_supabase_client
+        
+        # Create a new client with service key for admin operations
+        admin_supabase = create_supabase_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+        supabase = get_supabase_client()  # Keep regular client for database operations
         
         # Check if email already exists in users table
         existing_user = supabase.table("users").select("id").eq("email", employee_data.email).execute()
@@ -335,11 +341,45 @@ async def create_employee(
         plain_password = employee_data.password or "123456"
         
         try:
+            # Verify service key is configured correctly
+            from config import settings
+            service_key = settings.SUPABASE_SERVICE_KEY
+            if not service_key or service_key == "your_supabase_service_key_here":
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="SUPABASE_SERVICE_KEY chưa được cấu hình. Vui lòng kiểm tra file .env và đảm bảo SUPABASE_SERVICE_KEY có giá trị đúng."
+                )
+            
+            # Check if service key has service_role (decode JWT to check)
+            try:
+                import jwt
+                import json
+                # Decode without verification to check role
+                decoded = jwt.decode(service_key, options={"verify_signature": False})
+                if decoded.get("role") != "service_role":
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"SUPABASE_SERVICE_KEY không có quyền service_role. Role hiện tại: {decoded.get('role')}. Vui lòng lấy service_role key từ Supabase Dashboard > Settings > API."
+                    )
+            except jwt.DecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="SUPABASE_SERVICE_KEY không hợp lệ. Vui lòng kiểm tra lại key trong Supabase Dashboard."
+                )
+            except Exception as jwt_error:
+                # If jwt library not available, skip check but log warning
+                print(f"Warning: Could not verify service key role: {jwt_error}")
+            
             # Check if user already exists in Supabase Auth by trying to create first
             # If user exists, it will throw an error which we'll catch
             try:
                 # Try to create new user in Supabase Auth
-                auth_response = supabase.auth.admin.create_user({
+                print(f"[CREATE_USER] Attempting to create user: {employee_data.email}")
+                print(f"[CREATE_USER] Using Supabase URL: {supabase.url if hasattr(supabase, 'url') else 'N/A'}")
+                print(f"[CREATE_USER] Service key configured: {bool(service_key)}")
+                
+                # Create user with admin API
+                user_data = {
                     "email": employee_data.email,
                     "password": plain_password,
                     "email_confirm": True,
@@ -347,7 +387,11 @@ async def create_employee(
                         "full_name": f"{employee_data.first_name} {employee_data.last_name}",
                         "role": employee_data.user_role
                     }
-                })
+                }
+                print(f"[CREATE_USER] User data: {user_data}")
+                
+                # Use admin client for creating user
+                auth_response = admin_supabase.auth.admin.create_user(user_data)
                 
                 if not auth_response.user:
                     raise HTTPException(
@@ -367,7 +411,7 @@ async def create_employee(
                     
                     try:
                         # List all users and find by email
-                        users_response = supabase.auth.admin.list_users()
+                        users_response = admin_supabase.auth.admin.list_users()
                         user_id = None
                         
                         for user in users_response:
@@ -386,15 +430,17 @@ async def create_employee(
                             status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Failed to list users: {str(list_error)}"
                         )
-                elif "not allowed" in error_str or "user not allowed" in error_str:
+                elif "not allowed" in error_str or "user not allowed" in error_str or "forbidden" in error_str or "permission" in error_str:
                     # This is a permission issue with Supabase Auth
+                    print(f"[CREATE_USER] Permission error detected. Service key role check needed.")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Không có quyền tạo tài khoản người dùng. Vui lòng kiểm tra cấu hình SUPABASE_SERVICE_KEY trong file .env. Service key phải có quyền admin để tạo user."
+                        detail="Không có quyền tạo tài khoản người dùng. Vui lòng kiểm tra:\n1. SUPABASE_SERVICE_KEY trong file .env có đúng không\n2. Service key phải có quyền service_role (lấy từ Supabase Dashboard > Settings > API > service_role key)\n3. Đảm bảo service key không phải là anon key"
                     )
                 else:
                     # Re-raise if it's a different error with more details
-                    print(f"Error creating user in Supabase Auth: {create_error}")
+                    print(f"[CREATE_USER] Unexpected error creating user: {create_error}")
+                    print(f"[CREATE_USER] Error type: {type(create_error)}")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Failed to create user account: {str(create_error)}"
@@ -550,7 +596,7 @@ async def create_employee(
             # If employee creation fails, clean up user and auth
             try:
                 supabase.table("users").delete().eq("id", user_id).execute()
-                supabase.auth.admin.delete_user(user_id)
+                admin_supabase.auth.admin.delete_user(user_id)
             except:
                 pass
             raise HTTPException(

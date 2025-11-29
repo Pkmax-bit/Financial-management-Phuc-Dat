@@ -54,6 +54,7 @@ interface QuoteItem {
   unit: string
   unit_price: number
   total_price: number
+  tax_rate?: number  // Tax rate for this specific item (defaults to form tax_rate)
   area?: number | null
   baseline_area?: number | null
   volume?: number | null
@@ -907,7 +908,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
   // Calculate total amount and budget status
   useEffect(() => {
-    const calculatedTotal = formData.subtotal + formData.tax_amount - formData.discount_amount
+    // Calculate total tax from all items (each item has its own tax_rate)
+    const total_tax = items.reduce((sum, item) => {
+      const itemTaxRate = item.tax_rate ?? formData.tax_rate ?? 10
+      return sum + (item.total_price * (itemTaxRate / 100))
+    }, 0)
+    // Total = subtotal + total tax - discount
+    const calculatedTotal = formData.subtotal + total_tax - formData.discount_amount
     setTotalAmount(calculatedTotal)
 
     if (selectedProject && selectedProject.budget) {
@@ -918,7 +925,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setIsOverBudget(false)
       setBudgetDifference(0)
     }
-  }, [formData.subtotal, formData.tax_amount, formData.discount_amount, selectedProject])
+  }, [formData.subtotal, formData.tax_rate, formData.discount_amount, selectedProject, items])
 
   const fetchCustomers = async () => {
     try {
@@ -1160,6 +1167,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             unit: item.unit || '',
             unit_price: item.unit_price || 0,
             total_price: item.total_price || 0,
+            tax_rate: item.tax_rate ?? formData.tax_rate ?? 10,  // Load tax_rate from item or use form default
             area: item.area,
             baseline_area: item.area, // Use current area as baseline
             volume: item.volume,
@@ -1218,13 +1226,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
   const calculateSubtotal = () => {
     const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
-    const tax_amount = subtotal * (formData.tax_rate / 100)
-    const total_amount = subtotal + tax_amount
+    // Calculate total tax from all items (each item has its own tax_rate)
+    const total_tax = items.reduce((sum, item) => {
+      const itemTaxRate = item.tax_rate ?? formData.tax_rate ?? 10
+      return sum + (item.total_price * (itemTaxRate / 100))
+    }, 0)
+    // Total amount = subtotal + total tax from all items
+    const total_amount = subtotal + total_tax
 
     setFormData(prev => ({
       ...prev,
       subtotal,
-      tax_amount,
+      tax_amount: total_tax,  // Store total tax for reference
       total_amount
     }))
   }
@@ -1249,6 +1262,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       unit: '',
       unit_price: 0,
       total_price: 0,
+      tax_rate: formData.tax_rate || 10,  // Default tax rate from form
       area: null,
       baseline_area: null,
       volume: null,
@@ -2212,6 +2226,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             unit: item.unit,
             unit_price: item.unit_price,
             total_price: item.total_price,
+            tax_rate: item.tax_rate ?? formData.tax_rate ?? 10,  // Save tax_rate for each item
             area: item.area,
             volume: item.volume,
             height: item.height,
@@ -2221,14 +2236,39 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           }
         })
 
+        // Insert quote items with tax_rate
         const { data: insertedItems, error: itemsError } = await supabase
           .from('quote_items')
           .insert(quoteItems)
           .select('id')
 
         if (itemsError) {
+          const errorMessage = itemsError.message || JSON.stringify(itemsError)
           console.error('Error saving quote items:', itemsError)
-          // Don't throw error here, quote was saved successfully
+          console.error('Items data:', JSON.stringify(quoteItems, null, 2))
+          
+          // If error is about tax_rate column not existing, log warning but continue
+          if (errorMessage.includes('tax_rate') || errorMessage.includes('column') || errorMessage.includes('does not exist')) {
+            console.warn('⚠️ tax_rate column may not exist in quote_items table. Please run migration: database/migrations/add_tax_rate_to_quote_items.sql')
+            // Try inserting without tax_rate as fallback
+            const quoteItemsWithoutTax = quoteItems.map(item => {
+              const { tax_rate, ...itemWithoutTaxRate } = item
+              return itemWithoutTaxRate
+            })
+            
+            const retryResult = await supabase
+              .from('quote_items')
+              .insert(quoteItemsWithoutTax)
+              .select('id')
+            
+            if (retryResult.error) {
+              console.error('Error saving quote items (retry without tax_rate):', retryResult.error)
+            } else {
+              console.log('Quote items saved successfully (without tax_rate):', retryResult.data)
+            }
+          }
+        } else {
+          console.log('✅ Quote items saved successfully with tax_rate:', insertedItems)
         }
         // Components are already saved in product_components JSONB column, no need to insert separately
       }
@@ -2860,18 +2900,43 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             </div>
                           )}
                           {visibleColumns.total_price && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-gray-900">
-                                {formatCurrency(item.total_price)}
-                              </span>
-                              {items.length > 1 && (
-                                <button
-                                  onClick={() => removeItem(index)}
-                                  className="p-1 text-red-600 hover:text-red-800"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex flex-col items-end gap-1">
+                                  <span className="text-xs font-semibold text-gray-900">
+                                    {formatCurrency(item.total_price)}
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-gray-500">+ Thuế:</span>
+                                    <input
+                                      type="number"
+                                      value={item.tax_rate ?? formData.tax_rate ?? 10}
+                                      onChange={(e) => {
+                                        const newTaxRate = parseFloat(e.target.value) || 0
+                                        const updatedItems = [...items]
+                                        updatedItems[index] = { ...updatedItems[index], tax_rate: newTaxRate }
+                                        setItems(updatedItems)
+                                      }}
+                                      className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs text-center text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                    />
+                                    <span className="text-xs text-gray-500">%</span>
+                                    <span className="text-xs text-gray-500">
+                                      = {formatCurrency(item.total_price * ((item.tax_rate ?? formData.tax_rate ?? 10) / 100))}
+                                    </span>
+                                  </div>
+                                </div>
+                                {items.length > 1 && (
+                                  <button
+                                    onClick={() => removeItem(index)}
+                                    className="p-1 text-red-600 hover:text-red-800"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           )}
                           {visibleColumns.area && (
@@ -3030,34 +3095,20 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             <div className="mb-8">
               <h2 className="text-lg font-medium text-black mb-4">Tổng kết</h2>
               <div className="bg-gray-50 p-4 rounded-md">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-black mb-1">Thuế suất (%)</label>
-                    <input
-                      type="number"
-                      value={formData.tax_rate}
-                      onChange={(e) => setFormData({ ...formData, tax_rate: Number(e.target.value) })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      min="0"
-                      max="100"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <div className="w-full" data-tour-id="quote-form-totals">
+                <div className="w-full" data-tour-id="quote-form-totals">
                       <div className="flex justify-between items-center py-2 border-b border-gray-300">
                         <span className="text-sm font-medium text-black">Tạm tính:</span>
                         <span className="text-sm font-medium text-black">{formatCurrency(formData.subtotal)}</span>
                       </div>
                       <div className="flex justify-between items-center py-2 border-b border-gray-300">
-                        <span className="text-sm font-medium text-black">Thuế ({formData.tax_rate}%):</span>
-                        <span className="text-sm font-medium text-black">{formatCurrency(formData.tax_amount)}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-gray-300">
-                        <span className="text-base font-semibold text-black">Tổng cộng:</span>
+                        <span className="text-sm font-medium text-black">Tổng cộng:</span>
                         <span className={`text-base font-semibold ${isOverBudget ? 'text-red-600' : 'text-black'
                           }`}>
-                          {formatCurrency(formData.total_amount)}
+                          {formatCurrency(totalAmount)}
                         </span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        * Thuế đã được tính và cộng vào tổng cộng
                       </div>
 
                       {/* Profit Analysis */}
@@ -3202,8 +3253,6 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           </div>
                         </div>
                       )}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -3530,6 +3579,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             unit: p.unit || '',
                             unit_price: p.unit_price || 0,
                             total_price: 0, // Will compute below
+                            tax_rate: formData.tax_rate || 10,  // Default tax rate from form
                             product_category_id: p.category_id || null,
                             area: p.area ?? null,
                             baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
@@ -3551,6 +3601,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             unit: p.unit || '',
                             unit_price: p.unit_price || 0,
                             total_price: 0, // Will compute below
+                            tax_rate: formData.tax_rate || 10,  // Default tax rate from form
                             product_category_id: p.category_id || null,
                             area: p.area ?? null,
                             baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),

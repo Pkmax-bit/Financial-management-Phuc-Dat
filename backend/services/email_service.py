@@ -339,6 +339,7 @@ class EmailService:
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;" colspan="3">QUY CÁCH</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">KHỐI LƯỢNG (m)</th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">ĐƠN GIÁ</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">VAT (%)</th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">THÀNH TIỀN</th>
                                 <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">GHI CHÚ</th>
                             </tr>
@@ -352,6 +353,7 @@ class EmailService:
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">CAO (mm)</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;"></th>
                             </tr>
@@ -380,10 +382,10 @@ class EmailService:
                             return str(val) if val else ''
                     if decimal_val == 0:
                         return ''
-                    normalized = decimal_val.normalize()
-                    # Convert to string without trailing zeros
-                    formatted = format(normalized, 'f')
-                    formatted = formatted.rstrip('0').rstrip('.') if '.' in formatted else formatted
+                    # Round to 2 decimal places for area display
+                    rounded = round(float(decimal_val), 2)
+                    # Format with 2 decimal places, remove trailing zeros
+                    formatted = f"{rounded:.2f}".rstrip('0').rstrip('.')
                     return formatted
                 
                 quantity_display = item.get('quantity', 0)
@@ -392,12 +394,37 @@ class EmailService:
                 elif item.get('volume'):
                     quantity_display = item.get('volume')
                 
-                # Format total_price - if it's "TẶNG" or 0, show "TẶNG"
-                total_price_display = item.get('total_price', 0)
-                if total_price_display == 0 or str(total_price_display).upper() == 'TẶNG':
+                # Get VAT rate for this item from database (tax_rate column), fallback to vat_rate, then quote tax_rate, then default 10%
+                # Priority: item.tax_rate > item.vat_rate > quote.tax_rate > 10.0
+                vat_rate = None
+                if item.get('tax_rate') is not None:
+                    vat_rate = float(item.get('tax_rate'))
+                elif item.get('vat_rate') is not None:
+                    vat_rate = float(item.get('vat_rate'))
+                elif quote_data.get('tax_rate') is not None:
+                    vat_rate = float(quote_data.get('tax_rate'))
+                else:
+                    vat_rate = 10.0
+                
+                vat_display = f"{vat_rate:.2f}" if vat_rate else "10.00"
+                
+                # Calculate total price WITH tax included
+                # Formula: Thành tiền = Đơn giá × Số lượng × Diện tích × (1 + VAT%)
+                # total_price in database = unit_price × quantity × area (or unit_price × quantity if no area)
+                # This is BEFORE tax, so we need to multiply by (1 + tax_rate / 100) to get price WITH tax
+                total_price_before_tax = float(item.get('total_price', 0))
+                if total_price_before_tax == 0 or str(total_price_before_tax).upper() == 'TẶNG':
                     total_price_display = 'TẶNG'
                 else:
-                    total_price_display = format_currency(total_price_display)
+                    # Calculate: total_price × (1 + VAT%)
+                    # This gives us: (Đơn giá × Số lượng × Diện tích) × (1 + VAT%)
+                    total_price_after_tax = total_price_before_tax * (1 + vat_rate / 100)
+                    total_price_display = format_currency(total_price_after_tax)
+                    # Debug log
+                    unit_price = item.get('unit_price', 0)
+                    quantity = item.get('quantity', 0)
+                    area = item.get('area')
+                    print(f"📊 Item {idx} ({item.get('name_product', 'N/A')}): unit_price={unit_price}, quantity={quantity}, area={area}, total_price_before_tax={total_price_before_tax}, tax_rate={vat_rate}%, total_price_after_tax={total_price_after_tax}")
                 
                 quote_items_html += f"""
                         <tr>
@@ -413,6 +440,7 @@ class EmailService:
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{format_dimension(height)}</td>
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{format_dimension(quantity_display)}</td>
                             <td style=\"padding: 8px; text-align: right; border: 1px solid #000; color:#000000;\">{format_currency(item.get('unit_price', 0))}</td>
+                            <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{vat_display}</td>
                             <td style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold; color:#000000;\">{total_price_display}</td>
                             <td style=\"padding: 8px; text-align: left; border: 1px solid #000; color:#000000;\"></td>
                         </tr>
@@ -424,13 +452,26 @@ class EmailService:
                 </div>
                 """
         
-        # Calculate total product amount
+        # Calculate total product amount (sum of all items with tax included)
         total_product_amount = 0
         if quote_items:
             for item in quote_items:
-                total_price = item.get('total_price', 0)
-                if isinstance(total_price, (int, float)) and total_price > 0:
-                    total_product_amount += total_price
+                total_price_before_tax = item.get('total_price', 0)
+                if isinstance(total_price_before_tax, (int, float)) and total_price_before_tax > 0:
+                    # Get tax rate for this item
+                    item_tax_rate = None
+                    if item.get('tax_rate') is not None:
+                        item_tax_rate = float(item.get('tax_rate'))
+                    elif item.get('vat_rate') is not None:
+                        item_tax_rate = float(item.get('vat_rate'))
+                    elif quote_data.get('tax_rate') is not None:
+                        item_tax_rate = float(quote_data.get('tax_rate'))
+                    else:
+                        item_tax_rate = 10.0
+                    
+                    # Calculate price after tax
+                    total_price_after_tax = total_price_before_tax * (1 + item_tax_rate / 100)
+                    total_product_amount += total_price_after_tax
         
         # Calculate total and subtotal
         total_amount = quote_data.get('total_amount', total_product_amount)
@@ -557,20 +598,17 @@ class EmailService:
                     <!-- Tổng hạng mục -->
                     <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
                         <tr style="background: #ffd700;">
-                            <td colspan="10" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">TỔNG HẠNG MỤC</td>
+                            <td colspan="11" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">TỔNG HẠNG MỤC</td>
                             <td style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">{format_currency(total_product_amount)}</td>
-                            <td style="padding: 10px; border: 1px solid #000; color:#000000;"></td>
                         </tr>
                         {f'''
                         <tr style="background: #add8e6;">
-                            <td colspan="10" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">CHIẾT KHẤU {quote_data.get("discount_percentage", 0)}% KHÁCH THANH TOÁN TIỀN MẶT</td>
+                            <td colspan="11" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">CHIẾT KHẤU {quote_data.get("discount_percentage", 0)}% KHÁCH THANH TOÁN TIỀN MẶT</td>
                             <td style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">-{format_currency(discount_amount)}</td>
-                            <td style="padding: 10px; border: 1px solid #000; color:#000000;"></td>
                         </tr>
                         <tr style="background: #ffd700;">
-                            <td colspan="10" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">TỔNG HẠNG MỤC</td>
+                            <td colspan="11" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">TỔNG HẠNG MỤC</td>
                             <td style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #000; color:#000000;">{format_currency(total_amount)}</td>
-                            <td style="padding: 10px; border: 1px solid #000; color:#000000;"></td>
                         </tr>
                         ''' if discount_amount > 0 else ''}
                     </table>

@@ -45,8 +45,9 @@ PHONE_PATTERN = re.compile(
 )
 
 # Vietnamese phone number pattern
+# More flexible: allows numbers starting with 0 or +84, or just digits (for test/placeholder numbers)
 VIETNAM_PHONE_PATTERN = re.compile(
-    r'^(\+84|0)[1-9][0-9]{8,9}$'
+    r'^(\+84|0)?[0-9]{7,10}$'
 )
 
 
@@ -178,6 +179,8 @@ def validate_phone(phone: Optional[str], country: Optional[str] = None) -> Optio
     
     # Country-specific validation
     if country and country.upper() == 'VN':
+        # More lenient validation for Vietnamese phones
+        # Accept: numbers with +84 or 0 prefix, or just digits (7-10 digits)
         if not VIETNAM_PHONE_PATTERN.match(phone_clean):
             raise ValueError(f"Invalid Vietnamese phone format: {phone}")
     else:
@@ -186,8 +189,17 @@ def validate_phone(phone: Optional[str], country: Optional[str] = None) -> Optio
             raise ValueError(f"Invalid phone format: {phone}")
     
     # Length check (reasonable phone number length)
-    if len(phone_clean) < 7 or len(phone_clean) > 15:
-        raise ValueError(f"Phone number length invalid: {phone} (must be 7-15 digits)")
+    # For Vietnamese: 7-10 digits (after removing +84 or 0 prefix)
+    # For others: 7-15 digits
+    if country and country.upper() == 'VN':
+        # For VN, check digits only (excluding +84 prefix)
+        digits_only = re.sub(r'^\+84', '', phone_clean)
+        digits_only = re.sub(r'^0', '', digits_only)
+        if len(digits_only) < 7 or len(digits_only) > 10:
+            raise ValueError(f"Phone number length invalid: {phone} (must be 7-10 digits for Vietnamese numbers)")
+    else:
+        if len(phone_clean) < 7 or len(phone_clean) > 15:
+            raise ValueError(f"Phone number length invalid: {phone} (must be 7-15 digits)")
     
     return phone
 

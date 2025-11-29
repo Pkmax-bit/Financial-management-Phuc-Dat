@@ -87,7 +87,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   } | null>(null)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
-  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('active') // Mặc định: đang thực hiện
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all') // Mặc định: Tất cả
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
   const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
