@@ -73,7 +73,9 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
       params.set('payment_amount', String(paymentAmount))
       params.set('payment_method', paymentMethod)
       if (paymentReference) params.set('payment_reference', paymentReference)
-      params.set('payment_date', new Date().toISOString().split('T')[0])
+      if (notes) params.set('notes', notes)
+      // Include time (hour, minute, second) in payment date
+      params.set('payment_date', new Date().toISOString())
 
       const response = await fetch(getApiEndpoint(`/api/sales/invoices/${invoice.id}/payment?${params.toString()}`), {
         method: 'PUT',

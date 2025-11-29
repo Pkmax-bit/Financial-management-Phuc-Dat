@@ -32,6 +32,7 @@ import AllSalesTab from '@/components/sales/AllSalesTab'
 import QuotesTab from '@/components/sales/QuotesTab'
 import InvoicesTab from '@/components/sales/InvoicesTab'
 import PaymentsTab from '@/components/sales/PaymentsTab'
+import PaymentMethodsTab from '@/components/sales/PaymentMethodsTab'
 import CustomersTab from '@/components/sales/CustomersTab'
 import SalesReceiptsTab from '@/components/sales/SalesReceiptsTab'
 import VarianceTab from '@/components/sales/VarianceTab'
@@ -472,6 +473,15 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   Phiếu Thu
                 </button>
                 <button
+                  onClick={() => setActiveTab('payment-methods')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'payment-methods'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  Phương thức thanh toán
+                </button>
+                <button
                   onClick={() => setActiveTab('customers')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'customers'
                       ? 'border-blue-500 text-blue-600'
@@ -520,7 +530,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
             </div>
 
             {/* Search Bar - Only show for non-overview tabs, but hide for quotes and invoices */}
-            {activeTab !== 'overview' && activeTab !== 'quotes' && activeTab !== 'invoices' && (
+            {activeTab !== 'overview' && activeTab !== 'quotes' && activeTab !== 'invoices' && activeTab !== 'payment-methods' && (
               <div className="px-6 py-4 border-b border-gray-200">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -575,6 +585,11 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   onShowCreateModal={() => setShowCreateReceiptModal(true)}
                   onShowEditModal={(receipt) => console.log('Edit receipt:', receipt)}
                   onShowDetailModal={(receipt) => console.log('Detail receipt:', receipt)}
+                />
+              )}
+              {activeTab === 'payment-methods' && (
+                <PaymentMethodsTab
+                  searchTerm={searchTerm}
                 />
               )}
               {activeTab === 'customers' && (
@@ -662,7 +677,7 @@ function SalesPageWithParams() {
 
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'customers', 'variance', 'products', 'product-categories', 'adjustments'].includes(tab)) {
+    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments'].includes(tab)) {
       setActiveTab(tab)
     }
   }, [searchParams])

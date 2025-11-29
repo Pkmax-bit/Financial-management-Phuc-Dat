@@ -21,7 +21,7 @@ class Payment(BaseModel):
     invoice_id: str
     customer_id: str
     amount: float
-    payment_date: date
+    payment_date: datetime  # Changed from date to datetime to include time
     payment_method: PaymentMethod
     reference_number: Optional[str] = None
     notes: Optional[str] = None
@@ -34,7 +34,7 @@ class PaymentCreate(BaseModel):
     invoice_id: str
     customer_id: str
     amount: float
-    payment_date: date
+    payment_date: datetime  # Changed from date to datetime to include time
     payment_method: PaymentMethod
     reference_number: Optional[str] = None
     notes: Optional[str] = None
@@ -45,7 +45,7 @@ class PaymentUpdate(BaseModel):
     invoice_id: Optional[str] = None
     customer_id: Optional[str] = None
     amount: Optional[float] = None
-    payment_date: Optional[date] = None
+    payment_date: Optional[datetime] = None  # Changed from date to datetime
     payment_method: Optional[PaymentMethod] = None
     reference_number: Optional[str] = None
     notes: Optional[str] = None

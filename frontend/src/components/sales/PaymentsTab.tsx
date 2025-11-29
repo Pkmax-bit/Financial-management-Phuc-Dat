@@ -73,7 +73,15 @@ export default function PaymentsTab({ searchTerm, onCreatePayment }: PaymentsTab
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN')
+    const date = new Date(dateString)
+    // Format: "DD/MM/YYYY HH:mm"
+    return date.toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   const getStatusColor = (status: string) => {

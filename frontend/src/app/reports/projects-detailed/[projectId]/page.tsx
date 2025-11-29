@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, Calendar, FileSpreadsheet, CircleHelp } from 'lucide-react'
+import { ArrowLeft, Calendar, FileSpreadsheet, CircleHelp, CreditCard } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { apiGet } from '@/lib/api'
+import { getApiEndpoint } from '@/lib/apiUrl'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
 import { Pie } from 'react-chartjs-2'
@@ -105,6 +107,7 @@ export default function ProjectDetailedReportDetailPage() {
   const [employees, setEmployees] = useState<Map<string, string>>(new Map())
   const [expenseObjectNames, setExpenseObjectNames] = useState<Map<string, string>>(new Map())
   const [showExpenseObjectDetails, setShowExpenseObjectDetails] = useState<boolean>(true)
+  const [payments, setPayments] = useState<any[]>([])
 
   // Tour state
   const REPORT_DETAIL_TOUR_STORAGE_KEY = 'report-detail-tour-status-v1'
@@ -214,6 +217,21 @@ export default function ProjectDetailedReportDetailPage() {
       }
 
       setInvoices(invoicesData || [])
+
+      // Fetch payment history for this project
+      try {
+        const paymentsData = await apiGet(getApiEndpoint(`/api/sales/payment-methods/projects/${projectId}/payments`))
+        if (paymentsData && Array.isArray(paymentsData)) {
+          // Sort by date (newest first)
+          const sortedPayments = paymentsData.sort((a: any, b: any) => 
+            new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
+          )
+          setPayments(sortedPayments)
+        }
+      } catch (error) {
+        console.error('Error fetching payment history:', error)
+        setPayments([])
+      }
 
        // Fetch project expenses (actual costs - dùng tính lợi nhuận)
        const { data: projectExpensesData } = await supabase
@@ -1613,8 +1631,8 @@ export default function ProjectDetailedReportDetailPage() {
           {/* Two Column Layout: Plan vs Actual */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8" data-tour-id="report-detail-plan-vs-actual">
             {/* Left Column - PLAN (Kế hoạch) */}
-            <div className="space-y-6">
-              <div className="bg-blue-50 rounded-xl shadow-sm border-2 border-blue-200 p-6" data-tour-id="report-detail-plan-overview">
+            <div className="flex flex-col">
+              <div className="bg-blue-50 rounded-xl shadow-sm border-2 border-blue-200 p-6 flex flex-col h-full" data-tour-id="report-detail-plan-overview">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-blue-600 rounded-lg"></div>
                   <div>
@@ -1624,13 +1642,13 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Planned Revenue - Quotes */}
-                <div className="bg-white rounded-lg p-4 mb-4" data-tour-id="report-detail-plan-quotes">
+                <div className="bg-white rounded-lg p-4 mb-4 flex flex-col flex-1" data-tour-id="report-detail-plan-quotes">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-900">Báo giá (Doanh thu dự kiến)</h3>
                     <span className="text-lg font-bold text-blue-600">{formatCurrency(totalQuotes)}</span>
                   </div>
                   
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="space-y-2 flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: '16rem' }}>
                     {quotes.length > 0 ? (
                       quotes.map((quote) => (
                         <div key={quote.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -1673,7 +1691,7 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Planned Costs - From project_expenses_quote */}
-                <div className="bg-white rounded-lg p-4" data-tour-id="report-detail-plan-costs">
+                <div className="bg-white rounded-lg p-4 flex flex-col flex-1" data-tour-id="report-detail-plan-costs">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-900">Chi phí dự kiến (Quote)</h3>
@@ -1682,7 +1700,7 @@ export default function ProjectDetailedReportDetailPage() {
                     <span className="text-lg font-bold text-orange-600">{formatCurrency(totalExpenseQuotes)}</span>
                   </div>
                   
-                  <div className="space-y-2 max-h-64 overflow-y-auto mb-3">
+                  <div className="space-y-2 flex-1 min-h-0 overflow-y-auto mb-3" style={{ maxHeight: '16rem' }}>
                     {expenseQuotes.length > 0 ? (
                       expenseQuotes.map((expenseQuote) => (
                         <div key={expenseQuote.id} className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
@@ -1720,14 +1738,17 @@ export default function ProjectDetailedReportDetailPage() {
                     <p className={`text-lg font-bold ${plannedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(plannedProfit)}
                     </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      = Báo giá ({formatCurrency(totalQuotes)}) - Chi phí ({formatCurrency(totalExpenseQuotes)})
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Right Column - ACTUAL (Thực tế) */}
-            <div className="space-y-6">
-              <div className="bg-green-50 rounded-xl shadow-sm border-2 border-green-200 p-6" data-tour-id="report-detail-actual-overview">
+            <div className="flex flex-col">
+              <div className="bg-green-50 rounded-xl shadow-sm border-2 border-green-200 p-6 flex flex-col h-full" data-tour-id="report-detail-actual-overview">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-green-600 rounded-lg"></div>
                   <div>
@@ -1737,13 +1758,13 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Actual Revenue - Invoices */}
-                <div className="bg-white rounded-lg p-4 mb-4" data-tour-id="report-detail-actual-invoices">
+                <div className="bg-white rounded-lg p-4 mb-4 flex flex-col flex-1" data-tour-id="report-detail-actual-invoices">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-900">Hóa đơn (Doanh thu thực tế)</h3>
                     <span className="text-lg font-bold text-green-600">{formatCurrency(totalInvoices)}</span>
                   </div>
                   
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="space-y-2 flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: '16rem' }}>
                     {invoices.length > 0 ? (
                       invoices.map((invoice) => (
                         <div key={invoice.id} className="flex justify-between items-start p-3 bg-gray-50 rounded-lg">
@@ -1784,7 +1805,7 @@ export default function ProjectDetailedReportDetailPage() {
                 </div>
 
                 {/* Actual Costs - From project_expenses (approved only) */}
-                <div className="bg-white rounded-lg p-4" data-tour-id="report-detail-actual-expenses">
+                <div className="bg-white rounded-lg p-4 flex flex-col flex-1" data-tour-id="report-detail-actual-expenses">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-900">Chi phí thực tế (Đã duyệt)</h3>
@@ -1793,7 +1814,7 @@ export default function ProjectDetailedReportDetailPage() {
                     <span className="text-lg font-bold text-red-600">{formatCurrency(totalExpenses)}</span>
                   </div>
                   
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="space-y-2 flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: '16rem' }}>
                     {expenses.length > 0 ? (
                       expenses.map((expense) => (
                         <div key={expense.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
@@ -1848,6 +1869,106 @@ export default function ProjectDetailedReportDetailPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Payment History - Full Width Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8" data-tour-id="report-detail-payment-history">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CreditCard className="h-6 w-6 text-blue-600" />
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">Lịch sử thanh toán</h3>
+                    <p className="text-sm text-gray-600">Chi tiết các giao dịch thanh toán của dự án</p>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-gray-500">{payments.length} giao dịch</span>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {payments.length > 0 ? (
+                  payments.map((payment: any) => (
+                    <div key={payment.id} className="flex justify-between items-start p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <p className="text-sm font-semibold text-gray-900">{payment.payment_number || 'N/A'}</p>
+                          {payment.invoice_number && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                              {payment.invoice_number}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Ngày thanh toán</p>
+                            <p className="text-sm text-gray-900">
+                              {new Date(payment.payment_date).toLocaleString('vi-VN', {
+                                dateStyle: 'short',
+                                timeStyle: 'short'
+                              })}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Phương thức</p>
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {payment.payment_method === 'cash' ? 'Tiền mặt' :
+                               payment.payment_method === 'bank_transfer' ? 'Chuyển khoản' :
+                               payment.payment_method === 'card' ? 'Thẻ' :
+                               payment.payment_method === 'check' ? 'Séc' :
+                               payment.payment_method === 'digital_wallet' ? 'Ví điện tử' :
+                               payment.payment_method === 'other' ? 'Khác' :
+                               payment.payment_method || 'N/A'}
+                            </span>
+                          </div>
+                          {payment.reference_number && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Số tham chiếu</p>
+                              <p className="text-sm text-gray-900">{payment.reference_number}</p>
+                            </div>
+                          )}
+                        </div>
+                        {payment.notes && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs text-gray-500 mb-1">Ghi chú</p>
+                            <p className="text-sm text-gray-700 italic">{payment.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right ml-6">
+                        <p className="text-xs text-gray-500 mb-1">Số tiền</p>
+                        <p className="text-lg font-bold text-green-600">
+                          {new Intl.NumberFormat('vi-VN', {
+                            style: 'currency',
+                            currency: 'VND'
+                          }).format(payment.amount || 0)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">Chưa có lịch sử thanh toán</p>
+                  </div>
+                )}
+              </div>
+              
+              {payments.length > 0 && (
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-base font-semibold text-blue-900">Tổng đã thanh toán:</span>
+                    <span className="text-2xl font-bold text-blue-600">
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND'
+                      }).format(payments.reduce((sum, p) => sum + (p.amount || 0), 0))}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

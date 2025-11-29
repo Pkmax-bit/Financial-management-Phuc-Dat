@@ -2320,6 +2320,169 @@ async def get_payments(
             detail=f"Failed to fetch payments: {str(e)}"
         )
 
+# PAYMENT METHODS - Phương thức thanh toán theo dự án
+# ============================================================================
+
+@router.get("/payment-methods/projects")
+async def get_projects_with_payment_info(
+    current_user: User = Depends(get_current_user)
+):
+    """Get all projects with payment status and summary"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get accessible project_ids for current user
+        accessible_project_ids = get_user_accessible_project_ids(supabase, current_user)
+        
+        # Get all projects (filtered by access)
+        projects_query = supabase.table("projects").select("id, name, project_code, customer_id, customers!projects_customer_id_fkey(name)")
+        
+        if accessible_project_ids is not None:
+            if not accessible_project_ids:
+                return []
+            projects_query = projects_query.in_("id", accessible_project_ids)
+        
+        projects_result = projects_query.execute()
+        
+        if not projects_result.data:
+            return []
+        
+        # For each project, get invoices and calculate payment info
+        projects_with_payments = []
+        for project in projects_result.data:
+            project_id = project["id"]
+            
+            # Get all invoices for this project
+            invoices_result = supabase.table("invoices").select(
+                "id, invoice_number, total_amount, paid_amount, payment_status"
+            ).eq("project_id", project_id).execute()
+            
+            invoices = invoices_result.data or []
+            
+            # Calculate totals
+            total_invoice_amount = sum(float(inv.get("total_amount", 0)) for inv in invoices)
+            paid_amount = sum(float(inv.get("paid_amount", 0)) for inv in invoices)
+            remaining_amount = total_invoice_amount - paid_amount
+            
+            # Determine payment status
+            if len(invoices) == 0:
+                payment_status = "pending"
+            elif remaining_amount <= 0:
+                payment_status = "paid"
+            elif paid_amount > 0:
+                payment_status = "partial"
+            else:
+                payment_status = "pending"
+            
+            # Get payments count for all invoices in this project
+            all_payment_ids = set()
+            for invoice in invoices:
+                invoice_payments = supabase.table("payments").select("id").eq("invoice_id", invoice["id"]).execute()
+                if invoice_payments.data:
+                    all_payment_ids.update(p["id"] for p in invoice_payments.data)
+            payments_count = len(all_payment_ids)
+            
+            projects_with_payments.append({
+                "id": project_id,
+                "name": project.get("name", ""),
+                "project_code": project.get("project_code"),
+                "customer_id": project.get("customer_id"),
+                "customer_name": project.get("customers", {}).get("name") if project.get("customers") else None,
+                "total_invoice_amount": total_invoice_amount,
+                "paid_amount": paid_amount,
+                "remaining_amount": remaining_amount,
+                "payment_status": payment_status,
+                "invoices_count": len(invoices),
+                "payments_count": payments_count
+            })
+        
+        return projects_with_payments
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch projects with payment info: {str(e)}"
+        )
+
+@router.get("/payment-methods/projects/{project_id}/payments")
+async def get_project_payments(
+    project_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get payment history for a specific project"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify user has access to this project
+        accessible_project_ids = get_user_accessible_project_ids(supabase, current_user)
+        if accessible_project_ids is not None:
+            if project_id not in accessible_project_ids:
+                raise HTTPException(status_code=403, detail="Access denied to this project")
+        
+        # Get all invoices for this project
+        invoices_result = supabase.table("invoices").select("id, invoice_number").eq("project_id", project_id).execute()
+        
+        if not invoices_result.data:
+            return []
+        
+        invoice_ids = [inv["id"] for inv in invoices_result.data]
+        invoice_map = {inv["id"]: inv["invoice_number"] for inv in invoices_result.data}
+        
+        # Get all payments for these invoices
+        all_payments = []
+        for invoice_id in invoice_ids:
+            payments_result = supabase.table("payments").select(
+                "id, payment_number, payment_date, amount, payment_method, reference_number, notes, invoice_id"
+            ).eq("invoice_id", invoice_id).order("payment_date", desc=True).execute()
+            
+            if payments_result.data:
+                for payment in payments_result.data:
+                    payment["invoice_number"] = invoice_map.get(payment["invoice_id"])
+                    all_payments.append(payment)
+        
+        # Sort by payment_date descending
+        all_payments.sort(key=lambda x: x.get("payment_date", ""), reverse=True)
+        
+        return all_payments
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch project payments: {str(e)}"
+        )
+
+@router.get("/payment-methods/projects/{project_id}/invoices")
+async def get_project_invoices(
+    project_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get all invoices for a specific project"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify user has access to this project
+        accessible_project_ids = get_user_accessible_project_ids(supabase, current_user)
+        if accessible_project_ids is not None:
+            if project_id not in accessible_project_ids:
+                raise HTTPException(status_code=403, detail="Access denied to this project")
+        
+        # Get all invoices for this project
+        invoices_result = supabase.table("invoices").select(
+            "id, invoice_number, total_amount, paid_amount, payment_status, issue_date, due_date"
+        ).eq("project_id", project_id).order("issue_date", desc=True).execute()
+        
+        return invoices_result.data or []
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch project invoices: {str(e)}"
+        )
+
 @router.post("/payments", response_model=Payment)
 async def create_payment(
     payment_data: PaymentWithAllocations,
@@ -2416,10 +2579,11 @@ async def record_simple_payment(
     payment_amount: float,
     payment_method: str = "bank_transfer",
     payment_reference: Optional[str] = None,
-    payment_date: Optional[date] = None,
+    payment_date: Optional[str] = None,  # Accept ISO datetime string or date string
+    notes: Optional[str] = None,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Record a simple payment for a single invoice"""
+    """Record a payment for an invoice and save to payment history with full details"""
     try:
         supabase = get_supabase_client()
         
@@ -2432,7 +2596,7 @@ async def record_simple_payment(
             )
         
         invoice = invoice_result.data[0]
-        current_paid = invoice["paid_amount"]
+        current_paid = invoice.get("paid_amount", 0) or 0
         new_paid = current_paid + payment_amount
         total_amount = invoice["total_amount"]
         
@@ -2454,20 +2618,45 @@ async def record_simple_payment(
             payment_status = "pending"
             invoice_status = "sent"
         
-        # Create payment record
+        # Create payment record with FULL information for payment history
         payment_number = f"PAY-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        
+        # Parse payment_date: if provided as date string, combine with current time; if datetime string, use it; otherwise use now
+        if payment_date:
+            try:
+                # Try parsing as datetime first
+                payment_datetime = datetime.fromisoformat(payment_date.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
+                try:
+                    # Try parsing as date and combine with current time
+                    from datetime import date as date_type
+                    payment_date_obj = datetime.strptime(payment_date, '%Y-%m-%d').date()
+                    payment_datetime = datetime.combine(payment_date_obj, datetime.now().time())
+                except (ValueError, AttributeError):
+                    payment_datetime = datetime.now()
+        else:
+            payment_datetime = datetime.now()
+        
         payment_data = {
             "id": str(uuid.uuid4()),
             "payment_number": payment_number,
+            "invoice_id": invoice_id,  # IMPORTANT: Link payment to invoice for history
             "customer_id": invoice["customer_id"],
-            "payment_date": (payment_date or datetime.now().date()).isoformat(),
-            "amount": payment_amount,
+            "amount": float(payment_amount),
+            "currency": invoice.get("currency", "VND"),
+            "payment_date": payment_datetime.isoformat(),  # Now includes date and time (hour, minute, second)
             "payment_method": payment_method,
-            "created_by": None,
-            "created_at": datetime.utcnow().isoformat()
+            "reference_number": payment_reference,  # Mã tham chiếu (VD: số giao dịch ngân hàng)
+            "notes": notes,  # Ghi chú về thanh toán
+            "status": "completed",  # Payment is completed when recorded
+            "created_by": current_user.id,
+            "processed_by": current_user.id,
+            "processed_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
         }
         
-        # Insert payment
+        # Insert payment into payment history table
         payment_result = supabase.table("payments").insert(payment_data).execute()
         
         # Update invoice
