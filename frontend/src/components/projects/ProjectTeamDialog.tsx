@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Calendar, Search, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +20,7 @@ interface Employee {
   manager_name?: string;
   address?: string;
   status?: string;
+  department_id?: string;
 }
 
 interface ProjectTeamDialogProps {
@@ -57,14 +60,15 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedType, setSelectedType] = useState<'all' | 'employee' | 'user'>('all');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [departments, setDepartments] = useState<Array<{id: string, name: string}>>([]);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<File | null>(null);
 
   useEffect(() => {
     if (open) {
+      fetchDepartments();
       fetchEmployeesAndUsers();
-      // Auto-select current user if available
       if (currentUser?.full_name && currentUser?.email) {
         const currentUserEmployee: Employee = {
           id: currentUser.id || 'current-user',
@@ -82,114 +86,288 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
     }
   }, [open, currentUser]);
 
+  const fetchDepartments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      setDepartments((data || []) as Array<{id: string, name: string}>);
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+      setDepartments([]);
+    }
+  };
+
   const fetchEmployeesAndUsers = async () => {
     try {
       setLoading(true);
-
-      // First, fetch team members from project_team for this project to filter out existing members
-      const { data: teamMembersData, error: teamError } = await supabase
+      console.log('🔍 Bắt đầu lấy dữ liệu nhân viên...');
+      
+      const { data: teamMembersData } = await supabase
         .from('project_team')
         .select('user_id, email')
         .eq('project_id', projectId)
         .eq('status', 'active');
 
-      if (teamError) {
-        console.error('Error fetching team members:', teamError);
-        // Continue anyway - we'll show all employees
-      }
-
-      // Extract user_ids and emails from existing team members (to exclude them)
       const existingTeamUserIds = new Set((teamMembersData || []).map(tm => tm.user_id).filter(Boolean));
       const existingTeamEmails = new Set((teamMembersData || []).map(tm => tm.email).filter(Boolean));
 
-      // Fetch ALL employees with their department, position and manager
+      // Query TẤT CẢ nhân viên (active) - không filter gì thêm
       const { data: employeesData, error: employeesError } = await supabase
         .from('employees')
         .select(`
-          id,
-          user_id,
-          employee_code,
-          first_name,
-          last_name,
-          email,
+          id, 
+          user_id, 
+          employee_code, 
+          first_name, 
+          last_name, 
+          email, 
           phone,
-          departments:department_id (name),
-          positions:position_id (name),
-          hire_date,
-          status,
-          avatar_url,
+          department_id,
+          position_id,
+          hire_date, 
+          status, 
+          avatar_url, 
           address,
-          managers:manager_id (first_name, last_name)
+          manager_id,
+          salary
         `)
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .order('first_name', { ascending: true });
 
-      if (employeesError) throw new Error(`Error fetching employees: ${employeesError.message}`);
+      if (employeesError) {
+        console.error('❌ Error fetching employees:', employeesError);
+        throw new Error(`Error fetching employees: ${employeesError.message}`);
+      }
 
-      // Fetch ALL users
+      console.log(`✅ Lấy được ${employeesData?.length || 0} nhân viên từ database`);
+
+      // Lấy TẤT CẢ departments (không chỉ những cái có trong employees)
+      const { data: allDeptData, error: deptError } = await supabase
+        .from('departments')
+        .select('id, name, code')
+        .order('name');
+      
+      let departmentsMap = new Map<string, {id: string, name: string, code?: string}>();
+      if (deptError) {
+        console.error('❌ Error fetching all departments:', deptError);
+      } else if (allDeptData) {
+        allDeptData.forEach((dept: any) => {
+          departmentsMap.set(dept.id, { id: dept.id, name: dept.name, code: dept.code });
+        });
+        console.log(`✅ Lấy được ${allDeptData.length} phòng ban`);
+      }
+      
+      // Lấy TẤT CẢ positions (không chỉ những cái có trong employees)
+      const { data: allPosData, error: posError } = await supabase
+        .from('positions')
+        .select('id, name, code')
+        .order('name');
+      
+      let positionsMap = new Map<string, {id: string, name: string, code?: string}>();
+      if (posError) {
+        console.error('❌ Error fetching all positions:', posError);
+      } else if (allPosData) {
+        allPosData.forEach((pos: any) => {
+          positionsMap.set(pos.id, { id: pos.id, name: pos.name, code: pos.code });
+        });
+        console.log(`✅ Lấy được ${allPosData.length} vị trí`);
+      }
+      
+      // Query managers nếu có
+      const managerIds = new Set<string>();
+      (employeesData || []).forEach((emp: any) => {
+        if (emp.manager_id) managerIds.add(emp.manager_id);
+      });
+      
+      let managersMap = new Map<string, {first_name: string, last_name: string}>();
+      if (managerIds.size > 0) {
+        const { data: mgrData } = await supabase
+          .from('employees')
+          .select('id, first_name, last_name, employee_code')
+          .in('id', Array.from(managerIds));
+        
+        if (mgrData) {
+          mgrData.forEach((mgr: any) => {
+            managersMap.set(mgr.id, { first_name: mgr.first_name, last_name: mgr.last_name });
+          });
+          console.log(`✅ Lấy được ${mgrData.length} quản lý`);
+        }
+      }
+
+      // Query users
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select(`
-          id,
-          email,
-          full_name,
-          role,
-          avatar_url,
-          phone,
-          is_active
-        `)
+        .select('id, email, full_name, role, avatar_url, phone, is_active')
         .eq('is_active', true);
 
-      if (usersError) throw new Error(`Error fetching users: ${usersError.message}`);
-
-      // Format employee data - exclude those already in team
-      const formattedEmployees = (employeesData || [])
-        .filter(emp => {
-          // Exclude if already in team (by user_id or email)
-          return !((emp.user_id && existingTeamUserIds.has(emp.user_id)) || 
-                   (emp.email && existingTeamEmails.has(emp.email)));
-        })
-        .map(emp => ({
-          id: emp.id,
-          name: `${emp.first_name} ${emp.last_name}`,
-          email: emp.email,
-          user_id: emp.user_id,
-          type: 'employee' as const,
-          department: emp.departments?.name,
-          position: emp.positions?.name,
-          phone: emp.phone,
-          avatar_url: emp.avatar_url,
-          employee_code: emp.employee_code,
-          hire_date: emp.hire_date,
-          manager_name: emp.managers ? `${emp.managers.first_name} ${emp.managers.last_name}` : undefined,
-          address: emp.address,
-          status: emp.status
-        }));
-
-      // Format user data - exclude those already in team
-      const formattedUsers = (usersData || [])
-        .filter(user => {
-          // Exclude if already in team (by id or email)
-          return !((user.id && existingTeamUserIds.has(user.id)) || 
-                   (user.email && existingTeamEmails.has(user.email)));
-        })
-        .map(user => ({
-          id: user.id,
-          name: user.full_name,
-          email: user.email,
-          user_id: user.id,
-          type: 'user' as const,
-          role: user.role,
-          phone: user.phone,
-          avatar_url: user.avatar_url
-        }));
-
-      // Combine all data
-      const allEmployees = [...formattedEmployees, ...formattedUsers];
+      if (usersError) {
+        console.error('❌ Error fetching users:', usersError);
+        throw new Error(`Error fetching users: ${usersError.message}`);
+      }
       
-      // Remove duplicates based on email
-      const uniqueEmployees = Array.from(
-        new Map(allEmployees.map(item => [item.email, item])).values()
-      );
+      console.log(`✅ Lấy được ${usersData?.length || 0} users`);
+
+      // Format employees với đầy đủ thông tin
+      const formattedEmployees = (employeesData || [])
+        .filter((emp: any) => !((emp.user_id && existingTeamUserIds.has(emp.user_id)) || 
+                   (emp.email && existingTeamEmails.has(emp.email))))
+        .map((emp: any) => {
+          // Lấy department từ map
+          let departmentName: string | undefined;
+          let departmentId: string | undefined = emp.department_id;
+          let departmentCode: string | undefined;
+          
+          if (emp.department_id && departmentsMap.has(emp.department_id)) {
+            const dept = departmentsMap.get(emp.department_id);
+            departmentName = dept?.name;
+            departmentId = dept?.id || emp.department_id;
+            departmentCode = dept?.code;
+          } else if (emp.department_id) {
+            // Nếu có department_id nhưng không tìm thấy trong map, vẫn giữ ID
+            departmentId = emp.department_id;
+            console.warn(`⚠️ Không tìm thấy phòng ban với ID: ${emp.department_id} cho nhân viên ${emp.first_name} ${emp.last_name}`);
+          }
+          
+          // Lấy position từ map
+          let positionName: string | undefined;
+          let positionCode: string | undefined;
+          if (emp.position_id && positionsMap.has(emp.position_id)) {
+            const pos = positionsMap.get(emp.position_id);
+            positionName = pos?.name;
+            positionCode = pos?.code;
+          } else if (emp.position_id) {
+            console.warn(`⚠️ Không tìm thấy vị trí với ID: ${emp.position_id} cho nhân viên ${emp.first_name} ${emp.last_name}`);
+          }
+          
+          // Lấy manager từ map
+          let managerName: string | undefined;
+          if (emp.manager_id && managersMap.has(emp.manager_id)) {
+            const mgr = managersMap.get(emp.manager_id);
+            managerName = mgr ? `${mgr.first_name || ''} ${mgr.last_name || ''}`.trim() : undefined;
+          }
+          
+          const fullName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim();
+          
+          return {
+            id: emp.id,
+            name: fullName || emp.email || 'Không có tên',
+            email: emp.email,
+            user_id: emp.user_id,
+            type: 'employee' as const,
+            department: departmentName || (emp.department_id ? `[ID: ${emp.department_id}]` : undefined),
+            department_id: departmentId,
+            position: positionName || (emp.position_id ? `[ID: ${emp.position_id}]` : undefined),
+            phone: emp.phone,
+            avatar_url: emp.avatar_url,
+            employee_code: emp.employee_code,
+            hire_date: emp.hire_date,
+            manager_name: managerName,
+            address: emp.address,
+            status: emp.status
+          } as Employee;
+        });
+      
+      console.log(`✅ Đã format ${formattedEmployees.length} nhân viên (sau khi loại bỏ thành viên đã có trong dự án)`);
+
+      // Tạo map từ user_id -> employee để map users với employees
+      const userIdToEmployeeMap = new Map<string, any>();
+      (employeesData || []).forEach((emp: any) => {
+        if (emp.user_id) {
+          userIdToEmployeeMap.set(emp.user_id, emp);
+        }
+      });
+      console.log(`✅ Đã tạo map: ${userIdToEmployeeMap.size} users có employee record`);
+
+      // Format users và map với employees nếu có
+      const formattedUsers = (usersData || [])
+        .filter(user => !((user.id && existingTeamUserIds.has(user.id)) || 
+                   (user.email && existingTeamEmails.has(user.email))))
+        .map(user => {
+          // Tìm employee tương ứng với user này
+          const correspondingEmployee = userIdToEmployeeMap.get(user.id);
+          
+          let departmentName: string | undefined;
+          let departmentId: string | undefined;
+          let positionName: string | undefined;
+          
+          if (correspondingEmployee) {
+            // Nếu user có employee record, lấy thông tin phòng ban và vị trí
+            if (correspondingEmployee.department_id && departmentsMap.has(correspondingEmployee.department_id)) {
+              const dept = departmentsMap.get(correspondingEmployee.department_id);
+              departmentName = dept?.name;
+              departmentId = dept?.id || correspondingEmployee.department_id;
+            } else if (correspondingEmployee.department_id) {
+              departmentId = correspondingEmployee.department_id;
+            }
+            
+            if (correspondingEmployee.position_id && positionsMap.has(correspondingEmployee.position_id)) {
+              const pos = positionsMap.get(correspondingEmployee.position_id);
+              positionName = pos?.name;
+            }
+          }
+          
+          // Nếu user có employee record, lấy thêm thông tin từ employee
+          // Nhưng vẫn giữ type là 'user' để phân biệt
+          return {
+            id: user.id,
+            name: user.full_name,
+            email: user.email,
+            user_id: user.id,
+            type: 'user' as const,
+            role: user.role,
+            phone: user.phone || correspondingEmployee?.phone,
+            avatar_url: user.avatar_url || correspondingEmployee?.avatar_url,
+            // Thêm thông tin từ employee nếu có (phòng ban, vị trí, etc.)
+            department: departmentName,
+            department_id: departmentId,
+            position: positionName,
+            employee_code: correspondingEmployee?.employee_code,
+            hire_date: correspondingEmployee?.hire_date,
+            manager_name: correspondingEmployee?.manager_id && managersMap.has(correspondingEmployee.manager_id) 
+              ? (() => {
+                  const mgr = managersMap.get(correspondingEmployee.manager_id);
+                  return mgr ? `${mgr.first_name || ''} ${mgr.last_name || ''}`.trim() : undefined;
+                })()
+              : undefined,
+            address: correspondingEmployee?.address,
+            status: correspondingEmployee?.status
+          } as Employee;
+        });
+      
+      const usersWithDept = formattedUsers.filter(u => u.department || u.department_id).length;
+      const usersWithPos = formattedUsers.filter(u => u.position).length;
+      console.log(`✅ Đã format ${formattedUsers.length} users (sau khi map với employees nếu có)`);
+      console.log(`   - Users có phòng ban: ${usersWithDept}/${formattedUsers.length}`);
+      console.log(`   - Users có vị trí: ${usersWithPos}/${formattedUsers.length}`);
+
+      // Gộp employees và users, ưu tiên employee nếu trùng email
+      const allEmployees = [...formattedEmployees, ...formattedUsers];
+      const uniqueEmployeesMap = new Map<string, Employee>();
+      
+      // Ưu tiên employees trước (có đầy đủ thông tin hơn)
+      formattedEmployees.forEach(emp => {
+        uniqueEmployeesMap.set(emp.email, emp);
+      });
+      
+      // Thêm users nếu chưa có trong map (không trùng email với employees)
+      formattedUsers.forEach(user => {
+        if (!uniqueEmployeesMap.has(user.email)) {
+          uniqueEmployeesMap.set(user.email, user);
+        }
+      });
+      
+      const uniqueEmployees = Array.from(uniqueEmployeesMap.values());
+
+      console.log(`✅ Tổng cộng: ${uniqueEmployees.length} nhân viên/users (sau khi loại bỏ trùng lặp)`);
+      console.log(`📊 Thống kê:`);
+      console.log(`   - Nhân viên có phòng ban: ${uniqueEmployees.filter(e => e.type === 'employee' && ((e as Employee).department_id || (e as Employee).department)).length}`);
+      console.log(`   - Nhân viên không có phòng ban: ${uniqueEmployees.filter(e => e.type === 'employee' && !(e as Employee).department_id && !(e as Employee).department).length}`);
+      console.log(`   - Nhân viên có vị trí: ${uniqueEmployees.filter(e => e.type === 'employee' && (e as Employee).position).length}`);
+      console.log(`   - Nhân viên có quản lý: ${uniqueEmployees.filter(e => e.type === 'employee' && (e as Employee).manager_name).length}`);
 
       setEmployees(uniqueEmployees);
     } catch (error) {
@@ -254,7 +432,6 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
 
   const handleSubmit = async () => {
     try {
-      // Upload avatar if selected
       let avatarUrl = null;
       if (selectedAvatar) {
         avatarUrl = await handleAvatarUpload(selectedAvatar);
@@ -296,12 +473,13 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
     setEmployeeRoles({});
     setStartDate(new Date().toISOString().split('T')[0]);
     setSearchTerm('');
-    setSelectedType('all');
+    setSelectedDepartment('all');
     setSelectedAvatar(null);
     onClose();
   };
 
   const filteredEmployees = employees.filter(emp => {
+    // Lọc theo tìm kiếm
     const matchesSearch = (
       emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -313,19 +491,42 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
       emp.manager_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const matchesType = selectedType === 'all' || emp.type === selectedType;
+    // Lọc theo phòng ban
+    let matchesDepartment = true;
+    
+    if (selectedDepartment === 'all') {
+      // Hiển thị tất cả
+      matchesDepartment = true;
+    } else if (selectedDepartment === 'no-department') {
+      // Chỉ hiển thị nhân viên không có phòng ban (chỉ áp dụng cho employee type)
+      if (emp.type === 'employee') {
+        const empWithDeptId = emp as Employee & { department_id?: string };
+        matchesDepartment = !empWithDeptId.department_id && !emp.department;
+      } else {
+        // Users không có phòng ban, nên hiển thị khi chọn "no-department"
+        matchesDepartment = true;
+      }
+    } else {
+      // Chỉ hiển thị nhân viên thuộc phòng ban được chọn
+      if (emp.type === 'employee') {
+        const empWithDeptId = emp as Employee & { department_id?: string };
+        // So sánh department_id với selectedDepartment (là department ID)
+        matchesDepartment = empWithDeptId.department_id === selectedDepartment;
+      } else {
+        // Users không có phòng ban, nên không hiển thị khi chọn một phòng ban cụ thể
+        matchesDepartment = false;
+      }
+    }
 
-    return matchesSearch && matchesType;
+    return matchesSearch && matchesDepartment;
   });
 
   if (!open) return null;
 
   return (
-    <div className="fixed top-16 right-4 z-50 w-full max-w-4xl">
-      {/* Right Sidebar - No overlay to not block interface */}
-      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg max-h-[85vh] overflow-hidden animate-slide-in-right">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent">
+      <div className="bg-white shadow-2xl border border-gray-200 rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white flex-shrink-0">
           <div className="flex items-center">
             <Plus className="h-6 w-6 text-blue-600 mr-3" />
             <div>
@@ -343,9 +544,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 text-gray-900">
-          {/* Project Info */}
+        <div className="flex-1 overflow-y-auto p-6 text-gray-900" style={{ maxHeight: 'calc(90vh - 180px)' }}>
           {projectName && (
             <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center gap-3">
@@ -360,21 +559,45 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
             </div>
           )}
 
-          {/* Filter Type */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Lọc theo loại</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Lọc theo phòng ban
+              {selectedDepartment !== 'all' && (
+                <span className="ml-2 text-xs text-blue-600 font-normal">
+                  ({filteredEmployees.length} nhân viên)
+                </span>
+              )}
+            </label>
             <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value as 'all' | 'employee' | 'user')}
+              value={selectedDepartment}
+              onChange={(e) => {
+                setSelectedDepartment(e.target.value);
+                // Reset search khi đổi phòng ban để dễ thấy kết quả
+                if (e.target.value !== 'all') {
+                  setSearchTerm('');
+                }
+              }}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm text-black font-medium"
             >
-              <option value="all">🔍 Tất cả</option>
-              <option value="employee">👥 Nhân viên</option>
-              <option value="user">👤 Người dùng</option>
+              <option value="all">🔍 Tất cả phòng ban</option>
+              {departments.map((dept) => {
+                const deptEmployeeCount = employees.filter(emp => {
+                  if (emp.type !== 'employee') return false;
+                  const empWithDeptId = emp as Employee & { department_id?: string };
+                  return empWithDeptId.department_id === dept.id;
+                }).length;
+                return (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} ({deptEmployeeCount} nhân viên)
+                  </option>
+                );
+              })}
+              <option value="no-department">
+                Không có phòng ban ({employees.filter(emp => emp.type === 'employee' && !(emp as Employee).department_id && !(emp as Employee).department).length} nhân viên)
+              </option>
             </select>
           </div>
 
-          {/* Search */}
           <div className="relative mb-8">
             <label className="block text-sm font-medium text-gray-700 mb-2">Tìm kiếm</label>
             <div className="relative">
@@ -389,12 +612,26 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
             </div>
           </div>
 
-          {/* Employee List */}
           <div className="space-y-4 mb-8">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-900">Chọn thành viên</h3>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Chọn thành viên</h3>
+                {selectedDepartment !== 'all' && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    {selectedDepartment === 'no-department' 
+                      ? 'Đang hiển thị nhân viên chưa có phòng ban'
+                      : `Đang lọc theo phòng ban: ${departments.find(d => d.id === selectedDepartment)?.name || 'N/A'}`
+                    }
+                  </p>
+                )}
+              </div>
               <span className="text-sm font-medium text-gray-600">
                 {filteredEmployees.length} thành viên
+                {selectedDepartment !== 'all' && employees.length !== filteredEmployees.length && (
+                  <span className="text-xs text-gray-400 ml-1">
+                    / {employees.length} tổng
+                  </span>
+                )}
               </span>
             </div>
             <div className="max-h-[400px] overflow-y-auto border border-gray-200 rounded-xl divide-y bg-white shadow-sm">
@@ -441,31 +678,74 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
                               </span>
                             </div>
                           )}
-                          <div>
-                            <p className="font-medium text-black text-lg">{employee.name}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium text-black text-lg">{employee.name}</p>
+                              {employee.type === 'employee' && employee.department && (
+                                <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
+                                  {employee.department}
+                                </span>
+                              )}
+                            </div>
                             {employee.type === 'employee' && (
-                              <p className="text-sm font-medium text-blue-700">Mã: {employee.employee_code}</p>
+                              <p className="text-sm font-medium text-blue-700 mt-1">Mã: {employee.employee_code}</p>
                             )}
                             <p className="text-sm font-medium text-black">{employee.email}</p>
                           </div>
                         </div>
                         
-                        <div className="mt-3 space-y-1">
+                        <div className="mt-3 space-y-1.5">
                           {employee.type === 'employee' && (
                             <>
-                              {(employee.department || employee.position) && (
-                                <p className="text-sm text-black">
-                                  <span className="font-semibold">Vị trí:</span> {[employee.department, employee.position].filter(Boolean).join(' - ')}
-                                </p>
-                              )}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {employee.department ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-gray-600">🏢</span>
+                                    <span className="text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded-md">
+                                      {employee.department}
+                                    </span>
+                                  </div>
+                                ) : employee.department_id ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-gray-600">🏢</span>
+                                    <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-md">
+                                      ID: {employee.department_id.substring(0, 8)}...
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-gray-600">🏢</span>
+                                    <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
+                                      Chưa được gán
+                                    </span>
+                                  </div>
+                                )}
+                                
+                                {employee.position && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-gray-600">💼</span>
+                                    <span className="text-sm font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded-md">
+                                      {employee.position}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              
                               {employee.manager_name && (
                                 <p className="text-sm text-black">
-                                  <span className="font-semibold">Quản lý:</span> {employee.manager_name}
+                                  <span className="font-semibold">👤 Quản lý:</span> {employee.manager_name}
                                 </p>
                               )}
-                              {employee.hire_date && (
-                                <p className="text-sm text-black">
-                                  <span className="font-semibold">Ngày vào:</span> {new Date(employee.hire_date).toLocaleDateString('vi-VN')}
+                              
+                              {employee.phone && (
+                                <p className="text-sm text-gray-600">
+                                  <span className="font-semibold">📱 SĐT:</span> {employee.phone}
+                                </p>
+                              )}
+                              
+                              {employee.address && (
+                                <p className="text-sm text-gray-600">
+                                  <span className="font-semibold">📍 Địa chỉ:</span> {employee.address}
                                 </p>
                               )}
                             </>
@@ -473,13 +753,13 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
 
                           {employee.type === 'user' && employee.role && (
                             <p className="text-sm text-black">
-                              <span className="font-semibold">Vai trò:</span> {employee.role}
+                              <span className="font-semibold">Vai trò hệ thống:</span> {employee.role}
                             </p>
                           )}
 
-                          {employee.phone && (
+                          {employee.phone && employee.type === 'user' && (
                             <p className="text-sm text-black">
-                              <span className="font-semibold">SĐT:</span> {employee.phone}
+                              <span className="font-semibold">📱 SĐT:</span> {employee.phone}
                             </p>
                           )}
                         </div>
@@ -504,7 +784,6 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
             </div>
           </div>
 
-          {/* Selected Employees */}
           {selectedEmployees.length > 0 && (
             <div className="space-y-4 mb-8 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <div className="flex justify-between items-center">
@@ -542,14 +821,9 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
             </div>
           )}
 
-          {/* Start Date */}
           <div className="space-y-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <label className="block text-lg font-semibold text-black">
-              Ngày bắt đầu
-            </label>
-            <p className="text-sm font-medium text-black mb-4">
-              Chọn ngày bắt đầu tham gia dự án
-            </p>
+            <label className="block text-lg font-semibold text-black">Ngày bắt đầu</label>
+            <p className="text-sm font-medium text-black mb-4">Chọn ngày bắt đầu tham gia dự án</p>
             <div className="relative">
               <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
@@ -561,14 +835,9 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
             </div>
           </div>
 
-          {/* Avatar Upload */}
           <div className="space-y-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <label className="block text-lg font-semibold text-gray-900">
-              Hình ảnh đại diện
-            </label>
-            <p className="text-sm font-medium text-gray-600 mb-4">
-              Upload hình ảnh đại diện cho thành viên (tùy chọn)
-            </p>
+            <label className="block text-lg font-semibold text-gray-900">Hình ảnh đại diện</label>
+            <p className="text-sm font-medium text-gray-600 mb-4">Upload hình ảnh đại diện cho thành viên (tùy chọn)</p>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <input
                 type="file"
@@ -581,10 +850,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
                 className="hidden"
                 id="avatar-upload"
               />
-              <label
-                htmlFor="avatar-upload"
-                className="cursor-pointer flex flex-col items-center"
-              >
+              <label htmlFor="avatar-upload" className="cursor-pointer flex flex-col items-center">
                 {selectedAvatar ? (
                   <div className="space-y-2">
                     <img
@@ -592,24 +858,16 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
                       alt="Preview"
                       className="w-20 h-20 rounded-full object-cover mx-auto border-2 border-blue-200"
                     />
-                    <p className="text-sm text-blue-600 font-medium">
-                      {selectedAvatar.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Click để thay đổi hình ảnh
-                    </p>
+                    <p className="text-sm text-blue-600 font-medium">{selectedAvatar.name}</p>
+                    <p className="text-xs text-gray-500">Click để thay đổi hình ảnh</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
                       <Plus className="h-8 w-8 text-gray-400" />
                     </div>
-                    <p className="text-sm text-gray-600">
-                      Click để chọn hình ảnh
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      JPG, PNG, GIF (tối đa 5MB)
-                    </p>
+                    <p className="text-sm text-gray-600">Click để chọn hình ảnh</p>
+                    <p className="text-xs text-gray-500">JPG, PNG, GIF (tối đa 5MB)</p>
                   </div>
                 )}
               </label>
@@ -623,8 +881,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
           <div className="flex justify-between items-center">
             <div className="text-sm font-medium text-gray-700">
               {selectedEmployees.length} thành viên được chọn
@@ -655,4 +912,3 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
   );
 };
 
-export default ProjectTeamDialog;

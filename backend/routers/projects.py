@@ -494,35 +494,66 @@ async def delete_project_status(
             detail=f"Failed to delete project status: {str(e)}"
         )
 
+def check_user_has_project_access(supabase, current_user: User, project_id: Optional[str]) -> bool:
+    """Check if user has access to a specific project"""
+    if not project_id:
+        return True  # No project_id means no restriction
+    
+    # Admin, accountant, and workshop_employee have access to all projects
+    if current_user.role in ["admin", "accountant", "workshop_employee"]:
+        return True
+    
+    # Check if user is in project_team for this project
+    team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
+    
+    # Match by user_id or email
+    or_conditions = []
+    if current_user.id:
+        or_conditions.append(f"user_id.eq.{current_user.id}")
+    if current_user.email:
+        or_conditions.append(f"email.eq.{current_user.email}")
+    
+    if or_conditions:
+        if len(or_conditions) > 1:
+            team_query = team_query.or_(",".join(or_conditions))
+        else:
+            condition = or_conditions[0]
+            if condition.startswith("user_id.eq."):
+                team_query = team_query.eq("user_id", current_user.id)
+            elif condition.startswith("email.eq."):
+                team_query = team_query.eq("email", current_user.email)
+        
+        team_result = team_query.execute()
+        return len(team_result.data) > 0
+    
+    return False
+
 @router.get("/{project_id}", response_model=Project)
 async def get_project(
-    project_id: str
-    # Temporarily disable authentication to fix "Project not found" issue
-    # current_user: User = Depends(get_current_user)
+    project_id: str,
+    current_user: User = Depends(get_current_user)
 ):
-    """Get a specific project by ID"""
+    """Get a specific project by ID. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
     try:
         supabase = get_supabase_client()
-        
-        # Debug: Log the project_id being searched
-        print(f"Searching for project ID: {project_id}")
         
         # Get project data first
         result = supabase.table("projects").select("*").eq("id", project_id).execute()
         
-        print(f"Query result: {result.data}")
-        
         if not result.data:
-            # Debug: Check if there are any projects in the database
-            all_projects = supabase.table("projects").select("id, name").limit(5).execute()
-            print(f"Available projects: {all_projects.data}")
-            
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Project not found. Available projects: {[p['id'] for p in all_projects.data]}"
+                detail="Project not found"
             )
         
         project = result.data[0]
+        
+        # Check if user has access to this project
+        if not check_user_has_project_access(supabase, current_user, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this project"
+            )
         
         # Get customer and manager data separately
         customer_name = None
@@ -780,9 +811,16 @@ async def get_project_time_entries(
     end_date: Optional[date] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get time entries for a project"""
+    """Get time entries for a project. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
     try:
         supabase = get_supabase_client()
+        
+        # Check if user has access to this project
+        if not check_user_has_project_access(supabase, current_user, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this project"
+            )
         
         query = supabase.table("time_entries").select("*").eq("project_id", project_id)
         
@@ -814,7 +852,7 @@ async def create_time_entry(
     time_entry_data: TimeEntryCreate,
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new time entry for a project"""
+    """Create a new time entry for a project. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
     try:
         supabase = get_supabase_client()
         
@@ -824,6 +862,13 @@ async def create_time_entry(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found"
+            )
+        
+        # Check if user has access to this project
+        if not check_user_has_project_access(supabase, current_user, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this project"
             )
         
         # Create time entry record
@@ -871,13 +916,8 @@ async def get_project_profitability(
         project = project_result.data[0]
         
         # Object Level Authorization (BOLA) check
-        # Only allow internal roles to view detailed financial data
-        user_has_access = (
-            project.get("manager_id") == current_user.id or
-            current_user.role in ["admin", "manager"]
-        )
-        
-        if not user_has_access:
+        # Check if user has access to this project via project_team membership
+        if not check_user_has_project_access(supabase, current_user, project_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to view this project's financial data"
@@ -1063,13 +1103,8 @@ async def get_project_detailed_report(
         project = project_result.data[0]
         
         # Object Level Authorization (BOLA) check
-        # Only allow internal roles to view detailed financial reports
-        user_has_access = (
-            project.get("manager_id") == current_user.id or
-            current_user.role in ["admin", "manager"]
-        )
-        
-        if not user_has_access:
+        # Check if user has access to this project via project_team membership
+        if not check_user_has_project_access(supabase, current_user, project_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to view this project's detailed report"
@@ -1199,13 +1234,8 @@ async def get_project_financial_summary(
         project = project_result.data[0]
         
         # Object Level Authorization (BOLA) check
-        # Only allow internal roles to view project financial data
-        user_has_access = (
-            project.get("manager_id") == current_user.id or
-            current_user.role in ["admin", "manager"]
-        )
-        
-        if not user_has_access:
+        # Check if user has access to this project via project_team membership
+        if not check_user_has_project_access(supabase, current_user, project_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to view this project's financial data"
@@ -1436,13 +1466,8 @@ async def get_project_dashboard(
         project = project_result.data[0]
         
         # Object Level Authorization (BOLA) check
-        # Only allow internal roles to view project dashboard
-        user_has_access = (
-            project.get("manager_id") == current_user.id or
-            current_user.role in ["admin", "manager"]
-        )
-        
-        if not user_has_access:
+        # Check if user has access to this project via project_team membership
+        if not check_user_has_project_access(supabase, current_user, project_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to view this project's dashboard"
