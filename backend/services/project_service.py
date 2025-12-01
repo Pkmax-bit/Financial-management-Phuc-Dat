@@ -72,8 +72,8 @@ class ProjectService:
             query = query.eq('status', status_filter)
         
         # Apply role-based filtering
-        # Admins, accountants, and workshop employees see all projects
-        if user_role not in ['admin', 'accountant', 'workshop_employee']:
+        # Admins and accountants see all projects
+        if user_role not in ['admin', 'accountant']:
             # Other users only see projects they're assigned to
             query = query.eq('manager_id', user_id)
         

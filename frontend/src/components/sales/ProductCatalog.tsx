@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import ProductExcelImport from './ProductExcelImport'
+import FileUpload from '@/components/common/FileUpload'
 
 type ProductItem = {
   id: string
@@ -18,6 +19,8 @@ type ProductItem = {
   height: number | null
   length: number | null
   depth: number | null
+  image_url: string | null
+  image_urls?: string[] | null
 }
 
 type Category = { id: string; name: string }
@@ -47,23 +50,65 @@ export default function ProductCatalog() {
   const [editLength, setEditLength] = useState('')
   const [editDepth, setEditDepth] = useState('')
   const [editComponents, setEditComponents] = useState<Array<{ expense_object_id: string; unit?: string | null; unit_price?: number; quantity?: number }>>([])
+  const [editImages, setEditImages] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   const [expenseObjectMap, setExpenseObjectMap] = useState<Record<string, string>>({})
   const [allExpenseObjects, setAllExpenseObjects] = useState<Array<{ id: string; name: string; level: number; parent_id?: string | null; l1?: string; l2?: string }>>([])
+  const [previewImages, setPreviewImages] = useState<string[]>([])
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+
+  const resolveImages = (product: ProductItem | any): string[] => {
+    const list: string[] = []
+    if (Array.isArray(product?.image_urls)) {
+      list.push(...product.image_urls.filter((url: any) => typeof url === 'string' && url.length > 0))
+    }
+    if (product?.image_url && !list.includes(product.image_url)) {
+      list.unshift(product.image_url)
+    }
+    return list
+  }
+
+  const openPreview = (product: ProductItem) => {
+    const images = resolveImages(product)
+    if (images.length === 0) return
+    setPreviewImages(images)
+    setPreviewIndex(0)
+    setIsPreviewOpen(true)
+  }
+
+  const closePreview = () => {
+    setIsPreviewOpen(false)
+    setPreviewImages([])
+    setPreviewIndex(0)
+  }
+
+  const goPrevImage = () => {
+    setPreviewIndex((prev) => (prev - 1 + previewImages.length) % previewImages.length)
+  }
+
+  const goNextImage = () => {
+    setPreviewIndex((prev) => (prev + 1) % previewImages.length)
+  }
+
+  const closeEditModal = () => {
+    setEditing(null)
+    setEditImages([])
+  }
 
   const load = async () => {
     try {
       setLoading(true)
       setError(null)
       const [{ data: prodData, error: prodErr }, { data: catData, error: catErr }] = await Promise.all([
-        supabase.from('products').select('id, name, price, unit, description, category_id, created_at, is_active, area, volume, height, length, depth, product_components').order('created_at', { ascending: false }),
+        supabase.from('products').select('id, name, price, unit, description, category_id, created_at, is_active, area, volume, height, length, depth, image_url, image_urls, product_components').order('created_at', { ascending: false }),
         supabase.from('product_categories').select('id, name')
       ])
       if (prodErr) throw prodErr
       if (catErr) throw catErr
       const catMap: Record<string, string> = {}
-      ;(catData as Category[] | null)?.forEach(c => { catMap[c.id] = c.name })
+        ; (catData as Category[] | null)?.forEach(c => { catMap[c.id] = c.name })
       setCategories(catMap)
       const prods = (prodData || []) as any[]
       setItems(prods as unknown as ProductItem[])
@@ -102,7 +147,7 @@ export default function ProductCatalog() {
         .from('expense_objects')
         .select('id, name, parent_id, level, is_active')
         .eq('is_active', true)
-        .in('level', [1,2,3])
+        .in('level', [1, 2, 3])
       if (allObjs) {
         const byId: Record<string, any> = {}
         allObjs.forEach((o: any) => { byId[o.id] = o })
@@ -136,8 +181,8 @@ export default function ProductCatalog() {
     const h = p.height != null ? Number(p.height) : null
     const l = p.length != null ? Number(p.length) : null
     const d = p.depth != null ? Number(p.depth) : null
-    const computedArea = (h != null && l != null) ? Number(((l/1000) * (h/1000)).toFixed(6)) : null
-    const computedVolume = (h != null && l != null && d != null) ? Number(((l/1000) * (h/1000) * (d/1000)).toFixed(9)) : null
+    const computedArea = (h != null && l != null) ? Number(((l / 1000) * (h / 1000)).toFixed(6)) : null
+    const computedVolume = (h != null && l != null && d != null) ? Number(((l / 1000) * (h / 1000) * (d / 1000)).toFixed(9)) : null
     setEditArea(toDecimalString(computedArea ?? p.area, 6))
     setEditVolume(toDecimalString(computedVolume ?? p.volume, 9))
     // Load mm fields as plain digits (no thousand separators) to avoid mis-parsing like 2.800
@@ -146,6 +191,7 @@ export default function ProductCatalog() {
     setEditDepth(p.depth != null ? String(Number(p.depth)) : '')
     const comps = Array.isArray((p as any).product_components) ? (p as any).product_components : []
     setEditComponents(comps.map((c: any) => ({ expense_object_id: String(c.expense_object_id || ''), unit: c.unit || '', unit_price: Number(c.unit_price || 0), quantity: Number(c.quantity || 0) })))
+    setEditImages(resolveImages(p))
   }
 
   const parseCurrency = (s: string): number => {
@@ -193,14 +239,16 @@ export default function ProductCatalog() {
       const lengthNum = parseNumber(editLength)
       const depthNum = parseNumber(editDepth)
       // Derive area/volume from mm dimensions if present to ensure correctness
-      const derivedArea = (lengthNum != null && heightNum != null) ? Number(((lengthNum/1000) * (heightNum/1000)).toFixed(6)) : areaNum
-      const derivedVolume = (lengthNum != null && heightNum != null && depthNum != null) ? Number(((lengthNum/1000) * (heightNum/1000) * (depthNum/1000)).toFixed(9)) : volumeNum
+      const derivedArea = (lengthNum != null && heightNum != null) ? Number(((lengthNum / 1000) * (heightNum / 1000)).toFixed(6)) : areaNum
+      const derivedVolume = (lengthNum != null && heightNum != null && depthNum != null) ? Number(((lengthNum / 1000) * (heightNum / 1000) * (depthNum / 1000)).toFixed(9)) : volumeNum
       const upd = {
         name: editName.trim() || editing.name,
         category_id: editCat || null,
         price: priceNum,
         unit: editUnit.trim() || 'cái',
         description: editDesc.trim() || null,
+        image_url: editImages[0] || null,
+        image_urls: editImages,
         area: derivedArea,
         volume: derivedVolume,
         height: heightNum,
@@ -219,6 +267,7 @@ export default function ProductCatalog() {
         .eq('id', editing.id)
       if (updErr) throw updErr
       setEditing(null)
+      setEditImages([])
       await load()
     } catch (e) {
       // minimal handling; could surface error
@@ -289,6 +338,7 @@ export default function ProductCatalog() {
                     <table className="min-w-full text-sm text-gray-900">
                       <thead className="sticky top-0 bg-white shadow-sm">
                         <tr>
+                          <th className="px-3 py-2 text-left font-semibold w-20">Ảnh</th>
                           <th className="px-3 py-2 text-left font-semibold w-56">Tên</th>
                           <th className="px-3 py-2 text-right font-semibold w-24">Đơn giá</th>
                           <th className="px-3 py-2 text-right font-semibold w-28">Thành tiền</th>
@@ -305,6 +355,8 @@ export default function ProductCatalog() {
                       </thead>
                       <tbody>
                         {list.map(p => {
+                          const images = resolveImages(p)
+                          const coverImage = images[0]
                           // Tính diện tích m²: ưu tiên tính từ height × length (mm) để đảm bảo đúng đơn vị m²
                           // Công thức: (length_mm / 1000) × (height_mm / 1000) = diện tích m²
                           let areaInM2: number | null = null
@@ -319,50 +371,68 @@ export default function ProductCatalog() {
                             ? (Number(p.price) || 0) * areaInM2
                             : null
                           return (
-                          <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
-                            <td className="px-3 py-2 font-medium text-gray-900">{p.name}</td>
-                            <td className="px-3 py-2 text-right">{formatNumber(Number(p.price) || 0)}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                              {totalPrice != null ? formatNumber(totalPrice) : '-'}
-                            </td>
-                            <td className="px-3 py-2">{p.unit}</td>
-                            <td className="px-3 py-2 text-right">{p.area ? `${formatNumber(p.area)} m²` : '-'}</td>
-                            <td className="px-3 py-2 text-right">{p.volume ? `${formatNumber(p.volume)} m³` : '-'}</td>
-                            <td className="px-3 py-2 text-right">{p.height ? `${formatNumber(p.height)} mm` : '-'}</td>
-                            <td className="px-3 py-2 text-right">{p.length ? `${formatNumber(p.length)} mm` : '-'}</td>
-                            <td className="px-3 py-2 text-right">{p.depth ? `${formatNumber(p.depth)} mm` : '-'}</td>
-                            <td className="px-3 py-2">
-                              <div className="text-xs text-gray-700 space-y-1">
-                                {Array.isArray((p as any).product_components) && (p as any).product_components.length > 0 ? (
-                                  <>
-                                    {((p as any).product_components as any[]).slice(0,3).map((c, idx) => (
-                                      <div key={idx} className="truncate">
-                                        <span className="text-gray-900">{expenseObjectMap[String(c.expense_object_id)] || String(c.expense_object_id)}</span>
-                                        <span className="mx-1 text-gray-400">·</span>
-                                        <span>{Number(c.quantity || 0)}</span>
-                                        {c.unit ? <span className="ml-1">{c.unit}</span> : null}
-                                        <span className="ml-1">× {formatNumber(Number(c.unit_price || 0))}</span>
-                                      </div>
-                                    ))}
-                                    {((p as any).product_components as any[]).length > 3 && (
-                                      <div className="text-gray-500">+{((p as any).product_components as any[]).length - 3} mục khác</div>
-                                    )}
-                                  </>
+                            <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
+                              <td className="px-3 py-2">
+                                {coverImage ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openPreview(p)}
+                                    className="focus:outline-none"
+                                    title="Xem gallery"
+                                  >
+                                    <img
+                                      src={coverImage}
+                                      alt={p.name}
+                                      className="h-12 w-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-400"
+                                    />
+                                  </button>
                                 ) : (
-                                  <span className="text-gray-400">—</span>
+                                  <span className="text-xs text-gray-500">Không có ảnh</span>
                                 )}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-1 rounded text-xs ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                                {p.is_active ? 'Đang bán' : 'Ngưng'}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-right space-x-2">
-                              <button onClick={() => openEdit(p)} className="text-blue-600 hover:underline text-xs">Sửa</button>
-                              <button onClick={() => deleteItem(p)} className="text-red-600 hover:underline text-xs">Xóa</button>
-                            </td>
-                          </tr>
+                              </td>
+                              <td className="px-3 py-2 font-medium text-gray-900">{p.name}</td>
+                              <td className="px-3 py-2 text-right">{formatNumber(Number(p.price) || 0)}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                                {totalPrice != null ? formatNumber(totalPrice) : '-'}
+                              </td>
+                              <td className="px-3 py-2">{p.unit}</td>
+                              <td className="px-3 py-2 text-right">{p.area ? `${formatNumber(p.area)} m²` : '-'}</td>
+                              <td className="px-3 py-2 text-right">{p.volume ? `${formatNumber(p.volume)} m³` : '-'}</td>
+                              <td className="px-3 py-2 text-right">{p.height ? `${formatNumber(p.height)} mm` : '-'}</td>
+                              <td className="px-3 py-2 text-right">{p.length ? `${formatNumber(p.length)} mm` : '-'}</td>
+                              <td className="px-3 py-2 text-right">{p.depth ? `${formatNumber(p.depth)} mm` : '-'}</td>
+                              <td className="px-3 py-2">
+                                <div className="text-xs text-gray-700 space-y-1">
+                                  {Array.isArray((p as any).product_components) && (p as any).product_components.length > 0 ? (
+                                    <>
+                                      {((p as any).product_components as any[]).slice(0, 3).map((c, idx) => (
+                                        <div key={idx} className="truncate">
+                                          <span className="text-gray-900">{expenseObjectMap[String(c.expense_object_id)] || String(c.expense_object_id)}</span>
+                                          <span className="mx-1 text-gray-400">·</span>
+                                          <span>{Number(c.quantity || 0)}</span>
+                                          {c.unit ? <span className="ml-1">{c.unit}</span> : null}
+                                          <span className="ml-1">× {formatNumber(Number(c.unit_price || 0))}</span>
+                                        </div>
+                                      ))}
+                                      {((p as any).product_components as any[]).length > 3 && (
+                                        <div className="text-gray-500">+{((p as any).product_components as any[]).length - 3} mục khác</div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-400">—</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`px-2 py-1 rounded text-xs ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                                  {p.is_active ? 'Đang bán' : 'Ngưng'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right space-x-2">
+                                <button onClick={() => openEdit(p)} className="text-blue-600 hover:underline text-xs">Sửa</button>
+                                <button onClick={() => deleteItem(p)} className="text-red-600 hover:underline text-xs">Xóa</button>
+                              </td>
+                            </tr>
                           )
                         })}
                       </tbody>
@@ -378,12 +448,12 @@ export default function ProductCatalog() {
       {/* Edit Modal */}
       {editing && (
         <div className="fixed inset-0 z-50">
-          <div className="fixed inset-0 bg-black/30" onClick={() => setEditing(null)} />
+          <div className="fixed inset-0 bg-black/30" onClick={closeEditModal} />
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <div className="w-full max-w-5xl bg-white rounded-lg shadow-2xl border border-gray-200">
               <div className="flex items-center justify-between p-4 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">Sửa sản phẩm</h3>
-                <button onClick={() => setEditing(null)} className="text-gray-500 hover:text-gray-700">✕</button>
+                <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700">✕</button>
               </div>
               <div className="p-6 space-y-4">
                 {/* Thông tin cơ bản */}
@@ -396,7 +466,7 @@ export default function ProductCatalog() {
                       className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Khác</option>
-                      {Object.entries(categories).sort((a,b)=>a[1].localeCompare(b[1],'vi')).map(([id, name]) => (
+                      {Object.entries(categories).sort((a, b) => a[1].localeCompare(b[1], 'vi')).map(([id, name]) => (
                         <option key={id} value={id}>{name}</option>
                       ))}
                     </select>
@@ -430,13 +500,62 @@ export default function ProductCatalog() {
                       className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                    <div className="md:col-span-8">
+                  <div className="md:col-span-8">
                     <label className="block text-sm font-medium text-gray-900 mb-1">Mô tả</label>
                     <input
                       value={editDesc}
                       onChange={(e) => setEditDesc(e.target.value)}
                       className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
                     />
+                  </div>
+                </div>
+
+                {/* Hình ảnh */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Hình ảnh sản phẩm</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div className="md:col-span-5">
+                      <FileUpload
+                        endpoint="/api/uploads/images/products"
+                        label="Thêm hình (có thể chọn nhiều lần)"
+                        accept="image/*"
+                        showPreview={false}
+                        multiple={true}
+                        onSuccess={(result) => {
+                          setEditImages((prev) => [...prev, result.url])
+                        }}
+                        onError={(err) => console.error('Upload edit image error:', err)}
+                      />
+                    </div>
+                    <div className="md:col-span-7">
+                      {editImages.length > 0 ? (
+                        <div className="max-h-40 overflow-y-auto border border-gray-200 rounded p-3 flex flex-wrap gap-3">
+                          {editImages.map((url, idx) => (
+                            <div key={idx} className="relative">
+                              <img src={url} alt={`Ảnh ${idx + 1}`} className="h-20 w-20 object-cover rounded border border-gray-200" />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditImages((prev) => prev.filter((_, i) => i !== idx))
+                                }
+                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[10px] px-1"
+                              >
+                                x
+                              </button>
+                              {idx === 0 && (
+                                <span className="absolute bottom-0 left-0 bg-black/60 text-white text-[10px] px-1 rounded-tr">
+                                  Cover
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-500 border border-dashed border-gray-300 rounded p-3">
+                          Chưa có hình nào
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -534,9 +653,9 @@ export default function ProductCatalog() {
                               <td className="px-3 py-2 min-w-[320px]">
                                 <select
                                   value={row.expense_object_id}
-                                  onChange={(e)=>{
+                                  onChange={(e) => {
                                     const id = e.target.value
-                                    const next=[...editComponents]; next[idx] = { ...row, expense_object_id: id }; setEditComponents(next)
+                                    const next = [...editComponents]; next[idx] = { ...row, expense_object_id: id }; setEditComponents(next)
                                   }}
                                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
                                 >
@@ -546,13 +665,13 @@ export default function ProductCatalog() {
                                     if (!acc[key]) acc[key] = []
                                     acc[key].push({ id: cur.id, name: cur.name, level: cur.level, l2: cur.l2 })
                                     return acc
-                                  }, {})).sort(([a],[b]) => a.localeCompare(b, 'vi')).map(([group, list]) => (
+                                  }, {})).sort(([a], [b]) => a.localeCompare(b, 'vi')).map(([group, list]) => (
                                     <optgroup key={group} label={group}>
                                       {list
-                                        .sort((a,b)=>{ if (a.level!==b.level) return a.level-b.level; return (a.l2||'').localeCompare(b.l2||'','vi') || a.name.localeCompare(b.name,'vi') })
+                                        .sort((a, b) => { if (a.level !== b.level) return a.level - b.level; return (a.l2 || '').localeCompare(b.l2 || '', 'vi') || a.name.localeCompare(b.name, 'vi') })
                                         .map(o => (
                                           <option key={o.id} value={o.id}>
-                                            {o.level===1 ? `${group}` : o.level===2 ? `${group} / ${o.name}` : `${group}${o.l2?` / ${o.l2}`:''} / ${o.name}`}
+                                            {o.level === 1 ? `${group}` : o.level === 2 ? `${group} / ${o.name}` : `${group}${o.l2 ? ` / ${o.l2}` : ''} / ${o.name}`}
                                           </option>
                                         ))}
                                     </optgroup>
@@ -560,16 +679,16 @@ export default function ProductCatalog() {
                                 </select>
                               </td>
                               <td className="px-3 py-2 w-40">
-                                <input value={row.unit || ''} onChange={(e)=>{ const next=[...editComponents]; next[idx]={...row, unit:e.target.value}; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black" placeholder="m, m2, cái..." />
+                                <input value={row.unit || ''} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, unit: e.target.value }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black" placeholder="m, m2, cái..." />
                               </td>
                               <td className="px-3 py-2 text-right w-40">
-                                <input type="number" value={Number(row.unit_price||0)} onChange={(e)=>{ const next=[...editComponents]; next[idx]={...row, unit_price: parseFloat(e.target.value)||0}; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1000" min="0" />
+                                <input type="number" value={Number(row.unit_price || 0)} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, unit_price: parseFloat(e.target.value) || 0 }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1000" min="0" />
                               </td>
                               <td className="px-3 py-2 text-right w-40">
-                                <input type="number" value={Number(row.quantity||0)} onChange={(e)=>{ const next=[...editComponents]; next[idx]={...row, quantity: parseFloat(e.target.value)||0}; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="0.01" min="0" />
+                                <input type="number" value={Number(row.quantity || 0)} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, quantity: parseFloat(e.target.value) || 0 }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="0.01" min="0" />
                               </td>
                               <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatNumber(total)}</td>
-                              <td className="px-3 py-2 text-gray-900 text-right"><button onClick={()=>setEditComponents(prev=>prev.filter((_,i)=>i!==idx))} className="text-red-600 text-xs hover:underline">Xóa</button></td>
+                              <td className="px-3 py-2 text-gray-900 text-right"><button onClick={() => setEditComponents(prev => prev.filter((_, i) => i !== idx))} className="text-red-600 text-xs hover:underline">Xóa</button></td>
                             </tr>
                           )
                         })}
@@ -577,7 +696,7 @@ export default function ProductCatalog() {
                     </table>
                   </div>
                   <div className="mt-2">
-                    <button onClick={()=>setEditComponents(prev=>[...prev,{ expense_object_id:'', unit:'', unit_price:0, quantity:1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
+                    <button onClick={() => setEditComponents(prev => [...prev, { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
                   </div>
                 </div>
 
@@ -586,6 +705,63 @@ export default function ProductCatalog() {
                   <button onClick={saveEdit} disabled={saving} className="px-4 py-2 text-sm bg-blue-600 text-white rounded disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu'}</button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {isPreviewOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="fixed inset-0 bg-black/70" onClick={closePreview} />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <div className="relative bg-white rounded-lg shadow-2xl border border-gray-200 max-w-3xl w-full p-4">
+              <button
+                onClick={closePreview}
+                className="absolute top-2 right-2 text-gray-500 hover:text-gray-800"
+              >
+                ✕
+              </button>
+              {previewImages.length > 0 && (
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="relative">
+                    <img
+                      src={previewImages[previewIndex]}
+                      alt={`Preview ${previewIndex + 1}`}
+                      className="max-h-[60vh] object-contain rounded"
+                    />
+                    {previewImages.length > 1 && (
+                      <>
+                        <button
+                          onClick={goPrevImage}
+                          className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 px-2 py-1 rounded-full"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          onClick={goNextImage}
+                          className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 px-2 py-1 rounded-full"
+                        >
+                          ›
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {previewImages.length > 1 && (
+                    <div className="flex flex-wrap gap-2 justify-center max-h-24 overflow-y-auto">
+                      {previewImages.map((url, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setPreviewIndex(idx)}
+                          className={`border ${idx === previewIndex ? 'border-blue-500' : 'border-transparent'}`}
+                        >
+                          <img src={url} alt={`Thumb ${idx + 1}`} className="h-16 w-16 object-cover rounded" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

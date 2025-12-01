@@ -348,11 +348,11 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     }
   }
 
+  // Hiển thị tiền tệ dạng 1.234.567 (không kèm ký hiệu tiền tệ),
+  // dùng chung cho Đơn giá / Thành tiền ở màn chi phí
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(amount)
+    if (!amount) return '0'
+    return new Intl.NumberFormat('vi-VN').format(amount)
   }
 
   const filteredExpenses = expenses.filter(expense => {

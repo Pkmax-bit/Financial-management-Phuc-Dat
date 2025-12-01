@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { CircleHelp } from 'lucide-react'
+import FileUpload from '@/components/common/FileUpload'
 
 type Category = {
   id: string
@@ -35,6 +36,8 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
   const [unit, setUnit] = useState('cái')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Nhiều hình cho 1 sản phẩm
+  const [imageUrls, setImageUrls] = useState<string[]>([])
   
   // Dimension fields
   const [area, setArea] = useState<number | null>(null)
@@ -179,6 +182,9 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           price: price,
           unit: unit.trim() || 'cái',
           description: description.trim() || null,
+          // Lưu 1 ảnh đại diện + danh sách tất cả ảnh
+          image_url: imageUrls[0] || null,
+          image_urls: imageUrls,
           area: area,
           volume: volume,
           height: height,
@@ -206,6 +212,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
       setPriceDisplay('0')
       setUnit('cái')
       setDescription('')
+      setImageUrls([])
       setArea(null)
       setAreaDisplay('')
       setVolume(null)
@@ -546,6 +553,43 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black font-medium focus:ring-2 focus:ring-blue-500"
                 placeholder="Mô tả chi tiết sản phẩm"
               />
+            </div>
+            <div className="md:col-span-4">
+              <FileUpload
+                endpoint="/api/uploads/images/products"
+                label="Ảnh sản phẩm (có thể chọn nhiều lần)"
+                accept="image/*"
+                showPreview={false}
+                multiple={true}
+                onSuccess={(result) => {
+                  setImageUrls((prev) => [...prev, result.url])
+                }}
+                onError={(err) => {
+                  console.error('Upload image error:', err)
+                }}
+              />
+              {imageUrls.length > 0 && (
+                <div className="mt-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2 flex flex-wrap gap-2">
+                  {imageUrls.map((url, idx) => (
+                    <div key={idx} className="relative">
+                      <img
+                        src={url}
+                        alt={`Ảnh ${idx + 1}`}
+                        className="h-16 w-16 object-cover rounded border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setImageUrls((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[10px] px-1"
+                      >
+                        x
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

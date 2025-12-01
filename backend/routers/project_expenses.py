@@ -177,14 +177,14 @@ async def get_project_expenses(
     status_filter: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get project expenses with optional filtering. Only shows expenses for projects where user is in project_team, except for admin, accountant, and workshop_employee who see all expenses."""
+    """Get project expenses with optional filtering. Only shows expenses for projects where user is in project_team, except for admin and accountant who see all expenses."""
     try:
         supabase = get_supabase_client()
         query = supabase.table("project_expenses").select("*")
 
-        # Admin, accountant, and workshop_employee see all project expenses
+        # Admin and accountant see all project expenses
         # Other roles: only see expenses for projects where they are in project_team
-        if current_user.role not in ["admin", "accountant", "workshop_employee"]:
+        if current_user.role not in ["admin", "accountant"]:
             # Get project_ids where user is in team (by user_id or email)
             team_query = supabase.table("project_team").select("project_id").eq("status", "active")
             
@@ -265,7 +265,7 @@ async def get_project_expenses(
 async def get_project_expense(
     expense_id: str, current_user: User = Depends(get_current_user)
 ):
-    """Get a specific project expense. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
+    """Get a specific project expense. Only accessible if user is in project_team for that project, except for admin and accountant."""
     try:
         supabase = get_supabase_client()
         result = (
@@ -277,8 +277,8 @@ async def get_project_expense(
         expense = result.data[0]
         project_id = expense.get("project_id")
         
-        # Admin, accountant, and workshop_employee can access all expenses
-        if current_user.role not in ["admin", "accountant", "workshop_employee"]:
+        # Admin and accountant can access all expenses
+        if current_user.role not in ["admin", "accountant"]:
             # Check if user is in project_team for this project
             team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
             

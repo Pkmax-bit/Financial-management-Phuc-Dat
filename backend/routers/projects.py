@@ -56,12 +56,12 @@ async def get_projects(
     status: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get projects with optional filtering. Only shows projects where user is in project_team, except for admin, accountant, and workshop_employee who see all projects."""
+    """Get projects with optional filtering. Only shows projects where user is in project_team, except for admin and accountant who see all projects."""
     try:
         supabase = get_supabase_client()
         
-        # Admin, accountant, and workshop_employee see all projects
-        if current_user.role in ["admin", "accountant", "workshop_employee"]:
+        # Admin and accountant see all projects
+        if current_user.role in ["admin", "accountant"]:
             query = supabase.table("projects").select("""
                 *,
                 customers:customer_id(name),
@@ -145,11 +145,49 @@ async def get_projects(
         )
 
 @router.get("/list-ids")
-async def get_project_list():
-    """Get simple list of all projects with id, name, description and created_at - no authentication required"""
+async def get_project_list(
+    current_user: User = Depends(get_current_user)
+):
+    """Get simple list of projects with id, name, description and created_at. Only shows projects where user is in project_team, except for admin and accountant who see all projects."""
     try:
         supabase = get_supabase_client()
-        result = supabase.table("projects").select("id, name, description, created_at, project_code").order("created_at", desc=True).execute()
+        
+        # Admin and accountant see all projects
+        if current_user.role in ["admin", "accountant"]:
+            result = supabase.table("projects").select("id, name, description, created_at, project_code").order("created_at", desc=True).execute()
+        else:
+            # Non-admin users: only see projects where they are in project_team
+            team_query = supabase.table("project_team").select("project_id").eq("status", "active")
+            
+            or_conditions = []
+            if current_user.id:
+                or_conditions.append(f"user_id.eq.{current_user.id}")
+            if current_user.email:
+                or_conditions.append(f"email.eq.{current_user.email}")
+            
+            if not or_conditions:
+                return {"projects": [], "count": 0}
+            
+            if len(or_conditions) > 1:
+                team_query = team_query.or_(",".join(or_conditions))
+            else:
+                condition = or_conditions[0]
+                if condition.startswith("user_id.eq."):
+                    team_query = team_query.eq("user_id", current_user.id)
+                elif condition.startswith("email.eq."):
+                    team_query = team_query.eq("email", current_user.email)
+            
+            team_result = team_query.execute()
+            
+            if not team_result.data:
+                return {"projects": [], "count": 0}
+            
+            project_ids = list(set([member["project_id"] for member in team_result.data]))
+            
+            if not project_ids:
+                return {"projects": [], "count": 0}
+            
+            result = supabase.table("projects").select("id, name, description, created_at, project_code").in_("id", project_ids).order("created_at", desc=True).execute()
         
         return {
             "projects": result.data or [],
@@ -499,8 +537,8 @@ def check_user_has_project_access(supabase, current_user: User, project_id: Opti
     if not project_id:
         return True  # No project_id means no restriction
     
-    # Admin, accountant, and workshop_employee have access to all projects
-    if current_user.role in ["admin", "accountant", "workshop_employee"]:
+    # Admin and accountant have access to all projects
+    if current_user.role in ["admin", "accountant"]:
         return True
     
     # Check if user is in project_team for this project
@@ -533,7 +571,7 @@ async def get_project(
     project_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific project by ID. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
+    """Get a specific project by ID. Only accessible if user is in project_team for that project, except for admin and accountant."""
     try:
         supabase = get_supabase_client()
         
@@ -606,8 +644,64 @@ async def get_projects_by_customer(
         
         customer = customer_result.data[0]
         
-        # Get projects for this customer
-        query = supabase.table("projects").select("id, project_code, name, status, start_date, end_date").eq("customer_id", customer_id)
+        # Get projects for this customer - filter by project_team access
+        if current_user.role in ["admin", "accountant"]:
+            # Admin and accountant see all projects
+            query = supabase.table("projects").select("id, project_code, name, status, start_date, end_date").eq("customer_id", customer_id)
+        else:
+            # Non-admin users: only see projects where they are in project_team
+            team_query = supabase.table("project_team").select("project_id").eq("status", "active")
+            
+            or_conditions = []
+            if current_user.id:
+                or_conditions.append(f"user_id.eq.{current_user.id}")
+            if current_user.email:
+                or_conditions.append(f"email.eq.{current_user.email}")
+            
+            if not or_conditions:
+                return {
+                    "customer": {
+                        "id": customer["id"],
+                        "name": customer["name"]
+                    },
+                    "projects": [],
+                    "count": 0
+                }
+            
+            if len(or_conditions) > 1:
+                team_query = team_query.or_(",".join(or_conditions))
+            else:
+                condition = or_conditions[0]
+                if condition.startswith("user_id.eq."):
+                    team_query = team_query.eq("user_id", current_user.id)
+                elif condition.startswith("email.eq."):
+                    team_query = team_query.eq("email", current_user.email)
+            
+            team_result = team_query.execute()
+            
+            if not team_result.data:
+                return {
+                    "customer": {
+                        "id": customer["id"],
+                        "name": customer["name"]
+                    },
+                    "projects": [],
+                    "count": 0
+                }
+            
+            project_ids = list(set([member["project_id"] for member in team_result.data]))
+            
+            if not project_ids:
+                return {
+                    "customer": {
+                        "id": customer["id"],
+                        "name": customer["name"]
+                    },
+                    "projects": [],
+                    "count": 0
+                }
+            
+            query = supabase.table("projects").select("id, project_code, name, status, start_date, end_date").eq("customer_id", customer_id).in_("id", project_ids)
         
         if status:
             query = query.eq("status", status)
@@ -650,14 +744,51 @@ async def get_project_dropdown_options(
     customer_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get project dropdown options for a specific customer"""
+    """Get project dropdown options for a specific customer. Only shows projects where user is in project_team, except for admin and accountant who see all projects."""
     try:
         supabase = get_supabase_client()
         
-        # Get projects for customer with basic info for dropdown
-        projects_result = supabase.table("projects").select(
-            "id, project_code, name, status"
-        ).eq("customer_id", customer_id).in_("status", ["planning", "active"]).execute()
+        # Get projects for customer with basic info for dropdown - filter by project_team access
+        if current_user.role in ["admin", "accountant"]:
+            # Admin and accountant see all projects
+            projects_result = supabase.table("projects").select(
+                "id, project_code, name, status"
+            ).eq("customer_id", customer_id).in_("status", ["planning", "active"]).execute()
+        else:
+            # Non-admin users: only see projects where they are in project_team
+            team_query = supabase.table("project_team").select("project_id").eq("status", "active")
+            
+            or_conditions = []
+            if current_user.id:
+                or_conditions.append(f"user_id.eq.{current_user.id}")
+            if current_user.email:
+                or_conditions.append(f"email.eq.{current_user.email}")
+            
+            if not or_conditions:
+                return []
+            
+            if len(or_conditions) > 1:
+                team_query = team_query.or_(",".join(or_conditions))
+            else:
+                condition = or_conditions[0]
+                if condition.startswith("user_id.eq."):
+                    team_query = team_query.eq("user_id", current_user.id)
+                elif condition.startswith("email.eq."):
+                    team_query = team_query.eq("email", current_user.email)
+            
+            team_result = team_query.execute()
+            
+            if not team_result.data:
+                return []
+            
+            project_ids = list(set([member["project_id"] for member in team_result.data]))
+            
+            if not project_ids:
+                return []
+            
+            projects_result = supabase.table("projects").select(
+                "id, project_code, name, status"
+            ).eq("customer_id", customer_id).in_("id", project_ids).in_("status", ["planning", "active"]).execute()
         
         return projects_result.data
         
@@ -811,7 +942,7 @@ async def get_project_time_entries(
     end_date: Optional[date] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get time entries for a project. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
+    """Get time entries for a project. Only accessible if user is in project_team for that project, except for admin and accountant."""
     try:
         supabase = get_supabase_client()
         
@@ -852,7 +983,7 @@ async def create_time_entry(
     time_entry_data: TimeEntryCreate,
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new time entry for a project. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
+    """Create a new time entry for a project. Only accessible if user is in project_team for that project, except for admin and accountant."""
     try:
         supabase = get_supabase_client()
         

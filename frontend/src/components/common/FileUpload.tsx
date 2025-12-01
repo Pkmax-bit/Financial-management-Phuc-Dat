@@ -5,6 +5,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, X, Image as ImageIcon, FileText, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 interface FileUploadProps {
   /** API endpoint for upload (e.g., '/api/uploads/expenses/123') */
@@ -63,35 +64,53 @@ export default function FileUpload({
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const getToken = () => {
-    return localStorage.getItem('token') || sessionStorage.getItem('token')
+  // Lấy access token mới nhất từ Supabase session để tránh dùng token cũ hết hạn
+  const getToken = async (): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase.auth.getSession()
+      if (error) {
+        console.error('Error getting Supabase session:', error)
+        return null
+      }
+      return data.session?.access_token ?? null
+    } catch (e) {
+      console.error('Unexpected error getting Supabase session:', e)
+      return null
+    }
   }
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
     if (!files || files.length === 0) return
 
-    const file = files[0]
-    
-    // Validate file size
-    if (file.size > maxSize) {
-      const errorMsg = `File size exceeds ${(maxSize / 1024 / 1024).toFixed(1)}MB limit`
-      setError(errorMsg)
-      onError?.(errorMsg)
-      return
-    }
+    // Nếu cho phép nhiều file thì upload tuần tự từng file, còn không thì chỉ lấy file đầu tiên
+    const fileList = multiple ? Array.from(files) : [files[0]]
 
-    // Show preview for images
-    if (showPreview && file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setPreview(e.target?.result as string)
+    for (let index = 0; index < fileList.length; index++) {
+      const file = fileList[index]
+
+      // Validate file size
+      if (file.size > maxSize) {
+        const errorMsg = `File size exceeds ${(maxSize / 1024 / 1024).toFixed(1)}MB limit`
+        setError(errorMsg)
+        onError?.(errorMsg)
+        // Với nhiều file, bỏ qua file quá lớn nhưng vẫn xử lý các file khác
+        if (multiple) continue
+        return
       }
-      reader.readAsDataURL(file)
-    }
 
-    // Upload file
-    await uploadFile(file)
+      // Show preview cho file ảnh đầu tiên (tránh bị thay đổi liên tục nếu nhiều file)
+      if (showPreview && index === 0 && file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          setPreview(e.target?.result as string)
+        }
+        reader.readAsDataURL(file)
+      }
+
+      // Upload file
+      await uploadFile(file)
+    }
   }
 
   const uploadFile = async (file: File) => {
@@ -102,7 +121,7 @@ export default function FileUpload({
       const formData = new FormData()
       formData.append('file', file)
 
-      const token = getToken()
+      const token = await getToken()
       if (!token) {
         throw new Error('Authentication required')
       }

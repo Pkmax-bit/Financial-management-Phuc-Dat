@@ -825,11 +825,11 @@ const startApproveExpenseTour = useCallback(async () => {
     return <BarChart3 className="h-4 w-4" />
   }
 
+  // Hiển thị tiền tệ dạng 1.234.567 (không kèm ký hiệu tiền tệ),
+  // dùng chung cho Đơn giá / Thành tiền ở chi phí dự án
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(amount)
+    if (!amount) return '0'
+    return new Intl.NumberFormat('vi-VN').format(amount)
   }
 
   const handleApprove = async (quoteId: string) => {

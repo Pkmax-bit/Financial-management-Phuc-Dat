@@ -33,8 +33,8 @@ router = APIRouter()
 
 def get_user_accessible_project_ids(supabase, current_user: User) -> List[str]:
     """Get list of project_ids that user has access to via project_team"""
-    # Admin, accountant, and workshop_employee have access to all projects
-    if current_user.role in ["admin", "accountant", "workshop_employee"]:
+    # Admin and accountant have access to all projects
+    if current_user.role in ["admin", "accountant"]:
         return None  # None means all projects
     
     # Get project_ids where user is in team (by user_id or email)
@@ -77,8 +77,8 @@ def check_user_has_project_access(supabase, current_user: User, project_id: Opti
     if not project_id:
         return True  # No project_id means no restriction
     
-    # Admin, accountant, and workshop_employee have access to all projects
-    if current_user.role in ["admin", "accountant", "workshop_employee"]:
+    # Admin and accountant have access to all projects
+    if current_user.role in ["admin", "accountant"]:
         return True
     
     # Check if user is in project_team for this project
@@ -209,7 +209,7 @@ async def get_quotes(
     status: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all quotes with optional filtering. Only shows quotes for projects where user is in project_team, except for admin, accountant, and workshop_employee who see all quotes."""
+    """Get all quotes with optional filtering. Only shows quotes for projects where user is in project_team, except for admin and accountant who see all quotes."""
     try:
         supabase = get_supabase_client()
         
@@ -218,8 +218,8 @@ async def get_quotes(
         
         query = supabase.table("quotes").select("*")
         
-        # Filter by accessible projects if user is not admin/accountant/workshop_employee
-        if accessible_project_ids is not None:  # None means all projects (admin/accountant/workshop_employee)
+        # Filter by accessible projects if user is not admin/accountant
+        if accessible_project_ids is not None:  # None means all projects (admin/accountant)
             if not accessible_project_ids:
                 # User has no access to any projects - only show quotes with NULL project_id
                 query = query.is_("project_id", "null")
@@ -242,7 +242,7 @@ async def get_quotes(
         # Apply pagination and ordering
         result = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
         
-        # If user is not admin/accountant/workshop_employee and has accessible projects,
+        # If user is not admin/accountant and has accessible projects,
         # also include quotes with NULL project_id
         if accessible_project_ids is not None and accessible_project_ids:
             null_quotes_query = supabase.table("quotes").select("*").is_("project_id", "null")
@@ -325,7 +325,7 @@ async def get_quote(
     quote_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific quote by ID. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
+    """Get a specific quote by ID. Only accessible if user is in project_team for that project, except for admin and accountant."""
     try:
         supabase = get_supabase_client()
         
@@ -1866,7 +1866,7 @@ async def get_invoices(
     overdue_only: bool = Query(False),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all invoices with optional filtering. Only shows invoices for projects where user is in project_team, except for admin, accountant, and workshop_employee who see all invoices."""
+    """Get all invoices with optional filtering. Only shows invoices for projects where user is in project_team, except for admin and accountant who see all invoices."""
     try:
         supabase = get_supabase_client()
         
@@ -1875,8 +1875,8 @@ async def get_invoices(
         
         query = supabase.table("invoices").select("*")
         
-        # Filter by accessible projects if user is not admin/accountant/workshop_employee
-        if accessible_project_ids is not None:  # None means all projects (admin/accountant/workshop_employee)
+        # Filter by accessible projects if user is not admin/accountant
+        if accessible_project_ids is not None:  # None means all projects (admin/accountant)
             if not accessible_project_ids:
                 # User has no access to any projects - only show invoices with NULL project_id
                 query = query.is_("project_id", "null")
@@ -1909,7 +1909,7 @@ async def get_invoices(
         # Apply pagination and ordering
         result = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
         
-        # If user is not admin/accountant/workshop_employee and has accessible projects,
+        # If user is not admin/accountant and has accessible projects,
         # also include invoices with NULL project_id
         if accessible_project_ids is not None and accessible_project_ids:
             null_invoices_query = supabase.table("invoices").select("*").is_("project_id", "null")
@@ -1985,7 +1985,7 @@ async def get_invoice(
     invoice_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific invoice by ID. Only accessible if user is in project_team for that project, except for admin, accountant, and workshop_employee."""
+    """Get a specific invoice by ID. Only accessible if user is in project_team for that project, except for admin and accountant."""
     try:
         supabase = get_supabase_client()
         

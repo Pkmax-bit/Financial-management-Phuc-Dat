@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { 
-  X, 
-  Plus, 
-  Trash2, 
+import {
+  X,
+  Plus,
+  Trash2,
   Calendar,
   User,
   DollarSign,
@@ -108,21 +108,21 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
     try {
       setLoading(true)
       console.log('🔍 Fetching customers from database...')
-      
+
       // Use Supabase client directly to get real data
       const { data, error } = await supabase
         .from('customers')
         .select('*')
         .limit(10)
-      
+
       if (error) {
         console.error('❌ Supabase error:', error)
         throw error
       }
-      
+
       console.log('🔍 Real customers data from database:', data)
       setCustomers(data || [])
-      
+
       if (!data || data.length === 0) {
         alert('Không có khách hàng nào trong database. Vui lòng tạo khách hàng trước.')
       }
@@ -143,7 +143,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
     try {
       setLoadingProjects(true)
       console.log('🔍 Fetching projects for customer:', customerId)
-      
+
       // Use Supabase directly to get projects for the customer
       const { data: projects, error } = await supabase
         .from('projects')
@@ -151,12 +151,12 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
         .eq('customer_id', customerId)
         .in('status', ['planning', 'active'])
         .order('name')
-      
+
       if (error) {
         console.error('❌ Supabase error fetching projects:', error)
         throw error
       }
-      
+
       console.log('🔍 Projects data for customer:', projects)
       setProjects(projects || [])
     } catch (error) {
@@ -191,11 +191,11 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
     }, 0)
     // Total amount = subtotal + total tax from all items
     const total_amount = subtotal + total_tax
-    setFormData(prev => ({ 
-      ...prev, 
-      subtotal, 
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
       tax_amount: total_tax,  // Store total tax for reference
-      total_amount 
+      total_amount
     }))
   }
 
@@ -212,13 +212,13 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
   const updateItem = (index: number, field: keyof QuoteItem, value: string | number) => {
     const updatedItems = [...items]
     updatedItems[index] = { ...updatedItems[index], [field]: value }
-    
+
     // Recalculate total_price for this item
     if (field === 'quantity' || field === 'unit_price') {
       const itemTotal = updatedItems[index].quantity * updatedItems[index].unit_price
       updatedItems[index].total_price = itemTotal
     }
-    
+
     setItems(updatedItems)
   }
 
@@ -268,17 +268,17 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
 
   const handleSubmit = async (sendImmediately = false) => {
     setSubmitting(true)
-    
+
     try {
       console.log('🔍 Creating quote with data:', {
         formData,
         items,
         sendImmediately
       })
-      
+
       // Get current user for created_by
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       // Check if user exists in employees table
       let created_by = null
       if (user?.id) {
@@ -288,7 +288,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
           .select('id')
           .eq('user_id', user.id)
           .single()
-        
+
         if (employeeError) {
           console.log('🔍 Employee not found or error:', employeeError)
         } else {
@@ -298,9 +298,9 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
       } else {
         console.log('🔍 No user found in auth')
       }
-      
+
       console.log('🔍 Final created_by value:', created_by)
-      
+
       const quoteData = {
         quote_number: formData.quote_number,
         customer_id: formData.customer_id,
@@ -320,21 +320,21 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
       }
 
       console.log('🔍 Quote data to send:', quoteData)
-      
+
       // Create quote first
       const { data: quoteResult, error: quoteError } = await supabase
         .from('quotes')
         .insert([quoteData])
         .select()
         .single()
-      
+
       if (quoteError) {
         console.error('❌ Supabase quote error:', quoteError)
         throw quoteError
       }
-      
+
       console.log('🔍 Quote created successfully:', quoteResult)
-      
+
       // Create quote items
       const quoteItems = items.map(item => ({
         quote_id: quoteResult.id,
@@ -345,17 +345,17 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
         name_product: item.name_product || item.description,
         unit: item.unit || null
       }))
-      
+
       const { data: itemsResult, error: itemsError } = await supabase
         .from('quote_items')
         .insert(quoteItems)
         .select()
-      
+
       if (itemsError) {
         console.error('❌ Supabase items error:', itemsError)
         throw itemsError
       }
-      
+
       console.log('🔍 Quote items created successfully:', itemsResult)
       alert('Báo giá đã được tạo thành công trong database!')
       onSuccess()
@@ -411,17 +411,16 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
     <>
       {/* Invisible backdrop for click detection - no visual blocking */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40"
           onClick={onClose}
         />
       )}
-      
+
       {/* Sidebar Panel - No visual backdrop to not block interface */}
-      <div className={`fixed top-0 right-0 h-full w-[1200px] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${
-        isOpen ? 'translate-x-0' : 'translate-x-full'
-      }`}>
-        
+      <div className={`fixed top-0 right-0 h-full w-[1200px] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}>
+
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
           <div className="flex items-center">
@@ -447,7 +446,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
           <div className="absolute top-2 right-2 text-xs text-black bg-white px-2 py-1 rounded-full shadow-sm border">
             Cuộn để xem thêm
           </div>
-          
+
           {/* Basic Information Section */}
           <div className="bg-white border border-gray-200 rounded-lg">
             <button
@@ -464,7 +463,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                 <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
-            
+
             {expandedSections.basic && (
               <div className="px-4 pb-4 space-y-3">
                 <div className="grid grid-cols-3 gap-4">
@@ -623,7 +622,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                 <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
-            
+
             {expandedSections.items && (
               <div className="px-4 pb-4">
                 <div className="mb-4">
@@ -637,150 +636,150 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                   </button>
                 </div>
 
-                        {/* Scrollable items container */}
-                        <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-blue-100 hover:scrollbar-thumb-blue-400">
-                          {items.map((item, index) => (
-                            <div key={index} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-                              <div className="flex justify-between items-center mb-2">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-xs font-semibold text-black">Mục {index + 1}</span>
-                                  <div className="flex flex-col items-end">
-                                  <div className="flex flex-col items-end">
-                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                      {formatCurrency(item.total_price)}
-                                    </span>
-                                    <span className="text-xs text-gray-500 mt-0.5">
-                                      + Thuế: {((item as any).tax_rate ?? formData.tax_rate ?? 10)}%
-                                    </span>
-                                  </div>
-                                    <span className="text-xs text-gray-500 mt-0.5">
-                                      + Thuế ({formData.tax_rate || 10}%): {formatCurrency(item.total_price * (formData.tax_rate || 10) / 100)}
-                                    </span>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeItem(index)}
-                                  disabled={items.length === 1}
-                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:text-black disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-
-                              <div className="space-y-2">
-                                <div>
-                                  <label className="block text-xs font-semibold text-black mb-1">Mô tả sản phẩm/dịch vụ</label>
-                                  <input
-                                    type="text"
-                                    value={item.description}
-                                    onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="Nhập mô tả sản phẩm hoặc dịch vụ..."
-                                  />
-                                </div>
-                                
-                                <div className="grid grid-cols-5 gap-2">
-                                  <div>
-                                    <label className="block text-xs font-semibold text-black mb-1">Số lượng</label>
-                                    <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
-                                      <button
-                                        type="button"
-                                        onClick={() => decrementQuantity(index)}
-                                        className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-black hover:text-gray-800 transition-colors"
-                                        disabled={item.quantity <= 0.01}
-                                      >
-                                        <Minus className="w-3 h-3" />
-                                      </button>
-                                      <input
-                                        type="number"
-                                        value={item.quantity}
-                                        onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                                        className="flex-1 border-0 px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-0 text-center"
-                                        placeholder="1"
-                                        min="0"
-                                        step="0.01"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => incrementQuantity(index)}
-                                        className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-black hover:text-gray-800 transition-colors"
-                                      >
-                                        <PlusIcon className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-semibold text-black mb-1">Đơn vị</label>
-                                    <input
-                                      type="text"
-                                      value={item.unit || ''}
-                                      onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="m, m2, cái..."
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-semibold text-black mb-1">Đơn giá</label>
-                                    <input
-                                      type="number"
-                                      value={item.unit_price}
-                                      onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="0"
-                                      min="0"
-                                      step="1000"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-semibold text-black mb-1">Tên sản phẩm</label>
-                                    <input
-                                      type="text"
-                                      value={item.name_product || ''}
-                                      onChange={(e) => updateItem(index, 'name_product', e.target.value)}
-                                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Tên sản phẩm"
-                                    />
-                                    <button type="button" onClick={() => setShowProductPickerFor(index)} className="mt-1 text-xs text-blue-600 hover:underline">Chọn sản phẩm</button>
-                                  </div>
-                                </div>
-
-                                <div className="bg-blue-50 rounded-md p-2 border border-blue-200">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs font-semibold text-black">Thành tiền:</span>
-                                    <span className="text-sm font-bold text-blue-600">
-                                      {formatCurrency(item.total_price)}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <span className="text-xs text-gray-600">+ Thuế:</span>
-                                    <input
-                                      type="number"
-                                      value={(item as any).tax_rate ?? formData.tax_rate ?? 10}
-                                      onChange={(e) => {
-                                        const newTaxRate = parseFloat(e.target.value) || 0
-                                        const updatedItems = [...items]
-                                        updatedItems[index] = { ...updatedItems[index], tax_rate: newTaxRate } as any
-                                        setItems(updatedItems)
-                                      }}
-                                      className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs text-center text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      min="0"
-                                      max="100"
-                                      step="0.1"
-                                    />
-                                    <span className="text-xs text-gray-600">%</span>
-                                    <span className="text-xs text-gray-600">
-                                      = {formatCurrency(item.total_price * (((item as any).tax_rate ?? formData.tax_rate ?? 10) / 100))}
-                                    </span>
-                                  </div>
-                                  <div className="text-xs text-black mt-0.5">
-                                    {item.quantity} {item.unit ? item.unit : ''} × {formatCurrency(item.unit_price)} = {formatCurrency(item.quantity * item.unit_price)}
-                                  </div>
-                                </div>
-                              </div>
+                {/* Scrollable items container */}
+                <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-blue-100 hover:scrollbar-thumb-blue-400">
+                  {items.map((item, index) => (
+                    <div key={index} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-semibold text-black">Mục {index + 1}</span>
+                          <div className="flex flex-col items-end">
+                            <div className="flex flex-col items-end">
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                {formatCurrency(item.total_price)}
+                              </span>
+                              <span className="text-xs text-gray-500 mt-0.5">
+                                + Thuế: {((item as any).tax_rate ?? formData.tax_rate ?? 10)}%
+                              </span>
                             </div>
-                          ))}
+                            <span className="text-xs text-gray-500 mt-0.5">
+                              + Thuế ({formData.tax_rate || 10}%): {formatCurrency(item.total_price * (formData.tax_rate || 10) / 100)}
+                            </span>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          disabled={items.length === 1}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:text-black disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-black mb-1">Mô tả sản phẩm/dịch vụ</label>
+                          <input
+                            type="text"
+                            value={item.description}
+                            onChange={(e) => updateItem(index, 'description', e.target.value)}
+                            className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Nhập mô tả sản phẩm hoặc dịch vụ..."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-5 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-black mb-1">Số lượng</label>
+                            <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => decrementQuantity(index)}
+                                className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-black hover:text-gray-800 transition-colors"
+                                disabled={item.quantity <= 0.01}
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                                className="flex-1 border-0 px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-0 text-center"
+                                placeholder="1"
+                                min="0"
+                                step="0.01"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => incrementQuantity(index)}
+                                className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-black hover:text-gray-800 transition-colors"
+                              >
+                                <PlusIcon className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-black mb-1">Đơn vị</label>
+                            <input
+                              type="text"
+                              value={item.unit || ''}
+                              onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="m, m2, cái..."
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-black mb-1">Đơn giá</label>
+                            <input
+                              type="number"
+                              value={item.unit_price}
+                              onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="0"
+                              min="0"
+                              step="1000"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-black mb-1">Tên sản phẩm</label>
+                            <input
+                              type="text"
+                              value={item.name_product || ''}
+                              onChange={(e) => updateItem(index, 'name_product', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Tên sản phẩm"
+                            />
+                            <button type="button" onClick={() => setShowProductPickerFor(index)} className="mt-1 text-xs text-blue-600 hover:underline">Chọn sản phẩm</button>
+                          </div>
+                        </div>
+
+                        <div className="bg-blue-50 rounded-md p-2 border border-blue-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-semibold text-black">Thành tiền:</span>
+                            <span className="text-sm font-bold text-blue-600">
+                              {formatCurrency(item.total_price)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-xs text-gray-600">+ Thuế:</span>
+                            <input
+                              type="number"
+                              value={(item as any).tax_rate ?? formData.tax_rate ?? 10}
+                              onChange={(e) => {
+                                const newTaxRate = parseFloat(e.target.value) || 0
+                                const updatedItems = [...items]
+                                updatedItems[index] = { ...updatedItems[index], tax_rate: newTaxRate } as any
+                                setItems(updatedItems)
+                              }}
+                              className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs text-center text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                            />
+                            <span className="text-xs text-gray-600">%</span>
+                            <span className="text-xs text-gray-600">
+                              = {formatCurrency(item.total_price * (((item as any).tax_rate ?? formData.tax_rate ?? 10) / 100))}
+                            </span>
+                          </div>
+                          <div className="text-xs text-black mt-0.5">
+                            {item.quantity} {item.unit ? item.unit : ''} × {formatCurrency(item.unit_price)} = {formatCurrency(item.quantity * item.unit_price)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -801,33 +800,33 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                 <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
-            
-                    {expandedSections.totals && (
-                      <div className="px-4 pb-4 space-y-3">
-                        {/* Summary Grid */}
-                        {/* Subtotal removed - only show total */}
+
+            {expandedSections.totals && (
+              <div className="px-4 pb-4 space-y-3">
+                {/* Summary Grid */}
+                {/* Subtotal removed - only show total */}
 
 
-                        {/* Total Section */}
-                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm font-medium opacity-90">Tạm tính:</span>
-                            <span className="text-sm font-medium">{formatCurrency(formData.subtotal)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-lg font-bold">Tổng cộng:</span>
-                            <span className="text-2xl font-bold">
-                              {formatCurrency(total_amount)}
-                            </span>
-                          </div>
-                          <div className="mt-2 text-sm opacity-90">
-                            <div className="text-xs">
-                              * Thuế đã được tính và cộng vào tổng cộng
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                {/* Total Section */}
+                <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium opacity-90">Tạm tính:</span>
+                    <span className="text-sm font-medium">{formatCurrency(formData.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold">Tổng cộng:</span>
+                    <span className="text-2xl font-bold">
+                      {formatCurrency(total_amount)}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm opacity-90">
+                    <div className="text-xs">
+                      * Thuế đã được tính và cộng vào tổng cộng
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Additional Information Section */}
@@ -846,7 +845,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                 <ChevronRight className="h-5 w-5 text-black" />
               )}
             </button>
-            
+
             {expandedSections.additional && (
               <div className="px-4 pb-4 space-y-4">
                 <div>
@@ -897,7 +896,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
               <Send className="w-4 h-4 mr-2" />
               {submitting ? 'Đang gửi...' : 'Lưu & Gửi báo giá'}
             </button>
-            
+
             <div className="flex space-x-3">
               <button
                 type="button"
@@ -908,7 +907,7 @@ export default function CreateQuoteSidebar({ isOpen, onClose, onSuccess }: Creat
                 <Save className="w-4 h-4 mr-2" />
                 {submitting ? 'Đang lưu...' : 'Lưu nháp'}
               </button>
-              
+
               <button
                 type="button"
                 onClick={onClose}
