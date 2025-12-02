@@ -152,9 +152,9 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
   useEffect(() => {
     if (length != null && height != null) {
       const a = (length / 1000) * (height / 1000)
-      const rounded = Number(a.toFixed(6))
+      const rounded = Number(a.toFixed(2))
       setArea(rounded)
-      setAreaDisplay(formatDecimal(rounded, 6))
+      setAreaDisplay(formatDecimal(rounded, 2))
     }
   }, [length, height])
 

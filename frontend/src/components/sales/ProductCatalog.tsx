@@ -181,9 +181,9 @@ export default function ProductCatalog() {
     const h = p.height != null ? Number(p.height) : null
     const l = p.length != null ? Number(p.length) : null
     const d = p.depth != null ? Number(p.depth) : null
-    const computedArea = (h != null && l != null) ? Number(((l / 1000) * (h / 1000)).toFixed(6)) : null
+    const computedArea = (h != null && l != null) ? Number(((l / 1000) * (h / 1000)).toFixed(2)) : null
     const computedVolume = (h != null && l != null && d != null) ? Number(((l / 1000) * (h / 1000) * (d / 1000)).toFixed(9)) : null
-    setEditArea(toDecimalString(computedArea ?? p.area, 6))
+    setEditArea(toDecimalString(computedArea ?? p.area, 2))
     setEditVolume(toDecimalString(computedVolume ?? p.volume, 9))
     // Load mm fields as plain digits (no thousand separators) to avoid mis-parsing like 2.800
     setEditHeight(p.height != null ? String(Number(p.height)) : '')
@@ -210,8 +210,8 @@ export default function ProductCatalog() {
     const l = parseNumber(editLength)
     const h = parseNumber(editHeight)
     if (l != null && h != null) {
-      const a = Number(((l / 1000) * (h / 1000)).toFixed(6))
-      setEditArea(toDecimalString(a, 6))
+      const a = Number(((l / 1000) * (h / 1000)).toFixed(2))
+      setEditArea(toDecimalString(a, 2))
     }
   }, [editLength, editHeight, editing])
 
@@ -239,7 +239,7 @@ export default function ProductCatalog() {
       const lengthNum = parseNumber(editLength)
       const depthNum = parseNumber(editDepth)
       // Derive area/volume from mm dimensions if present to ensure correctness
-      const derivedArea = (lengthNum != null && heightNum != null) ? Number(((lengthNum / 1000) * (heightNum / 1000)).toFixed(6)) : areaNum
+      const derivedArea = (lengthNum != null && heightNum != null) ? Number(((lengthNum / 1000) * (heightNum / 1000)).toFixed(2)) : areaNum
       const derivedVolume = (lengthNum != null && heightNum != null && depthNum != null) ? Number(((lengthNum / 1000) * (heightNum / 1000) * (depthNum / 1000)).toFixed(9)) : volumeNum
       const upd = {
         name: editName.trim() || editing.name,
@@ -362,10 +362,10 @@ export default function ProductCatalog() {
                           let areaInM2: number | null = null
                           if (p.height != null && p.length != null) {
                             // Tính từ mm sang m²: (length_mm / 1000) × (height_mm / 1000)
-                            areaInM2 = Number(((Number(p.length) / 1000) * (Number(p.height) / 1000)).toFixed(6))
+                            areaInM2 = Number(((Number(p.length) / 1000) * (Number(p.height) / 1000)).toFixed(2))
                           } else if (p.area != null) {
-                            // Nếu không có height/length, dùng p.area (đã là m²)
-                            areaInM2 = Number(p.area)
+                            // Nếu không có height/length, dùng p.area (đã là m²) - làm tròn đến 2 chữ số thập phân
+                            areaInM2 = Math.round(Number(p.area) * 100) / 100
                           }
                           const totalPrice = areaInM2 != null && areaInM2 > 0
                             ? (Number(p.price) || 0) * areaInM2

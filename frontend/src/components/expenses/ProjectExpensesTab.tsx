@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { 
-  DollarSign, 
-  Plus, 
-  Search, 
-  Eye, 
-  Edit, 
-  Trash2, 
+import {
+  DollarSign,
+  Plus,
+  Search,
+  Eye,
+  Edit,
+  Trash2,
   Calendar,
   TrendingUp,
   TrendingDown,
@@ -21,11 +21,16 @@ import {
   ChevronDown,
   Folder,
   FileText,
-  CircleHelp
+  CircleHelp,
+  Mail,
+  Download,
+  Send
 } from 'lucide-react'
 import CreateProjectExpenseDialog from './CreateProjectExpenseDialog'
 import CreateExpenseObjectDialog from './CreateExpenseObjectDialog'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
+import ExpensePreviewModal from './ExpensePreviewModal'
+import ExpensePDFPreviewModal from './ExpensePDFPreviewModal'
 import { supabase } from '@/lib/supabase'
 import { getApiUrl } from '@/lib/apiUrl'
 import { PROJECT_STATUS_FILTER_OPTIONS } from '@/config/projectStatus'
@@ -50,6 +55,7 @@ interface ProjectExpense {
   children?: ProjectExpense[]
   level?: number
   hasChildren?: boolean
+  notes?: string
 }
 
 interface ProjectExpensesTabProps {
@@ -79,266 +85,264 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   type ApproveExpenseShepherdType = ApproveExpenseShepherdModule & { Tour: new (...args: any[]) => any }
   type ApproveExpenseShepherdTour = InstanceType<ApproveExpenseShepherdType['Tour']>
 
-// CRUD permissions
-const canEdit = (expense: ProjectExpense) => {
-  // Check if user role has permission to edit
-  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
-  console.log('🔍 canEdit check:', { userRole, allowedRoles, isAllowed: allowedRoles.includes(userRole) })
-  
-  if (!allowedRoles.includes(userRole)) {
-    console.log('❌ canEdit: User role not allowed', userRole)
-    return false
-  }
-  
-  // Planned: only pending can be edited
-  // Actual: can be edited (for corrections)
-  if (expense.category === 'planned') {
-    const canEditPlanned = expense.status === 'pending'
-    console.log('📋 canEdit planned:', { category: expense.category, status: expense.status, canEdit: canEditPlanned })
-    return canEditPlanned
-  }
-  // Actual expenses can be edited
-  console.log('✅ canEdit actual: true')
-  return true
-}
+  // CRUD permissions
+  const canEdit = (expense: ProjectExpense) => {
+    // Check if user role has permission to edit
+    const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+    console.log('🔍 canEdit check:', { userRole, allowedRoles, isAllowed: allowedRoles.includes(userRole) })
 
-const canDelete = (expense: ProjectExpense) => {
-  // Check if user role has permission to delete
-  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
-  console.log('🔍 canDelete check:', { userRole, allowedRoles, isAllowed: allowedRoles.includes(userRole) })
-  
-  if (!allowedRoles.includes(userRole)) {
-    console.log('❌ canDelete: User role not allowed', userRole)
-    return false
+    if (!allowedRoles.includes(userRole)) {
+      console.log('❌ canEdit: User role not allowed', userRole)
+      return false
+    }
+
+    // Planned: only pending can be edited
+    // Actual: can be edited (for corrections)
+    if (expense.category === 'planned') {
+      const canEditPlanned = expense.status === 'pending'
+      console.log('📋 canEdit planned:', { category: expense.category, status: expense.status, canEdit: canEditPlanned })
+      return canEditPlanned
+    }
+    // Actual expenses can be edited
+    console.log('✅ canEdit actual: true')
+    return true
   }
-  
-  // Planned: only pending can be deleted
-  // Actual: can be deleted (for corrections)
-  if (expense.category === 'planned') {
-    const canDeletePlannedStatuses: Array<ProjectExpense['status']> = ['pending', 'approved']
-    const canDeletePlanned = canDeletePlannedStatuses.includes(expense.status)
-    console.log('📋 canDelete planned:', { category: expense.category, status: expense.status, canDelete: canDeletePlanned })
-    return canDeletePlanned
+
+  const canDelete = (expense: ProjectExpense) => {
+    // Check if user role has permission to delete
+    const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+    console.log('🔍 canDelete check:', { userRole, allowedRoles, isAllowed: allowedRoles.includes(userRole) })
+
+    if (!allowedRoles.includes(userRole)) {
+      console.log('❌ canDelete: User role not allowed', userRole)
+      return false
+    }
+
+    // Planned: only pending can be deleted
+    // Actual: can be deleted (for corrections)
+    if (expense.category === 'planned') {
+      const canDeletePlannedStatuses: Array<ProjectExpense['status']> = ['pending', 'approved']
+      const canDeletePlanned = canDeletePlannedStatuses.includes(expense.status)
+      console.log('📋 canDelete planned:', { category: expense.category, status: expense.status, canDelete: canDeletePlanned })
+      return canDeletePlanned
+    }
+    // Actual expenses can be deleted
+    console.log('✅ canDelete actual: true')
+    return true
   }
-  // Actual expenses can be deleted
-  console.log('✅ canDelete actual: true')
-  return true
-}
 
-const canApprove = (expense: ProjectExpense) => {
-  // Only planned expenses that are pending can be approved
-  if (expense.category !== 'planned' || expense.status !== 'pending') {
-    console.log('❌ canApprove: Not planned or not pending', { category: expense.category, status: expense.status })
-    return false
+  const canApprove = (expense: ProjectExpense) => {
+    // Only planned expenses that are pending can be approved
+    if (expense.category !== 'planned' || expense.status !== 'pending') {
+      console.log('❌ canApprove: Not planned or not pending', { category: expense.category, status: expense.status })
+      return false
+    }
+
+    // Check if user role has permission to approve
+    const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+    const canApproveResult = allowedRoles.includes(userRole)
+    console.log('🔍 canApprove check:', { userRole, allowedRoles, canApprove: canApproveResult })
+    return canApproveResult
   }
-  
-  // Check if user role has permission to approve
-  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
-  const canApproveResult = allowedRoles.includes(userRole)
-  console.log('🔍 canApprove check:', { userRole, allowedRoles, canApprove: canApproveResult })
-  return canApproveResult
-}
 
-// Approve permission for actual expenses (pending only)
-const canApproveActual = (expense: ProjectExpense) => {
-  if (expense.category !== 'actual' || expense.status !== 'pending') {
-    return false
+  // Approve permission for actual expenses (pending only)
+  const canApproveActual = (expense: ProjectExpense) => {
+    if (expense.category !== 'actual' || expense.status !== 'pending') {
+      return false
+    }
+    const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
+    return allowedRoles.includes(userRole)
   }
-  const allowedRoles = ['admin', 'accountant', 'manager', 'Supplier', 'vận chuyển', 'nhân công']
-  return allowedRoles.includes(userRole)
-}
 
-const [editExpense, setEditExpense] = useState<{ id: string; category: 'planned' | 'actual' } | null>(null)
+  const handleEditExpense = (expense: ProjectExpense) => {
+    if (!canEdit(expense)) return
+    setEditExpense({ id: expense.id, category: expense.category })
+    setCreateExpenseCategory(expense.category)
+    setShowCreateModal(true)
+  }
 
-const handleEditExpense = (expense: ProjectExpense) => {
-  if (!canEdit(expense)) return
-  setEditExpense({ id: expense.id, category: expense.category })
-  setCreateExpenseCategory(expense.category)
-  setShowCreateModal(true)
-}
+  const handleDeleteExpense = async (expenseId: string) => {
+    const expense = expenses.find(e => e.id === expenseId)
+    if (!expense || !canDelete(expense)) return
 
-const handleDeleteExpense = async (expenseId: string) => {
-  const expense = expenses.find(e => e.id === expenseId)
-  if (!expense || !canDelete(expense)) return
-  
-  const isPlanned = expense.category === 'planned'
-  const tableName = isPlanned ? 'project_expenses_quote' : 'project_expenses'
-  
-  // Check if this is a parent expense (has children)
-  const hasChildren = expenses.some(e => e.id_parent === expenseId)
-  
-  const confirmMessage = isPlanned 
-    ? (expense.status === 'approved'
+    const isPlanned = expense.category === 'planned'
+    const tableName = isPlanned ? 'project_expenses_quote' : 'project_expenses'
+
+    // Check if this is a parent expense (has children)
+    const hasChildren = expenses.some(e => e.id_parent === expenseId)
+
+    const confirmMessage = isPlanned
+      ? (expense.status === 'approved'
         ? 'Chi phí kế hoạch này đã được duyệt. Bạn có chắc chắn muốn xóa?'
         : 'Bạn có chắc chắn muốn xóa chi phí kế hoạch này?')
-    : hasChildren 
-      ? 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Xóa cha sẽ xóa tất cả chi phí con. Hành động này không thể hoàn tác!'
-      : 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Hành động này không thể hoàn tác!'
-  
-  if (window.confirm(confirmMessage)) {
-    try {
-      if (isPlanned) {
-        // For planned expenses, just delete the single expense
-        const { error } = await supabase
-          .from(tableName)
-          .delete()
-          .eq('id', expenseId)
-        
-        if (error) throw error
-      } else {
-        // For actual expenses, implement cascade delete
-        console.log('🗑️ Deleting expense with cascade:', expenseId)
-        
-        // First, delete all child expenses
-        console.log('🔍 Step 1: Deleting child expenses...')
-        const { error: deleteChildrenError } = await supabase
-          .from(tableName)
-          .delete()
-          .eq('id_parent', expenseId)
-        
-        if (deleteChildrenError) {
-          console.error('❌ Error deleting child expenses:', deleteChildrenError)
-          throw deleteChildrenError
+      : hasChildren
+        ? 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Xóa cha sẽ xóa tất cả chi phí con. Hành động này không thể hoàn tác!'
+        : 'Bạn có chắc chắn muốn xóa chi phí thực tế này? Hành động này không thể hoàn tác!'
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        if (isPlanned) {
+          // For planned expenses, just delete the single expense
+          const { error } = await supabase
+            .from(tableName)
+            .delete()
+            .eq('id', expenseId)
+
+          if (error) throw error
+        } else {
+          // For actual expenses, implement cascade delete
+          console.log('🗑️ Deleting expense with cascade:', expenseId)
+
+          // First, delete all child expenses
+          console.log('🔍 Step 1: Deleting child expenses...')
+          const { error: deleteChildrenError } = await supabase
+            .from(tableName)
+            .delete()
+            .eq('id_parent', expenseId)
+
+          if (deleteChildrenError) {
+            console.error('❌ Error deleting child expenses:', deleteChildrenError)
+            throw deleteChildrenError
+          }
+
+          console.log('✅ Child expenses deleted successfully')
+
+          // Then, delete the parent expense
+          console.log('🔍 Step 2: Deleting parent expense...')
+          const { error: deleteParentError } = await supabase
+            .from(tableName)
+            .delete()
+            .eq('id', expenseId)
+
+          if (deleteParentError) {
+            console.error('❌ Error deleting parent expense:', deleteParentError)
+            throw deleteParentError
+          }
+
+          console.log('✅ Parent expense deleted successfully')
+          console.log('✅ Cascade delete completed: Xóa cha thì con cũng bị xóa')
         }
-        
-        console.log('✅ Child expenses deleted successfully')
-        
-        // Then, delete the parent expense
-        console.log('🔍 Step 2: Deleting parent expense...')
-        const { error: deleteParentError } = await supabase
-          .from(tableName)
-          .delete()
-          .eq('id', expenseId)
-        
-        if (deleteParentError) {
-          console.error('❌ Error deleting parent expense:', deleteParentError)
-          throw deleteParentError
-        }
-        
-        console.log('✅ Parent expense deleted successfully')
-        console.log('✅ Cascade delete completed: Xóa cha thì con cũng bị xóa')
+
+        alert('Xóa chi phí thành công!')
+
+        // Refresh list after delete
+        fetchProjectExpenses()
+      } catch (e: any) {
+        console.error('Error deleting expense:', e)
+        const errorMessage = e?.message || 'Không thể xóa chi phí'
+        setError(errorMessage)
+        alert(`Lỗi: ${errorMessage}`)
       }
-      
-      alert('Xóa chi phí thành công!')
-      
-      // Refresh list after delete
-      fetchProjectExpenses()
-    } catch (e: any) {
-      console.error('Error deleting expense:', e)
-      const errorMessage = e?.message || 'Không thể xóa chi phí'
-      setError(errorMessage)
-      alert(`Lỗi: ${errorMessage}`)
     }
   }
-}
 
-const handleApproveExpense = async (expenseId: string) => {
-  const expense = expenses.find(e => e.id === expenseId)
-  if (!expense || !canApprove(expense)) return
-  
-  if (window.confirm('Duyệt chi phí này thành chi phí thực tế?')) {
-    try {
-      // Get the quote data
-      const { data: quoteData, error: fetchError } = await supabase
-        .from('project_expenses_quote')
-        .select('*')
-        .eq('id', expenseId)
-        .single()
-      
-      if (fetchError) {
-        console.error('Error fetching quote:', fetchError)
-        throw new Error(`Lỗi lấy dữ liệu: ${fetchError.message}`)
-      }
-      
-      if (!quoteData) {
-        throw new Error('Không tìm thấy chi phí')
-      }
-      
-      console.log('Quote data to approve:', quoteData)
-      
-      // Create actual expense from quote
-      // CRITICAL: Status must be 'pending' by default, not 'approved'
-      // Only the approve button in the actions column should change status to 'approved'
-      const newExpense: any = {
-        id: crypto.randomUUID(), // Generate new UUID for id
-        project_id: quoteData.project_id,
-        description: quoteData.description,
-        amount: quoteData.amount,
-        expense_date: quoteData.expense_date,
-        status: 'pending', // Default to pending - must be approved via approve button
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      
-      // Add optional fields if they exist
-      if (quoteData.expense_code) newExpense.expense_code = quoteData.expense_code
-      if (quoteData.currency) newExpense.currency = quoteData.currency
-      if (quoteData.notes) newExpense.notes = quoteData.notes
-      if (quoteData.receipt_url) newExpense.receipt_url = quoteData.receipt_url
-      if (quoteData.employee_id) newExpense.employee_id = quoteData.employee_id
-      if (quoteData.department_id) newExpense.department_id = quoteData.department_id
-      if (quoteData.customer_id) newExpense.customer_id = quoteData.customer_id
-      if (quoteData.id_parent) newExpense.id_parent = quoteData.id_parent
-      
-      // Copy expense object related fields from quote to actual expense
-      if (quoteData.expense_object_id) {
-        newExpense.expense_object_id = quoteData.expense_object_id
-        console.log('✅ Copied expense_object_id:', quoteData.expense_object_id)
-      }
-      
-      if (Array.isArray(quoteData.expense_object_columns) && quoteData.expense_object_columns.length > 0) {
-        newExpense.expense_object_columns = quoteData.expense_object_columns
-        console.log('✅ Copied expense_object_columns:', quoteData.expense_object_columns.length, 'columns')
-      }
-      
-      if (Array.isArray(quoteData.invoice_items) && quoteData.invoice_items.length > 0) {
-        newExpense.invoice_items = quoteData.invoice_items
-        console.log('✅ Copied invoice_items:', quoteData.invoice_items.length, 'items')
-      }
-      
-      console.log('Creating actual expense:', newExpense)
-      
-      const { data: insertedData, error: insertError } = await supabase
-        .from('project_expenses')
-        .insert(newExpense)
-        .select()
-      
-      if (insertError) {
-        console.error('Error inserting expense:', insertError)
-        throw new Error(`Lỗi tạo chi phí thực tế: ${insertError.message}`)
-      }
-      
-      console.log('Inserted expense:', insertedData)
-      
-      // Update quote status to approved
-      const { error: updateError } = await supabase
-        .from('project_expenses_quote')
-        .update({ 
-          status: 'approved',
+  const handleApproveExpense = async (expenseId: string) => {
+    const expense = expenses.find(e => e.id === expenseId)
+    if (!expense || !canApprove(expense)) return
+
+    if (window.confirm('Duyệt chi phí này thành chi phí thực tế?')) {
+      try {
+        // Get the quote data
+        const { data: quoteData, error: fetchError } = await supabase
+          .from('project_expenses_quote')
+          .select('*')
+          .eq('id', expenseId)
+          .single()
+
+        if (fetchError) {
+          console.error('Error fetching quote:', fetchError)
+          throw new Error(`Lỗi lấy dữ liệu: ${fetchError.message}`)
+        }
+
+        if (!quoteData) {
+          throw new Error('Không tìm thấy chi phí')
+        }
+
+        console.log('Quote data to approve:', quoteData)
+
+        // Create actual expense from quote
+        // CRITICAL: Status must be 'pending' by default, not 'approved'
+        // Only the approve button in the actions column should change status to 'approved'
+        const newExpense: any = {
+          id: crypto.randomUUID(), // Generate new UUID for id
+          project_id: quoteData.project_id,
+          description: quoteData.description,
+          amount: quoteData.amount,
+          expense_date: quoteData.expense_date,
+          status: 'pending', // Default to pending - must be approved via approve button
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        })
-        .eq('id', expenseId)
-      
-      if (updateError) {
-        console.error('Error updating quote status:', updateError)
-        throw new Error(`Lỗi cập nhật trạng thái: ${updateError.message}`)
+        }
+
+        // Add optional fields if they exist
+        if (quoteData.expense_code) newExpense.expense_code = quoteData.expense_code
+        if (quoteData.currency) newExpense.currency = quoteData.currency
+        if (quoteData.notes) newExpense.notes = quoteData.notes
+        if (quoteData.receipt_url) newExpense.receipt_url = quoteData.receipt_url
+        if (quoteData.employee_id) newExpense.employee_id = quoteData.employee_id
+        if (quoteData.department_id) newExpense.department_id = quoteData.department_id
+        if (quoteData.customer_id) newExpense.customer_id = quoteData.customer_id
+        if (quoteData.id_parent) newExpense.id_parent = quoteData.id_parent
+
+        // Copy expense object related fields from quote to actual expense
+        if (quoteData.expense_object_id) {
+          newExpense.expense_object_id = quoteData.expense_object_id
+          console.log('✅ Copied expense_object_id:', quoteData.expense_object_id)
+        }
+
+        if (Array.isArray(quoteData.expense_object_columns) && quoteData.expense_object_columns.length > 0) {
+          newExpense.expense_object_columns = quoteData.expense_object_columns
+          console.log('✅ Copied expense_object_columns:', quoteData.expense_object_columns.length, 'columns')
+        }
+
+        if (Array.isArray(quoteData.invoice_items) && quoteData.invoice_items.length > 0) {
+          newExpense.invoice_items = quoteData.invoice_items
+          console.log('✅ Copied invoice_items:', quoteData.invoice_items.length, 'items')
+        }
+
+        console.log('Creating actual expense:', newExpense)
+
+        const { data: insertedData, error: insertError } = await supabase
+          .from('project_expenses')
+          .insert(newExpense)
+          .select()
+
+        if (insertError) {
+          console.error('Error inserting expense:', insertError)
+          throw new Error(`Lỗi tạo chi phí thực tế: ${insertError.message}`)
+        }
+
+        console.log('Inserted expense:', insertedData)
+
+        // Update quote status to approved
+        const { error: updateError } = await supabase
+          .from('project_expenses_quote')
+          .update({
+            status: 'approved',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', expenseId)
+
+        if (updateError) {
+          console.error('Error updating quote status:', updateError)
+          throw new Error(`Lỗi cập nhật trạng thái: ${updateError.message}`)
+        }
+
+        // Show success message
+        alert('Duyệt chi phí thành công!')
+
+        // Refresh list
+        fetchProjectExpenses()
+      } catch (e: any) {
+        console.error('Error approving expense:', e)
+        const errorMessage = e?.message || 'Không thể duyệt chi phí'
+        setError(errorMessage)
+        alert(`Lỗi: ${errorMessage}`)
       }
-      
-      // Show success message
-      alert('Duyệt chi phí thành công!')
-      
-      // Refresh list
-      fetchProjectExpenses()
-    } catch (e: any) {
-      console.error('Error approving expense:', e)
-      const errorMessage = e?.message || 'Không thể duyệt chi phí'
-      setError(errorMessage)
-      alert(`Lỗi: ${errorMessage}`)
     }
   }
-}
 
-const startApproveExpenseTour = useCallback(async () => {
+  const startApproveExpenseTour = useCallback(async () => {
     if (typeof window === 'undefined') return
 
     if (approveExpenseTourRef.current) {
@@ -494,14 +498,21 @@ const startApproveExpenseTour = useCallback(async () => {
   }, [])
 
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [createExpenseCategory, setCreateExpenseCategory] = useState<'planned' | 'actual'>('planned')
   const [showExpenseObjectModal, setShowExpenseObjectModal] = useState(false)
+  const [editExpense, setEditExpense] = useState<{ id: string; category: 'planned' | 'actual' } | null>(null)
+  const [createExpenseCategory, setCreateExpenseCategory] = useState<'planned' | 'actual'>('planned')
+  const [showExpensePreviewModal, setShowExpensePreviewModal] = useState(false)
+  const [previewExpenseId, setPreviewExpenseId] = useState<string | null>(null)
+
+  // PDF Preview Modal State
+  const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  const [previewData, setPreviewData] = useState<any>(null)
 
   // Define projectsMap at the top of the component after fetching data
   const [projectsMap, setProjectsMap] = useState(new Map())
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [projectsList, setProjectsList] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
-  
+
   // Update project status filter when viewMode changes
   useEffect(() => {
     if (viewMode === 'planned') {
@@ -515,7 +526,7 @@ const startApproveExpenseTour = useCallback(async () => {
   // Filter expenses based on view mode and build tree
   const getFilteredExpenses = () => {
     let filtered: ProjectExpense[] = []
-    
+
     switch (viewMode) {
       case 'planned':
         filtered = expenses.filter(e => e.category === 'planned')
@@ -526,9 +537,9 @@ const startApproveExpenseTour = useCallback(async () => {
       default:
         filtered = expenses
     }
-    
+
     // KHÔNG lọc theo trạng thái dự án nữa: luôn hiển thị tất cả trạng thái
-    
+
     // Build tree structure and flatten for display
     const tree = buildTree(filtered)
     return flattenTree(tree)
@@ -599,15 +610,15 @@ const startApproveExpenseTour = useCallback(async () => {
   // Flatten tree for rendering with level info
   const flattenTree = (tree: ProjectExpense[], level = 0): ProjectExpense[] => {
     const result: ProjectExpense[] = []
-    
+
     tree.forEach(item => {
       result.push({ ...item, level })
-      
+
       if (item.hasChildren && item.children && expandedItems.has(item.id)) {
         result.push(...flattenTree(item.children, level + 1))
       }
     })
-    
+
     return result
   }
 
@@ -626,7 +637,7 @@ const startApproveExpenseTour = useCallback(async () => {
             .select('role')
             .eq('id', session.user.id)
             .single()
-          
+
           if (!userError && userData) {
             // Map role cũ sang role mới (giống như trong CreateProjectExpenseDialog)
             let mappedRole = userData.role
@@ -634,7 +645,7 @@ const startApproveExpenseTour = useCallback(async () => {
               mappedRole = 'Supplier'
               console.log('🔄 Mapped workshop_employee to Supplier')
             }
-            
+
             setUserRole(mappedRole || 'employee')
             console.log('✅ Loaded user role:', mappedRole)
           }
@@ -643,7 +654,7 @@ const startApproveExpenseTour = useCallback(async () => {
         console.error('Error loading user role:', err)
       }
     }
-    
+
     loadUserRole()
   }, [])
 
@@ -656,7 +667,7 @@ const startApproveExpenseTour = useCallback(async () => {
       const [quotesRes, actualRes, projectsRes] = await Promise.all([
         supabase
           .from('project_expenses_quote')
-          .select('id, project_id, expense_code, description, amount, currency, expense_date, status, id_parent, created_at, updated_at')
+          .select('id, project_id, expense_code, description, amount, currency, expense_date, status, id_parent, notes, created_at, updated_at')
           .order('created_at', { ascending: false }),
         supabase
           .from('project_expenses')
@@ -690,6 +701,7 @@ const startApproveExpenseTour = useCallback(async () => {
           expense_date: e.expense_date,
           status: e.status as 'pending' | 'approved' | 'rejected',
           id_parent: e.id_parent,
+          notes: e.notes || '',
           created_at: e.created_at,
           updated_at: e.updated_at,
         })),
@@ -716,19 +728,19 @@ const startApproveExpenseTour = useCallback(async () => {
 
       // Fetch employees data for display names
       console.log('Fetching employees data in ProjectExpensesTab...')
-      
+
       // Try fetching from users table first
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('id, full_name')
-      
+
       if (usersError) {
         console.error('Error fetching users:', usersError)
         // Try employees table as fallback
         const { data: employeesData, error: employeesError } = await supabase
           .from('employees')
           .select('id, full_name')
-        
+
         if (employeesError) {
           console.error('Error fetching employees:', employeesError)
         } else {
@@ -832,6 +844,586 @@ const startApproveExpenseTour = useCallback(async () => {
     return new Intl.NumberFormat('vi-VN').format(amount)
   }
 
+  // Handle open preview modal for planned expense
+  const handleOpenPreview = (expenseId: string) => {
+    console.log('🔍 Opening preview modal for expense:', expenseId)
+    setPreviewExpenseId(expenseId)
+    setShowExpensePreviewModal(true)
+    console.log('✅ Preview modal state set to true')
+  }
+
+  // Handle export PDF for planned expense (moved to preview modal)
+  const handleExportPDF = async (expenseId: string) => {
+    try {
+      setLoading(true)
+
+      // 1. Fetch full expense data from project_expenses_quote
+      const { data: expenseData, error: fetchError } = await supabase
+        .from('project_expenses_quote')
+        .select(`
+          *,
+          projects:project_id(name, project_code),
+          customers:customer_id(name)
+        `)
+        .eq('id', expenseId)
+        .single()
+
+      if (fetchError || !expenseData) {
+        throw new Error('Không tìm thấy dữ liệu chi phí kế hoạch')
+      }
+
+      const projectId = expenseData.project_id
+      if (!projectId) {
+        throw new Error('Chi phí kế hoạch không có dự án liên kết')
+      }
+
+      // 2. Fetch quote data from quotes table (based on project_id)
+      const { data: quotesData, error: quotesError } = await supabase
+        .from('quotes')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (quotesError) {
+        console.warn('Warning: Could not fetch quote data:', quotesError)
+      }
+
+      const quoteData = quotesData && quotesData.length > 0 ? quotesData[0] : null
+      const quoteId = quoteData?.id
+
+      // 3. Fetch quote items from quote_items table with product names
+      let quoteItems: any[] = []
+      if (quoteId) {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('quote_items')
+          .select(`
+            *,
+            products:product_service_id(id, name, description)
+          `)
+          .eq('quote_id', quoteId)
+          .order('created_at', { ascending: true })
+
+        if (itemsError) {
+          console.warn('Warning: Could not fetch quote items:', itemsError)
+        } else {
+          quoteItems = itemsData || []
+        }
+      }
+
+      // 4. Fetch expense objects
+      const expenseObjectIds = expenseData.expense_object_columns || []
+      let expenseObjects: any[] = []
+      if (expenseObjectIds.length > 0) {
+        const { data: objectsData, error: objectsError } = await supabase
+          .from('expense_objects')
+          .select('id, name, level, parent_id')
+          .in('id', expenseObjectIds)
+
+        if (objectsError) {
+          console.warn('Warning: Could not fetch expense objects:', objectsError)
+        } else {
+          expenseObjects = objectsData || []
+        }
+      }
+
+      // 5. Fetch product names for invoice_items if they have product_service_id
+      const fetchProductNames = async (items: any[]) => {
+        const productIds = items
+          .map(item => item.product_service_id || item.product_id)
+          .filter(id => id)
+
+        if (productIds.length === 0) return {}
+
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('id, name, description')
+          .in('id', productIds)
+
+        const productMap: { [key: string]: { name: string; description?: string } } = {}
+        if (productsData) {
+          productsData.forEach(product => {
+            productMap[product.id] = {
+              name: product.name,
+              description: product.description || ''
+            }
+          })
+        }
+        return productMap
+      }
+
+      // 6. Prepare invoice items - use expense invoice_items if available, otherwise use quote_items
+      let invoiceItems: any[] = []
+      if (expenseData.invoice_items && Array.isArray(expenseData.invoice_items) && expenseData.invoice_items.length > 0) {
+        // Fetch product names for expense invoice_items
+        const productMap = await fetchProductNames(expenseData.invoice_items)
+
+        // Use invoice_items from expense
+        invoiceItems = expenseData.invoice_items.map((item: any) => {
+          const productId = item.product_service_id || item.product_id
+          const productInfo = productId ? productMap[productId] : null
+
+          return {
+            section: item.section || '',
+            productName: productInfo?.name || item.productName || item.name_product || '',
+            description: productInfo?.description || item.description || '',
+            unitPrice: Number(item.unitPrice || item.unit_price || 0),
+            quantity: Number(item.quantity || 0),
+            unit: item.unit || 'cái',
+            area: item.area ? Number(item.area) : undefined,
+            lineTotal: Number(item.lineTotal || item.line_total || item.total_price || 0),
+            components: item.components || {}
+          }
+        })
+      } else if (quoteItems.length > 0) {
+        // Fallback to quote_items - get product names from join or fetch separately
+        invoiceItems = quoteItems.map((item: any) => {
+          // Try to get product name from joined products relation
+          const product = item.products
+          const productName = Array.isArray(product)
+            ? (product[0]?.name || '')
+            : (product?.name || '')
+
+          return {
+            section: '',
+            productName: productName || item.name_product || item.product_name || '',
+            description: item.products?.description || item.description || '',
+            unitPrice: Number(item.unit_price || item.price || 0),
+            quantity: Number(item.quantity || item.qty || 0),
+            unit: item.unit || 'cái',
+            area: item.area ? Number(item.area) : undefined,
+            lineTotal: Number(item.total_price || item.subtotal || item.total || 0),
+            components: item.product_components || item.components || {}
+          }
+        })
+      }
+
+      // Log invoice items for debugging
+      console.log('📦 Invoice items prepared:', {
+        count: invoiceItems.length,
+        hasExpenseItems: expenseData.invoice_items?.length > 0,
+        hasQuoteItems: quoteItems.length > 0,
+        sample: invoiceItems[0]
+      })
+
+      // Warn if no invoice items found
+      if (!invoiceItems || invoiceItems.length === 0) {
+        console.warn('⚠️ No invoice items found for expense:', expenseId)
+        console.warn('  - Expense invoice_items:', expenseData.invoice_items)
+        console.warn('  - Quote items:', quoteItems)
+      }
+
+      // 7. Prepare data for PDF export
+      const project = expenseData.projects as any
+      const customer = expenseData.customers as any
+      const projectName = Array.isArray(project) ? project[0]?.name : (project?.name || '')
+      const projectCode = Array.isArray(project) ? project[0]?.project_code : (project?.project_code || '')
+      const customerName = Array.isArray(customer) ? customer[0]?.name : (customer?.name || '')
+
+      // 8. Get company info from database (company_settings table)
+      let companyInfo: any = {}
+
+      // Try to fetch from company_settings table first
+      const { data: companyData, error: companyError } = await supabase
+        .from('company_settings')
+        .select('*')
+        .limit(1)
+        .single()
+
+      if (!companyError && companyData) {
+        console.log('✅ Fetched company settings from database:', companyData)
+
+        // Fetch logo and convert to base64 if URL exists
+        let logoBase64 = ''
+        if (companyData.company_logo_url) {
+          try {
+            const response = await fetch(companyData.company_logo_url)
+            const blob = await response.blob()
+            logoBase64 = await new Promise((resolve) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(reader.result as string)
+              reader.readAsDataURL(blob)
+            })
+            console.log('✅ Converted company logo to base64')
+          } catch (err) {
+            console.warn('⚠️ Could not fetch company logo:', err)
+          }
+        }
+
+        companyInfo = {
+          company_name: companyData.company_name,
+          company_showroom: companyData.company_showroom,
+          company_factory: companyData.company_factory,
+          company_website: companyData.company_website,
+          company_hotline: companyData.company_hotline,
+          company_logo_url: companyData.company_logo_url,
+          company_logo_base64: logoBase64
+        }
+      } else {
+        console.warn('⚠️ Could not fetch company settings, using quote data as fallback')
+
+        // Fallback to quote data if available
+        if (quoteData) {
+          companyInfo = {
+            company_name: quoteData.company_name || 'Công ty TNHH Cửa Phúc Đạt',
+            company_showroom: quoteData.company_showroom || '',
+            company_factory: quoteData.company_factory || '',
+            company_website: quoteData.company_website || '',
+            company_hotline: quoteData.company_hotline || '',
+            company_logo_url: quoteData.company_logo_url || '',
+            company_logo_base64: quoteData.company_logo_base64 || ''
+          }
+        }
+      }
+
+
+      // 8. Import and use export function
+      const { exportExpenseToPDF } = await import('@/utils/exportExpensePDF')
+
+      await exportExpenseToPDF({
+        id: expenseData.id,
+        expense_code: expenseData.expense_code || '',
+        description: expenseData.description || '',
+        amount: expenseData.amount || 0,
+        currency: expenseData.currency || 'VND',
+        expense_date: expenseData.expense_date || new Date().toISOString(),
+        project_name: projectName,
+        project_code: projectCode,
+        customer_name: customerName,
+        notes: expenseData.notes || '',
+        invoice_items: invoiceItems,
+        expense_objects: expenseObjects,
+        expense_object_totals: expenseData.expense_object_totals || {},
+        company_info: companyInfo
+      })
+
+      // Update expense notes to mark PDF as sent
+      const currentNotes = expenseData.notes || ''
+      const updatedNotes = currentNotes.includes('[PDF_SENT]')
+        ? currentNotes
+        : `${currentNotes}\n[PDF_SENT]`.trim()
+
+      await supabase
+        .from('project_expenses_quote')
+        .update({ notes: updatedNotes })
+        .eq('id', expenseId)
+
+      // Refresh data
+      await fetchProjectExpenses()
+
+      alert('Xuất PDF thành công!')
+    } catch (error: any) {
+      console.error('Error exporting PDF:', error)
+      alert(`Lỗi khi xuất PDF: ${error.message || 'Lỗi không xác định'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Handle preview PDF for planned expense
+  const handlePreviewPDF = async (expenseId: string) => {
+    try {
+      setLoading(true)
+
+      // Fetch data using the same logic as handleExportPDF
+      const pdfData = await fetchExpenseDataForPDF(expenseId)
+
+      // Set preview data and open modal
+      setPreviewData(pdfData)
+      setPreviewModalOpen(true)
+    } catch (error: any) {
+      console.error('Error preparing PDF preview:', error)
+      alert(`Lỗi khi xem trước PDF: ${error.message || 'Lỗi không xác định'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Extract PDF data fetching logic to reuse in both export and preview
+  const fetchExpenseDataForPDF = async (expenseId: string) => {
+    // 1. Fetch full expense data from project_expenses_quote
+    const { data: expenseData, error: fetchError } = await supabase
+      .from('project_expenses_quote')
+      .select(`
+        *,
+        projects:project_id(name, project_code),
+        customers:customer_id(name)
+      `)
+      .eq('id', expenseId)
+      .single()
+
+    if (fetchError || !expenseData) {
+      throw new Error('Không tìm thấy dữ liệu chi phí kế hoạch')
+    }
+
+    const projectId = expenseData.project_id
+    if (!projectId) {
+      throw new Error('Chi phí kế hoạch không có dự án liên kết')
+    }
+
+    // 2. Fetch quote data from quotes table (based on project_id)
+    const { data: quotesData, error: quotesError } = await supabase
+      .from('quotes')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (quotesError) {
+      console.warn('Warning: Could not fetch quote data:', quotesError)
+    }
+
+    const quoteData = quotesData && quotesData.length > 0 ? quotesData[0] : null
+    const quoteId = quoteData?.id
+
+    // 3. Fetch quote items from quote_items table with product names
+    let quoteItems: any[] = []
+    if (quoteId) {
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('quote_items')
+        .select(`
+          *,
+          products:product_service_id(id, name, description)
+        `)
+        .eq('quote_id', quoteId)
+        .order('created_at', { ascending: true })
+
+      if (itemsError) {
+        console.warn('Warning: Could not fetch quote items:', itemsError)
+      } else {
+        quoteItems = itemsData || []
+      }
+    }
+
+    // 4. Fetch expense objects
+    const expenseObjectIds = expenseData.expense_object_columns || []
+    let expenseObjects: any[] = []
+    if (expenseObjectIds.length > 0) {
+      const { data: objectsData, error: objectsError } = await supabase
+        .from('expense_objects')
+        .select('id, name, level, parent_id')
+        .in('id', expenseObjectIds)
+
+      if (objectsError) {
+        console.warn('Warning: Could not fetch expense objects:', objectsError)
+      } else {
+        expenseObjects = objectsData || []
+      }
+    }
+
+    // 5. Fetch product names for invoice_items if they have product_service_id
+    const fetchProductNames = async (items: any[]) => {
+      const productIds = items
+        .map(item => item.product_service_id || item.product_id)
+        .filter(id => id)
+
+      if (productIds.length === 0) return {}
+
+      const { data: productsData } = await supabase
+        .from('products')
+        .select('id, name, description')
+        .in('id', productIds)
+
+      const productMap: { [key: string]: { name: string; description?: string } } = {}
+      if (productsData) {
+        productsData.forEach(product => {
+          productMap[product.id] = {
+            name: product.name,
+            description: product.description || ''
+          }
+        })
+      }
+      return productMap
+    }
+
+    // 6. Prepare invoice items - use expense invoice_items if available, otherwise use quote_items
+    let invoiceItems: any[] = []
+    if (expenseData.invoice_items && Array.isArray(expenseData.invoice_items) && expenseData.invoice_items.length > 0) {
+      // Fetch product names for expense invoice_items
+      const productMap = await fetchProductNames(expenseData.invoice_items)
+
+      // Use invoice_items from expense
+      invoiceItems = expenseData.invoice_items.map((item: any) => {
+        const productId = item.product_service_id || item.product_id
+        const productInfo = productId ? productMap[productId] : null
+
+        return {
+          section: item.section || '',
+          productName: productInfo?.name || item.productName || item.name_product || '',
+          description: productInfo?.description || item.description || '',
+          unitPrice: Number(item.unitPrice || item.unit_price || 0),
+          quantity: Number(item.quantity || 0),
+          unit: item.unit || 'cái',
+          area: item.area ? Number(item.area) : undefined,
+          lineTotal: Number(item.lineTotal || item.line_total || item.total_price || 0),
+          components: item.components || {}
+        }
+      })
+    } else if (quoteItems.length > 0) {
+      // Fallback to quote_items - get product names from join or fetch separately
+      invoiceItems = quoteItems.map((item: any) => {
+        // Try to get product name from joined products relation
+        const product = item.products
+        const productName = Array.isArray(product)
+          ? (product[0]?.name || '')
+          : (product?.name || '')
+
+        return {
+          section: '',
+          productName: productName || item.name_product || item.product_name || '',
+          description: item.products?.description || item.description || '',
+          unitPrice: Number(item.unit_price || item.price || 0),
+          quantity: Number(item.quantity || item.qty || 0),
+          unit: item.unit || 'cái',
+          area: item.area ? Number(item.area) : undefined,
+          lineTotal: Number(item.total_price || item.subtotal || item.total || 0),
+          components: item.product_components || item.components || {}
+        }
+      })
+    }
+
+    // Log invoice items for debugging
+    console.log('📦 Invoice items prepared:', {
+      count: invoiceItems.length,
+      hasExpenseItems: expenseData.invoice_items?.length > 0,
+      hasQuoteItems: quoteItems.length > 0,
+      sample: invoiceItems[0]
+    })
+
+    // Warn if no invoice items found
+    if (!invoiceItems || invoiceItems.length === 0) {
+      console.warn('⚠️ No invoice items found for expense:', expenseId)
+      console.warn('  - Expense invoice_items:', expenseData.invoice_items)
+      console.warn('  - Quote items:', quoteItems)
+    }
+
+    // 7. Prepare data for PDF export
+    const project = expenseData.projects as any
+    const customer = expenseData.customers as any
+    const projectName = Array.isArray(project) ? project[0]?.name : (project?.name || '')
+    const projectCode = Array.isArray(project) ? project[0]?.project_code : (project?.project_code || '')
+    const customerName = Array.isArray(customer) ? customer[0]?.name : (customer?.name || '')
+
+    // 8. Get company info from database (company_settings table)
+    let companyInfo: any = {}
+
+    // Try to fetch from company_settings table first
+    const { data: companyData, error: companyError } = await supabase
+      .from('company_settings')
+      .select('*')
+      .limit(1)
+      .single()
+
+    if (!companyError && companyData) {
+      console.log('✅ Fetched company settings from database:', companyData)
+
+      // Fetch logo and convert to base64 if URL exists
+      let logoBase64 = ''
+      if (companyData.company_logo_url) {
+        try {
+          const response = await fetch(companyData.company_logo_url)
+          const blob = await response.blob()
+          logoBase64 = await new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+          console.log('✅ Converted company logo to base64')
+        } catch (err) {
+          console.warn('⚠️ Could not fetch company logo:', err)
+        }
+      }
+
+      companyInfo = {
+        company_name: companyData.company_name,
+        company_showroom: companyData.company_showroom,
+        company_factory: companyData.company_factory,
+        company_website: companyData.company_website,
+        company_hotline: companyData.company_hotline,
+        company_logo_url: companyData.company_logo_url,
+        company_logo_base64: logoBase64
+      }
+    } else {
+      console.warn('⚠️ Could not fetch company settings, using quote data as fallback')
+
+      // Fallback to quote data if available
+      if (quoteData) {
+        companyInfo = {
+          company_name: quoteData.company_name || 'Công ty TNHH Cửa Phúc Đạt',
+          company_showroom: quoteData.company_showroom || '',
+          company_factory: quoteData.company_factory || '',
+          company_website: quoteData.company_website || '',
+          company_hotline: quoteData.company_hotline || '',
+          company_logo_url: quoteData.company_logo_url || '',
+          company_logo_base64: quoteData.company_logo_base64 || ''
+        }
+      }
+    }
+
+    return {
+      id: expenseData.id,
+      expense_code: expenseData.expense_code || '',
+      description: expenseData.description || '',
+      amount: expenseData.amount || 0,
+      currency: expenseData.currency || 'VND',
+      expense_date: expenseData.expense_date || new Date().toISOString(),
+      project_name: projectName,
+      project_code: projectCode,
+      customer_name: customerName,
+      notes: expenseData.notes || '',
+      invoice_items: invoiceItems,
+      expense_objects: expenseObjects,
+      expense_object_totals: expenseData.expense_object_totals || {},
+      company_info: companyInfo
+    }
+  }
+
+  // Handle send email for planned expense
+  const handleSendEmail = async (expenseId: string) => {
+    try {
+      setLoading(true)
+
+      // Fetch expense data
+      const { data: expenseData, error: fetchError } = await supabase
+        .from('project_expenses_quote')
+        .select('*')
+        .eq('id', expenseId)
+        .single()
+
+      if (fetchError || !expenseData) {
+        throw new Error('Không tìm thấy dữ liệu chi phí kế hoạch')
+      }
+
+      // TODO: Implement email sending with backend API
+      // For now, just mark as sent
+      const currentNotes = expenseData.notes || ''
+      const updatedNotes = currentNotes.includes('[EMAIL_SENT]')
+        ? currentNotes
+        : `${currentNotes}\n[EMAIL_SENT]`.trim()
+
+      await supabase
+        .from('project_expenses_quote')
+        .update({ notes: updatedNotes })
+        .eq('id', expenseId)
+
+      // Refresh data
+      await fetchProjectExpenses()
+
+      alert('Gửi email thành công! (Tính năng đang được phát triển)')
+    } catch (error: any) {
+      console.error('Error sending email:', error)
+      alert(`Lỗi khi gửi email: ${error.message || 'Lỗi không xác định'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Check if expense has been exported or emailed
+  const hasBeenExportedOrEmailed = (expense: ProjectExpense): boolean => {
+    const notes = expense.notes || ''
+    return notes.includes('[PDF_SENT]') || notes.includes('[EMAIL_SENT]')
+  }
+
   const handleApprove = async (quoteId: string) => {
     try {
       setLoading(true)
@@ -861,7 +1453,7 @@ const startApproveExpenseTour = useCallback(async () => {
   const handleApproveActual = async (expenseId: string) => {
     const expense = expenses.find(e => e.id === expenseId)
     if (!expense || !canApproveActual(expense)) return
-    
+
     if (window.confirm('Duyệt chi phí thực tế này?')) {
       try {
         const { error } = await supabase
@@ -893,18 +1485,18 @@ const startApproveExpenseTour = useCallback(async () => {
   }
 
   const filteredExpenses = expenses.filter(expense => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       expense.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       expense.project_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       expense.description.toLowerCase().includes(searchTerm.toLowerCase())
-    
+
     const matchesView = viewMode === 'all' || expense.category === viewMode
-    
+
     const matchesProject = selectedProjectId === 'all' || expense.project_id === selectedProjectId
-    
+
     // Không lọc theo trạng thái dự án -> luôn true
     const matchesProjectStatus = true
-    
+
     return matchesSearch && matchesView && matchesProject && matchesProjectStatus
   })
 
@@ -959,106 +1551,102 @@ const startApproveExpenseTour = useCallback(async () => {
 
   const projectDisplay = formatProjects(selectedProjectId === 'all' ? expenses : expenses.filter(e => e.project_id === selectedProjectId))
 
-return (
-  <div className="space-y-6">
-    {/* Action Buttons */}
-    <div className="flex justify-end space-x-2" data-tour-id="expenses-list-header">
-      {viewMode === 'planned' && (
-        <button
-          onClick={() => startApproveExpenseTour()}
-          disabled={isApproveExpenseTourRunning}
-          className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
-            isApproveExpenseTourRunning
+  return (
+    <div className="space-y-6">
+      {/* Action Buttons */}
+      <div className="flex justify-end space-x-2" data-tour-id="expenses-list-header">
+        {viewMode === 'planned' && (
+          <button
+            onClick={() => startApproveExpenseTour()}
+            disabled={isApproveExpenseTourRunning}
+            className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${isApproveExpenseTourRunning
               ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
               : 'text-white bg-green-600 hover:bg-green-700'
-          }`}
-          title="Bắt đầu hướng dẫn duyệt chi phí kế hoạch"
-        >
-          <CircleHelp className="h-4 w-4" />
-          <span>Hướng dẫn duyệt</span>
-        </button>
-      )}
-      <button
-        onClick={() => setShowExpenseObjectModal(true)}
-        className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-      >
-        <Target className="h-4 w-4 mr-2" />
-        Tạo đối tượng chi phí
-      </button>
-      <button
-        onClick={() => {
-          setCreateExpenseCategory('planned')
-          setShowCreateModal(true)
-        }}
-        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-      >
-        <Plus className="h-4 w-4 mr-2" />
-        Thêm chi phí kế hoạch
-      </button>
-      <button
-        onClick={() => {
-          setCreateExpenseCategory('actual')
-          setShowCreateModal(true)
-        }}
-        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-      >
-        <Plus className="h-4 w-4 mr-2" />
-        Thêm chi phí thực tế
-      </button>
-    </div>
-
-    {/* View Mode Tabs and Project Filter */}
-    <div className="flex items-center justify-between flex-wrap gap-4">
-      <div className="flex space-x-2">
+              }`}
+            title="Bắt đầu hướng dẫn duyệt chi phí kế hoạch"
+          >
+            <CircleHelp className="h-4 w-4" />
+            <span>Hướng dẫn duyệt</span>
+          </button>
+        )}
         <button
-          onClick={() => setViewMode('all')}
-          className={`px-4 py-2 rounded-lg ${
-            viewMode === 'all' 
-              ? 'bg-blue-100 text-blue-700' 
-              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-          }`}
+          onClick={() => setShowExpenseObjectModal(true)}
+          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
         >
-          Tất cả
+          <Target className="h-4 w-4 mr-2" />
+          Tạo đối tượng chi phí
         </button>
         <button
-          onClick={() => setViewMode('planned')}
-          className={`px-4 py-2 rounded-lg ${
-            viewMode === 'planned'
-              ? 'bg-blue-100 text-blue-700'
-              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-          }`}
+          onClick={() => {
+            setCreateExpenseCategory('planned')
+            setShowCreateModal(true)
+          }}
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
         >
-          Kế hoạch
+          <Plus className="h-4 w-4 mr-2" />
+          Thêm chi phí kế hoạch
         </button>
         <button
-          onClick={() => setViewMode('actual')}
-          className={`px-4 py-2 rounded-lg ${
-            viewMode === 'actual'
-              ? 'bg-blue-100 text-blue-700'
-              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-          }`}
+          onClick={() => {
+            setCreateExpenseCategory('actual')
+            setShowCreateModal(true)
+          }}
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
         >
-          Thực tế
+          <Plus className="h-4 w-4 mr-2" />
+          Thêm chi phí thực tế
         </button>
       </div>
-      
-      <div className="flex space-x-2">
-        {/* Project Filter */}
-        <select
-          value={selectedProjectId}
-          onChange={(e) => setSelectedProjectId(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">Tất cả dự án</option>
-          {projectsList.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.project_code ? `${project.project_code} - ` : ''}{project.name}
-            </option>
-          ))}
-        </select>
 
-        {/* Project Status Filter - luôn hiển thị tất cả trạng thái, nên ẩn dropdown này */}
-        {/* <select
+      {/* View Mode Tabs and Project Filter */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setViewMode('all')}
+            className={`px-4 py-2 rounded-lg ${viewMode === 'all'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+          >
+            Tất cả
+          </button>
+          <button
+            onClick={() => setViewMode('planned')}
+            className={`px-4 py-2 rounded-lg ${viewMode === 'planned'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+          >
+            Kế hoạch
+          </button>
+          <button
+            onClick={() => setViewMode('actual')}
+            className={`px-4 py-2 rounded-lg ${viewMode === 'actual'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+          >
+            Thực tế
+          </button>
+        </div>
+
+        <div className="flex space-x-2">
+          {/* Project Filter */}
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả dự án</option>
+            {projectsList.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.project_code ? `${project.project_code} - ` : ''}{project.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Project Status Filter - luôn hiển thị tất cả trạng thái, nên ẩn dropdown này */}
+          {/* <select
           value={projectStatusFilter}
           onChange={(e) => setProjectStatusFilter(e.target.value)}
           className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1069,79 +1657,78 @@ return (
             </option>
           ))}
         </select> */}
+        </div>
       </div>
-    </div>
 
-    {/* Summary Cards - Show based on viewMode */}
-      <div className={`grid grid-cols-1 gap-4 ${
-        viewMode === 'all' ? 'md:grid-cols-4' : 
-        viewMode === 'planned' || viewMode === 'actual' ? 'md:grid-cols-1 max-w-md' : 
-        'md:grid-cols-4'
-      }`}>
+      {/* Summary Cards - Show based on viewMode */}
+      <div className={`grid grid-cols-1 gap-4 ${viewMode === 'all' ? 'md:grid-cols-4' :
+        viewMode === 'planned' || viewMode === 'actual' ? 'md:grid-cols-1 max-w-md' :
+          'md:grid-cols-4'
+        }`}>
         {/* Kế hoạch - Show in 'all' and 'planned' */}
         {(viewMode === 'all' || viewMode === 'planned') && (
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="p-2 rounded-lg bg-blue-500">
-              <Target className="h-5 w-5 text-white" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Kế hoạch</p>
-              <p className="text-lg font-bold text-gray-900">
-                {formatCurrency(totalPlanned)}
-              </p>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="flex items-center">
+              <div className="p-2 rounded-lg bg-blue-500">
+                <Target className="h-5 w-5 text-white" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-600">Kế hoạch</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {formatCurrency(totalPlanned)}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
         )}
-        
+
         {/* Thực tế - Show in 'all' and 'actual' */}
         {(viewMode === 'all' || viewMode === 'actual') && (
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="p-2 rounded-lg bg-green-500">
-              <DollarSign className="h-5 w-5 text-white" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Thực tế</p>
-              <p className="text-lg font-bold text-gray-900">
-                {formatCurrency(totalActual)}
-              </p>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="flex items-center">
+              <div className="p-2 rounded-lg bg-green-500">
+                <DollarSign className="h-5 w-5 text-white" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-600">Thực tế</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {formatCurrency(totalActual)}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
         )}
-        
+
         {/* Chênh lệch - Only show in 'all' */}
         {viewMode === 'all' && (
           <>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="p-2 rounded-lg bg-purple-500">
-              <BarChart3 className="h-5 w-5 text-white" />
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center">
+                <div className="p-2 rounded-lg bg-purple-500">
+                  <BarChart3 className="h-5 w-5 text-white" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-gray-600">Chênh lệch</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {formatCurrency(totalVariance)}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Chênh lệch</p>
-              <p className="text-lg font-bold text-gray-900">
-                {formatCurrency(totalVariance)}
-              </p>
+
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center">
+                <div className="p-2 rounded-lg bg-orange-500">
+                  {getVarianceIcon(totalVariance)}
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-gray-600">Tỷ lệ %</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {variancePercentage.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="p-2 rounded-lg bg-orange-500">
-              {getVarianceIcon(totalVariance)}
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tỷ lệ %</p>
-              <p className="text-lg font-bold text-gray-900">
-                {variancePercentage.toFixed(1)}%
-              </p>
-            </div>
-          </div>
-        </div>
           </>
         )}
       </div>
@@ -1150,31 +1737,28 @@ return (
       <div className="flex space-x-2">
         <button
           onClick={() => setViewMode('all')}
-          className={`px-3 py-2 rounded-md text-sm font-medium ${
-            viewMode === 'all' 
-              ? 'bg-blue-100 text-blue-700' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
+          className={`px-3 py-2 rounded-md text-sm font-medium ${viewMode === 'all'
+            ? 'bg-blue-100 text-blue-700'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
         >
           Tất cả
         </button>
         <button
           onClick={() => setViewMode('planned')}
-          className={`px-3 py-2 rounded-md text-sm font-medium ${
-            viewMode === 'planned' 
-              ? 'bg-blue-100 text-blue-700' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
+          className={`px-3 py-2 rounded-md text-sm font-medium ${viewMode === 'planned'
+            ? 'bg-blue-100 text-blue-700'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
         >
           Kế hoạch
         </button>
         <button
           onClick={() => setViewMode('actual')}
-          className={`px-3 py-2 rounded-md text-sm font-medium ${
-            viewMode === 'actual' 
-              ? 'bg-blue-100 text-blue-700' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
+          className={`px-3 py-2 rounded-md text-sm font-medium ${viewMode === 'actual'
+            ? 'bg-blue-100 text-blue-700'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
         >
           Thực tế
         </button>
@@ -1212,30 +1796,30 @@ return (
                 {/* Loại - removed per request; keep detailed in other views if needed */}
                 {/* Kế hoạch - Show in 'all' and 'planned' */}
                 {(viewMode === 'all' || viewMode === 'planned') && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Kế hoạch
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Kế hoạch
+                  </th>
                 )}
                 {/* Thực tế - Show in 'all' and 'actual' */}
                 {(viewMode === 'all' || viewMode === 'actual') && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Thực tế
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Thực tế
+                  </th>
                 )}
                 {/* Chênh lệch - Only show in 'all' */}
                 {viewMode === 'all' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Chênh lệch
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Chênh lệch
+                  </th>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Trạng thái
                 </th>
                 {/* Thao tác - chỉ hiển thị khi không phải tab "Tất cả" */}
                 {viewMode !== 'all' && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Thao tác
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Thao tác
+                  </th>
                 )}
               </tr>
             </thead>
@@ -1243,81 +1827,80 @@ return (
               {viewMode === 'all' ? (
                 // Show aggregated data for 'all' view
                 projectDisplay.map((project) => (
-                <tr key={project.project_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {projectsMap.get(project.project_id)?.name || 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {projectsMap.get(project.project_id)?.project_code || 'N/A'}
-                    </div>
-                  </td>
-                  {/* Loại column removed */}
-                  {/* Kế hoạch - Show in 'all' and 'planned' */}
-                  {(viewMode === 'all' || viewMode === 'planned') && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(project.planned)}
-                  </td>
-                  )}
-                  {/* Thực tế - Show in 'all' and 'actual' */}
-                  {(viewMode === 'all' || viewMode === 'actual') && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(project.actual)}
-                  </td>
-                  )}
-                  {/* Chênh lệch - Only show in 'all' */}
-                  {viewMode === 'all' && (
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`flex items-center text-sm ${getVarianceColor(project.variance)}`}>
-                      {getVarianceIcon(project.variance)}
-                      <span className="ml-1">
-                        {formatCurrency(project.variance)} ({project.variance_percentage.toFixed(1)}%)
+                  <tr key={project.project_id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {projectsMap.get(project.project_id)?.name || 'N/A'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {projectsMap.get(project.project_id)?.project_code || 'N/A'}
+                      </div>
+                    </td>
+                    {/* Loại column removed */}
+                    {/* Kế hoạch - Show in 'all' and 'planned' */}
+                    {(viewMode === 'all' || viewMode === 'planned') && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(project.planned)}
+                      </td>
+                    )}
+                    {/* Thực tế - Show in 'all' and 'actual' */}
+                    {(viewMode === 'all' || viewMode === 'actual') && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(project.actual)}
+                      </td>
+                    )}
+                    {/* Chênh lệch - Only show in 'all' */}
+                    {viewMode === 'all' && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`flex items-center text-sm ${getVarianceColor(project.variance)}`}>
+                          {getVarianceIcon(project.variance)}
+                          <span className="ml-1">
+                            {formatCurrency(project.variance)} ({project.variance_percentage.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.variance_percentage > 0 ? 'rejected' : 'approved')}`}>
+                        {project.variance_percentage > 0 ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                        <span className="ml-1">{project.variance_percentage > 0 ? 'Vượt chi phí kế hoạch' : 'Đã duyệt'}</span>
                       </span>
-                    </div>
-                  </td>
-                  )}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.variance_percentage > 0 ? 'rejected' : 'approved')}`}>
-                      {project.variance_percentage > 0 ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                      <span className="ml-1">{project.variance_percentage > 0 ? 'Vượt chi phí kế hoạch' : 'Đã duyệt'}</span>
-                    </span>
-                  </td>
-                  {/* Thao tác - chỉ hiển thị khi không phải tab "Tất cả" */}
-                  {viewMode !== 'all' && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button 
-                        className="text-blue-600 hover:text-blue-900 p-1"
-                        title="Xem chi tiết"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button 
-                        className="text-gray-600 hover:text-gray-900 p-1"
-                        title="Chỉnh sửa"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      {/* Approve action removed in aggregated view; approval is available on planned rows */}
-                      <button 
-                        className="text-red-600 hover:text-red-900 p-1"
-                        title="Xóa"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                  )}
-                </tr>
+                    </td>
+                    {/* Thao tác - chỉ hiển thị khi không phải tab "Tất cả" */}
+                    {viewMode !== 'all' && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            className="text-blue-600 hover:text-blue-900 p-1"
+                            title="Xem chi tiết"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            className="text-gray-600 hover:text-gray-900 p-1"
+                            title="Chỉnh sửa"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          {/* Approve action removed in aggregated view; approval is available on planned rows */}
+                          <button
+                            className="text-red-600 hover:text-red-900 p-1"
+                            title="Xóa"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
                 ))
               ) : (
                 // Show individual expense items for 'planned' or 'actual' view
                 getPaginatedFilteredExpenses().slice(startIndex, endIndex).map((expense) => (
-                  <tr key={expense.id} className={`hover:bg-gray-50 ${
-                    expense.level && expense.level > 0 
-                      ? 'bg-orange-50' // Child expenses - light orange background
-                      : 'bg-white'     // Parent expenses - white background
-                  }`}>
+                  <tr key={expense.id} className={`hover:bg-gray-50 ${expense.level && expense.level > 0
+                    ? 'bg-orange-50' // Child expenses - light orange background
+                    : 'bg-white'     // Parent expenses - white background
+                    }`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {projectsMap.get(expense.project_id)?.name || 'N/A'}
@@ -1349,20 +1932,19 @@ return (
                           ) : (
                             <div className="w-6 mr-2" />
                           )}
-                          
+
                           {/* Icon for parent/child with different colors */}
                           {expense.hasChildren ? (
                             <Folder className="h-4 w-4 text-blue-500 mr-2" />
                           ) : (
                             <FileText className={`h-4 w-4 mr-2 ${expense.level && expense.level > 0 ? 'text-orange-500' : 'text-gray-400'}`} />
                           )}
-                          
+
                           <div className="flex-1">
-                            <div className={`text-sm font-medium ${
-                              expense.level && expense.level > 0 
-                                ? 'text-orange-700' // Child expenses - orange color
-                                : 'text-gray-900'  // Parent expenses - normal color
-                            }`}>
+                            <div className={`text-sm font-medium ${expense.level && expense.level > 0
+                              ? 'text-orange-700' // Child expenses - orange color
+                              : 'text-gray-900'  // Parent expenses - normal color
+                              }`}>
                               {expense.description}
                               {expense.hasChildren && expense.children && (
                                 <span className="ml-2 text-xs text-gray-500">
@@ -1370,18 +1952,16 @@ return (
                                 </span>
                               )}
                             </div>
-                            <div className={`text-xs mt-1 ${
-                              expense.level && expense.level > 0 
-                                ? 'text-orange-600' // Child expenses - orange color
-                                : 'text-gray-500'   // Parent expenses - normal color
-                            }`}>
+                            <div className={`text-xs mt-1 ${expense.level && expense.level > 0
+                              ? 'text-orange-600' // Child expenses - orange color
+                              : 'text-gray-500'   // Parent expenses - normal color
+                              }`}>
                               Mã: {expense.id.substring(0, 8)}...
                             </div>
-                            <div className={`text-xs ${
-                              expense.level && expense.level > 0 
-                                ? 'text-orange-400' // Child expenses - light orange
-                                : 'text-gray-400'   // Parent expenses - normal color
-                            }`}>
+                            <div className={`text-xs ${expense.level && expense.level > 0
+                              ? 'text-orange-400' // Child expenses - light orange
+                              : 'text-gray-400'   // Parent expenses - normal color
+                              }`}>
                               {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
                             </div>
                           </div>
@@ -1390,21 +1970,19 @@ return (
                     </td>
                     {/* Show only planned amount in 'planned' view */}
                     {viewMode === 'planned' && (
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
-                        expense.level && expense.level > 0 
-                          ? 'text-orange-600' // Child expenses - orange color
-                          : 'text-blue-600'   // Parent expenses - blue color
-                      }`}>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${expense.level && expense.level > 0
+                        ? 'text-orange-600' // Child expenses - orange color
+                        : 'text-blue-600'   // Parent expenses - blue color
+                        }`}>
                         {formatCurrency(expense.planned_amount)}
                       </td>
                     )}
                     {/* Show only actual amount in 'actual' view */}
                     {viewMode === 'actual' && (
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
-                        expense.level && expense.level > 0 
-                          ? 'text-orange-600' // Child expenses - orange color
-                          : 'text-green-600'  // Parent expenses - green color
-                      }`}>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${expense.level && expense.level > 0
+                        ? 'text-orange-600' // Child expenses - orange color
+                        : 'text-green-600'  // Parent expenses - green color
+                        }`}>
                         {formatCurrency(expense.actual_amount)}
                       </td>
                     )}
@@ -1422,7 +2000,7 @@ return (
                         {viewMode === 'planned' && (
                           <>
                             {canEdit(expense) && (
-                              <button 
+                              <button
                                 onClick={() => handleEditExpense(expense)}
                                 className="text-blue-600 hover:text-blue-900 p-1"
                                 title="Sửa"
@@ -1430,8 +2008,19 @@ return (
                                 <Edit className="h-4 w-4" />
                               </button>
                             )}
-                            {canApprove(expense) && (
+                            {/* Preview/Edit button - opens preview modal for pending expenses */}
+                            {expense.status === 'pending' && (
                               <button 
+                                onClick={() => handleOpenPreview(expense.id)}
+                                className="text-green-600 hover:text-green-900 p-1"
+                                title="Xem và chỉnh sửa trước khi xuất PDF hoặc gửi email"
+                              >
+                                <Send className="h-4 w-4" />
+                              </button>
+                            )}
+                            {/* Approve button - only visible after PDF export or email sent */}
+                            {canApprove(expense) && hasBeenExportedOrEmailed(expense) && (
+                              <button
                                 onClick={() => handleApprove(expense.id)}
                                 className="text-green-600 hover:text-green-900 p-1"
                                 title="Duyệt thành chi phí thực tế"
@@ -1441,7 +2030,7 @@ return (
                               </button>
                             )}
                             {canDelete(expense) && (
-                              <button 
+                              <button
                                 onClick={() => handleDeleteExpense(expense.id)}
                                 className="text-red-600 hover:text-red-900 p-1"
                                 title="Xóa"
@@ -1451,12 +2040,12 @@ return (
                             )}
                           </>
                         )}
-                        
+
                         {/* For actual expenses */}
                         {viewMode === 'actual' && (
                           <>
                             {canEdit(expense) && (
-                              <button 
+                              <button
                                 onClick={() => handleEditExpense(expense)}
                                 className="text-blue-600 hover:text-blue-900 p-1"
                                 title="Sửa"
@@ -1465,7 +2054,7 @@ return (
                               </button>
                             )}
                             {canApproveActual(expense) && (
-                              <button 
+                              <button
                                 onClick={() => handleApproveActual(expense.id)}
                                 className="text-green-600 hover:text-green-900 p-1"
                                 title="Duyệt chi phí thực tế"
@@ -1474,7 +2063,7 @@ return (
                               </button>
                             )}
                             {canDelete(expense) && (
-                              <button 
+                              <button
                                 onClick={() => handleDeleteExpense(expense.id)}
                                 className="text-red-600 hover:text-red-900 p-1"
                                 title="Xóa"
@@ -1484,8 +2073,8 @@ return (
                             )}
                           </>
                         )}
-                        
-                        <button 
+
+                        <button
                           className="text-gray-600 hover:text-gray-900 p-1"
                           title="Xem chi tiết"
                         >
@@ -1498,7 +2087,7 @@ return (
               )}
             </tbody>
           </table>
-          
+
           {/* Pagination Controls */}
           {allFilteredExpenses.length > 0 && totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
@@ -1511,11 +2100,10 @@ return (
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded-md text-sm ${
-                    currentPage === 1
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                  }`}
+                  className={`px-3 py-1 rounded-md text-sm ${currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
                 >
                   Trước
                 </button>
@@ -1524,11 +2112,10 @@ return (
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1 rounded-md text-sm ${
-                        currentPage === page
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                      }`}
+                      className={`px-3 py-1 rounded-md text-sm ${currentPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
                     >
                       {page}
                     </button>
@@ -1537,11 +2124,10 @@ return (
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded-md text-sm ${
-                    currentPage === totalPages
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                  }`}
+                  className={`px-3 py-1 rounded-md text-sm ${currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
                 >
                   Sau
                 </button>
@@ -1568,6 +2154,19 @@ return (
         onSuccess={() => {
           setShowExpenseObjectModal(false)
           // Có thể thêm logic refresh danh sách đối tượng chi phí nếu cần
+        }}
+      />
+
+      {/* Expense Preview Modal */}
+      <ExpensePreviewModal
+        isOpen={showExpensePreviewModal}
+        onClose={() => {
+          setShowExpensePreviewModal(false)
+          setPreviewExpenseId(null)
+        }}
+        expenseId={previewExpenseId || ''}
+        onSuccess={() => {
+          fetchProjectExpenses()
         }}
       />
     </div>

@@ -1803,13 +1803,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           const quantity = Number(curr.quantity || 1)
           const baselineAreaPerUnit = (lengthMm * heightMm) / 1_000_000 // mm^2 -> m^2 per unit
           const computedArea = baselineAreaPerUnit * quantity // Multiply by quantity
-          const rounded = Math.round(computedArea * 1e6) / 1e6
-          if (curr.area == null || Math.abs(Number(curr.area) - rounded) > 1e-9) {
+          const rounded = Math.round(computedArea * 100) / 100 // Round to 2 decimal places
+          if (curr.area == null || Math.abs(Number(curr.area) - rounded) > 0.01) {
             curr.area = rounded
             autoAreaChanged = true
-            // Store baseline area per unit (not multiplied by quantity)
+            // Store baseline area per unit (not multiplied by quantity) - round to 2 decimal places
             if (curr.baseline_area == null) {
-              curr.baseline_area = baselineAreaPerUnit
+              curr.baseline_area = Math.round(baselineAreaPerUnit * 100) / 100
             }
             // Recalculate total_price after auto area update
             updatedItems[index].total_price = computeItemTotal(updatedItems[index])
@@ -1837,7 +1837,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           computedVolume = baselineVolumePerUnit * quantity // Multiply by quantity
         } else if (curr.area != null && heightMm != null) {
           // If using area, calculate volume per unit first
-          const baselineAreaPerUnit = curr.baseline_area ?? (curr.area / quantity) // Get per-unit area
+          const baselineAreaPerUnit = curr.baseline_area ?? Math.round((curr.area / quantity) * 100) / 100 // Get per-unit area, round to 2 decimal places
           baselineVolumePerUnit = baselineAreaPerUnit * (heightMm / 1000)
           computedVolume = baselineVolumePerUnit * quantity // Multiply by quantity
         }
@@ -2013,7 +2013,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               unit_price: (product as any).unit_price || 0,
               total_price: 0, // will compute below after area fields are set
               area: (product as any).area ?? null,
-              baseline_area: (product as any).area ?? (((product as any).length != null && (product as any).height != null) ? (((Number((product as any).length) * Number((product as any).height)) / 1_000_000)) : null),
+              baseline_area: (product as any).area ?? (((product as any).length != null && (product as any).height != null) ? Math.round(((Number((product as any).length) * Number((product as any).height)) / 1_000_000) * 100) / 100 : null),
               volume: (product as any).volume ?? null,
               baseline_volume: (product as any).volume ?? (((product as any).length != null && (product as any).height != null && (product as any).depth != null) ? (((Number((product as any).length) * Number((product as any).height) * Number((product as any).depth)) / 1_000_000_000)) : null),
               height: (product as any).height ?? null,
@@ -2058,7 +2058,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             unit_price: (product as any).unit_price ?? current.unit_price,
             total_price: 0, // compute after area fields below
             area: (product as any).area ?? current.area ?? null,
-            baseline_area: (product as any).area ?? current.baseline_area ?? (((product as any).length != null && (product as any).height != null) ? (((Number((product as any).length) * Number((product as any).height)) / 1_000_000)) : current.baseline_area ?? null),
+            baseline_area: (product as any).area ?? current.baseline_area ?? (((product as any).length != null && (product as any).height != null) ? Math.round(((Number((product as any).length) * Number((product as any).height)) / 1_000_000) * 100) / 100 : current.baseline_area ?? null),
             volume: (product as any).volume ?? current.volume ?? null,
             baseline_volume: (product as any).volume ?? current.baseline_volume ?? (((product as any).length != null && (product as any).height != null && (product as any).depth != null) ? (((Number((product as any).length) * Number((product as any).height) * Number((product as any).depth)) / 1_000_000_000)) : current.baseline_volume ?? null),
             height: (product as any).height ?? current.height ?? null,
@@ -3582,7 +3582,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             tax_rate: formData.tax_rate || 10,  // Default tax rate from form
                             product_category_id: p.category_id || null,
                             area: p.area ?? null,
-                            baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
+                            baseline_area: p.area ?? ((p.length != null && p.height != null) ? Math.round(((Number(p.length) * Number(p.height)) / 1_000_000) * 100) / 100 : null),
                             volume: p.volume ?? null,
                             baseline_volume: p.volume ?? ((p.length != null && p.height != null && p.depth != null) ? ((Number(p.length) * Number(p.height) * Number(p.depth)) / 1_000_000_000) : null),
                             height: p.height ?? null,
@@ -3604,7 +3604,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             tax_rate: formData.tax_rate || 10,  // Default tax rate from form
                             product_category_id: p.category_id || null,
                             area: p.area ?? null,
-                            baseline_area: p.area ?? ((p.length != null && p.height != null) ? ((Number(p.length) * Number(p.height)) / 1_000_000) : null),
+                            baseline_area: p.area ?? ((p.length != null && p.height != null) ? Math.round(((Number(p.length) * Number(p.height)) / 1_000_000) * 100) / 100 : null),
                             volume: p.volume ?? null,
                             baseline_volume: p.volume ?? ((p.length != null && p.height != null && p.depth != null) ? ((Number(p.length) * Number(p.height) * Number(p.depth)) / 1_000_000_000) : null),
                             height: p.height ?? null,
@@ -3879,10 +3879,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                         const depthMm = it.depth != null ? Number(it.depth) : null
                         const qty = Number(it.quantity || 1)
                         // Baseline area is per unit, so no multiplication needed for display
-                        const baseArea = it.baseline_area != null ? Number(it.baseline_area) : ((lengthMm != null && heightMm != null) ? Math.round(((lengthMm * heightMm) / 1_000_000) * 1e6) / 1e6 : null)
+                        const baseArea = it.baseline_area != null ? Number(it.baseline_area) : ((lengthMm != null && heightMm != null) ? Math.round(((lengthMm * heightMm) / 1_000_000) * 100) / 100 : null)
                         // Area value should include quantity (integrate quantity into calculation)
                         const areaVal = (lengthMm != null && heightMm != null)
-                          ? Math.round(((lengthMm * heightMm * qty) / 1_000_000) * 1e6) / 1e6
+                          ? Math.round(((lengthMm * heightMm * qty) / 1_000_000) * 100) / 100
                           : (it.area ?? null)
                         // Volume value should include quantity (integrate quantity into calculation)
                         const volumeVal = (lengthMm != null && heightMm != null && depthMm != null)

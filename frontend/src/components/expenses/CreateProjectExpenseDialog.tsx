@@ -1571,7 +1571,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 // Calculate area backwards: area = line_total / (unitPrice * quantity)
                 const calculatedArea = storedLineTotal / (unitPrice * quantity)
                 if (calculatedArea > 0 && isFinite(calculatedArea)) {
-                  areaVal = Math.round(calculatedArea * 1e6) / 1e6 // Round to 6 decimal places
+                  areaVal = Math.round(calculatedArea * 100) / 100 // Round to 2 decimal places
                   console.log('🔧 Calculated area backwards from line_total:', areaVal, 'for product:', it.product_name)
                 }
               }
@@ -1941,7 +1941,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               // Calculate area backwards: area = line_total / (unitPrice * quantity)
               const calculatedArea = storedLineTotal / (unitPrice * quantity)
               if (calculatedArea > 0 && isFinite(calculatedArea)) {
-                areaVal = Math.round(calculatedArea * 1e6) / 1e6 // Round to 6 decimal places
+                areaVal = Math.round(calculatedArea * 100) / 100 // Round to 2 decimal places
                 console.log('🔧 Calculated area backwards from line_total:', areaVal, 'for product:', it.product_name)
               }
             }

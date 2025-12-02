@@ -273,7 +273,7 @@ export default function ProductExcelImport({ onImportSuccess }: { onImportSucces
         const lengthMm = normalizeNumber(getCell(r, ['Dài (mm)','length_mm']))
         const depthMm = normalizeNumber(getCell(r, ['Sâu (mm)','depth_mm']))
         // Prefer deriving area/volume from mm
-        const areaFromMm = (lengthMm != null && heightMm != null) ? Number(((lengthMm/1000) * (heightMm/1000)).toFixed(6)) : null
+        const areaFromMm = (lengthMm != null && heightMm != null) ? Number(((lengthMm/1000) * (heightMm/1000)).toFixed(2)) : null
         const volumeFromMm = (lengthMm != null && heightMm != null && depthMm != null) ? Number(((lengthMm/1000) * (heightMm/1000) * (depthMm/1000)).toFixed(9)) : null
         const area = areaFromMm ?? (normalizeNumber(getCell(r, ['Diện tích (m²)','area'])) ?? null)
         const volume = volumeFromMm ?? (normalizeNumber(getCell(r, ['Thể tích (m³)','volume'])) ?? null)
