@@ -4883,10 +4883,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       <tr>
                         {selectedExpenseObjectIds.length > 0 && selectedExpenseObjectIds.map((id) => (
                           <React.Fragment key={`${id}-header`}>
-                            {visibleColumns.expense_percentage && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '60px' }}>%</th>}
-                            {visibleColumns.expense_quantity && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '80px' }}>Số lượng</th>}
-                            {visibleColumns.expense_unit_price && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '100px' }}>Đơn giá</th>}
-                            {visibleColumns.expense_amount && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '120px' }}>VND</th>}
+                        {visibleColumns.expense_percentage && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '60px' }}>%</th>}
+                        {visibleColumns.expense_quantity && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '80px' }}>Đơn vị</th>}
+                        {visibleColumns.expense_unit_price && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '100px' }}>Đơn giá</th>}
+                        {visibleColumns.expense_amount && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '120px' }}>VND</th>}
                           </React.Fragment>
                         ))}
                       </tr>

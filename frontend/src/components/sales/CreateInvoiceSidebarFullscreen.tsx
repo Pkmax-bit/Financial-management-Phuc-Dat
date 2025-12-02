@@ -1921,7 +1921,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                               {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
                                 <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
                                 <div key={`hdr-price-${idx}`} className="px-2">Đơn giá</div>,
-                                <div key={`hdr-qty-${idx}`} className="px-2">Số lượng</div>,
+                                <div key={`hdr-qty-${idx}`} className="px-2">Đơn vị</div>,
                                 <div key={`hdr-total-${idx}`} className="px-2">Thành tiền</div>
                               ])}
                             </div>
@@ -2177,7 +2177,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 />
               </div>
             </div>
-
+            
             <div className="flex-1 overflow-y-auto bg-gray-50">
               {loadingProducts ? (
                 <div className="text-center py-8">
@@ -2222,10 +2222,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                           </div>
 
                           {isExpanded && (
-                            <div className="space-y-2">
-                              {categoryProducts.map((product) => (
+                        <div className="space-y-2">
+                          {categoryProducts.map((product) => (
                                 <label
-                                  key={product.id}
+                              key={product.id}
                                   className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-3"
                                 >
                                   <input
@@ -2239,11 +2239,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                     className="h-4 w-4"
                                   />
                                   <div className="grid grid-cols-6 gap-3 items-center w-full">
-                                    <div className="col-span-2">
-                                      <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
-                                      <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
-                                        {category}
-                                      </div>
+                                <div className="col-span-2">
+                                  <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
+                                  <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
+                                    {category}
+                                  </div>
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation()
@@ -2257,53 +2257,53 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                           return variants.length > 1 ? `Chọn biến thể (${variants.length})` : 'Chọn sản phẩm này'
                                         })()}
                                       </button>
-                                    </div>
-                                    <div className="col-span-1">
-                                      <span className="text-sm text-gray-500">
+                                </div>
+                                <div className="col-span-1">
+                                  <span className="text-sm text-gray-500">
                                         <span className="font-medium">Đơn vị:</span><br />
-                                        {product.unit || 'Chưa có'}
-                                      </span>
-                                    </div>
-                                    <div className="col-span-1">
-                                      {product.unit_price ? (
-                                        <span className="text-sm font-bold text-green-600">
+                                    {product.unit || 'Chưa có'}
+                                  </span>
+                                </div>
+                                <div className="col-span-1">
+                                  {product.unit_price ? (
+                                    <span className="text-sm font-bold text-green-600">
                                           <span className="font-medium">Đơn giá:</span><br />
-                                          {formatCurrency(product.unit_price)}
-                                        </span>
-                                      ) : (
-                                        <span className="text-sm text-gray-400">
+                                      {formatCurrency(product.unit_price)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-gray-400">
                                           <span className="font-medium">Đơn giá:</span><br />
-                                          Chưa có
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="col-span-1">
-                                      <span className="text-sm text-gray-500">
+                                      Chưa có
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="col-span-1">
+                                  <span className="text-sm text-gray-500">
                                         <span className="font-medium">Kích thước:</span><br />
-                                        <div className="text-xs space-y-1">
-                                          {product.area && <div>📐 Diện tích: {product.area} m²</div>}
-                                          {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
+                                    <div className="text-xs space-y-1">
+                                      {product.area && <div>📐 Diện tích: {product.area} m²</div>}
+                                      {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
                                           {product.height && <div>📏 Cao: {product.height} mm</div>}
                                           {product.length && <div>📏 Dài: {product.length} mm</div>}
                                           {product.depth && <div>📏 Sâu: {product.depth} mm</div>}
                                           {!product.area && !product.volume && !product.height && !product.length && !product.depth && (
-                                            <div className="text-gray-400">Chưa có kích thước</div>
+                                        <div className="text-gray-400">Chưa có kích thước</div>
                                           )}
-                                        </div>
-                                      </span>
                                     </div>
-                                    <div className="col-span-1">
-                                      <span className="text-sm text-gray-500">
+                                  </span>
+                                </div>
+                                <div className="col-span-1">
+                                  <span className="text-sm text-gray-500">
                                         <span className="font-medium">Mô tả:</span><br />
-                                        {product.description || 'Không có mô tả'}
-                                      </span>
-                                    </div>
-                                  </div>
+                                    {product.description || 'Không có mô tả'}
+                                  </span>
+                                </div>
+                              </div>
                                 </label>
-                              ))}
-                            </div>
-                          )}
+                          ))}
                         </div>
+                          )}
+                      </div>
                       )
                     })
                   })()}

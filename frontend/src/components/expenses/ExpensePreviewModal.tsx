@@ -627,7 +627,7 @@ export default function ExpensePreviewModal({
         <tr>
           ${selectedExpenseObjectIds.map(() => `
             <th class="text-right" style="font-size: 8pt;">%</th>
-            <th class="text-right" style="font-size: 8pt;">Số lượng</th>
+            <th class="text-right" style="font-size: 8pt;">Đơn vị</th>
             <th class="text-right" style="font-size: 8pt;">Đơn giá</th>
             <th class="text-right" style="font-size: 8pt;">Thành tiền</th>
           `).join('')}
@@ -1018,7 +1018,7 @@ export default function ExpensePreviewModal({
         <tr>
           ${selectedExpenseObjectIds.map(() => `
             <th class="text-right" style="font-size: 8pt;">%</th>
-            <th class="text-right" style="font-size: 8pt;">Số lượng</th>
+            <th class="text-right" style="font-size: 8pt;">Đơn vị</th>
             <th class="text-right" style="font-size: 8pt;">Đơn giá</th>
             <th class="text-right" style="font-size: 8pt;">Thành tiền</th>
           `).join('')}

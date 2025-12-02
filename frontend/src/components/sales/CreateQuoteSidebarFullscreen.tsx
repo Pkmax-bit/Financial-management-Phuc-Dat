@@ -2793,7 +2793,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
                               <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
                               <div key={`hdr-price-${idx}`} className="px-2">Đơn giá</div>,
-                              <div key={`hdr-qty-${idx}`} className="px-2">Số lượng</div>,
+                              <div key={`hdr-qty-${idx}`} className="px-2">Đơn vị</div>,
                               <div key={`hdr-total-${idx}`} className="px-2">Thành tiền</div>
                             ])}
                           </div>
@@ -3971,7 +3971,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                   <th className="px-2 py-1 text-left">Vật tư</th>
                                   <th className="px-2 py-1 text-center">Đơn vị</th>
                                   <th className="px-2 py-1 text-right">Đơn giá</th>
-                                  <th className="px-2 py-1 text-right">Số lượng</th>
+                                  <th className="px-2 py-1 text-right">Đơn vị</th>
                                   <th className="px-2 py-1 text-right">Thành tiền</th>
                                 </tr>
                               </thead>

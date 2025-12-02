@@ -811,7 +811,7 @@ export default function ProductCatalog() {
                           <th className="px-3 py-2 text-gray-900 text-left">Đối tượng</th>
                           <th className="px-3 py-2 text-gray-900 text-left">Đơn vị</th>
                           <th className="px-3 py-2 text-gray-900 text-right">Đơn giá</th>
-                          <th className="px-3 py-2 text-gray-900 text-right">Số lượng</th>
+                          <th className="px-3 py-2 text-gray-900 text-right">Đơn vị</th>
                           <th className="px-3 py-2 text-gray-900 text-right">Thành tiền</th>
                           <th className="px-3 py-2 text-gray-900 text-right">&nbsp;</th>
                         </tr>
