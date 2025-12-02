@@ -475,7 +475,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Tổng chi phí theo từng đối tượng chi phí được chọn
   const expenseObjectTotals = useMemo(() => {
     const totals: Record<string, number> = {}
+    // Initialize all selected expense object IDs to 0
     selectedExpenseObjectIds.forEach(id => { totals[id] = 0 })
+    // Calculate totals from invoice items
     invoiceItems.forEach(row => {
       selectedExpenseObjectIds.forEach(id => {
         const pct = Number(row.componentsPct[id] ?? 0)
@@ -486,6 +488,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     })
     return totals
   }, [invoiceItems, selectedExpenseObjectIds])
+
+  // Combined totals: direct input takes priority, then calculated totals
+  const combinedExpenseObjectTotals = useMemo(() => {
+    const totals: Record<string, number> = {}
+    selectedExpenseObjectIds.forEach(id => {
+      totals[id] = directObjectTotals[id] || expenseObjectTotals[id] || 0
+    })
+    return totals
+  }, [directObjectTotals, expenseObjectTotals, selectedExpenseObjectIds])
 
   // Tổng chi phí đã phân bổ (nếu không có phân bổ thì dùng tổng thành tiền dòng)
   const grandAllocationTotal = useMemo(() => {
@@ -668,6 +679,36 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       // For planned expenses: load quote_items with product_components
       if (category === 'planned') {
         console.log('📋 Loading quote_items with product_components for planned expense, project:', projectId)
+        
+        // Load revenue (invoices) for profit calculation in planned expenses
+        try {
+          const { data: invForRevenue } = await supabase
+            .from('invoices')
+            .select('id, total_amount, items')
+            .eq('project_id', projectId)
+          if (Array.isArray(invForRevenue)) {
+            const sumRevenue = invForRevenue.reduce((s: number, inv: any) => {
+              const totalAmt = Number(inv.total_amount)
+              if (!isNaN(totalAmt) && totalAmt > 0) return s + totalAmt
+              // fallback: sum items if total_amount missing
+              const items = Array.isArray(inv.items) ? inv.items : []
+              const itemsSum = items.reduce((ss: number, it: any) => {
+                const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
+                const qty = Number(it.quantity ?? it.qty) || 0
+                const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * qty)
+                return ss + (lineTotal || 0)
+              }, 0)
+              return s + itemsSum
+            }, 0)
+            setProjectRevenueTotal(sumRevenue)
+            console.log('✅ Loaded revenue for planned expense:', sumRevenue)
+          } else {
+            setProjectRevenueTotal(0)
+          }
+        } catch (e) {
+          console.warn('⚠️ Error loading revenue for planned expense:', e)
+          setProjectRevenueTotal(0)
+        }
         
         // First, get quote IDs for this project
         const { data: quotesData, error: quotesError } = await supabase
@@ -5094,6 +5135,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           )}
                         </div>
                       )}
+                      {category === 'planned' && plannedAmountComputed > 0 && (
+                        <div className="text-sm text-gray-700">
+                          Lợi nhuận: <span className={`font-semibold ${
+                            (plannedAmountComputed - grandAllocationTotal) > 0 ? 'text-green-600' : (plannedAmountComputed - grandAllocationTotal) < 0 ? 'text-red-600' : 'text-gray-600'
+                          }`}>
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}
+                            {plannedAmountComputed > 0 && (
+                              <span className="ml-2">
+                                ({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                   <div className="text-sm text-gray-700">
                     Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
                       </div>
@@ -5128,6 +5183,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               <p className="mt-1">
                                 Tổng chi phí: <strong className="text-red-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
                               </p>
+                              <p className="mt-1">
+                                Lợi nhuận: <strong className="text-red-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
+                                <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
+                              </p>
                               <p className="mt-1 text-red-600 font-medium">
                                 ⚠️ Chi phí vượt quá thành tiền {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal - plannedAmountComputed)} ({costPercentage.toFixed(1)}%)
                               </p>
@@ -5153,6 +5212,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               </p>
                               <p className="mt-1">
                                 Tổng chi phí: <strong className="text-yellow-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
+                              </p>
+                              <p className="mt-1">
+                                Lợi nhuận: <strong className="text-yellow-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
+                                <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
                               </p>
                               <p className="mt-1 text-yellow-600 font-medium">
                                 ⚠️ Chi phí đã đạt {costPercentage.toFixed(1)}% thành tiền, cần kiểm tra lại!
@@ -5181,6 +5244,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                 Tổng chi phí: <strong className="text-green-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
                                 <span className="ml-2">({costPercentage.toFixed(1)}%)</span>
                               </p>
+                              <p className="mt-1">
+                                Lợi nhuận: <strong className="text-green-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
+                                <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -5198,21 +5265,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
             {/* Expense Summary Display - Enhanced with hierarchical totals */}
             {selectedExpenseObjectIds.length > 0 && (
-              <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
+              <div key={`expense-summary-${selectedExpenseObjectIds.join('-')}`} className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
                   <BarChart3 className="w-5 h-5 text-blue-600" />
                   <span>Tóm tắt chi phí theo cấp độ</span>
                 </h3>
                 <ExpenseSummaryDisplay
+                  key={`expense-summary-display-${selectedExpenseObjectIds.join('-')}-${JSON.stringify(combinedExpenseObjectTotals)}`}
                   selectedObjectIds={selectedExpenseObjectIds}
                   expenseObjects={expenseObjectsOptions}
-                  expenseAmounts={(() => {
-                    const amounts: { [key: string]: number } = {}
-                    selectedExpenseObjectIds.forEach(id => {
-                      amounts[id] = directObjectTotals[id] || expenseObjectTotals[id] || 0
-                    })
-                    return amounts
-                  })()}
+                  expenseAmounts={combinedExpenseObjectTotals}
                 />
               </div>
             )}
@@ -5272,7 +5334,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       <div className="space-y-1.5">
                         {selectedExpenseObjectIds.map((id) => {
                           const expenseObject = expenseObjectsOptions.find(o => o.id === id)
-                          const totalAmount = directObjectTotals[id] || expenseObjectTotals[id] || 0
+                          const totalAmount = combinedExpenseObjectTotals[id] || 0
                           const parentTotal = (() => {
                             const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
                             return hasDirectObjectInputs 
@@ -5315,7 +5377,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             )}
 
             {selectedExpenseObjectIds.length > 0 && (
-              <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div key={`expense-object-totals-${selectedExpenseObjectIds.join('-')}`} className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <div className="flex items-center space-x-2 mb-3">
                   <BarChart3 className="h-4 w-4 text-gray-600" />
                   <span className="text-sm font-medium text-black">Tổng chi phí theo đối tượng</span>
@@ -5370,8 +5432,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 <div className="space-y-1">
                   {selectedExpenseObjectIds.map((id) => {
                     const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
-                    // Use direct input value if available, otherwise use calculated total
-                    const totalAmount = directObjectTotals[id] || expenseObjectTotals[id] || 0
+                    // Use combined totals (direct input takes priority, then calculated)
+                    const totalAmount = combinedExpenseObjectTotals[id] || 0
                     
                     // Calculate total allocation: sum of all direct object totals or use grandAllocationTotal
                     const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
@@ -5558,6 +5620,48 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               </div>
             </div>
           </div>
+          
+          {/* Total Summary with Profit Percentage */}
+          {category === 'planned' && projectRevenueTotal > 0 && (
+            <div className="bg-white border border-green-200 rounded-lg p-4 space-y-3">
+              <div className="text-sm font-semibold text-gray-900 mb-3">📊 Tổng kết</div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-gray-700">Doanh thu</div>
+                  <div className="text-base font-semibold text-gray-900">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(projectRevenueTotal)}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-gray-700">Chi phí kế hoạch</div>
+                  <div className="text-base font-semibold text-blue-700">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-200 pt-2">
+                  <div className="text-sm font-medium text-gray-700">Lợi nhuận</div>
+                  <div className="text-base font-semibold text-green-700">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(profitComputed)}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-200 pt-2">
+                  <div className="text-sm font-medium text-gray-900">% Lợi nhuận</div>
+                  <div className={`text-lg font-bold ${
+                    projectRevenueTotal > 0 && (profitComputed / projectRevenueTotal) * 100 > 0 
+                      ? 'text-green-600' 
+                      : (profitComputed / projectRevenueTotal) * 100 < 0 
+                        ? 'text-red-600' 
+                        : 'text-gray-600'
+                  }`}>
+                    {projectRevenueTotal > 0 
+                      ? `${((profitComputed / projectRevenueTotal) * 100).toFixed(2)}%`
+                      : '0.00%'
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Additional Information Section moved to bottom */}
             <div className="bg-white border border-gray-200 rounded-lg">
               <button

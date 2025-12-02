@@ -105,24 +105,16 @@ export default function ExpenseSummaryDisplay({
         level3Totals[obj.id] = amount
       })
 
-    // Special case: If only level 1 objects are selected, use their direct amounts
-    const selectedLevels = [...new Set(selectedObjects.map(obj => obj.level || 0))]
-    const onlyLevel1Selected = selectedLevels.length === 1 && selectedLevels[0] === 1
-    
-    if (onlyLevel1Selected) {
-      selectedObjects
-        .filter(obj => obj.level === 1)
-        .forEach(obj => {
-          const amount = expenseAmounts[obj.id] || 0
-          level1Totals[obj.id] = amount
-        })
-    }
-
-    // Calculate level 2 totals (sum of their level 3 children) - skip if only level 1 selected
-    if (!onlyLevel1Selected) {
-      displayObjects
-        .filter(obj => obj.level === 2)
-        .forEach(obj => {
+    // Calculate level 2 totals - check if directly selected first, then calculate from children
+    displayObjects
+      .filter(obj => obj.level === 2)
+      .forEach(obj => {
+        // If this level 2 object is directly selected and has amount, use it directly
+        const isDirectlySelected = selectedObjects.some(sel => sel.id === obj.id)
+        if (isDirectlySelected && expenseAmounts[obj.id]) {
+          level2Totals[obj.id] = expenseAmounts[obj.id]
+        } else {
+          // Otherwise, calculate from children
           const children = selectedObjects.filter(child => child.parent_id === obj.id)
           if (children.length === 1) {
             // If only 1 child, use that child's amount directly
@@ -139,14 +131,32 @@ export default function ExpenseSummaryDisplay({
               level2Totals[obj.id] = total
             }
           }
+        }
+      })
+
+    // Special case: If only level 1 objects are selected, use their direct amounts
+    const selectedLevels = [...new Set(selectedObjects.map(obj => obj.level || 0))]
+    const onlyLevel1Selected = selectedLevels.length === 1 && selectedLevels[0] === 1
+    
+    if (onlyLevel1Selected) {
+      selectedObjects
+        .filter(obj => obj.level === 1)
+        .forEach(obj => {
+          const amount = expenseAmounts[obj.id] || 0
+          level1Totals[obj.id] = amount
         })
     }
 
-    // Calculate level 1 totals (sum of their level 2 children) - skip if only level 1 selected
-    if (!onlyLevel1Selected) {
-      displayObjects
-        .filter(obj => obj.level === 1)
-        .forEach(obj => {
+    // Calculate level 1 totals - check if directly selected first, then calculate from children
+    displayObjects
+      .filter(obj => obj.level === 1)
+      .forEach(obj => {
+        // If this level 1 object is directly selected and has amount, use it directly (unless only level 1 selected)
+        const isDirectlySelected = selectedObjects.some(sel => sel.id === obj.id)
+        if (isDirectlySelected && expenseAmounts[obj.id] && onlyLevel1Selected) {
+          level1Totals[obj.id] = expenseAmounts[obj.id]
+        } else if (!onlyLevel1Selected) {
+          // Otherwise, calculate from level 2 children
           const children = displayObjects.filter(child => child.parent_id === obj.id && child.level === 2)
           if (children.length === 1) {
             // If only 1 child, use that child's amount directly
@@ -163,8 +173,8 @@ export default function ExpenseSummaryDisplay({
               level1Totals[obj.id] = total
             }
           }
-        })
-    }
+        }
+      })
 
     return {
       level1: level1Totals,
