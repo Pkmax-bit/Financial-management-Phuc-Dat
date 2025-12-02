@@ -51,8 +51,22 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
   const [depth, setDepth] = useState<number | null>(null)
   const [depthDisplay, setDepthDisplay] = useState('')
   // Đối tượng chi phí (vật tư) - selector
+  type ExpenseObjectNode = {
+    id: string
+    name: string
+    level: number
+    parent_id?: string | null
+    children?: ExpenseObjectNode[]
+    fullPath?: string
+  }
   const [expenseObjects, setExpenseObjects] = useState<Array<{ id: string; name: string; level: number; parent_id?: string | null; l1?: string; l2?: string }>>([])
-  const [componentRows, setComponentRows] = useState<Array<{ expense_object_id: string; expense_object_name?: string; unit: string; unit_price: number; quantity: number }>>([
+  const [expenseTree, setExpenseTree] = useState<ExpenseObjectNode[]>([])
+  const [expenseObjectsMap, setExpenseObjectsMap] = useState<Record<string, any>>({})
+  const [componentRows, setComponentRows] = useState<Array<{ expense_object_id: string; expense_object_name?: string; expense_object_path?: string; unit: string; unit_price: number; quantity: number }>>([
+    { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }
+  ])
+  // Chi phí vật tư thực tế - tương tự chi phí kế hoạch
+  const [actualComponentRows, setActualComponentRows] = useState<Array<{ expense_object_id: string; expense_object_name?: string; expense_object_path?: string; unit: string; unit_price: number; quantity: number }>>([
     { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }
   ])
 
@@ -86,21 +100,77 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
     load()
   }, [])
 
-  // Tải đối tượng chi phí cấp 3
+  // Hàm xây dựng đường dẫn đầy đủ từ gốc đến node
+  const getFullPath = (nodeId: string, map: Record<string, any>): string => {
+    const node = map[nodeId]
+    if (!node) return ''
+    if (!node.parent_id) return node.name
+    return `${getFullPath(node.parent_id, map)} > ${node.name}`
+  }
+
+  // Hàm xây dựng cây từ danh sách expense_objects
+  const buildTree = (items: any[], map: Record<string, any>): ExpenseObjectNode[] => {
+    const tree: ExpenseObjectNode[] = []
+    const itemMap: Record<string, ExpenseObjectNode> = {}
+
+    // Tạo map các node
+    items.forEach(item => {
+      itemMap[item.id] = {
+        id: item.id,
+        name: item.name,
+        level: item.level,
+        parent_id: item.parent_id,
+        children: [],
+        fullPath: getFullPath(item.id, map)
+      }
+    })
+
+    // Xây dựng cây
+    items.forEach(item => {
+      const node = itemMap[item.id]
+      if (item.parent_id && itemMap[item.parent_id]) {
+        if (!itemMap[item.parent_id].children) {
+          itemMap[item.parent_id].children = []
+        }
+        itemMap[item.parent_id].children!.push(node)
+      } else {
+        tree.push(node)
+      }
+    })
+
+    // Sắp xếp cây theo tên
+    const sortTree = (nodes: ExpenseObjectNode[]): ExpenseObjectNode[] => {
+      return nodes.sort((a, b) => a.name.localeCompare(b.name, 'vi')).map(node => ({
+        ...node,
+        children: node.children ? sortTree(node.children) : undefined
+      }))
+    }
+
+    return sortTree(tree)
+  }
+
+  // Tải đối tượng chi phí - load tất cả để xây dựng cây
   useEffect(() => {
     const loadExpenseObjects = async () => {
       try {
-        // Load tất cả level 1-3
+        // Load tất cả expense_objects (không giới hạn level)
         const { data: allObjs, error: e1 } = await supabase
           .from('expense_objects')
           .select('id, name, parent_id, level, is_active')
           .eq('is_active', true)
-          .in('level', [1, 2, 3])
+          .order('level', { ascending: true })
+          .order('name', { ascending: true })
         if (e1) throw e1
 
         const byId: Record<string, any> = {}
         ;(allObjs || []).forEach((o: any) => { byId[o.id] = o })
 
+        // Xây dựng cây
+        const tree = buildTree(allObjs || [], byId)
+        setExpenseTree(tree)
+        setExpenseObjectsMap(byId)
+
+        // Giữ lại format cũ cho tương thích
         const withPaths = (allObjs || []).map((o: any) => {
           let l1: string | undefined
           let l2: string | undefined
@@ -121,6 +191,8 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
         setExpenseObjects(withPaths)
       } catch (_) {
         setExpenseObjects([])
+        setExpenseTree([])
+        setExpenseObjectsMap({})
       }
     }
     loadExpenseObjects()
@@ -144,6 +216,95 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
     setter(num)
     // Keep user's raw input (no thousand separators) to avoid showing 2.800 for 2800
     displaySetter(val)
+  }
+
+  // Hàm render cây expense_objects trong dropdown
+  const renderTreeOptions = (nodes: ExpenseObjectNode[], depth: number = 0): JSX.Element[] => {
+    const options: JSX.Element[] = []
+    nodes.forEach(node => {
+      const indent = '  '.repeat(depth)
+      options.push(
+        <option key={node.id} value={node.id}>
+          {indent}{node.fullPath || node.name}
+        </option>
+      )
+      if (node.children && node.children.length > 0) {
+        options.push(...renderTreeOptions(node.children, depth + 1))
+      }
+    })
+    return options
+  }
+
+  // Hàm tính tổng chi phí theo cấu trúc cây
+  const calculateTreeTotals = (rows: Array<{ expense_object_id: string; unit_price: number; quantity: number }>) => {
+    const directTotals: Record<string, number> = {}
+    const allTotals: Record<string, number> = {}
+
+    // Bước 1: Tính tổng trực tiếp cho từng expense_object được chọn (chỉ các node con được chọn)
+    rows.forEach(row => {
+      if (row.expense_object_id) {
+        const total = (row.unit_price || 0) * (row.quantity || 0)
+        directTotals[row.expense_object_id] = (directTotals[row.expense_object_id] || 0) + total
+        allTotals[row.expense_object_id] = directTotals[row.expense_object_id]
+      }
+    })
+
+    // Bước 2: Tính tổng cho các cấp cha (từ dưới lên trên)
+    // Sắp xếp các node theo level từ cao xuống thấp để tính từ con lên cha
+    const nodeIds = Object.keys(directTotals)
+    const sortedNodes = nodeIds
+      .map(id => ({ id, level: expenseObjectsMap[id]?.level || 0 }))
+      .sort((a, b) => b.level - a.level) // Sắp xếp từ level cao xuống thấp
+
+    // Tính tổng cho từng cấp cha
+    sortedNodes.forEach(({ id }) => {
+      let currentId: string | null = id
+      while (currentId) {
+        const obj = expenseObjectsMap[currentId]
+        if (!obj || !obj.parent_id) break
+        
+        const parentId = obj.parent_id
+        // Cộng tổng của node hiện tại vào parent
+        allTotals[parentId] = (allTotals[parentId] || 0) + allTotals[currentId]
+        currentId = parentId
+      }
+    })
+
+    return { directTotals, allTotals }
+  }
+
+  // Hàm xây dựng danh sách hiển thị theo cấu trúc cây (chỉ các nhánh có chi phí)
+  const buildTreeDisplayList = (
+    tree: ExpenseObjectNode[],
+    totals: Record<string, number>,
+    directTotals: Record<string, number>,
+    result: Array<{ id: string; name: string; level: number; total: number; path: string; isDirect: boolean }> = [],
+    currentPath: string[] = []
+  ): Array<{ id: string; name: string; level: number; total: number; path: string; isDirect: boolean }> => {
+    tree.forEach(node => {
+      const newPath = [...currentPath, node.name]
+      const pathStr = newPath.join(' > ')
+      
+      // Chỉ thêm node nếu có tổng (direct hoặc từ parent)
+      if (totals[node.id] && totals[node.id] > 0) {
+        const isDirect = !!directTotals[node.id]
+        result.push({
+          id: node.id,
+          name: node.name,
+          level: node.level,
+          total: totals[node.id],
+          path: pathStr,
+          isDirect
+        })
+        
+        // Nếu node có children và có tổng, tiếp tục duyệt children
+        if (node.children && node.children.length > 0) {
+          buildTreeDisplayList(node.children, totals, directTotals, result, newPath)
+        }
+      }
+    })
+    
+    return result
   }
 
   // Auto-calculate area/volume with inputs in mm
@@ -198,6 +359,17 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
               unit_price: r.unit_price || 0,
               quantity: r.quantity || 0
             })),
+          actual_material_components: actualComponentRows
+            .filter(r => r.expense_object_id)
+            .map(r => ({
+              expense_object_id: r.expense_object_id,
+              unit: r.unit || null,
+              unit_price: r.unit_price || 0,
+              quantity: r.quantity || 0
+            })),
+          actual_material_cost: actualComponentRows
+            .filter(r => r.expense_object_id)
+            .reduce((sum, r) => sum + ((r.unit_price || 0) * (r.quantity || 0)), 0),
           is_active: true
         })
       if (error) throw error
@@ -224,6 +396,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
       setDepth(null)
       setDepthDisplay('')
       setComponentRows([{ expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])
+      setActualComponentRows([{ expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])
       
       // Auto-hide success message after 3 seconds
       setTimeout(() => {
@@ -345,8 +518,8 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
 
     tour.addStep({
       id: 'product-form-components',
-      title: 'Vật tư (đối tượng chi phí)',
-      text: 'Thêm vật tư cấu thành sản phẩm (tùy chọn):\n• Chọn đối tượng chi phí cấp 3 từ danh sách\n• Nhập đơn vị, đơn giá và số lượng\n• Nhấn "Thêm dòng" để thêm vật tư khác\n• Nhấn "Xóa" để xóa vật tư không cần thiết\n\nLưu ý: Thành tiền = Đơn giá × Số lượng (tự động tính)',
+      title: 'Chi phí kế hoạch (Vật tư)',
+      text: 'Thêm vật tư cấu thành sản phẩm theo kế hoạch (tùy chọn):\n• Chọn đối tượng chi phí cấp 3 từ danh sách\n• Nhập đơn vị, đơn giá và số lượng\n• Nhấn "Thêm dòng" để thêm vật tư khác\n• Nhấn "Xóa" để xóa vật tư không cần thiết\n\nLưu ý: Thành tiền = Đơn giá × Số lượng (tự động tính)',
       attachTo: { element: '[data-tour-id="product-form-components"]', on: 'top' },
       buttons: [
         {
@@ -658,9 +831,9 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
             autoComplete="off"
           />
         </div>
-        {/* Chọn đối tượng chi phí (Vật tư) */}
+        {/* Chọn đối tượng chi phí (Vật tư) - Chi phí kế hoạch */}
         <div className="md:col-span-12" data-tour-id="product-form-components">
-          <h4 className="text-md font-medium text-gray-900 mb-3 mt-4">Vật tư (đối tượng chi phí cấp 3)</h4>
+          <h4 className="text-md font-medium text-gray-900 mb-3 mt-4">Chi phí kế hoạch (Vật tư - đối tượng chi phí cấp 3)</h4>
           <div className="overflow-x-auto border border-gray-200 rounded">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
@@ -683,34 +856,22 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
                           value={row.expense_object_id}
                           onChange={(e) => {
                             const id = e.target.value
-                            const name = expenseObjects.find(o => o.id === id)?.name
+                            const obj = expenseObjectsMap[id]
+                            const fullPath = obj ? getFullPath(id, expenseObjectsMap) : ''
                             const next = [...componentRows]
-                            next[idx] = { ...row, expense_object_id: id, expense_object_name: name }
+                            next[idx] = { ...row, expense_object_id: id, expense_object_name: obj?.name, expense_object_path: fullPath }
                             setComponentRows(next)
                           }}
                           className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
                         >
                           <option value="">Chọn đối tượng</option>
-                          {Object.entries(expenseObjects.reduce<Record<string, { id: string; name: string; level: number; l2?: string }[]>>((acc, cur) => {
-                            const key = cur.l1 || 'Khác'
-                            if (!acc[key]) acc[key] = []
-                            acc[key].push({ id: cur.id, name: cur.name, level: cur.level, l2: cur.l2 })
-                            return acc
-                          }, {})).sort(([a],[b]) => a.localeCompare(b, 'vi')).map(([group, list]) => (
-                            <optgroup key={group} label={group}>
-                              {list
-                                .sort((a,b)=>{
-                                  if (a.level!==b.level) return a.level-b.level
-                                  return (a.l2||'').localeCompare(b.l2||'', 'vi') || a.name.localeCompare(b.name, 'vi')
-                                })
-                                .map(o => (
-                                  <option key={o.id} value={o.id}>
-                                    {o.level===1 ? `${group}` : o.level===2 ? `${group} / ${o.name}` : `${group}${o.l2?` / ${o.l2}`:''} / ${o.name}`}
-                                  </option>
-                                ))}
-                            </optgroup>
-                          ))}
+                          {renderTreeOptions(expenseTree)}
                         </select>
+                        {row.expense_object_path && (
+                          <div className="mt-1 text-xs text-gray-600 italic">
+                            {row.expense_object_path}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2 w-40">
                         <input
@@ -742,7 +903,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
                             const next=[...componentRows]; next[idx]={...row, quantity: parseFloat(e.target.value)||0}; setComponentRows(next)
                           }}
                           className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black"
-                          step="0.01"
+                          step="1"
                           min="0"
                         />
                       </td>
@@ -759,6 +920,171 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           <div className="mt-2">
             <button type="button" onClick={()=>setComponentRows(prev=>[...prev,{ expense_object_id:'', unit:'', unit_price:0, quantity:1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
           </div>
+          {/* Hiển thị tổng theo cấu trúc cây cho chi phí kế hoạch */}
+          {(() => {
+            const { directTotals, allTotals } = calculateTreeTotals(componentRows)
+            const displayList = buildTreeDisplayList(expenseTree, allTotals, directTotals)
+
+            if (displayList.length === 0) return null
+
+            return (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
+                <h5 className="text-sm font-semibold text-gray-900 mb-2">Tổng chi phí kế hoạch theo cấu trúc cây:</h5>
+                <div className="space-y-1 text-xs">
+                  {displayList.map(item => {
+                    const amountClass = item.isDirect ? 'text-green-700' : 'text-green-500'
+                    return (
+                      <div key={item.id} className="flex justify-between items-center" style={{ paddingLeft: `${item.level * 16}px` }}>
+                        <span className="text-gray-700">
+                          {item.level > 0 && '└─ '}
+                          <span className={`font-medium ${item.isDirect ? 'text-green-800' : ''}`}>{item.name}</span>
+                          {!item.isDirect && (
+                            <span className="text-gray-500 ml-1 text-[10px]">(tổng từ con)</span>
+                          )}
+                        </span>
+                        <span className={`font-semibold ${amountClass}`}>
+                          {new Intl.NumberFormat('vi-VN').format(item.total)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+        
+        {/* Chi phí vật tư thực tế */}
+        <div className="md:col-span-12 mt-4">
+          <h4 className="text-md font-medium text-gray-900 mb-3">Chi phí vật tư thực tế</h4>
+          <div className="overflow-x-auto border border-gray-200 rounded">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-gray-900 text-left">Đối tượng chi phí</th>
+                  <th className="px-3 py-2 text-gray-900 text-left">Đơn vị</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">Đơn giá</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">Số lượng</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">Thành tiền</th>
+                  <th className="px-3 py-2 text-gray-900 text-right">&nbsp;</th>
+                </tr>
+              </thead>
+              <tbody>
+                {actualComponentRows.map((row, idx) => {
+                  const total = (row.unit_price || 0) * (row.quantity || 0)
+                  return (
+                    <tr key={idx} className="border-t">
+                      <td className="px-3 py-2 min-w-[320px]">
+                        <select
+                          value={row.expense_object_id}
+                          onChange={(e) => {
+                            const id = e.target.value
+                            const obj = expenseObjectsMap[id]
+                            const fullPath = obj ? getFullPath(id, expenseObjectsMap) : ''
+                            const next = [...actualComponentRows]
+                            next[idx] = { ...row, expense_object_id: id, expense_object_name: obj?.name, expense_object_path: fullPath }
+                            setActualComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
+                        >
+                          <option value="">Chọn đối tượng</option>
+                          {renderTreeOptions(expenseTree)}
+                        </select>
+                        {row.expense_object_path && (
+                          <div className="mt-1 text-xs text-gray-600 italic">
+                            {row.expense_object_path}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 w-40">
+                        <input
+                          value={row.unit}
+                          onChange={(e)=>{
+                            const next=[...actualComponentRows]; next[idx]={...row, unit:e.target.value}; setActualComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
+                          placeholder="m, m2, cái..."
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right w-40">
+                        <input
+                          type="number"
+                          value={row.unit_price}
+                          onChange={(e)=>{
+                            const next=[...actualComponentRows]; next[idx]={...row, unit_price: parseFloat(e.target.value)||0}; setActualComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black"
+                          step="1000"
+                          min="0"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right w-40">
+                        <input
+                          type="number"
+                          value={row.quantity}
+                          onChange={(e)=>{
+                            const next=[...actualComponentRows]; next[idx]={...row, quantity: parseFloat(e.target.value)||0}; setActualComponentRows(next)
+                          }}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black"
+                          step="1"
+                          min="0"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{new Intl.NumberFormat('vi-VN').format(total)}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={()=>setActualComponentRows(prev=>prev.filter((_,i)=>i!==idx))} className="text-red-600 text-xs hover:underline">Xóa</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <button type="button" onClick={()=>setActualComponentRows(prev=>[...prev,{ expense_object_id:'', unit:'', unit_price:0, quantity:1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
+            <div className="text-sm text-gray-700">
+              <span className="font-medium">Tổng chi phí thực tế: </span>
+              <span className="font-semibold text-blue-600">
+                {new Intl.NumberFormat('vi-VN').format(
+                  actualComponentRows
+                    .filter(r => r.expense_object_id)
+                    .reduce((sum, r) => sum + ((r.unit_price || 0) * (r.quantity || 0)), 0)
+                )}
+              </span>
+            </div>
+          </div>
+          {/* Hiển thị tổng theo cấu trúc cây */}
+          {(() => {
+            const { directTotals, allTotals } = calculateTreeTotals(actualComponentRows)
+            const displayList = buildTreeDisplayList(expenseTree, allTotals, directTotals)
+
+            if (displayList.length === 0) return null
+
+            return (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                <h5 className="text-sm font-semibold text-gray-900 mb-2">Tổng chi phí theo cấu trúc cây:</h5>
+                <div className="space-y-1 text-xs">
+                  {displayList.map(item => {
+                    const amountClass = item.isDirect ? 'text-blue-700' : 'text-blue-500'
+                    return (
+                      <div key={item.id} className="flex justify-between items-center" style={{ paddingLeft: `${item.level * 16}px` }}>
+                        <span className="text-gray-700">
+                          {item.level > 0 && '└─ '}
+                          <span className={`font-medium ${item.isDirect ? 'text-blue-800' : ''}`}>{item.name}</span>
+                          {!item.isDirect && (
+                            <span className="text-gray-500 ml-1 text-[10px]">(tổng từ con)</span>
+                          )}
+                        </span>
+                        <span className={`font-semibold ${amountClass}`}>
+                          {new Intl.NumberFormat('vi-VN').format(item.total)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
         </div>
         
         <div className="md:col-span-12" data-tour-id="product-form-submit">

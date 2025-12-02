@@ -21,9 +21,25 @@ type ProductItem = {
   depth: number | null
   image_url: string | null
   image_urls?: string[] | null
+  actual_material_cost?: number | null
+  actual_material_components?: Array<{
+    expense_object_id: string
+    unit?: string | null
+    unit_price?: number
+    quantity?: number
+  }> | null
 }
 
 type Category = { id: string; name: string }
+
+type ExpenseObjectNode = {
+  id: string
+  name: string
+  level: number
+  parent_id?: string | null
+  children?: ExpenseObjectNode[]
+  fullPath?: string
+}
 
 const formatNumber = (value: number): string => new Intl.NumberFormat('vi-VN').format(value)
 const toDecimalString = (value: number | null | undefined, maxFractionDigits = 6): string => {
@@ -50,14 +66,135 @@ export default function ProductCatalog() {
   const [editLength, setEditLength] = useState('')
   const [editDepth, setEditDepth] = useState('')
   const [editComponents, setEditComponents] = useState<Array<{ expense_object_id: string; unit?: string | null; unit_price?: number; quantity?: number }>>([])
+  const [editActualComponents, setEditActualComponents] = useState<Array<{ expense_object_id: string; unit?: string | null; unit_price?: number; quantity?: number }>>([])
   const [editImages, setEditImages] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   const [expenseObjectMap, setExpenseObjectMap] = useState<Record<string, string>>({})
   const [allExpenseObjects, setAllExpenseObjects] = useState<Array<{ id: string; name: string; level: number; parent_id?: string | null; l1?: string; l2?: string }>>([])
+  const [expenseTree, setExpenseTree] = useState<ExpenseObjectNode[]>([])
+  const [expenseObjectsMap, setExpenseObjectsMap] = useState<Record<string, any>>({})
   const [previewImages, setPreviewImages] = useState<string[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const getFullPath = (nodeId: string, map: Record<string, any>): string => {
+    const node = map[nodeId]
+    if (!node) return ''
+    if (!node.parent_id) return node.name
+    return `${getFullPath(node.parent_id, map)} > ${node.name}`
+  }
+
+  const buildTree = (items: any[], map: Record<string, any>): ExpenseObjectNode[] => {
+    const tree: ExpenseObjectNode[] = []
+    const itemMap: Record<string, ExpenseObjectNode> = {}
+
+    items.forEach(item => {
+      itemMap[item.id] = {
+        id: item.id,
+        name: item.name,
+        level: item.level,
+        parent_id: item.parent_id,
+        children: [],
+        fullPath: getFullPath(item.id, map)
+      }
+    })
+
+    items.forEach(item => {
+      const node = itemMap[item.id]
+      if (item.parent_id && itemMap[item.parent_id]) {
+        itemMap[item.parent_id].children!.push(node)
+      } else {
+        tree.push(node)
+      }
+    })
+
+    const sortTree = (nodes: ExpenseObjectNode[]): ExpenseObjectNode[] =>
+      nodes
+        .sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+        .map(node => ({
+          ...node,
+          children: node.children && node.children.length > 0 ? sortTree(node.children) : undefined
+        }))
+
+    return sortTree(tree)
+  }
+
+  const renderTreeOptions = (nodes: ExpenseObjectNode[], depth: number = 0): JSX.Element[] => {
+    const options: JSX.Element[] = []
+    nodes.forEach(node => {
+      const indent = '  '.repeat(depth)
+      options.push(
+        <option key={node.id} value={node.id}>
+          {indent}{node.fullPath || node.name}
+        </option>
+      )
+      if (node.children && node.children.length > 0) {
+        options.push(...renderTreeOptions(node.children, depth + 1))
+      }
+    })
+    return options
+  }
+
+  // ===== TÍNH TỔNG THEO CẤU TRÚC CÂY (GIỐNG VIEW TẠO) =====
+  const calculateTreeTotals = (rows: Array<{ expense_object_id?: string; unit_price?: number; quantity?: number }>) => {
+    const directTotals: Record<string, number> = {}
+    const allTotals: Record<string, number> = {}
+
+    rows.forEach(row => {
+      if (row.expense_object_id) {
+        const total = Number(row.unit_price || 0) * Number(row.quantity || 0)
+        directTotals[row.expense_object_id] = (directTotals[row.expense_object_id] || 0) + total
+        allTotals[row.expense_object_id] = directTotals[row.expense_object_id]
+      }
+    })
+
+    const nodeIds = Object.keys(directTotals)
+    const sortedNodes = nodeIds
+      .map(id => ({ id, level: expenseObjectsMap[id]?.level || 0 }))
+      .sort((a, b) => b.level - a.level)
+
+    sortedNodes.forEach(({ id }) => {
+      let currentId: string | null = id
+      while (currentId) {
+        const obj = expenseObjectsMap[currentId]
+        if (!obj || !obj.parent_id) break
+        const parentId = obj.parent_id
+        allTotals[parentId] = (allTotals[parentId] || 0) + allTotals[currentId]
+        currentId = parentId
+      }
+    })
+
+    return { directTotals, allTotals }
+  }
+
+  const buildTreeDisplayList = (
+    tree: ExpenseObjectNode[],
+    totals: Record<string, number>,
+    directTotals: Record<string, number>,
+    result: Array<{ id: string; name: string; level: number; total: number; isDirect: boolean }> = []
+  ): Array<{ id: string; name: string; level: number; total: number; isDirect: boolean }> => {
+    tree.forEach(node => {
+      const total = totals[node.id]
+      const hasDirect = !!directTotals[node.id]
+
+      // Node có tổng từ con hoặc trực tiếp
+      if (total && total > 0) {
+        result.push({
+          id: node.id,
+          name: node.name,
+          level: node.level,
+          total,
+          isDirect: hasDirect
+        })
+      }
+
+      if (node.children && node.children.length > 0) {
+        buildTreeDisplayList(node.children, totals, directTotals, result)
+      }
+    })
+    return result
+  }
+
 
   const resolveImages = (product: ProductItem | any): string[] => {
     const list: string[] = []
@@ -102,7 +239,7 @@ export default function ProductCatalog() {
       setLoading(true)
       setError(null)
       const [{ data: prodData, error: prodErr }, { data: catData, error: catErr }] = await Promise.all([
-        supabase.from('products').select('id, name, price, unit, description, category_id, created_at, is_active, area, volume, height, length, depth, image_url, image_urls, product_components').order('created_at', { ascending: false }),
+        supabase.from('products').select('id, name, price, unit, description, category_id, created_at, is_active, area, volume, height, length, depth, image_url, image_urls, product_components, actual_material_cost, actual_material_components').order('created_at', { ascending: false }),
         supabase.from('product_categories').select('id, name')
       ])
       if (prodErr) throw prodErr
@@ -147,11 +284,17 @@ export default function ProductCatalog() {
         .from('expense_objects')
         .select('id, name, parent_id, level, is_active')
         .eq('is_active', true)
-        .in('level', [1, 2, 3])
+        .order('level', { ascending: true })
+        .order('name', { ascending: true })
       if (allObjs) {
         const byId: Record<string, any> = {}
         allObjs.forEach((o: any) => { byId[o.id] = o })
-        const withPaths = allObjs.map((o: any) => {
+
+        const tree = buildTree(allObjs || [], byId)
+        setExpenseTree(tree)
+        setExpenseObjectsMap(byId)
+
+        const withPaths = (allObjs || []).map((o: any) => {
           let l1: string | undefined
           let l2: string | undefined
           if (o.level === 1) l1 = o.name
@@ -190,7 +333,20 @@ export default function ProductCatalog() {
     setEditLength(p.length != null ? String(Number(p.length)) : '')
     setEditDepth(p.depth != null ? String(Number(p.depth)) : '')
     const comps = Array.isArray((p as any).product_components) ? (p as any).product_components : []
-    setEditComponents(comps.map((c: any) => ({ expense_object_id: String(c.expense_object_id || ''), unit: c.unit || '', unit_price: Number(c.unit_price || 0), quantity: Number(c.quantity || 0) })))
+    setEditComponents(comps.map((c: any) => ({
+      expense_object_id: String(c.expense_object_id || ''),
+      unit: c.unit || '',
+      unit_price: Number(c.unit_price || 0),
+      quantity: Number(c.quantity || 0)
+    })))
+
+    const actualComps = Array.isArray((p as any).actual_material_components) ? (p as any).actual_material_components : []
+    setEditActualComponents(actualComps.map((c: any) => ({
+      expense_object_id: String(c.expense_object_id || ''),
+      unit: c.unit || '',
+      unit_price: Number(c.unit_price || 0),
+      quantity: Number(c.quantity || 0)
+    })))
     setEditImages(resolveImages(p))
   }
 
@@ -241,6 +397,10 @@ export default function ProductCatalog() {
       // Derive area/volume from mm dimensions if present to ensure correctness
       const derivedArea = (lengthNum != null && heightNum != null) ? Number(((lengthNum / 1000) * (heightNum / 1000)).toFixed(2)) : areaNum
       const derivedVolume = (lengthNum != null && heightNum != null && depthNum != null) ? Number(((lengthNum / 1000) * (heightNum / 1000) * (depthNum / 1000)).toFixed(9)) : volumeNum
+      const totalActualCost = editActualComponents
+        .filter(r => r.expense_object_id)
+        .reduce((sum, r) => sum + Number(r.unit_price || 0) * Number(r.quantity || 0), 0)
+
       const upd = {
         name: editName.trim() || editing.name,
         category_id: editCat || null,
@@ -259,7 +419,14 @@ export default function ProductCatalog() {
           unit: r.unit || null,
           unit_price: r.unit_price || 0,
           quantity: r.quantity || 0
-        }))
+        })),
+        actual_material_components: editActualComponents.filter(r => r.expense_object_id).map(r => ({
+          expense_object_id: r.expense_object_id,
+          unit: r.unit || null,
+          unit_price: r.unit_price || 0,
+          quantity: r.quantity || 0
+        })),
+        actual_material_cost: totalActualCost
       }
       const { error: updErr } = await supabase
         .from('products')
@@ -450,7 +617,7 @@ export default function ProductCatalog() {
         <div className="fixed inset-0 z-50">
           <div className="fixed inset-0 bg-black/30" onClick={closeEditModal} />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <div className="w-full max-w-5xl bg-white rounded-lg shadow-2xl border border-gray-200">
+            <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-2xl border border-gray-200">
               <div className="flex items-center justify-between p-4 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">Sửa sản phẩm</h3>
                 <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700">✕</button>
@@ -630,7 +797,7 @@ export default function ProductCatalog() {
                   </div>
                 </div>
 
-                {/* Vật tư (đối tượng chi phí) */}
+                {/* Vật tư (đối tượng chi phí) - Chi phí kế hoạch */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-sm font-semibold text-gray-900 mb-3">Vật tư (đối tượng chi phí)</h4>
                   <div className="overflow-x-auto border border-gray-200 rounded">
@@ -660,22 +827,7 @@ export default function ProductCatalog() {
                                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
                                 >
                                   <option value="">Chọn đối tượng</option>
-                                  {Object.entries(allExpenseObjects.reduce<Record<string, { id: string; name: string; level: number; l2?: string }[]>>((acc, cur) => {
-                                    const key = cur.l1 || 'Khác'
-                                    if (!acc[key]) acc[key] = []
-                                    acc[key].push({ id: cur.id, name: cur.name, level: cur.level, l2: cur.l2 })
-                                    return acc
-                                  }, {})).sort(([a], [b]) => a.localeCompare(b, 'vi')).map(([group, list]) => (
-                                    <optgroup key={group} label={group}>
-                                      {list
-                                        .sort((a, b) => { if (a.level !== b.level) return a.level - b.level; return (a.l2 || '').localeCompare(b.l2 || '', 'vi') || a.name.localeCompare(b.name, 'vi') })
-                                        .map(o => (
-                                          <option key={o.id} value={o.id}>
-                                            {o.level === 1 ? `${group}` : o.level === 2 ? `${group} / ${o.name}` : `${group}${o.l2 ? ` / ${o.l2}` : ''} / ${o.name}`}
-                                          </option>
-                                        ))}
-                                    </optgroup>
-                                  ))}
+                                  {renderTreeOptions(expenseTree)}
                                 </select>
                               </td>
                               <td className="px-3 py-2 w-40">
@@ -685,7 +837,7 @@ export default function ProductCatalog() {
                                 <input type="number" value={Number(row.unit_price || 0)} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, unit_price: parseFloat(e.target.value) || 0 }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1000" min="0" />
                               </td>
                               <td className="px-3 py-2 text-right w-40">
-                                <input type="number" value={Number(row.quantity || 0)} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, quantity: parseFloat(e.target.value) || 0 }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="0.01" min="0" />
+                                <input type="number" value={Number(row.quantity || 0)} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, quantity: parseFloat(e.target.value) || 0 }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1" min="0" />
                               </td>
                               <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatNumber(total)}</td>
                               <td className="px-3 py-2 text-gray-900 text-right"><button onClick={() => setEditComponents(prev => prev.filter((_, i) => i !== idx))} className="text-red-600 text-xs hover:underline">Xóa</button></td>
@@ -698,6 +850,109 @@ export default function ProductCatalog() {
                   <div className="mt-2">
                     <button onClick={() => setEditComponents(prev => [...prev, { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
                   </div>
+                </div>
+
+                {/* Chi phí vật tư thực tế */}
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Chi phí vật tư thực tế</h4>
+                  <div className="overflow-x-auto border border-gray-200 rounded">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-gray-900 text-left">Đối tượng</th>
+                          <th className="px-3 py-2 text-gray-900 text-left">Đơn vị</th>
+                          <th className="px-3 py-2 text-gray-900 text-right">Đơn giá</th>
+                          <th className="px-3 py-2 text-gray-900 text-right">Số lượng</th>
+                          <th className="px-3 py-2 text-gray-900 text-right">Thành tiền</th>
+                          <th className="px-3 py-2 text-gray-900 text-right">&nbsp;</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {editActualComponents.map((row, idx) => {
+                          const total = Number(row.unit_price || 0) * Number(row.quantity || 0)
+                          return (
+                            <tr key={idx} className="border-t">
+                              <td className="px-3 py-2 min-w-[320px]">
+                                <select
+                                  value={row.expense_object_id}
+                                  onChange={(e) => {
+                                    const id = e.target.value
+                                    const next = [...editActualComponents]; next[idx] = { ...row, expense_object_id: id }; setEditActualComponents(next)
+                                  }}
+                                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
+                                >
+                                  <option value="">Chọn đối tượng</option>
+                                  {renderTreeOptions(expenseTree)}
+                                </select>
+                              </td>
+                              <td className="px-3 py-2 w-40">
+                                <input value={row.unit || ''} onChange={(e) => { const next = [...editActualComponents]; next[idx] = { ...row, unit: e.target.value }; setEditActualComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black" placeholder="m, m2, cái..." />
+                              </td>
+                              <td className="px-3 py-2 text-right w-40">
+                                <input type="number" value={Number(row.unit_price || 0)} onChange={(e) => { const next = [...editActualComponents]; next[idx] = { ...row, unit_price: parseFloat(e.target.value) || 0 }; setEditActualComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1000" min="0" />
+                              </td>
+                              <td className="px-3 py-2 text-right w-40">
+                                <input type="number" value={Number(row.quantity || 0)} onChange={(e) => { const next = [...editActualComponents]; next[idx] = { ...row, quantity: parseFloat(e.target.value) || 0 }; setEditActualComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1" min="0" />
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatNumber(total)}</td>
+                              <td className="px-3 py-2 text-gray-900 text-right"><button onClick={() => setEditActualComponents(prev => prev.filter((_, i) => i !== idx))} className="text-red-600 text-xs hover:underline">Xóa</button></td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <button onClick={() => setEditActualComponents(prev => [...prev, { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
+                    <div className="text-sm text-gray-700">
+                      <span className="font-medium">Tổng chi phí vật tư thực tế: </span>
+                      <span className="font-semibold text-blue-600">
+                        {formatNumber(
+                          editActualComponents
+                            .filter(r => r.expense_object_id)
+                            .reduce((sum, r) => sum + Number(r.unit_price || 0) * Number(r.quantity || 0), 0)
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Tổng chi phí theo cấu trúc cây (thực tế) */}
+                  {(() => {
+                    const { directTotals, allTotals } = calculateTreeTotals(editActualComponents)
+                    const displayList = buildTreeDisplayList(expenseTree, allTotals, directTotals)
+
+                    if (displayList.length === 0) return null
+
+                    return (
+                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <h5 className="text-sm font-semibold text-gray-900 mb-2">Tổng chi phí theo cấu trúc cây:</h5>
+                        <div className="space-y-1 text-xs">
+                          {displayList.map(item => {
+                            const amountClass = item.isDirect ? 'text-blue-700' : 'text-blue-500'
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex justify-between items-center"
+                                style={{ paddingLeft: `${item.level * 16}px` }}
+                              >
+                                <span className="text-gray-700">
+                                  {item.level > 0 && '└─ '}
+                                  <span className={`font-medium ${item.isDirect ? 'text-blue-800' : ''}`}>
+                                    {item.name}
+                                  </span>
+                                  {!item.isDirect && (
+                                    <span className="text-gray-500 ml-1 text-[10px]">(tổng từ con)</span>
+                                  )}
+                                </span>
+                                <span className={`font-semibold ${amountClass}`}>
+                                  {formatNumber(item.total)}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200">

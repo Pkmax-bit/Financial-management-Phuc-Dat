@@ -14,6 +14,13 @@ export interface Product {
   unit?: string
   price?: number
   cost?: number
+  actual_material_cost?: number
+  actual_material_components?: Array<{
+    expense_object_id: string
+    unit?: string
+    unit_price: number
+    quantity: number
+  }>
   is_active?: boolean
   area?: number | null
   volume?: number | null
@@ -41,6 +48,7 @@ export interface ProductCreate {
   unit?: string
   price?: number
   cost?: number
+  actual_material_cost?: number
   is_active?: boolean
   area?: number | null
   volume?: number | null
@@ -56,6 +64,7 @@ export interface ProductUpdate {
   unit?: string
   price?: number
   cost?: number
+  actual_material_cost?: number
   is_active?: boolean
   area?: number | null
   volume?: number | null
