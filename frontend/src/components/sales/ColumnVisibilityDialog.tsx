@@ -7,7 +7,7 @@ interface ColumnVisibilityDialogProps {
   isOpen: boolean
   onClose: () => void
   visibleColumns: Record<string, boolean>
-  onToggleColumn: (column: string) => void
+  onToggleColumn: (column: keyof typeof COLUMN_LABELS) => void
   onReset: () => void
 }
 

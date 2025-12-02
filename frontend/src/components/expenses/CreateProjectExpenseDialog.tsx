@@ -947,7 +947,36 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           }
           
           if (!invoiceItemsError && Array.isArray(invoiceItemsData) && invoiceItemsData.length > 0) {
-            // Collect all product_components from all invoice_items
+            // ===== Chuẩn bị lấy chi phí vật tư thực tế từ sản phẩm =====
+            const productIdSet = new Set<string>()
+            invoiceItemsData.forEach((ii: any) => {
+              if (ii.product_id) {
+                productIdSet.add(String(ii.product_id))
+              }
+            })
+
+            const productComponentsByProductId: Record<string, any[]> = {}
+            if (productIdSet.size > 0) {
+              const productIds = Array.from(productIdSet)
+              const { data: productsData, error: productsError } = await supabase
+                .from('products')
+                .select('id, actual_material_components, product_components')
+                .in('id', productIds)
+
+              if (productsError) {
+                console.warn('⚠️ Error loading products for actual_material_components, fallback to invoice_items.product_components:', productsError)
+              } else if (Array.isArray(productsData)) {
+                productsData.forEach((p: any) => {
+                  const pid = String(p.id)
+                  // Ưu tiên dùng actual_material_components; nếu rỗng thì fallback product_components
+                  const actualComps = Array.isArray(p.actual_material_components) ? p.actual_material_components : []
+                  const plannedComps = Array.isArray(p.product_components) ? p.product_components : []
+                  productComponentsByProductId[pid] = actualComps.length > 0 ? actualComps : plannedComps
+                })
+              }
+            }
+
+            // Collect all components from all invoice_items (dùng để auto-chọn đối tượng chi phí)
             const allComponents: Array<{
               expense_object_id: string
               name?: string
@@ -962,8 +991,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             
             const rows: InvoiceItemRow[] = []
             invoiceItemsData.forEach((ii: any) => {
-              // Use product_components from invoice_items (may also have components as fallback)
-              const productComponents = ii.product_components || ii.components || []
+              // Với chi phí thực tế: ưu tiên lấy chi phí đối tượng thực tế từ sản phẩm
+              let productComponents: any[] = []
+              const pid = ii.product_id ? String(ii.product_id) : ''
+              if (pid && productComponentsByProductId[pid] && productComponentsByProductId[pid].length > 0) {
+                productComponents = productComponentsByProductId[pid]
+              } else {
+                // Fallback: dùng product_components / components từ invoice_items nếu không có dữ liệu thực tế
+                productComponents = ii.product_components || ii.components || []
+              }
               
               if (Array.isArray(productComponents) && productComponents.length > 0) {
                 // Collect components for auto-selection and auto-fill
@@ -996,7 +1032,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 }
               }
               
-              // Prepare components data for this row
+              // Prepare components data cho dòng này
               const componentsPct: Record<string, number> = {}
               const componentsAmt: Record<string, number> = {}
               const componentsQuantity: Record<string, number> = {}

@@ -14,7 +14,9 @@ import {
   Package,
   Search,
   Eye,
-  CircleHelp
+  CircleHelp,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -99,7 +101,14 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const [submitting, setSubmitting] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
+  const [productSearch, setProductSearch] = useState('')
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [showVariantDialog, setShowVariantDialog] = useState(false)
+  const [selectedProductVariants, setSelectedProductVariants] = useState<Product[]>([])
+  const [pendingProductClick, setPendingProductClick] = useState<Product | null>(null)
   const [showColumnDialog, setShowColumnDialog] = useState(false)
+  const [editingCell, setEditingCell] = useState<{ index: number; field: string } | null>(null)
   
   // Tour state
   const INVOICE_FORM_TOUR_STORAGE_KEY = 'invoice-form-tour-status-v1'
@@ -121,7 +130,8 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     volume: true,
     height: true,
     length: true,
-    depth: true
+    depth: true,
+    components_block: true
   })
 
   // Form data
@@ -161,6 +171,91 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       depth: null
     }
   ])
+
+  // Filter products based on search
+  const filteredProducts = products.filter(product => {
+    const searchTerm = productSearch.toLowerCase()
+    return product.name.toLowerCase().includes(searchTerm) ||
+      (product.description || '').toLowerCase().includes(searchTerm) ||
+      (product.category || '').toLowerCase().includes(searchTerm)
+  })
+
+  // Helper function to extract base product name (remove size/dimension info)
+  const getBaseProductName = (productName: string): string => {
+    let baseName = productName
+      .replace(/\s+ngang\s+\d+/gi, '')
+      .replace(/\s+cao\s+\d+/gi, '')
+      .replace(/\s+dài\s+\d+/gi, '')
+      .replace(/\s+rộng\s+\d+/gi, '')
+      .replace(/\s+sâu\s+\d+/gi, '')
+      .replace(/\s+\d+x\d+/gi, '')
+      .replace(/\s+\d+\s*x\s*\d+/gi, '')
+      .trim()
+
+    if (baseName.length < 3) {
+      return productName
+    }
+
+    return baseName
+  }
+
+  // Group products by base name (để xử lý biến thể kích thước)
+  const groupProductsByName = (products: Product[]): Map<string, Product[]> => {
+    const grouped = new Map<string, Product[]>()
+    products.forEach(product => {
+      const baseName = getBaseProductName(product.name)
+      if (!grouped.has(baseName)) {
+        grouped.set(baseName, [])
+      }
+      grouped.get(baseName)!.push(product)
+    })
+    return grouped
+  }
+
+  // Toggle category expansion in product modal
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(category)) next.delete(category)
+      else next.add(category)
+      return next
+    })
+  }
+
+  // Shared components schema cho phần vật tư: chỉ lấy từ components thực tế của từng dòng
+  const headerComponents = (() => {
+    const seen = new Set<string>()
+    const list: Array<{ expense_object_id: string; name?: string }> = []
+    items.forEach(it => {
+      const comps: any[] = Array.isArray((it as any)?.components) ? ((it as any).components as any[]) : []
+      comps.forEach(c => {
+        const id = String(c?.expense_object_id || '')
+        if (!id) return
+        if (!seen.has(id)) {
+          seen.add(id)
+          list.push({ expense_object_id: id, name: c?.name })
+        }
+      })
+    })
+    return list
+  })()
+
+  // Grid dùng chung cho bảng sản phẩm + block vật tư để header/body luôn thẳng cột
+  const gridTemplateColumns = [
+    visibleColumns.name && 'minmax(200px, auto)',
+    visibleColumns.description && 'minmax(150px, auto)',
+    visibleColumns.quantity && 'minmax(80px, auto)',
+    visibleColumns.unit && '80px',
+    visibleColumns.unit_price && 'minmax(100px, auto)',
+    visibleColumns.total_price && 'minmax(120px, auto)',
+    visibleColumns.area && 'minmax(80px, auto)',
+    visibleColumns.volume && 'minmax(80px, auto)',
+    visibleColumns.height && 'minmax(80px, auto)',
+    visibleColumns.length && 'minmax(80px, auto)',
+    visibleColumns.depth && 'minmax(80px, auto)',
+    // Components block width per component: unit 80 + unit_price 100 + quantity 80 + total 120 = 380
+    visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * (80 + 100 + 80 + 120)}px, auto)`
+  ].filter(Boolean).join(' ')
 
   // Hide sidebar when modal opens/closes
   useEffect(() => {
@@ -823,7 +918,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     }])
   }
 
-  const toggleColumn = (column: string) => {
+  const toggleColumn = (column: keyof typeof visibleColumns) => {
     setVisibleColumns(prev => ({
       ...prev,
       [column]: !prev[column]
@@ -842,7 +937,8 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       volume: true,
       height: true,
       length: true,
-      depth: true
+      depth: true,
+      components_block: true
     })
   }
 
@@ -852,7 +948,21 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     }
   }
 
-  const updateItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
+  const computeItemTotal = (item: InvoiceItem) => {
+    const unitPrice = Number(item.unit_price || 0) // Đơn giá / m²
+    const areaVal = item.area != null ? Number(item.area) : null // Diện tích (m²)
+
+    if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
+      // Có diện tích: thành tiền = (Đơn giá / m²) × Diện tích (m²)
+      return unitPrice * areaVal
+    }
+
+    // Không có diện tích: thành tiền = đơn giá × số lượng
+    const quantity = Number(item.quantity || 0)
+    return unitPrice * quantity
+  }
+
+  const updateItem = (index: number, field: keyof InvoiceItem, value: string | number | null) => {
     const updatedItems = [...items]
     const oldItem = { ...updatedItems[index] }
     const oldQuantity = oldItem.quantity
@@ -860,20 +970,9 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     updatedItems[index] = { ...updatedItems[index], [field]: value }
     const curr = updatedItems[index]
     
-    // Recalculate total_price for this item
-    // Thành tiền = (Đơn giá / m²) × Diện tích (m²) nếu có diện tích, nếu không thì đơn giá × số lượng
+    // Recalculate total_price cho dòng sản phẩm
     if (field === 'quantity' || field === 'unit_price' || field === 'area') {
-      const unitPrice = Number(updatedItems[index].unit_price || 0) // Đơn giá / m²
-      const areaVal = updatedItems[index].area != null ? Number(updatedItems[index].area) : null // Diện tích (m²)
-      
-      if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
-        // Có diện tích: thành tiền = (Đơn giá / m²) × Diện tích (m²)
-        updatedItems[index].total_price = unitPrice * areaVal
-      } else {
-        // Không có diện tích: thành tiền = đơn giá × số lượng
-        const quantity = Number(updatedItems[index].quantity || 0)
-        updatedItems[index].total_price = unitPrice * quantity
-      }
+      updatedItems[index].total_price = computeItemTotal(updatedItems[index])
     }
     
     // When quantity changes, adjust components quantity proportionally
@@ -926,50 +1025,234 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     setItems(updatedItems)
   }
 
+  // Editable components (vật tư) fields per invoice item – giống giao diện Báo giá
+  const updateComponentField = (
+    itemIndex: number,
+    expenseObjectId: string,
+    field: 'unit' | 'unit_price' | 'quantity',
+    value: string | number
+  ) => {
+    const updated = [...items]
+    const comps = Array.isArray((updated[itemIndex] as any).components)
+      ? ([...(updated[itemIndex] as any).components] as any[])
+      : []
+    const idx = comps.findIndex((c: any) => String(c.expense_object_id) === String(expenseObjectId))
+    let comp: any
+    if (idx >= 0) {
+      comp = { ...comps[idx] }
+    } else {
+      comp = {
+        expense_object_id: String(expenseObjectId),
+        name: headerComponents.find(h => h.expense_object_id === expenseObjectId)?.name || expenseObjectId,
+        unit: '',
+        unit_price: 0,
+        quantity: 0,
+        total_price: 0
+      }
+    }
+    comp[field] = value
+    const qty = Number(comp.quantity || 0)
+    const price = Number(comp.unit_price || 0)
+    comp.total_price = qty * price
+    if (idx >= 0) comps[idx] = comp
+    else comps.push(comp)
+    ;(updated[itemIndex] as any).components = comps
+    // Cập nhật lại thành tiền dòng hóa đơn sau khi thay đổi vật tư
+    updated[itemIndex].total_price = computeItemTotal(updated[itemIndex])
+    setItems(updated)
+  }
+
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      maximumFractionDigits: 3
+    }).format(value)
+  }
+
+  const parseNumber = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(/,/g, '.')
+    const n = Number(cleaned)
+    return isNaN(n) ? 0 : n
+  }
+
+  const EditableNumberCell = ({
+    value,
+    onChange,
+    format,
+    step,
+    min,
+    placeholder,
+    index,
+    field,
+    commitOnChange,
+    displayFractionDigits
+  }: {
+    value: number | null
+    onChange: (v: number | null) => void
+    format: 'currency' | 'number'
+    step?: number
+    min?: number
+    placeholder?: string
+    index: number
+    field: string
+    commitOnChange?: boolean
+    displayFractionDigits?: number
+  }) => {
+    const [text, setText] = useState<string>('')
+    const inputRef = useRef<HTMLInputElement>(null)
+    const cursorPositionRef = useRef<number | null>(null)
+    const isInitializedRef = useRef(false)
+    const isEditing = editingCell && editingCell.index === index && editingCell.field === field
+
+    // Initialize text when starting to edit (only once when entering edit mode)
+    useEffect(() => {
+      if (isEditing && !isInitializedRef.current) {
+        const initialValue = value == null ? '' : String(value)
+        setText(initialValue)
+        isInitializedRef.current = true
+        // Focus and set cursor at end
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus()
+            const len = initialValue.length
+            inputRef.current.setSelectionRange(len, len)
+          }
+        }, 0)
+      } else if (!isEditing) {
+        // Reset when exiting edit mode
+        isInitializedRef.current = false
+        cursorPositionRef.current = null
+      }
+    }, [isEditing, value])
+
+    // Restore focus and cursor position after re-render when commitOnChange is enabled
+    useEffect(() => {
+      if (isEditing && inputRef.current && cursorPositionRef.current !== null) {
+        const pos = cursorPositionRef.current
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus()
+            inputRef.current.setSelectionRange(pos, pos)
+            cursorPositionRef.current = null
+          }
+        }, 0)
+      }
+    }, [text, isEditing])
+
+    if (!isEditing) {
+      const display = value == null
+        ? ''
+        : (format === 'currency'
+          ? formatCurrency(value)
+          : (displayFractionDigits != null
+            ? new Intl.NumberFormat('vi-VN', { minimumFractionDigits: displayFractionDigits, maximumFractionDigits: displayFractionDigits }).format(value)
+            : formatNumber(value)))
+      return (
+        <div
+          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text"
+          onClick={() => setEditingCell({ index, field })}
+          title={display}
+        >
+          {display || (placeholder || '')}
+        </div>
+      )
+    }
+
+    return (
+      <input
+        ref={inputRef}
+        type={format === 'number' ? 'number' : 'text'}
+        value={text}
+        onChange={(e) => {
+          const nvRaw = e.target.value
+          // Save cursor position before state update
+          if (e.target instanceof HTMLInputElement) {
+            cursorPositionRef.current = e.target.selectionStart
+          }
+          setText(nvRaw)
+          if (commitOnChange) {
+            const parsed = nvRaw.trim() === '' ? null : (format === 'number' ? Number(nvRaw) : parseNumber(nvRaw))
+            onChange(parsed)
+          }
+        }}
+        onBlur={() => {
+          const nv = text.trim() === '' ? null : parseNumber(text)
+          onChange(nv)
+          setEditingCell(null)
+          cursorPositionRef.current = null
+          isInitializedRef.current = false
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            const nv = text.trim() === '' ? null : parseNumber(text)
+            onChange(nv)
+            setEditingCell(null)
+            cursorPositionRef.current = null
+            isInitializedRef.current = false
+          } else if (e.key === 'Escape') {
+            setEditingCell(null)
+            cursorPositionRef.current = null
+            isInitializedRef.current = false
+          }
+        }}
+        className="w-full border border-blue-400 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+        placeholder={placeholder}
+        inputMode="decimal"
+        step={format === 'number' ? step : undefined}
+        min={format === 'number' ? min : undefined}
+      />
+    )
+  }
+
   const openProductModal = (itemIndex: number) => {
     setSelectedItemIndex(itemIndex)
     setShowProductModal(true)
   }
 
+  // Khi click "Chọn sản phẩm này" hoặc biến thể trong modal
   const selectProduct = (product: Product) => {
-    console.log('🔍 selectProduct called with:', product)
-    console.log('🔍 Product dimensions:', {
-      area: product.area,
-      volume: product.volume,
-      height: product.height,
-      length: product.length,
-      depth: product.depth
-    })
-    
+    console.log('🔍 selectProduct (Invoice) called with:', product)
+    // Giữ lại để dùng cho logic thêm hàng nếu cần – hiện modal chính dùng multi-select
     if (selectedItemIndex !== null) {
       const updatedItems = [...items]
-      const newItem = {
-        ...updatedItems[selectedItemIndex],
+      const base = updatedItems[selectedItemIndex]
+      const unitPrice = product.unit_price || 0
+      const areaVal = product.area != null ? Number(product.area) : null
+      const newItem: InvoiceItem = {
+        ...base,
+        product_service_id: product.id,
         name_product: product.name,
         description: product.description || '',
-        unit: product.unit || '',
-        unit_price: product.unit_price || 0,
-        total_price: (() => {
-          const unitPrice = product.unit_price || 0 // Đơn giá / m²
-          const areaVal = product.area != null ? Number(product.area) : null // Diện tích (m²)
-          // Thành tiền = (Đơn giá / m²) × Diện tích (m²) nếu có diện tích, nếu không thì đơn giá × số lượng
-          if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
-            return unitPrice * areaVal
-          }
-          return updatedItems[selectedItemIndex].quantity * unitPrice
-        })(),
-        area: product.area !== undefined ? product.area : null,
-        volume: product.volume !== undefined ? product.volume : null,
-        height: product.height !== undefined ? product.height : null,
-        length: product.length !== undefined ? product.length : null,
-        depth: product.depth !== undefined ? product.depth : null
+        quantity: base.quantity || 1,
+        unit: product.unit || base.unit || '',
+        unit_price: unitPrice,
+        total_price: areaVal != null && isFinite(areaVal) && areaVal > 0
+          ? unitPrice * areaVal
+          : (base.quantity || 1) * unitPrice,
+        area: product.area ?? null,
+        volume: product.volume ?? null,
+        height: product.height ?? null,
+        length: product.length ?? null,
+        depth: product.depth ?? null
       }
-      console.log('🔍 New item after selection:', newItem)
       updatedItems[selectedItemIndex] = newItem
       setItems(updatedItems)
     }
     setShowProductModal(false)
     setSelectedItemIndex(null)
+  }
+
+  // Xử lý click chọn sản phẩm trong modal: nếu có nhiều biến thể sẽ mở dialog biến thể
+  const handleProductClick = (product: Product) => {
+    const baseName = getBaseProductName(product.name)
+    const variants = filteredProducts.filter(p => getBaseProductName(p.name) === baseName)
+
+    if (variants.length > 1) {
+      setSelectedProductVariants(variants)
+      setPendingProductClick(product)
+      setShowVariantDialog(true)
+    } else {
+      selectProduct(product)
+    }
   }
 
   const handleSubmit = async (sendImmediately = false) => {
@@ -1483,13 +1766,16 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                         )}
                         {visibleColumns.quantity && (
                           <div>
-                            <input
-                              type="number"
+                            <EditableNumberCell
                               value={item.quantity}
-                              onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              step="1"
+                              onChange={(v) => updateItem(index, 'quantity', Number(v || 0))}
+                              format="number"
+                              step={1}
+                              min={0}
+                              placeholder="0"
+                              index={index}
+                              field={'quantity'}
+                              commitOnChange
                             />
                           </div>
                         )}
@@ -1499,20 +1785,24 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                               type="text"
                               value={item.unit}
                               onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               placeholder="cái"
+                              maxLength={5}
                             />
                           </div>
                         )}
                         {visibleColumns.unit_price && (
                           <div>
-                            <input
-                              type="number"
+                            <EditableNumberCell
                               value={item.unit_price}
-                              onChange={(e) => updateItem(index, 'unit_price', Number(e.target.value))}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              min="0"
-                              step="1000"
+                              onChange={(v) => updateItem(index, 'unit_price', Number(v || 0))}
+                              format="currency"
+                              step={1000}
+                              min={0}
+                              placeholder="0 ₫"
+                              index={index}
+                              field={'unit_price'}
+                              commitOnChange
                             />
                           </div>
                         )}
@@ -1533,65 +1823,189 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                         )}
                         {visibleColumns.area && (
                           <div>
-                            <input
-                              type="number"
-                              value={item.area ?? ''}
-                              onChange={(e) => updateItem(index, 'area', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            <EditableNumberCell
+                              value={item.area ?? null}
+                              onChange={(v) => updateItem(index, 'area', v == null ? null : Number(v))}
+                              format="number"
+                              step={0.000001}
+                              min={0}
                               placeholder="m²"
-                              step="0.01"
+                              index={index}
+                              field={'area'}
+                              commitOnChange
                             />
                           </div>
                         )}
                         {visibleColumns.volume && (
                           <div>
-                            <input
-                              type="number"
-                              value={item.volume ?? ''}
-                              onChange={(e) => updateItem(index, 'volume', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            <EditableNumberCell
+                              value={item.volume ?? null}
+                              onChange={(v) => updateItem(index, 'volume', v == null ? null : Number(v))}
+                              format="number"
+                              step={0.001}
+                              min={0}
                               placeholder="m³"
-                              step="0.001"
+                              index={index}
+                              field={'volume'}
+                              commitOnChange
                             />
                           </div>
                         )}
                         {visibleColumns.height && (
                           <div>
-                            <input
-                              type="number"
-                              value={item.height ?? ''}
-                              onChange={(e) => updateItem(index, 'height', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="cm"
-                              step="0.1"
+                            <EditableNumberCell
+                              value={item.height ?? null}
+                              onChange={(v) => updateItem(index, 'height', v == null ? null : Number(v))}
+                              format="number"
+                              step={100}
+                              min={0}
+                              placeholder="mm"
+                              index={index}
+                              field={'height'}
+                              commitOnChange
                             />
                           </div>
                         )}
                         {visibleColumns.length && (
                           <div>
-                            <input
-                              type="number"
-                              value={item.length ?? ''}
-                              onChange={(e) => updateItem(index, 'length', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="cm"
-                              step="0.1"
+                            <EditableNumberCell
+                              value={item.length ?? null}
+                              onChange={(v) => updateItem(index, 'length', v == null ? null : Number(v))}
+                              format="number"
+                              step={100}
+                              min={0}
+                              placeholder="mm"
+                              index={index}
+                              field={'length'}
+                              commitOnChange
                             />
                           </div>
                         )}
                         {visibleColumns.depth && (
                           <div>
-                            <input
-                              type="number"
-                              value={item.depth ?? ''}
-                              onChange={(e) => updateItem(index, 'depth', e.target.value ? Number(e.target.value) : null)}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="cm"
-                              step="0.1"
+                            <EditableNumberCell
+                              value={item.depth ?? null}
+                              onChange={(v) => updateItem(index, 'depth', v == null ? null : Number(v))}
+                              format="number"
+                              step={100}
+                              min={0}
+                              placeholder="mm"
+                              index={index}
+                              field={'depth'}
+                              commitOnChange
                             />
                           </div>
                         )}
                       </div>
+
+                      {/* Vật tư (components) - trình bày giống layout Báo giá */}
+                      {Array.isArray((item as any).components) && (item as any).components.length > 0 && (
+                        <div className="mt-3 border-t border-gray-200 pt-3">
+                          <div className="text-xs font-semibold text-gray-900 mb-1">Vật tư</div>
+                          <div className="w-full">
+                            {/* Hàng 1: tên vật tư theo từng đối tượng chi phí */}
+                            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${(headerComponents.length || 1) * 4}, minmax(auto, auto))` }}>
+                              {(headerComponents.length > 0 ? headerComponents : [{}]).map((c: any, idx: number) => (
+                                <div key={`hdr-comp-name-${idx}`} className="col-span-4 font-semibold text-gray-800 whitespace-nowrap px-2">
+                                  {c?.name || c?.expense_object_id || 'Vật tư'}
+                                </div>
+                              ))}
+                            </div>
+                            {/* Hàng 2: tên 4 cột Đơn vị / Đơn giá / Số lượng / Thành tiền */}
+                            <div
+                              className="mt-1 grid gap-2 text-xs text-gray-600"
+                              style={{
+                                gridTemplateColumns: `repeat(${(headerComponents.length || 1)}, 80px 100px 80px 120px)`
+                              }}
+                            >
+                              {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((_, idx) => [
+                                <div key={`hdr-unit-${idx}`} className="px-2">Đơn vị</div>,
+                                <div key={`hdr-price-${idx}`} className="px-2">Đơn giá</div>,
+                                <div key={`hdr-qty-${idx}`} className="px-2">Số lượng</div>,
+                                <div key={`hdr-total-${idx}`} className="px-2">Thành tiền</div>
+                              ])}
+                            </div>
+                            {/* Hàng 3: giá trị vật tư trên 1 hàng, giống báo giá */}
+                            <div
+                              className="mt-1 grid gap-2 text-xs text-gray-800"
+                              style={{
+                                gridTemplateColumns: `repeat(${(headerComponents.length || 1)}, 80px 100px 80px 120px)`
+                              }}
+                            >
+                              {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
+                                const realMatch: any =
+                                  (item as any).components &&
+                                  Array.isArray((item as any).components)
+                                    ? (item as any).components.find(
+                                        (c: any) => String(c.expense_object_id) === String(hc.expense_object_id)
+                                      )
+                                    : null
+                                if (!realMatch) {
+                                  return []
+                                }
+                                const match = realMatch
+                                const editIndex = index * 1000 + idx
+                                return [
+                                  <div key={`val-unit-${idx}`} className="px-2 py-1">
+                                    <input
+                                      type="text"
+                                      value={match.unit || ''}
+                                      onChange={(e) =>
+                                        updateComponentField(index, String(hc.expense_object_id), 'unit', e.target.value)
+                                      }
+                                      className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      placeholder="ĐV"
+                                      maxLength={3}
+                                    />
+                                  </div>,
+                                  <div key={`val-price-${idx}`} className="px-2 py-1">
+                                    <EditableNumberCell
+                                      value={match.unit_price != null ? Number(match.unit_price) : null}
+                                      onChange={(v) =>
+                                        updateComponentField(
+                                          index,
+                                          String(hc.expense_object_id),
+                                          'unit_price',
+                                          v == null ? 0 : Number(v)
+                                        )
+                                      }
+                                      format="currency"
+                                      step={1000}
+                                      min={0}
+                                      placeholder="0 ₫"
+                                      index={editIndex}
+                                      field={`comp-${idx}-unit_price`}
+                                    />
+                                  </div>,
+                                  <div key={`val-qty-${idx}`} className="px-2 py-1">
+                                    <EditableNumberCell
+                                      value={match.quantity != null ? Number(match.quantity) : null}
+                                      onChange={(v) =>
+                                        updateComponentField(
+                                          index,
+                                          String(hc.expense_object_id),
+                                          'quantity',
+                                          v == null ? 0 : Number(v)
+                                        )
+                                      }
+                                      format="number"
+                                      step={1}
+                                      min={0}
+                                      placeholder="0"
+                                      index={editIndex}
+                                      field={`comp-${idx}-quantity`}
+                                      displayFractionDigits={2}
+                                    />
+                                  </div>,
+                                  <div key={`val-total-${idx}`} className="px-2 py-1 text-right font-semibold text-gray-900">
+                                    {match.total_price != null ? formatCurrency(Number(match.total_price)) : ''}
+                                  </div>
+                                ]
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1736,34 +2150,49 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         </div>
       </div>
 
-      {/* Product Selection Modal */}
+      {/* Product Selection Modal – làm giống báo giá */}
       {showProductModal && (
         <div className="fixed inset-0 z-60 bg-transparent flex items-end justify-center">
-          <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[75vh] flex flex-col">
+          <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[60vh] flex flex-col" data-tour-id="invoice-product-selection-modal">
             <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-700">Chọn sản phẩm</h3>
               <button
                 onClick={() => setShowProductModal(false)}
-                className="p-2 hover:bg-gray-200 rounded-md transition-colors"
+                className="p-2 hover:bg-gray-200 rounded-md text-gray-500 hover:text-gray-700"
               >
-                <X className="h-5 w-5 text-gray-500" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            
+
+            {/* Search Bar */}
+            <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Tìm kiếm sản phẩm theo tên, mô tả hoặc loại..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-black font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                />
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto bg-gray-50">
               {loadingProducts ? (
                 <div className="text-center py-8">
                   <span className="text-gray-500">Đang tải sản phẩm...</span>
                 </div>
-              ) : products.length === 0 ? (
+              ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-8">
-                  <span className="text-gray-500">Không có sản phẩm nào</span>
+                  <span className="text-gray-500">
+                    {productSearch ? 'Không có sản phẩm phù hợp' : 'Không có sản phẩm nào'}
+                  </span>
                 </div>
               ) : (
                 <div className="p-4">
                   {(() => {
-                    // Group products by category
-                    const groupedProducts = products.reduce((acc, product) => {
+                    const groupedProducts = filteredProducts.reduce((acc, product) => {
                       const category = product.category || 'Khác'
                       if (!acc[category]) {
                         acc[category] = []
@@ -1772,74 +2201,228 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                       return acc
                     }, {} as Record<string, Product[]>)
 
-                    return Object.entries(groupedProducts).map(([category, categoryProducts]) => (
-                      <div key={category} className="mb-6">
-                        <h4 className="text-sm font-semibold text-gray-600 mb-3 px-3 py-2 bg-white rounded-md border border-gray-200 shadow-sm">
-                          📁 {category}
-                        </h4>
-                        <div className="space-y-2">
-                          {categoryProducts.map((product) => (
-                            <div
-                              key={product.id}
-                              onClick={() => selectProduct(product)}
-                              className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md"
-                            >
-                              <div className="grid grid-cols-6 gap-3 items-center">
-                                <div className="col-span-2">
-                                  <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
-                                  <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
-                                    {category}
-                                  </div>
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
-                                    <span className="font-medium">Đơn vị:</span><br/>
-                                    {product.unit || 'Chưa có'}
-                                  </span>
-                                </div>
-                                <div className="col-span-1">
-                                  {product.unit_price ? (
-                                    <span className="text-sm font-bold text-green-600">
-                                      <span className="font-medium">Đơn giá:</span><br/>
-                                      {formatCurrency(product.unit_price)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-sm text-gray-400">
-                                      <span className="font-medium">Đơn giá:</span><br/>
-                                      Chưa có
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
-                                    <span className="font-medium">Kích thước:</span><br/>
-                                    <div className="text-xs space-y-1">
-                                      {product.area && <div>📐 Diện tích: {product.area} m²</div>}
-                                      {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
-                                      {product.height && <div>📏 Cao: {product.height} cm</div>}
-                                      {product.length && <div>📏 Dài: {product.length} cm</div>}
-                                      {product.depth && <div>📏 Sâu: {product.depth} cm</div>}
-                                      {!product.area && !product.volume && !product.height && !product.length && !product.depth && 
-                                        <div className="text-gray-400">Chưa có kích thước</div>
-                                      }
-                                    </div>
-                                  </span>
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
-                                    <span className="font-medium">Mô tả:</span><br/>
-                                    {product.description || 'Không có mô tả'}
-                                  </span>
-                                </div>
-                              </div>
+                    return Object.entries(groupedProducts).map(([category, categoryProducts]) => {
+                      const isExpanded = expandedCategories.has(category)
+
+                      return (
+                        <div key={category} className="mb-4">
+                          <div
+                            className="text-sm font-semibold text-gray-600 mb-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm cursor-pointer hover:bg-gray-50 transition-colors flex items-center justify-between"
+                            onClick={() => toggleCategory(category)}
+                          >
+                            <div className="flex items-center">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-gray-500 mr-2" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-500 mr-2" />
+                              )}
+                              <span>📁 {category}</span>
+                              <span className="ml-2 text-xs text-gray-500">({categoryProducts.length} sản phẩm)</span>
                             </div>
-                          ))}
+                          </div>
+
+                          {isExpanded && (
+                            <div className="space-y-2">
+                              {categoryProducts.map((product) => (
+                                <label
+                                  key={product.id}
+                                  className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-3"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProductIds.includes(product.id)}
+                                    onChange={(e) => {
+                                      setSelectedProductIds(prev =>
+                                        e.target.checked ? [...prev, product.id] : prev.filter(id => id !== product.id)
+                                      )
+                                    }}
+                                    className="h-4 w-4"
+                                  />
+                                  <div className="grid grid-cols-6 gap-3 items-center w-full">
+                                    <div className="col-span-2">
+                                      <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
+                                      <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
+                                        {category}
+                                      </div>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleProductClick(product)
+                                        }}
+                                        className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                                      >
+                                        {(() => {
+                                          const baseName = getBaseProductName(product.name)
+                                          const variants = filteredProducts.filter(p => getBaseProductName(p.name) === baseName)
+                                          return variants.length > 1 ? `Chọn biến thể (${variants.length})` : 'Chọn sản phẩm này'
+                                        })()}
+                                      </button>
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Đơn vị:</span><br />
+                                        {product.unit || 'Chưa có'}
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1">
+                                      {product.unit_price ? (
+                                        <span className="text-sm font-bold text-green-600">
+                                          <span className="font-medium">Đơn giá:</span><br />
+                                          {formatCurrency(product.unit_price)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-sm text-gray-400">
+                                          <span className="font-medium">Đơn giá:</span><br />
+                                          Chưa có
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Kích thước:</span><br />
+                                        <div className="text-xs space-y-1">
+                                          {product.area && <div>📐 Diện tích: {product.area} m²</div>}
+                                          {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
+                                          {product.height && <div>📏 Cao: {product.height} mm</div>}
+                                          {product.length && <div>📏 Dài: {product.length} mm</div>}
+                                          {product.depth && <div>📏 Sâu: {product.depth} mm</div>}
+                                          {!product.area && !product.volume && !product.height && !product.length && !product.depth && (
+                                            <div className="text-gray-400">Chưa có kích thước</div>
+                                          )}
+                                        </div>
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Mô tả:</span><br />
+                                        {product.description || 'Không có mô tả'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   })()}
                 </div>
               )}
+            </div>
+            <div className="p-4 border-t bg-white flex justify-between items-center">
+              <button
+                onClick={() => { setSelectedProductIds([]); setShowProductModal(false) }}
+                className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={async () => {
+                  const map = new Map(products.map(p => [p.id, p]))
+                  const chosen = selectedProductIds.map(id => map.get(id)).filter(Boolean) as Product[]
+                  if (chosen.length > 0) {
+                    const productIds = chosen.map(p => p.id)
+                    const { data: prods } = await supabase
+                      .from('products')
+                      .select('id, name, description, unit, price, category_id, area, volume, height, length, depth, actual_material_components, product_components')
+                      .in('id', productIds)
+
+                    const byId: Record<string, any> = {}
+                    prods?.forEach((pr: any) => { byId[pr.id] = pr })
+
+                    const allComponents = (prods || []).flatMap((pr: any) => {
+                      const actualComps = Array.isArray(pr.actual_material_components) ? pr.actual_material_components : []
+                      const plannedComps = Array.isArray(pr.product_components) ? pr.product_components : []
+                      const comps = actualComps.length > 0 ? actualComps : plannedComps
+                      return comps
+                    })
+                    const ids = Array.from(new Set(allComponents.map((c: any) => String(c.expense_object_id)).filter(Boolean)))
+                    let nameMap: Record<string, string> = {}
+                    if (ids.length > 0) {
+                      const { data: exp } = await supabase
+                        .from('expense_objects')
+                        .select('id, name')
+                        .in('id', ids)
+                      exp?.forEach((e: any) => { nameMap[e.id] = e.name })
+                    }
+
+                    const newItems = [...items]
+                    const findEmptyFrom = (startIdx: number) => {
+                      for (let i = Math.max(0, startIdx); i < newItems.length; i++) {
+                        if (!newItems[i].name_product || newItems[i].name_product.trim() === '') return i
+                      }
+                      return -1
+                    }
+                    let insertIdx = selectedItemIndex !== null ? selectedItemIndex : findEmptyFrom(0)
+
+                    for (const p of chosen) {
+                      const full = byId[p.id]
+                      const actualComps: any[] = Array.isArray(full?.actual_material_components) ? full.actual_material_components : []
+                      const plannedComps: any[] = Array.isArray(full?.product_components) ? full.product_components : []
+                      const componentsSource: any[] = actualComps.length > 0 ? actualComps : plannedComps
+
+                      const components = componentsSource.map((c: any) => ({
+                        expense_object_id: String(c.expense_object_id),
+                        name: nameMap[String(c.expense_object_id)] || c.name || '',
+                        unit: c.unit || '',
+                        unit_price: Number(c.unit_price || 0),
+                        quantity: Number(c.quantity || 0),
+                        total_price: Number(c.total_price || 0)
+                      }))
+
+                      const baseItem = insertIdx !== -1 ? newItems[insertIdx] : null
+
+                      if (baseItem) {
+                        const merged: InvoiceItem = {
+                          ...baseItem,
+                          product_service_id: p.id,
+                          name_product: p.name,
+                          description: p.description || '',
+                          quantity: baseItem.quantity || 1,
+                          unit: p.unit || baseItem.unit || '',
+                          unit_price: p.unit_price || 0,
+                          area: full?.area ?? p.area ?? null,
+                          volume: full?.volume ?? p.volume ?? null,
+                          height: full?.height ?? p.height ?? null,
+                          length: full?.length ?? p.length ?? null,
+                          depth: full?.depth ?? p.depth ?? null,
+                          components
+                        }
+                        merged.total_price = computeItemTotal(merged)
+                        newItems[insertIdx] = merged
+                        insertIdx = findEmptyFrom(insertIdx + 1)
+                      } else {
+                        const created: InvoiceItem = {
+                          product_service_id: p.id,
+                          name_product: p.name,
+                          description: p.description || '',
+                          quantity: 1,
+                          unit: p.unit || '',
+                          unit_price: p.unit_price || 0,
+                          total_price: 0,
+                          area: full?.area ?? p.area ?? null,
+                          volume: full?.volume ?? p.volume ?? null,
+                          height: full?.height ?? p.height ?? null,
+                          length: full?.length ?? p.length ?? null,
+                          depth: full?.depth ?? p.depth ?? null,
+                          components
+                        }
+                        created.total_price = computeItemTotal(created)
+                        newItems.push(created)
+                      }
+                    }
+
+                    setItems(newItems)
+                  }
+                  setSelectedProductIds([])
+                  setShowProductModal(false)
+                  setSelectedItemIndex(null)
+                }}
+                className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Thêm đã chọn
+              </button>
             </div>
           </div>
         </div>

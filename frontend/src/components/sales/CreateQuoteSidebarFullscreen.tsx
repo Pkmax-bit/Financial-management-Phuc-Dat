@@ -65,7 +65,7 @@ interface QuoteItem {
   // UI-only flags to avoid overwriting manual inputs
   area_is_manual?: boolean
   volume_is_manual?: boolean
-  // values sourced strictly from product_components
+// values sourced strictly from product components (hiện tại lấy từ actual_material_components của sản phẩm)
   component_unit?: string
   component_unit_price?: number
   component_quantity?: number
@@ -452,7 +452,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     }
   }, [isOpen, hideSidebar])
 
-  // Shared components schema for header/body alignment: union across all items' components
+  // Shared components schema cho phần vật tư: chỉ lấy từ components thực tế của từng dòng
   const headerComponents = (() => {
     const seen = new Set<string>()
     const list: Array<{ expense_object_id: string; name?: string }> = []
@@ -467,26 +467,6 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         }
       })
     })
-    // Include all expense_object_ids that have preload rules to always show their columns
-    try {
-      adjustmentRulesMap.current.forEach((rulesArr, key) => {
-        const eid = String((key || '').split('_')[0] || '')
-        if (!eid) return
-        if (!seen.has(eid)) {
-          seen.add(eid)
-          // Try to find a friendly name from existing components
-          const nameFromItems = (() => {
-            for (const it of items as any[]) {
-              const comps: any[] = Array.isArray(it?.components) ? (it.components as any[]) : []
-              const hit = comps.find((c: any) => String(c?.expense_object_id) === eid)
-              if (hit?.name) return hit.name
-            }
-            return undefined
-          })()
-          list.push({ expense_object_id: eid, name: nameFromItems })
-        }
-      })
-    } catch (_) { }
     return list
   })()
 
@@ -574,11 +554,14 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       // Try to find a product tied to this project (by project_id); fallback: none
       const { data: prod } = await supabase
         .from('products')
-        .select('id, name, product_components')
+        .select('id, name, actual_material_components, product_components')
         .eq('project_id', projectId)
         .limit(1)
         .maybeSingle()
-      const components: any[] = Array.isArray(prod?.product_components) ? prod!.product_components as any[] : []
+      const actualComps: any[] = Array.isArray(prod?.actual_material_components) ? (prod!.actual_material_components as any[]) : []
+      const plannedComps: any[] = Array.isArray(prod?.product_components) ? (prod!.product_components as any[]) : []
+      // Ưu tiên dùng vật tư thực tế; nếu chưa có thì fallback vật tư kế hoạch
+      const components: any[] = actualComps.length > 0 ? actualComps : plannedComps
       if (components.length === 0) return
 
       // Fetch names for expense_object_ids
@@ -1177,7 +1160,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             depth: item.depth,
             area_is_manual: false,
             volume_is_manual: false,
-            // Load components from product_components JSONB column
+            // Load components từ product_components JSONB column (đang được fill từ actual_material_components của sản phẩm)
             components: Array.isArray(item.product_components) ? item.product_components.map((comp: any) => ({
               expense_object_id: comp.expense_object_id,
               name: comp.name,
@@ -1988,15 +1971,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       depth: product.depth
     })
 
-    const fillFromProductComponents = async () => {
+        const fillFromProductComponents = async () => {
       try {
         // Load product with components (in case not included)
         const { data: prod } = await supabase
           .from('products')
-          .select('id, name, description, unit, unit_price, area, volume, height, length, depth, product_components')
+              .select('id, name, description, unit, price, area, volume, height, length, depth, actual_material_components, product_components')
           .eq('id', product.id)
           .maybeSingle()
-        const components: any[] = Array.isArray(prod?.product_components) ? (prod!.product_components as any[]) : []
+            const actualComps: any[] = Array.isArray(prod?.actual_material_components) ? (prod!.actual_material_components as any[]) : []
+            const plannedComps: any[] = Array.isArray(prod?.product_components) ? (prod!.product_components as any[]) : []
+            // Ưu tiên dùng vật tư thực tế; nếu chưa có thì fallback vật tư kế hoạch
+            const components: any[] = actualComps.length > 0 ? actualComps : plannedComps
         // If no components and no target index, nothing to do
         if (selectedItemIndex === null && components.length === 0) return
 
@@ -3023,11 +3009,19 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           {visibleColumns.components_block && (
                             <div className="text-sm text-black w-full">
                               <div className="grid gap-2" style={{
-                                // Body grid for components: fixed widths like header
+                                // Body grid cho vật tư: vẫn giữ số cột như header
                                 gridTemplateColumns: `repeat(${(headerComponents.length || 1)}, 80px 100px 80px 120px)`
                               }}>
                                 {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
-                                  const match: any = (item.components || []).find((c: any) => String(c.expense_object_id) === String(hc.expense_object_id)) || { unit: '', unit_price: null, quantity: null, total_price: null }
+                                  // Chỉ hiển thị cho những đối tượng chi phí mà dòng sản phẩm này thực sự có
+                                  const realMatch: any = (item.components || []).find(
+                                    (c: any) => String(c.expense_object_id) === String(hc.expense_object_id)
+                                  )
+                                  if (!realMatch) {
+                                    // Không có vật tư cho expense_object này ở dòng hiện tại -> không render 4 ô rỗng
+                                    return []
+                                  }
+                                  const match = realMatch
                                   const editIndex = index * 1000 + idx
                                   return [
                                     <div key={`val-unit-${idx}`} className="px-2 py-1 text-xs text-gray-800">
@@ -3533,18 +3527,23 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   const map = new Map(products.map(p => [p.id, p]))
                   const chosen = selectedProductIds.map(id => map.get(id)).filter(Boolean) as Product[]
                   if (chosen.length > 0) {
-                    // Load full products with product_components
+                    // Load full products with components (ưu tiên vật tư thực tế từ actual_material_components)
                     const productIds = chosen.map(p => p.id)
                     const { data: prods } = await supabase
                       .from('products')
-                      .select('id, name, description, unit, price, category_id, area, volume, height, length, depth, product_components')
+                      .select('id, name, description, unit, price, category_id, area, volume, height, length, depth, actual_material_components, product_components')
                       .in('id', productIds)
 
                     const byId: Record<string, any> = {}
                     prods?.forEach((pr: any) => { byId[pr.id] = pr })
 
-                    // Collect all expense_object_ids to batch fetch names
-                    const allComponents = (prods || []).flatMap((pr: any) => Array.isArray(pr.product_components) ? pr.product_components : [])
+                    // Collect all expense_object_ids to batch fetch names (dùng components đã ưu tiên vật tư thực tế)
+                    const allComponents = (prods || []).flatMap((pr: any) => {
+                      const actualComps = Array.isArray(pr.actual_material_components) ? pr.actual_material_components : []
+                      const plannedComps = Array.isArray(pr.product_components) ? pr.product_components : []
+                      const comps = actualComps.length > 0 ? actualComps : plannedComps
+                      return comps
+                    })
                     const ids = Array.from(new Set(allComponents.map((c: any) => String(c.expense_object_id)).filter(Boolean)))
                     let nameMap: Record<string, string> = {}
                     if (ids.length > 0) {
@@ -3566,7 +3565,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
                     for (const p of chosen) {
                       const full = byId[p.id]
-                      const components: any[] = Array.isArray(full?.product_components) ? full.product_components : []
+                      const actualComps: any[] = Array.isArray(full?.actual_material_components) ? full.actual_material_components : []
+                      const plannedComps: any[] = Array.isArray(full?.product_components) ? full.product_components : []
+                      const components: any[] = actualComps.length > 0 ? actualComps : plannedComps
                       if (components.length === 0) {
                         // fallback to single product row
                         if (insertIdx !== -1) {

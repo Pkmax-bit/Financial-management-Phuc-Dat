@@ -65,7 +65,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
   const [componentRows, setComponentRows] = useState<Array<{ expense_object_id: string; expense_object_name?: string; expense_object_path?: string; unit: string; unit_price: number; quantity: number }>>([
     { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }
   ])
-  // Chi phí vật tư thực tế - tương tự chi phí kế hoạch
+  // Chi phí vật tư
   const [actualComponentRows, setActualComponentRows] = useState<Array<{ expense_object_id: string; expense_object_name?: string; expense_object_path?: string; unit: string; unit_price: number; quantity: number }>>([
     { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }
   ])
@@ -831,132 +831,10 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
             autoComplete="off"
           />
         </div>
-        {/* Chọn đối tượng chi phí (Vật tư) - Chi phí kế hoạch */}
-        <div className="md:col-span-12" data-tour-id="product-form-components">
-          <h4 className="text-md font-medium text-gray-900 mb-3 mt-4">Chi phí kế hoạch (Vật tư - đối tượng chi phí cấp 3)</h4>
-          <div className="overflow-x-auto border border-gray-200 rounded">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-gray-900 text-left">Đối tượng chi phí</th>
-                  <th className="px-3 py-2 text-gray-900 text-left">Đơn vị</th>
-                  <th className="px-3 py-2 text-gray-900 text-right">Đơn giá</th>
-                  <th className="px-3 py-2 text-gray-900 text-right">Số lượng</th>
-                  <th className="px-3 py-2 text-gray-900 text-right">Thành tiền</th>
-                  <th className="px-3 py-2 text-gray-900 text-right">&nbsp;</th>
-                </tr>
-              </thead>
-              <tbody>
-                {componentRows.map((row, idx) => {
-                  const total = (row.unit_price || 0) * (row.quantity || 0)
-                  return (
-                    <tr key={idx} className="border-t">
-                      <td className="px-3 py-2 min-w-[320px]">
-                        <select
-                          value={row.expense_object_id}
-                          onChange={(e) => {
-                            const id = e.target.value
-                            const obj = expenseObjectsMap[id]
-                            const fullPath = obj ? getFullPath(id, expenseObjectsMap) : ''
-                            const next = [...componentRows]
-                            next[idx] = { ...row, expense_object_id: id, expense_object_name: obj?.name, expense_object_path: fullPath }
-                            setComponentRows(next)
-                          }}
-                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
-                        >
-                          <option value="">Chọn đối tượng</option>
-                          {renderTreeOptions(expenseTree)}
-                        </select>
-                        {row.expense_object_path && (
-                          <div className="mt-1 text-xs text-gray-600 italic">
-                            {row.expense_object_path}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 w-40">
-                        <input
-                          value={row.unit}
-                          onChange={(e)=>{
-                            const next=[...componentRows]; next[idx]={...row, unit:e.target.value}; setComponentRows(next)
-                          }}
-                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
-                          placeholder="m, m2, cái..."
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right w-40">
-                        <input
-                          type="number"
-                          value={row.unit_price}
-                          onChange={(e)=>{
-                            const next=[...componentRows]; next[idx]={...row, unit_price: parseFloat(e.target.value)||0}; setComponentRows(next)
-                          }}
-                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black"
-                          step="1000"
-                          min="0"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right w-40">
-                        <input
-                          type="number"
-                          value={row.quantity}
-                          onChange={(e)=>{
-                            const next=[...componentRows]; next[idx]={...row, quantity: parseFloat(e.target.value)||0}; setComponentRows(next)
-                          }}
-                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black"
-                          step="1"
-                          min="0"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{new Intl.NumberFormat('vi-VN').format(total)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <button type="button" onClick={()=>setComponentRows(prev=>prev.filter((_,i)=>i!==idx))} className="text-red-600 text-xs hover:underline">Xóa</button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-2">
-            <button type="button" onClick={()=>setComponentRows(prev=>[...prev,{ expense_object_id:'', unit:'', unit_price:0, quantity:1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
-          </div>
-          {/* Hiển thị tổng theo cấu trúc cây cho chi phí kế hoạch */}
-          {(() => {
-            const { directTotals, allTotals } = calculateTreeTotals(componentRows)
-            const displayList = buildTreeDisplayList(expenseTree, allTotals, directTotals)
-
-            if (displayList.length === 0) return null
-
-            return (
-              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
-                <h5 className="text-sm font-semibold text-gray-900 mb-2">Tổng chi phí kế hoạch theo cấu trúc cây:</h5>
-                <div className="space-y-1 text-xs">
-                  {displayList.map(item => {
-                    const amountClass = item.isDirect ? 'text-green-700' : 'text-green-500'
-                    return (
-                      <div key={item.id} className="flex justify-between items-center" style={{ paddingLeft: `${item.level * 16}px` }}>
-                        <span className="text-gray-700">
-                          {item.level > 0 && '└─ '}
-                          <span className={`font-medium ${item.isDirect ? 'text-green-800' : ''}`}>{item.name}</span>
-                          {!item.isDirect && (
-                            <span className="text-gray-500 ml-1 text-[10px]">(tổng từ con)</span>
-                          )}
-                        </span>
-                        <span className={`font-semibold ${amountClass}`}>
-                          {new Intl.NumberFormat('vi-VN').format(item.total)}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })()}
-        </div>
         
-        {/* Chi phí vật tư thực tế */}
+        {/* Chi phí vật tư */}
         <div className="md:col-span-12 mt-4">
-          <h4 className="text-md font-medium text-gray-900 mb-3">Chi phí vật tư thực tế</h4>
+          <h4 className="text-md font-medium text-gray-900 mb-3">Chi phí vật tư</h4>
           <div className="overflow-x-auto border border-gray-200 rounded">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50">

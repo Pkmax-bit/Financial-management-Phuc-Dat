@@ -570,19 +570,23 @@ export default function ProductCatalog() {
                               <td className="px-3 py-2 text-right">{p.depth ? `${formatNumber(p.depth)} mm` : '-'}</td>
                               <td className="px-3 py-2">
                                 <div className="text-xs text-gray-700 space-y-1">
-                                  {Array.isArray((p as any).product_components) && (p as any).product_components.length > 0 ? (
+                                  {Array.isArray((p as any).actual_material_components) && (p as any).actual_material_components.length > 0 ? (
                                     <>
-                                      {((p as any).product_components as any[]).slice(0, 3).map((c, idx) => (
+                                      {((p as any).actual_material_components as any[]).slice(0, 3).map((c, idx) => (
                                         <div key={idx} className="truncate">
-                                          <span className="text-gray-900">{expenseObjectMap[String(c.expense_object_id)] || String(c.expense_object_id)}</span>
+                                          <span className="text-gray-900">
+                                            {expenseObjectMap[String(c.expense_object_id)] || String(c.expense_object_id)}
+                                          </span>
                                           <span className="mx-1 text-gray-400">·</span>
                                           <span>{Number(c.quantity || 0)}</span>
                                           {c.unit ? <span className="ml-1">{c.unit}</span> : null}
                                           <span className="ml-1">× {formatNumber(Number(c.unit_price || 0))}</span>
                                         </div>
                                       ))}
-                                      {((p as any).product_components as any[]).length > 3 && (
-                                        <div className="text-gray-500">+{((p as any).product_components as any[]).length - 3} mục khác</div>
+                                      {((p as any).actual_material_components as any[]).length > 3 && (
+                                        <div className="text-gray-500">
+                                          +{((p as any).actual_material_components as any[]).length - 3} mục khác
+                                        </div>
                                       )}
                                     </>
                                   ) : (
@@ -797,64 +801,9 @@ export default function ProductCatalog() {
                   </div>
                 </div>
 
-                {/* Vật tư (đối tượng chi phí) - Chi phí kế hoạch */}
-                <div className="border-t border-gray-200 pt-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Vật tư (đối tượng chi phí)</h4>
-                  <div className="overflow-x-auto border border-gray-200 rounded">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-gray-900 text-left">Đối tượng</th>
-                          <th className="px-3 py-2 text-gray-900 text-left">Đơn vị</th>
-                          <th className="px-3 py-2 text-gray-900 text-right">Đơn giá</th>
-                          <th className="px-3 py-2 text-gray-900 text-right">Số lượng</th>
-                          <th className="px-3 py-2 text-gray-900 text-right">Thành tiền</th>
-                          <th className="px-3 py-2 text-gray-900 text-right">&nbsp;</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {editComponents.map((row, idx) => {
-                          const total = Number(row.unit_price || 0) * Number(row.quantity || 0)
-                          return (
-                            <tr key={idx} className="border-t">
-                              <td className="px-3 py-2 min-w-[320px]">
-                                <select
-                                  value={row.expense_object_id}
-                                  onChange={(e) => {
-                                    const id = e.target.value
-                                    const next = [...editComponents]; next[idx] = { ...row, expense_object_id: id }; setEditComponents(next)
-                                  }}
-                                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black"
-                                >
-                                  <option value="">Chọn đối tượng</option>
-                                  {renderTreeOptions(expenseTree)}
-                                </select>
-                              </td>
-                              <td className="px-3 py-2 w-40">
-                                <input value={row.unit || ''} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, unit: e.target.value }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black" placeholder="m, m2, cái..." />
-                              </td>
-                              <td className="px-3 py-2 text-right w-40">
-                                <input type="number" value={Number(row.unit_price || 0)} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, unit_price: parseFloat(e.target.value) || 0 }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1000" min="0" />
-                              </td>
-                              <td className="px-3 py-2 text-right w-40">
-                                <input type="number" value={Number(row.quantity || 0)} onChange={(e) => { const next = [...editComponents]; next[idx] = { ...row, quantity: parseFloat(e.target.value) || 0 }; setEditComponents(next) }} className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-right text-black" step="1" min="0" />
-                              </td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatNumber(total)}</td>
-                              <td className="px-3 py-2 text-gray-900 text-right"><button onClick={() => setEditComponents(prev => prev.filter((_, i) => i !== idx))} className="text-red-600 text-xs hover:underline">Xóa</button></td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="mt-2">
-                    <button onClick={() => setEditComponents(prev => [...prev, { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
-                  </div>
-                </div>
-
-                {/* Chi phí vật tư thực tế */}
+                {/* Chi phí vật tư */}
                 <div className="border-t border-gray-200 pt-4 mt-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Chi phí vật tư thực tế</h4>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Chi phí vật tư</h4>
                   <div className="overflow-x-auto border border-gray-200 rounded">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50">
@@ -905,7 +854,7 @@ export default function ProductCatalog() {
                   <div className="mt-2 flex items-center justify-between">
                     <button onClick={() => setEditActualComponents(prev => [...prev, { expense_object_id: '', unit: '', unit_price: 0, quantity: 1 }])} className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded">Thêm dòng</button>
                     <div className="text-sm text-gray-700">
-                      <span className="font-medium">Tổng chi phí vật tư thực tế: </span>
+                      <span className="font-medium">Tổng chi phí vật tư: </span>
                       <span className="font-semibold text-blue-600">
                         {formatNumber(
                           editActualComponents
