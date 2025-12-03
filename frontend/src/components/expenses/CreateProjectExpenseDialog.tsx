@@ -29,6 +29,7 @@ import { ExpenseObjectRoleFilter, useExpenseObjectRoleFilter, ExpenseObjectDispl
 import ExpenseObjectSelector from '@/components/ExpenseObjectSelector'
 import ExpenseObjectMultiSelector from '@/components/ExpenseObjectMultiSelector'
 import ExpenseObjectMultiSelectorEnhanced from '@/components/ExpenseObjectMultiSelectorEnhanced'
+import ExpenseObjectTreeView from '@/components/expenses/ExpenseObjectTreeView'
 import ExpenseSummaryDisplay from '@/components/ExpenseSummaryDisplay'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
 import ExpenseColumnVisibilityDialog from './ExpenseColumnVisibilityDialog'
@@ -202,6 +203,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     amounts: true,
     additional: false
   })
+  
+  // State for expense object selection visibility
+  const [showExpenseObjectSelection, setShowExpenseObjectSelection] = useState(true)
 
   // Tour state for planned expenses
   const PLANNED_EXPENSE_TOUR_STORAGE_KEY = 'planned-expense-tour-status-v1'
@@ -4696,8 +4700,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </div>
                   </div>
 
-                  {/* Role field - hiển thị lại để user có thể thấy role của mình */}
-                  <div className="space-y-2" data-tour-id={category === 'planned' ? 'planned-expense-field-role' : 'actual-expense-field-role'}>
+                  {/* Role field - ẩn nhưng vẫn hoạt động (tự động điền) */}
+                  <div className="space-y-2 hidden" data-tour-id={category === 'planned' ? 'planned-expense-field-role' : 'actual-expense-field-role'}>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700">
                       Vai trò *
                     </label>
@@ -4722,66 +4726,69 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4" data-tour-id={category === 'planned' ? 'planned-expense-objects' : 'actual-expense-objects'}>
                     <label className="block text-base font-semibold text-gray-900 mb-3">
-                      <div className="flex items-center space-x-2">
-                        <div className="p-1.5 bg-blue-100 rounded-lg">
-                          <Target className="w-4 h-4 text-blue-600" />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div className="p-1.5 bg-blue-100 rounded-lg">
+                            <Target className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <span>Đối tượng chi phí (có thể chọn nhiều)</span>
                         </div>
-                        <span>Đối tượng chi phí (có thể chọn nhiều)</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowExpenseObjectSelection(!showExpenseObjectSelection)}
+                          className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                          title={showExpenseObjectSelection ? 'Ẩn' : 'Hiện'}
+                        >
+                          {showExpenseObjectSelection ? (
+                            <ChevronDown className="w-5 h-5 text-gray-600" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-gray-600" />
+                          )}
+                        </button>
                       </div>
                       <div className="text-sm font-normal text-gray-600 mt-1 ml-8">
                         Chọn các đối tượng chi phí để phân bổ ngân sách dự án
                       </div>
                     </label>
                     
-                    <div className="space-y-3">
-                      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-sm hover:border-blue-400 transition-colors">
-                        <ExpenseObjectMultiSelectorEnhanced
-                          values={selectedExpenseObjectIds}
-                          onChange={setSelectedExpenseObjectIds}
-                          placeholder="Chọn nhiều đối tượng chi phí để phân bổ"
+                    {showExpenseObjectSelection && (
+                      <div className="space-y-3">
+                        {/* Expense Object Tree View */}
+                        <ExpenseObjectTreeView
                           expenseObjects={expenseObjectsOptions}
+                          selectedIds={selectedExpenseObjectIds}
+                          onSelectionChange={setSelectedExpenseObjectIds}
+                          expenseAmounts={combinedExpenseObjectTotals}
+                          invoiceItems={invoiceItems.map((item, idx) => ({
+                            id: idx.toString(),
+                            productName: item.productName,
+                            componentsAmt: item.componentsAmt,
+                            lineTotal: item.lineTotal || 0
+                          }))}
                         />
-                      </div>
-                      
-                      {/* Selected Objects Summary */}
-                      {selectedExpenseObjectIds.length > 0 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-2">
-                              <CheckCircle className="w-4 h-4 text-blue-600" />
-                              <span className="text-sm font-semibold text-blue-800">
-                                Đã chọn {selectedExpenseObjectIds.length} đối tượng
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedExpenseObjectIds([])}
-                              className="text-xs text-blue-600 hover:text-blue-800 underline"
-                            >
-                              Bỏ chọn tất cả
-                            </button>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {selectedExpenseObjectIds.slice(0, 4).map(id => {
-                              const obj = expenseObjectsOptions.find(o => o.id === id)
-                              return obj ? (
-                                <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                                  <span className="truncate max-w-24">{obj.name}</span>
-                                  <span className="text-xs bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full">
-                                    L{obj.level || 1}
-                                  </span>
+                        
+                        {/* Selected Objects Summary */}
+                        {selectedExpenseObjectIds.length > 0 && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="w-4 h-4 text-blue-600" />
+                                <span className="text-sm font-semibold text-blue-800">
+                                  Đã chọn {selectedExpenseObjectIds.length} đối tượng
                                 </span>
-                              ) : null
-                            })}
-                            {selectedExpenseObjectIds.length > 4 && (
-                              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                                +{selectedExpenseObjectIds.length - 4} nữa
-                              </span>
-                            )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedExpenseObjectIds([])}
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                Bỏ chọn tất cả
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
