@@ -203,7 +203,7 @@ export default function TaskDetailPage() {
 
   const [chatMessage, setChatMessage] = useState('')
   const [chatFilter, setChatFilter] = useState<'all' | 'pinned'>('all')
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
@@ -324,13 +324,17 @@ export default function TaskDetailPage() {
   }, [user])
 
   useEffect(() => {
-    if (pendingFile && pendingFile.type.startsWith('image/')) {
-      const preview = URL.createObjectURL(pendingFile)
-      setPendingPreview(preview)
-      return () => URL.revokeObjectURL(preview)
+    // Tự động tạo preview cho file ảnh đầu tiên trong danh sách (nếu có)
+    if (pendingFiles.length > 0) {
+      const firstImage = pendingFiles.find(f => f.type.startsWith('image/'))
+      if (firstImage) {
+        const preview = URL.createObjectURL(firstImage)
+        setPendingPreview(preview)
+        return () => URL.revokeObjectURL(preview)
+      }
     }
     setPendingPreview(null)
-  }, [pendingFile])
+  }, [pendingFiles])
 
   useEffect(() => {
     const loadUser = async () => {
@@ -657,14 +661,17 @@ export default function TaskDetailPage() {
   const uploadChatFile = async (file: File) => {
     setUploadingFile(true)
     try {
-      const token = localStorage.getItem('token')
+      // Lấy token hiện tại từ Supabase (tự xử lý refresh nếu gần hết hạn)
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
       if (!token) {
-        throw new Error('Thiếu token xác thực')
+        throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
       }
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/attachments`, {
+      // Dùng đường dẫn tương đối để đi qua API backend hiện tại
+      const response = await fetch(`/api/tasks/${taskId}/attachments`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -683,27 +690,38 @@ export default function TaskDetailPage() {
   }
 
   const handleSendMessage = async () => {
-    if (!chatMessage.trim() && !pendingFile) return
+    const trimmedMessage = chatMessage.trim()
+    if (!trimmedMessage && pendingFiles.length === 0) return
     try {
       setSendingMessage(true)
-      let fileUrl: string | undefined
-      let messageType: 'text' | 'file' | 'image' = 'text'
 
-      if (pendingFile) {
-        fileUrl = await uploadChatFile(pendingFile)
-        messageType = pendingFile.type.startsWith('image/') ? 'image' : 'file'
+      // Gửi file trước (mỗi file là 1 comment riêng)
+      for (const file of pendingFiles) {
+        const fileUrl = await uploadChatFile(file)
+        const messageType: 'file' | 'image' = file.type.startsWith('image/') ? 'image' : 'file'
+
+        await apiPost(`/api/tasks/${taskId}/comments`, {
+          comment: file.name || 'File đính kèm',
+          type: messageType,
+          file_url: fileUrl,
+          is_pinned: false,
+          parent_id: replyingTo?.id || null
+        })
       }
 
-      await apiPost(`/api/tasks/${taskId}/comments`, {
-        comment: chatMessage.trim() || pendingFile?.name || 'File đính kèm',
-        type: messageType,
-        file_url: fileUrl,
-        is_pinned: false,
-        parent_id: replyingTo?.id || null
-      })
+      // Sau đó gửi tin nhắn text (nếu có)
+      if (trimmedMessage) {
+        await apiPost(`/api/tasks/${taskId}/comments`, {
+          comment: trimmedMessage,
+          type: 'text',
+          file_url: undefined,
+          is_pinned: false,
+          parent_id: replyingTo?.id || null
+        })
+      }
 
       setChatMessage('')
-      setPendingFile(null)
+      setPendingFiles([])
       setPendingPreview(null)
       setReplyingTo(null)
       // Only reload comments, not the entire task
@@ -738,10 +756,14 @@ export default function TaskDetailPage() {
     }
   }
 
-  const handleDeleteComment = async (commentId: string) => {
-    if (!confirm('Xóa tin nhắn này?')) return
+  const handleDeleteComment = async (comment: TaskComment) => {
+    const hasAttachment = !!comment.file_url
+    const confirmMessage = hasAttachment
+      ? 'Xóa tin nhắn này và file đính kèm khỏi hệ thống?'
+      : 'Xóa tin nhắn này?'
+    if (!confirm(confirmMessage)) return
     try {
-      await apiDelete(`/api/tasks/comments/${commentId}`)
+      await apiDelete(`/api/tasks/comments/${comment.id}`)
       // Only reload comments, not the entire task
       loadComments()
     } catch (err) {
@@ -759,7 +781,11 @@ export default function TaskDetailPage() {
     return topLevelComments
   }, [taskData, chatFilter])
 
-  const pendingAttachmentName = pendingFile ? `${pendingFile.name} (${formatFileSize(pendingFile.size)})` : null
+  const pendingAttachmentName = pendingFiles.length
+    ? (pendingFiles.length === 1
+      ? `${pendingFiles[0].name} (${formatFileSize(pendingFiles[0].size)})`
+      : `${pendingFiles.length} file đã chọn`)
+    : null
   const pinnedCount = taskData?.comments.filter(comment => comment.is_pinned).length ?? 0
 
   if (!taskId) {
@@ -1267,7 +1293,27 @@ export default function TaskDetailPage() {
                             {c.type === 'image' && c.file_url && (
                               <img src={c.file_url} alt="Attachment" className="max-w-full rounded-lg mb-2" />
                             )}
-                            <p className="whitespace-pre-wrap">{c.comment}</p>
+                            {c.type === 'file' && c.file_url && (
+                              <a
+                                href={c.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`inline-flex items-center gap-2 px-3 py-2 mb-1 rounded-lg text-xs font-medium ${
+                                  c.user_id === user?.id
+                                    ? 'bg-blue-500/90 text-white hover:bg-blue-400'
+                                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                                } transition-colors`}
+                              >
+                                <Paperclip className="h-3.5 w-3.5" />
+                                <span className="truncate max-w-[160px]">
+                                  {c.comment || 'File đính kèm'}
+                                </span>
+                              </a>
+                            )}
+                            {/* Nội dung text */}
+                            {c.comment && (
+                              <p className="whitespace-pre-wrap">{c.comment}</p>
+                            )}
                             {/* Reply button - appears on hover */}
                             <button
                               onClick={() => handleReply(c)}
@@ -1287,7 +1333,7 @@ export default function TaskDetailPage() {
                               Trả lời
                             </button>
                             {canManageComment(c) && (
-                              <button onClick={() => handleDeleteComment(c.id)} className="text-xs text-red-500 hover:underline">Xóa</button>
+                              <button onClick={() => handleDeleteComment(c)} className="text-xs text-red-500 hover:underline">Xóa</button>
                             )}
                             <button onClick={() => handleTogglePin(c)} className="text-xs text-gray-500 hover:text-blue-600">
                               {c.is_pinned ? 'Bỏ ghim' : 'Ghim'}
@@ -1330,32 +1376,44 @@ export default function TaskDetailPage() {
                   </div>
                 </div>
               )}
+              {/* Preview file đang chọn */}
               {pendingPreview && (
                 <div className="mb-2 relative inline-block">
                   <img src={pendingPreview} alt="Preview" className="h-20 rounded-lg border border-gray-200" />
-                  <button onClick={() => { setPendingFile(null); setPendingPreview(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5">
+                  <button onClick={() => { setPendingFiles([]); setPendingPreview(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5">
                     <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {!pendingPreview && pendingAttachmentName && (
+                <div className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-xs text-gray-700">
+                  <Paperclip className="h-3.5 w-3.5 text-gray-500" />
+                  <span className="truncate max-w-[220px]" title={pendingAttachmentName}>{pendingAttachmentName}</span>
+                  <button
+                    onClick={() => { setPendingFiles([]); setPendingPreview(null); }}
+                    className="ml-1 text-gray-400 hover:text-red-500"
+                    title="Xóa file đính kèm"
+                  >
+                    <X className="h-3 w-3" />
                   </button>
                 </div>
               )}
               <div className="flex gap-2 items-end">
                 <label className="p-2 text-gray-400 hover:text-blue-600 cursor-pointer transition-colors">
                   <Paperclip className="h-5 w-5" />
-                  <input type="file" className="hidden" onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      setPendingFile(file)
-                      if (file.type.startsWith('image/')) {
-                        const reader = new FileReader()
-                        reader.onloadend = () => {
-                          setPendingPreview(reader.result as string)
-                        }
-                        reader.readAsDataURL(file)
-                      } else {
-                        setPendingPreview(null)
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || [])
+                      if (files.length > 0) {
+                        setPendingFiles(prev => [...prev, ...files])
                       }
-                    }
-                  }} />
+                      // Cho phép chọn lại cùng 1 file sau khi xóa
+                      e.target.value = ''
+                    }}
+                  />
                 </label>
                 <div className="flex-1 bg-gray-100 rounded-xl px-4 py-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white transition-all">
                   <textarea
@@ -1376,7 +1434,7 @@ export default function TaskDetailPage() {
                 </div>
                 <button
                   onClick={handleSendMessage}
-                  disabled={sendingMessage || (!chatMessage.trim() && !pendingFile)}
+                  disabled={sendingMessage || (!chatMessage.trim() && pendingFiles.length === 0)}
                   className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Send className="h-5 w-5" />

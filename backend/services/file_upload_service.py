@@ -146,123 +146,126 @@ class FileUploadService:
                     detail=f"File type '{file.content_type}' not supported. Allowed types: {', '.join(allowed_types)}"
                 )
             
-            # Generate filename
-            if custom_filename:
-                unique_filename = custom_filename
-            elif generate_unique_name:
-                file_ext = file.filename.split('.')[-1] if '.' in file.filename else ''
-                unique_filename = f"{uuid.uuid4()}.{file_ext}" if file_ext else str(uuid.uuid4())
+            # Tách tên gốc để có thể tự tạo 'tenfile(2).pdf' nếu trùng
+            original_name = custom_filename or file.filename
+            if '.' in original_name:
+                base_name = '.'.join(original_name.split('.')[:-1])
+                file_ext = '.' + original_name.split('.')[-1]
             else:
-                # Sanitize filename
-                unique_filename = file.filename.replace(' ', '_').replace('/', '_').replace('\\', '_')
-            
-            # Construct file path
-            file_path = f"{folder_path}/{unique_filename}".strip('/')
-            
-            # Upload to Supabase Storage
+                base_name = original_name
+                file_ext = ''
+            # Sanitize base name
+            base_name = base_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+
+            # Nếu generate_unique_name=True thì vẫn ưu tiên UUID để tránh trùng tuyệt đối
+            if generate_unique_name and not custom_filename:
+                unique_filename = f"{uuid.uuid4()}{file_ext}" if file_ext else str(uuid.uuid4())
+                base_name = unique_filename.rsplit('.', 1)[0]
+
             supabase = get_supabase_client()
-            
-            try:
-                # Try multiple upload strategies to work around Supabase Storage restrictions
-                upload_result = None
-                error_msg = None
-                
-                # Strategy 1: Upload with original content-type
+            upload_result = None
+            public_url = None
+            error_msg = None
+
+            # Thử nhiều lần với hậu tố (2), (3), ... khi gặp lỗi Duplicate
+            for attempt in range(5):
+                suffix = "" if attempt == 0 else f"({attempt + 1})"
+                candidate_filename = f"{base_name}{suffix}{file_ext}"
+                file_path = f"{folder_path}/{candidate_filename}".strip('/')
+
                 try:
-                    upload_result = supabase.storage.from_(self.bucket_name).upload(
-                        file_path,
-                        content,
-                        file_options={"content-type": file.content_type}
-                    )
-                    # Check if successful
-                    if hasattr(upload_result, 'error') and upload_result.error:
-                        raise Exception(str(upload_result.error))
-                except Exception as e1:
-                    logger.warning(f"Upload with content-type failed: {e1}")
-                    
-                    # Strategy 2: Upload without content-type (let Supabase auto-detect)
+                    # Strategy 1: Upload với content-type gốc, cho phép upsert
                     try:
                         upload_result = supabase.storage.from_(self.bucket_name).upload(
                             file_path,
-                            content
+                            content,
+                            file_options={
+                                "content-type": file.content_type,
+                                "upsert": "false"
+                            }
                         )
                         if hasattr(upload_result, 'error') and upload_result.error:
                             raise Exception(str(upload_result.error))
-                        logger.info(f"Uploaded {file.content_type} without content-type option as workaround")
-                    except Exception as e2:
-                        logger.warning(f"Upload without content-type failed: {e2}")
+                    except Exception as e1:
+                        logger.warning(f"Upload with content-type failed (attempt {attempt}, name={candidate_filename}): {e1}")
                         
-                        # Strategy 3: Upload with generic binary content-type (workaround for restricted MIME types)
-                        # This bypasses MIME type restrictions but preserves file extension
-                        # Try for all document types that might be restricted
-                        restricted_types = [
-                            "application/pdf",
-                            "text/plain",
-                            "text/html",
-                            "text/csv",
-                            "application/msword",
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            "application/vnd.ms-excel",
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            "application/vnd.ms-powerpoint",
-                            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                        ]
-                        error_str = str(e1).lower() + " " + str(e2).lower()
-                        if file.content_type in restricted_types or "mime type" in error_str or "not supported" in error_str:
-                            try:
-                                upload_result = supabase.storage.from_(self.bucket_name).upload(
-                                    file_path,
-                                    content,
-                                    file_options={"content-type": "application/octet-stream"}
-                                )
-                                if hasattr(upload_result, 'error') and upload_result.error:
-                                    raise Exception(str(upload_result.error))
-                                logger.info(f"Uploaded {file.content_type} with generic content-type (application/octet-stream) as workaround")
-                            except Exception as e3:
-                                logger.warning(f"Upload with application/octet-stream also failed: {e3}")
-                                # If application/octet-stream is also blocked, we need to inform user to configure bucket
-                                error_msg = f"All upload strategies failed. Bucket 'minhchung_chiphi' is blocking file type '{file.content_type}'. Last error: {str(e3)}"
-                        else:
-                            error_msg = f"Upload failed: {str(e2)}"
-                
-                # Check for upload errors
-                if not error_msg:
-                    if hasattr(upload_result, 'error') and upload_result.error:
-                        error_msg = str(upload_result.error)
-                    elif hasattr(upload_result, 'data') and not upload_result.data:
-                        error_msg = "Upload failed - no data returned"
-                    elif isinstance(upload_result, dict) and upload_result.get("error"):
-                        error_msg = str(upload_result.get("error"))
-                
+                        # Strategy 2: Không truyền content-type
+                        try:
+                            upload_result = supabase.storage.from_(self.bucket_name).upload(
+                                file_path,
+                                content,
+                                file_options={
+                                    "upsert": "false"
+                                }
+                            )
+                            if hasattr(upload_result, 'error') and upload_result.error:
+                                raise Exception(str(upload_result.error))
+                            logger.info(f"Uploaded {file.content_type} without content-type option as workaround")
+                        except Exception as e2:
+                            logger.warning(f"Upload without content-type failed (attempt {attempt}, name={candidate_filename}): {e2}")
+                            
+                            # Strategy 3: Dùng application/octet-stream
+                            restricted_types = [
+                                "application/pdf",
+                                "text/plain",
+                                "text/html",
+                                "text/csv",
+                                "application/msword",
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "application/vnd.ms-excel",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "application/vnd.ms-powerpoint",
+                                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                            ]
+                            error_str = str(e1).lower() + " " + str(e2).lower()
+                            if file.content_type in restricted_types or "mime type" in error_str or "not supported" in error_str:
+                                try:
+                                    upload_result = supabase.storage.from_(self.bucket_name).upload(
+                                        file_path,
+                                        content,
+                                        file_options={
+                                            "content-type": "application/octet-stream",
+                                            "upsert": "false"
+                                        }
+                                    )
+                                    if hasattr(upload_result, 'error') and upload_result.error:
+                                        raise Exception(str(upload_result.error))
+                                    logger.info(f"Uploaded {file.content_type} with generic content-type (application/octet-stream) as workaround")
+                                except Exception as e3:
+                                    logger.warning(f"Upload with application/octet-stream also failed (attempt {attempt}, name={candidate_filename}): {e3}")
+                                    error_msg = str(e3)
+                            else:
+                                error_msg = str(e2)
+
+                    # Nếu tới đây không có lỗi, thoát vòng lặp
+                    if not error_msg:
+                        public_url = self._get_public_url(file_path)
+                        original_name_to_return = candidate_filename
+                        break
+
+                    # Nếu lỗi là Duplicate, thử tên khác với hậu tố (2), (3)...
+                    if "duplicate" in error_msg.lower() or "already exists" in error_msg.lower():
+                        logger.info(f"File exists, retrying with new name: {candidate_filename}")
+                        error_msg = None
+                        continue
+
+                    # Các lỗi khác: dừng luôn
+                    break
+
+                except HTTPException:
+                    raise
+                except Exception as upload_error:
+                    logger.error(f"Upload error (attempt {attempt}, name={candidate_filename}): {str(upload_error)}")
+                    error_msg = str(upload_error)
+                    break
+
+            # Sau khi thử hết mà vẫn không upload được
+            if not public_url:
                 if error_msg:
-                    # Check if it's a file type restriction error from Supabase
                     error_lower = error_msg.lower()
                     if "mime type" in error_lower or "not supported" in error_lower or "invalidrequest" in error_lower:
-                        # Try to extract the mime type from error message
-                        mime_type_match = None
-                        if "application/pdf" in error_lower or file.content_type == "application/pdf":
-                            mime_type_match = "application/pdf"
-                        elif "text/plain" in error_lower or file.content_type == "text/plain":
-                            mime_type_match = "text/plain"
-                        elif "image/" in error_lower:
-                            # Extract image type if mentioned
-                            match = re.search(r'image/\w+', error_lower)
-                            if match:
-                                mime_type_match = match.group()
-                        
-                        # Build list of all MIME types that failed
-                        failed_types = []
-                        if "application/pdf" in error_lower or file.content_type == "application/pdf":
-                            failed_types.append("application/pdf")
-                        if "text/plain" in error_lower or file.content_type == "text/plain":
-                            failed_types.append("text/plain")
-                        if "spreadsheetml" in error_lower or file.content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-                            failed_types.append("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                        if "wordprocessingml" in error_lower or "msword" in error_lower:
-                            failed_types.append("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                        if not failed_types:
-                            failed_types.append(file.content_type)
-                        
+                        # Giữ nguyên đoạn hướng dẫn cấu hình bucket như cũ
+                        failed_types = [file.content_type]
                         detail_msg = f"Không thể upload file: Loại file '{file.content_type}' không được phép bởi cấu hình Supabase Storage bucket."
                         detail_msg += f"\n\n📋 CÁCH KHẮC PHỤC (BẮT BUỘC):"
                         detail_msg += f"\n\n1️⃣ Vào Supabase Dashboard:"
@@ -275,20 +278,12 @@ class FileUploadService:
                         detail_msg += f"\n      - Hoặc tắt 'Restrict file types'"
                         detail_msg += f"\n      - Click 'Save'"
                         detail_msg += f"\n\n   ✅ CÁCH B (Cho Production):"
-                        detail_msg += f"\n      - Thêm các MIME types sau vào danh sách"
-                        detail_msg += f"\n      ⚠️ QUAN TRỌNG: Mỗi MIME type trên MỘT DÒNG RIÊNG (nhấn Enter sau mỗi type)"
-                        detail_msg += f"\n      - KHÔNG nhập dạng comma-separated như: 'application/pdf, text/plain' ❌"
-                        detail_msg += f"\n      - Danh sách MIME types cần thêm (mỗi dòng một type):"
+                        detail_msg += f"\n      - Thêm các MIME types sau vào danh sách (mỗi dòng một type):"
                         for mime_type in failed_types:
                             detail_msg += f"\n         {mime_type}"
-                        detail_msg += f"\n      - Thêm thêm các types khác nếu cần (mỗi dòng một type):"
                         detail_msg += f"\n         application/octet-stream"
-                        detail_msg += f"\n         application/msword"
-                        detail_msg += f"\n         application/vnd.ms-excel"
-                        detail_msg += f"\n         text/csv"
                         detail_msg += f"\n         image/jpeg"
                         detail_msg += f"\n         image/png"
-                        detail_msg += f"\n      - Click 'Save'"
                         detail_msg += f"\n\n5️⃣ Sau khi lưu, thử upload lại file"
                         detail_msg += f"\n\n⚠️ LƯU Ý: MIME type restrictions được cấu hình trong Dashboard, KHÔNG thể thay đổi qua SQL!"
                         
@@ -296,21 +291,9 @@ class FileUploadService:
                             status_code=status.HTTP_400_BAD_REQUEST,
                             detail=detail_msg
                         )
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Upload failed: {error_msg}"
-                    )
-                
-                # Get public URL
-                public_url = self._get_public_url(file_path)
-                
-            except HTTPException:
-                raise
-            except Exception as upload_error:
-                logger.error(f"Upload error: {str(upload_error)}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Upload failed: {str(upload_error)}"
+                    detail=f"Upload failed: {error_msg or 'Unknown error'}"
                 )
             
             if not public_url:

@@ -1689,13 +1689,13 @@ async def delete_task_comment(
     comment_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a task comment."""
+    """Delete a task comment. If it has an attachment, also delete the stored file + attachment record."""
     try:
         supabase = get_supabase_client()
 
         existing = (
             supabase.table("task_comments")
-            .select("user_id")
+            .select("user_id, task_id, file_url")
             .eq("id", comment_id)
             .single()
             .execute()
@@ -1707,6 +1707,52 @@ async def delete_task_comment(
         owner_id = existing.data.get("user_id")
         if owner_id != current_user.id and not _has_comment_moderation_rights(current_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this comment")
+
+        # Nếu comment có file đính kèm, xóa luôn file trong storage + bản ghi attachment
+        file_url = existing.data.get("file_url")
+        task_id = existing.data.get("task_id")
+        if file_url and task_id:
+            try:
+                # Tìm attachment theo file_url và task_id
+                attachment_result = (
+                    supabase.table("task_attachments")
+                    .select("id, file_name, task_id")
+                    .eq("task_id", task_id)
+                    .eq("file_url", file_url)
+                    .execute()
+                )
+                attachments = attachment_result.data or []
+                if attachments:
+                    # Lấy group_id của task để build đúng path
+                    task_result = (
+                        supabase.table("tasks")
+                        .select("id, group_id")
+                        .eq("id", task_id)
+                        .single()
+                        .execute()
+                    )
+                    task_group_id = ""
+                    if task_result.data:
+                        task_group_id = task_result.data.get("group_id") or ""
+
+                    upload_service = get_file_upload_service()
+
+                    for att in attachments:
+                        try:
+                            if task_group_id:
+                                file_path = f"Groups/{task_group_id}/Tasks/{att['task_id']}/{att['file_name']}"
+                            else:
+                                file_path = f"Tasks/{att['task_id']}/{att['file_name']}"
+                            # Xóa file khỏi storage
+                            await upload_service.delete_file(file_path)
+                        except Exception:
+                            # Log nhưng không chặn việc xóa comment
+                            logger.warning(f"Failed to delete attachment file for comment {comment_id}")
+
+                    # Xóa bản ghi attachment trong DB
+                    supabase.table("task_attachments").delete().eq("task_id", task_id).eq("file_url", file_url).execute()
+            except Exception as e:
+                logger.warning(f"Error while cleaning up attachments for comment {comment_id}: {e}")
 
         supabase.table("task_comments").delete().eq("id", comment_id).execute()
         return {"message": "Comment deleted successfully"}
