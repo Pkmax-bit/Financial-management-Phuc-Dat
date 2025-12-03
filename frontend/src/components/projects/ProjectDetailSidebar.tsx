@@ -1,14 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Edit, Trash2, Calendar, DollarSign, Users, Target, Clock, TrendingUp, BarChart3, Receipt, CreditCard, FileText, Activity, AlertCircle, CheckCircle, Pause } from 'lucide-react'
+import { X, Edit, Trash2, Calendar, DollarSign, Users, Target, Clock, TrendingUp, BarChart3, FileText, Activity, AlertCircle, CheckCircle, Pause } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi } from '@/lib/api'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import ProjectTeam from './ProjectTeam'
 import ProjectTimeline from './ProjectTimeline'
-import ProjectInvoices from './ProjectInvoices'
-import ProjectExpenses from './ProjectExpenses'
 
 interface Project {
   id: string
@@ -71,7 +69,7 @@ const priorityConfig = {
 }
 
 export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit, onDelete }: ProjectDetailSidebarProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'invoices' | 'expenses'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team'>('overview')
   const [financialData, setFinancialData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<any>(null)
@@ -231,9 +229,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
               {[
                 { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
                 { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
-                { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
-                { id: 'invoices', label: 'Hóa đơn', icon: Receipt, color: 'green' },
-                { id: 'expenses', label: 'Chi phí', icon: CreditCard, color: 'red' }
+                { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' }
               ].map((tab) => {
                 const Icon = tab.icon
                 const isActive = activeTab === tab.id
@@ -469,19 +465,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
                 </div>
               )}
 
-              {/* Invoices Tab */}
-              {activeTab === 'invoices' && project && (
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <ProjectInvoices projectId={project.id} projectName={project.name} />
-                </div>
-              )}
-
-              {/* Expenses Tab */}
-              {activeTab === 'expenses' && project && (
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <ProjectExpenses projectId={project.id} projectName={project.name} />
-                </div>
-              )}
+              {/* Đã ẩn tab Hóa đơn & Chi phí khỏi sidebar chi tiết dự án */}
             </div>
           </div>
         </div>

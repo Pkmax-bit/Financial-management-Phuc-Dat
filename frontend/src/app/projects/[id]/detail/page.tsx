@@ -20,16 +20,13 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Pause,
-  Receipt,
-  CreditCard
+  Pause
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import ProjectTeam from '@/components/projects/ProjectTeam'
 import ProjectTimeline from '@/components/projects/ProjectTimeline'
-import ProjectInvoices from '@/components/projects/ProjectInvoices'
-import ProjectExpenses from '@/components/projects/ProjectExpenses'
+// Đã ẩn tab Hóa đơn & Chi phí trên giao diện chi tiết dự án
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 import { getApiEndpoint } from '@/lib/apiUrl'
 
@@ -110,7 +107,7 @@ export default function ProjectDetailPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents' | 'invoices' | 'expenses'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents'>('overview')
   const [showEditSidebar, setShowEditSidebar] = useState(false)
 
   useEffect(() => {
@@ -372,8 +369,6 @@ export default function ProjectDetailPage() {
                 { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
                 { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
                 { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
-                { id: 'invoices', label: 'Hóa đơn', icon: Receipt, color: 'green' },
-                { id: 'expenses', label: 'Chi phí', icon: CreditCard, color: 'red' },
                 { id: 'documents', label: 'Tài liệu', icon: FileText, color: 'gray' }
               ].map((tab) => {
                 const Icon = tab.icon
@@ -633,42 +628,6 @@ export default function ProjectDetailPage() {
               </div>
               <div className="p-4">
                 <ProjectTeam projectId={projectId} projectName={project.name} currentUser={user || undefined} />
-              </div>
-            </div>
-          )}
-
-          {/* Invoices Tab */}
-          {activeTab === 'invoices' && (
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div className="px-6 py-4 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <Receipt className="h-5 w-5 text-green-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900">Hóa đơn dự án</h3>
-                </div>
-                <p className="text-sm text-gray-600 mt-1">Chi tiết các hóa đơn và sản phẩm đã duyệt</p>
-              </div>
-              <div className="p-6">
-                <ProjectInvoices projectId={projectId} projectName={project.name} />
-              </div>
-            </div>
-          )}
-
-          {/* Expenses Tab */}
-          {activeTab === 'expenses' && (
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div className="px-6 py-4 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-50 rounded-lg">
-                    <CreditCard className="h-5 w-5 text-red-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900">Chi phí dự án</h3>
-                </div>
-                <p className="text-sm text-gray-600 mt-1">Chi phí kế hoạch và thực tế với chi tiết từng khoản</p>
-              </div>
-              <div className="p-6">
-                <ProjectExpenses projectId={projectId} projectName={project.name} />
               </div>
             </div>
           )}
