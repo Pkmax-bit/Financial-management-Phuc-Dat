@@ -1,11 +1,11 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
-import KanbanBoard from '@/components/projects/KanbanBoard'
+import KanbanBoard, { KanbanBoardRef } from '@/components/projects/KanbanBoard'
 import ProjectDetailSidebar from '@/components/projects/ProjectDetailSidebar'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 
@@ -33,6 +33,7 @@ interface Project {
 
 export default function ProjectsKanbanPage() {
   const router = useRouter()
+  const kanbanBoardRef = useRef<KanbanBoardRef>(null)
   const [user, setUser] = useState<{ full_name?: string, role?: string, email?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showDetailSidebar, setShowDetailSidebar] = useState(false)
@@ -98,6 +99,7 @@ export default function ProjectsKanbanPage() {
 
         <div className="px-2 py-6 sm:px-4 lg:px-6 xl:px-8">
           <KanbanBoard 
+            ref={kanbanBoardRef}
             onViewProject={(project) => {
               setSelectedProject(project as Project)
               setShowDetailSidebar(true)
@@ -123,7 +125,7 @@ export default function ProjectsKanbanPage() {
           setShowDetailSidebar(false)
           setSelectedProject(null)
           // Refresh kanban board
-          window.location.reload()
+          kanbanBoardRef.current?.refresh()
         }}
       />
 
@@ -139,7 +141,7 @@ export default function ProjectsKanbanPage() {
           setShowEditSidebar(false)
           setSelectedProject(null)
           // Refresh kanban board
-          window.location.reload()
+          kanbanBoardRef.current?.refresh()
         }}
       />
     </LayoutWithSidebar>

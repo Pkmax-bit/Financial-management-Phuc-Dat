@@ -1,9 +1,13 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useImperativeHandle, forwardRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import ProductExcelImport from './ProductExcelImport'
 import FileUpload from '@/components/common/FileUpload'
+
+export interface ProductCatalogRef {
+  refresh: () => Promise<void>
+}
 
 type ProductItem = {
   id: string
@@ -48,7 +52,7 @@ const toDecimalString = (value: number | null | undefined, maxFractionDigits = 6
   return fixed.replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1')
 }
 
-export default function ProductCatalog() {
+const ProductCatalog = forwardRef<ProductCatalogRef>((props, ref) => {
   const [items, setItems] = useState<ProductItem[]>([])
   const [categories, setCategories] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
@@ -310,6 +314,11 @@ export default function ProductCatalog() {
       setLoading(false)
     }
   }
+
+  // Expose refresh function via ref
+  useImperativeHandle(ref, () => ({
+    refresh: load
+  }))
 
   useEffect(() => { load() }, [])
 
@@ -972,6 +981,10 @@ export default function ProductCatalog() {
       )}
     </div>
   )
-}
+})
+
+ProductCatalog.displayName = 'ProductCatalog'
+
+export default ProductCatalog
 
 

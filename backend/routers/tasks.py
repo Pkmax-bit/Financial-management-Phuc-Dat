@@ -1079,6 +1079,15 @@ async def get_task(
                 emp = reply.get("employees")
                 if emp:
                     reply["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+
+                # Fallback: nếu chưa có user_name mà có user_id thì lấy từ bảng users
+                if not reply.get("user_name") and reply.get("user_id"):
+                    try:
+                        user_result = supabase.table("users").select("full_name").eq("id", reply.get("user_id")).single().execute()
+                        if user_result.data:
+                            reply["user_name"] = user_result.data.get("full_name")
+                    except Exception:
+                        pass
                 
                 # Recursively get nested replies
                 reply["replies"] = get_replies(reply["id"])
@@ -1095,6 +1104,15 @@ async def get_task(
             emp = comment.get("employees")
             if emp:
                 comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+
+            # Fallback: nếu chưa có user_name mà có user_id thì lấy từ bảng users
+            if not comment.get("user_name") and comment.get("user_id"):
+                try:
+                    user_result = supabase.table("users").select("full_name").eq("id", comment.get("user_id")).single().execute()
+                    if user_result.data:
+                        comment["user_name"] = user_result.data.get("full_name")
+                except Exception:
+                    pass
             
             # Get replies for this comment (only if parent_id column exists)
             try:
@@ -1454,6 +1472,15 @@ async def get_task_comments(
                             reply["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
                     except Exception:
                         pass
+
+                # Fallback: nếu chưa có user_name mà có user_id thì lấy từ bảng users
+                if not reply.get("user_name") and reply.get("user_id"):
+                    try:
+                        user_result = supabase.table("users").select("full_name").eq("id", reply.get("user_id")).single().execute()
+                        if user_result.data:
+                            reply["user_name"] = user_result.data.get("full_name")
+                    except Exception:
+                        pass
                 
                 # Recursively get nested replies
                 reply["replies"] = get_replies(reply["id"])
@@ -1479,15 +1506,28 @@ async def get_task_comments(
                 if emp:
                     comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
             
-            # If join didn't work, query directly for employee
-            if not comment.get("employee_name") and comment.get("employee_id"):
-                try:
-                    emp_result = supabase.table("employees").select("first_name, last_name").eq("id", comment.get("employee_id")).single().execute()
-                    if emp_result.data:
-                        emp_data = emp_result.data
-                        comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
-                except Exception:
-                    pass
+            # If join didn't work, try to get employee name by employee_id, then by user_id
+            if not comment.get("employee_name"):
+                # 1) By employee_id on the comment (nếu có)
+                employee_id = comment.get("employee_id")
+                if employee_id:
+                    try:
+                        emp_result = supabase.table("employees").select("first_name, last_name").eq("id", employee_id).single().execute()
+                        if emp_result.data:
+                            emp_data = emp_result.data
+                            comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                    except Exception:
+                        pass
+                
+                # 2) Fallback: tìm employee theo user_id (nếu không có employee_id)
+                if not comment.get("employee_name") and comment.get("user_id"):
+                    try:
+                        emp_result = supabase.table("employees").select("first_name, last_name").eq("user_id", comment.get("user_id")).single().execute()
+                        if emp_result.data:
+                            emp_data = emp_result.data
+                            comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                    except Exception:
+                        pass
             
             # Get replies for this comment (only if parent_id column exists)
             try:
@@ -1547,7 +1587,34 @@ async def create_task_comment(
                 detail="Failed to create comment"
             )
         
-        return result.data[0]
+        # Enrich comment with user_name / employee_name dựa trên user_id / employee_id vừa lưu
+        comment = result.data[0]
+
+        # Lấy tên user từ bảng users
+        try:
+            user_result = supabase.table("users").select("full_name").eq("id", current_user.id).single().execute()
+            if user_result.data:
+                comment["user_name"] = user_result.data.get("full_name")
+        except Exception:
+            pass
+
+        # Lấy tên nhân viên: ưu tiên theo employee_id, sau đó fallback theo user_id
+        try:
+            emp_data = None
+            if employee_id:
+                emp_result = supabase.table("employees").select("first_name, last_name").eq("id", employee_id).single().execute()
+                if emp_result.data:
+                    emp_data = emp_result.data
+            if not emp_data:
+                emp_result = supabase.table("employees").select("first_name, last_name").eq("user_id", current_user.id).single().execute()
+                if emp_result.data:
+                    emp_data = emp_result.data
+            if emp_data:
+                comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+        except Exception:
+            pass
+
+        return comment
     except HTTPException:
         raise
     except Exception as e:

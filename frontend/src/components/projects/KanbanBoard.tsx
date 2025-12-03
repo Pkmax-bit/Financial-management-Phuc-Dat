@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useImperativeHandle, forwardRef } from 'react'
 import KanbanColumn from './KanbanColumn'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -48,7 +48,11 @@ interface KanbanBoardProps {
   onViewProject?: (project: ProjectItem) => void
 }
 
-export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
+export interface KanbanBoardRef {
+  refresh: () => Promise<void>
+}
+
+const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProject }, ref) => {
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [statuses, setStatuses] = useState<ProjectStatusItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -134,114 +138,120 @@ export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
   const isFormValid = statusForm.name.trim().length > 0 && statusForm.display_order > 0
   const router = useRouter()
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch statuses first
-        const statusesData = await apiGet('/api/projects/statuses')
-        setStatuses(statusesData || [])
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      // Fetch statuses first
+      const statusesData = await apiGet('/api/projects/statuses')
+      setStatuses(statusesData || [])
 
-        // Then fetch projects with status_id
-        const { data, error } = await supabase
-          .from('projects')
-          .select(`
-            id, 
-            name, 
-            project_code, 
-            description,
-            status, 
-            status_id,
-            priority, 
-            progress,
-            customer_id,
-            manager_id,
-            start_date,
-            end_date,
-            budget,
-            actual_cost,
-            billing_type,
-            hourly_rate,
-            created_at,
-            updated_at,
-            customers(name),
-            employees!manager_id(
-              id,
-              employee_code,
-              first_name,
-              last_name
-            )
-          `)
+      // Then fetch projects with status_id
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          id, 
+          name, 
+          project_code, 
+          description,
+          status, 
+          status_id,
+          priority, 
+          progress,
+          customer_id,
+          manager_id,
+          start_date,
+          end_date,
+          budget,
+          actual_cost,
+          billing_type,
+          hourly_rate,
+          created_at,
+          updated_at,
+          customers(name),
+          employees!manager_id(
+            id,
+            employee_code,
+            first_name,
+            last_name
+          )
+        `)
 
-        if (error) throw error
+      if (error) throw error
 
-        const mapped: ProjectItem[] = (data || []).map((p: any) => {
-          // Get manager name from employees table
-          const manager = p.employees
-          const managerName = manager ? `${manager.first_name || ''} ${manager.last_name || ''}`.trim() : undefined
-          
-          // Get status name from statuses array by matching status_id
-          // Otherwise fallback to enum status mapping
-          let statusName: string
-          if (p.status_id && statusesData && statusesData.length > 0) {
-            const matchedStatus = statusesData.find((s: ProjectStatusItem) => s.id === p.status_id)
-            statusName = matchedStatus?.name || enumToStatusName[p.status] || p.status
-          } else {
-            statusName = enumToStatusName[p.status] || p.status
-          }
-          
-          return {
-            id: p.id,
-            name: p.name,
-            project_code: p.project_code,
-            description: p.description,
-            status: statusName, // Use status name from project_statuses or fallback to enum
-            status_id: p.status_id, // Include status_id
-            priority: p.priority,
-            progress: typeof p.progress === 'number' ? p.progress : Number(p.progress ?? 0),
-            customer_id: p.customer_id,
-            customer_name: p.customers?.name,
-            manager_id: p.manager_id,
-            manager_name: managerName,
-            manager_code: manager?.employee_code,
-            start_date: p.start_date,
-            end_date: p.end_date,
-            budget: p.budget,
-            actual_cost: p.actual_cost,
-            billing_type: p.billing_type,
-            hourly_rate: p.hourly_rate,
-            created_at: p.created_at,
-            updated_at: p.updated_at
-          }
-        })
-
-        setProjects(mapped)
-
-        // Fetch invoices for all projects to calculate totals
-        const projectIds = mapped.map(p => p.id)
-        if (projectIds.length > 0) {
-          const { data: invoicesData, error: invoicesError } = await supabase
-            .from('invoices')
-            .select('project_id, total_amount')
-            .in('project_id', projectIds)
-
-          if (!invoicesError && invoicesData) {
-            // Calculate total invoice amount for each project
-            const totals: Record<string, number> = {}
-            invoicesData.forEach((invoice: any) => {
-              const projectId = invoice.project_id
-              const amount = Number(invoice.total_amount) || 0
-              totals[projectId] = (totals[projectId] || 0) + amount
-            })
-            setProjectInvoiceTotals(totals)
-          }
+      const mapped: ProjectItem[] = (data || []).map((p: any) => {
+        // Get manager name from employees table
+        const manager = p.employees
+        const managerName = manager ? `${manager.first_name || ''} ${manager.last_name || ''}`.trim() : undefined
+        
+        // Get status name from statuses array by matching status_id
+        // Otherwise fallback to enum status mapping
+        let statusName: string
+        if (p.status_id && statusesData && statusesData.length > 0) {
+          const matchedStatus = statusesData.find((s: ProjectStatusItem) => s.id === p.status_id)
+          statusName = matchedStatus?.name || enumToStatusName[p.status] || p.status
+        } else {
+          statusName = enumToStatusName[p.status] || p.status
         }
-      } catch (e: any) {
-        setError(e.message || 'Lỗi tải dữ liệu')
-      } finally {
-        setLoading(false)
-      }
-    }
+        
+        return {
+          id: p.id,
+          name: p.name,
+          project_code: p.project_code,
+          description: p.description,
+          status: statusName, // Use status name from project_statuses or fallback to enum
+          status_id: p.status_id, // Include status_id
+          priority: p.priority,
+          progress: typeof p.progress === 'number' ? p.progress : Number(p.progress ?? 0),
+          customer_id: p.customer_id,
+          customer_name: p.customers?.name,
+          manager_id: p.manager_id,
+          manager_name: managerName,
+          manager_code: manager?.employee_code,
+          start_date: p.start_date,
+          end_date: p.end_date,
+          budget: p.budget,
+          actual_cost: p.actual_cost,
+          billing_type: p.billing_type,
+          hourly_rate: p.hourly_rate,
+          created_at: p.created_at,
+          updated_at: p.updated_at
+        }
+      })
 
+      setProjects(mapped)
+
+      // Fetch invoices for all projects to calculate totals
+      const projectIds = mapped.map(p => p.id)
+      if (projectIds.length > 0) {
+        const { data: invoicesData, error: invoicesError } = await supabase
+          .from('invoices')
+          .select('project_id, total_amount')
+          .in('project_id', projectIds)
+
+        if (!invoicesError && invoicesData) {
+          // Calculate total invoice amount for each project
+          const totals: Record<string, number> = {}
+          invoicesData.forEach((invoice: any) => {
+            const projectId = invoice.project_id
+            const amount = Number(invoice.total_amount) || 0
+            totals[projectId] = (totals[projectId] || 0) + amount
+          })
+          setProjectInvoiceTotals(totals)
+        }
+      }
+    } catch (e: any) {
+      setError(e.message || 'Lỗi tải dữ liệu')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Expose refresh function via ref
+  useImperativeHandle(ref, () => ({
+    refresh: fetchData
+  }))
+
+  useEffect(() => {
     fetchData()
   }, [])
 
@@ -551,8 +561,8 @@ export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
         await new Promise(resolve => setTimeout(resolve, minWaitTime - elapsed))
       }
 
-      // Step 8: Reload page
-      window.location.reload()
+      // Step 8: Refresh data
+      await fetchData()
     } catch (e: any) {
       setIsShiftingStatuses(false)
       alert(e.message || 'Lỗi khi cập nhật vị trí trạng thái')
@@ -1155,7 +1165,11 @@ export default function KanbanBoard({ onViewProject }: KanbanBoardProps = {}) {
       )}
     </>
   )
-}
+})
+
+KanbanBoard.displayName = 'KanbanBoard'
+
+export default KanbanBoard
 
 
 

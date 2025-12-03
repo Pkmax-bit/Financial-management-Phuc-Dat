@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   FileText,
@@ -24,7 +24,7 @@ import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
 import OverviewTab from '@/components/sales/OverviewTab'
-import ProductCatalog from '@/components/sales/ProductCatalog'
+import ProductCatalog, { ProductCatalogRef } from '@/components/sales/ProductCatalog'
 import ProductCategoriesTab from '@/components/sales/ProductCategoriesTab'
 import ProductCreateModal from '@/components/sales/ProductCreateModal'
 import ProductExcelUpload from '@/components/sales/ProductExcelUpload'
@@ -49,6 +49,7 @@ interface User {
 }
 
 function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
+  const productCatalogRef = useRef<ProductCatalogRef>(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [user, setUser] = useState<User | null>(null)
@@ -613,11 +614,11 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   <div className="mb-6">
                     <ProductExcelUpload onImportComplete={() => {
                       // Refresh product catalog after import
-                      window.location.reload()
+                      productCatalogRef.current?.refresh()
                     }} />
                   </div>
 
-                  <ProductCatalog />
+                  <ProductCatalog ref={productCatalogRef} />
                 </div>
               )}
               {activeTab === 'product-categories' && (

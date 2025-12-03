@@ -209,7 +209,6 @@ export default function TaskDetailPage() {
   const [uploadingFile, setUploadingFile] = useState(false)
   const [replyingTo, setReplyingTo] = useState<TaskComment | null>(null)  // Comment being replied to
   const [draggedComment, setDraggedComment] = useState<TaskComment | null>(null)  // Comment being dragged
-  const [selectedMemberId, setSelectedMemberId] = useState<string>('')  // Selected member for sending message
 
   // Resizable layout states
   const [leftColumnWidth, setLeftColumnWidth] = useState(320)
@@ -685,10 +684,6 @@ export default function TaskDetailPage() {
 
   const handleSendMessage = async () => {
     if (!chatMessage.trim() && !pendingFile) return
-    if (!selectedMemberId && availableMembers.length > 0) {
-      alert('Vui lòng chọn thành viên để gửi tin nhắn')
-      return
-    }
     try {
       setSendingMessage(true)
       let fileUrl: string | undefined
@@ -699,16 +694,12 @@ export default function TaskDetailPage() {
         messageType = pendingFile.type.startsWith('image/') ? 'image' : 'file'
       }
 
-      // Tìm thông tin thành viên được chọn
-      const selectedMember = availableMembers.find(m => (m.employee_id || m.id) === selectedMemberId)
-
       await apiPost(`/api/tasks/${taskId}/comments`, {
         comment: chatMessage.trim() || pendingFile?.name || 'File đính kèm',
         type: messageType,
         file_url: fileUrl,
         is_pinned: false,
-        parent_id: replyingTo?.id || null,
-        employee_id: selectedMember?.employee_id || selectedMemberId  // Gửi employee_id của thành viên được chọn
+        parent_id: replyingTo?.id || null
       })
 
       setChatMessage('')
@@ -757,77 +748,6 @@ export default function TaskDetailPage() {
       alert(getErrorMessage(err, 'Không thể xóa tin nhắn'))
     }
   }
-
-  // Lấy danh sách thành viên để chọn khi nhắn tin (lấy từ tất cả nguồn)
-  // Phải đặt trước early returns để tuân thủ Rules of Hooks
-  const availableMembers = useMemo(() => {
-    if (!taskData) return []
-    
-    const { assignments, participants } = taskData
-    const members: Array<{ id: string; name: string; employee_id?: string; user_id?: string }> = []
-    const memberIds = new Set<string>()
-
-    // Lấy từ assignments
-    if (assignments && assignments.length > 0) {
-      assignments.forEach(assignment => {
-        if (assignment.assigned_to_name && assignment.assigned_to && !memberIds.has(assignment.assigned_to)) {
-          members.push({
-            id: assignment.assigned_to,
-            name: assignment.assigned_to_name,
-            employee_id: assignment.assigned_to
-          })
-          memberIds.add(assignment.assigned_to)
-        }
-      })
-    }
-
-    // Lấy từ participants
-    if (participants && participants.length > 0) {
-      participants.forEach(participant => {
-        if (participant.employee_name && participant.employee_id && !memberIds.has(participant.employee_id)) {
-          members.push({
-            id: participant.employee_id,
-            name: participant.employee_name,
-            employee_id: participant.employee_id
-          })
-          memberIds.add(participant.employee_id)
-        }
-      })
-    }
-
-    // Lấy từ group members
-    if (groupMembers.length > 0) {
-      groupMembers.forEach(member => {
-        if (member.employee_name && member.employee_id && !memberIds.has(member.employee_id)) {
-          members.push({
-            id: member.employee_id,
-            name: member.employee_name,
-            employee_id: member.employee_id
-          })
-          memberIds.add(member.employee_id)
-        }
-      })
-    }
-
-    // Fallback: dùng assigned_to_name từ task
-    if (taskData?.task?.assigned_to_name && taskData?.task?.assigned_to && !memberIds.has(taskData.task.assigned_to)) {
-      members.push({
-        id: taskData.task.assigned_to,
-        name: taskData.task.assigned_to_name,
-        employee_id: taskData.task.assigned_to
-      })
-      memberIds.add(taskData.task.assigned_to)
-    }
-
-    return members
-  }, [taskData, groupMembers])
-
-  // Set default selected member (first member)
-  useEffect(() => {
-    if (availableMembers.length > 0 && !selectedMemberId) {
-      setSelectedMemberId(availableMembers[0].employee_id || availableMembers[0].id)
-    }
-  }, [availableMembers, selectedMemberId])
 
   const filteredComments = useMemo(() => {
     if (!taskData?.comments) return []
@@ -1408,23 +1328,6 @@ export default function TaskDetailPage() {
                       <X className="h-3.5 w-3.5 text-blue-600" />
                     </button>
                   </div>
-                </div>
-              )}
-              {/* Chọn thành viên để nhắn tin */}
-              {availableMembers.length > 0 && (
-                <div className="mb-3">
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Chọn thành viên nhắn tin:</label>
-                  <select
-                    value={selectedMemberId}
-                    onChange={(e) => setSelectedMemberId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-black"
-                  >
-                    {availableMembers.map((member) => (
-                      <option key={member.id} value={member.employee_id || member.id}>
-                        {member.name}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               )}
               {pendingPreview && (
