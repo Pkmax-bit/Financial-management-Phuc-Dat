@@ -78,6 +78,7 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
   const [editDialogState, setEditDialogState] = useState<{ mode: 'create' | 'edit'; expense?: Expense; isLeaf?: boolean } | null>(null)
   const [teamMembers, setTeamMembers] = useState<Array<{ id: string, name: string, email?: string, user_id?: string, project_id?: string, project_ids?: string[], hasProjects?: boolean }>>([])
   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string>('all')
+  const [userRole, setUserRole] = useState<string>('')
 
   useEffect(() => {
     fetchExpenses()
@@ -160,6 +161,9 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
         .single()
 
       if (!userData) return
+
+      // Save user role for UI display logic
+      setUserRole(userData.role)
 
       // Get allowed project IDs
       let allowedProjectIds: string[] = []
@@ -746,8 +750,8 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
         </div>
       </div>
 
-      {/* Team Member Filter */}
-      {teamMembers.length > 0 && (
+      {/* Team Member Filter - Only show for admin and accountant */}
+      {(userRole === 'admin' || userRole === 'accountant') && teamMembers.length > 0 && (
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-900 mb-2">
             Lọc theo thành viên dự án
