@@ -512,6 +512,8 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   const [projectsMap, setProjectsMap] = useState(new Map())
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [projectsList, setProjectsList] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
+  const [teamMembers, setTeamMembers] = useState<Array<{id: string, name: string, email?: string, user_id?: string, project_id?: string, project_ids?: string[], hasProjects?: boolean}>>([])
+  const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string>('all')
 
   // Update project status filter when viewMode changes
   useEffect(() => {
@@ -624,7 +626,186 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
 
   useEffect(() => {
     fetchProjectExpenses()
+    fetchTeamMembers()
   }, [])
+
+  const fetchTeamMembers = async () => {
+    try {
+      // Lấy user đang đăng nhập
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
+
+      // Lấy thông tin user từ bảng users
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, email, role')
+        .eq('id', authUser.id)
+        .single()
+
+      if (!userData) return
+
+      // Lấy danh sách project_ids mà user có quyền truy cập
+      let allowedProjectIds: string[] = []
+      
+      // Nếu là admin hoặc accountant, xem tất cả dự án
+      if (userData.role === 'admin' || userData.role === 'accountant') {
+        const { data: allProjects } = await supabase
+          .from('projects')
+          .select('id')
+        allowedProjectIds = (allProjects || []).map(p => p.id)
+      } else {
+        // Lấy project_ids từ project_team theo user_id hoặc email
+        // Thử query riêng biệt để đảm bảo chính xác
+        const [teamDataByUserId, teamDataByEmail] = await Promise.all([
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('user_id', userData.id),
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('email', userData.email)
+        ])
+        
+        // Gộp kết quả từ cả hai query
+        const allTeamData = [
+          ...(teamDataByUserId.data || []),
+          ...(teamDataByEmail.data || [])
+        ]
+        
+        allowedProjectIds = [...new Set(allTeamData.map(t => t.project_id))]
+      }
+
+      if (allowedProjectIds.length === 0) {
+        setTeamMembers([])
+        return
+      }
+
+      // Lấy tất cả nhân viên từ employees và users
+      const [employeesRes, usersRes] = await Promise.all([
+        supabase
+          .from('employees')
+          .select('id, first_name, last_name, email, user_id')
+          .eq('status', 'active'),
+        supabase
+          .from('users')
+          .select('id, full_name, email, is_active')
+          .eq('is_active', true)
+      ])
+
+      const allEmployees = [
+        ...(employeesRes.data || []).map((emp: any) => ({
+          id: emp.id,
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email || 'Không có tên',
+          email: emp.email,
+          user_id: emp.user_id,
+          type: 'employee' as const
+        })),
+        ...(usersRes.data || []).map((user: any) => ({
+          id: user.id,
+          name: user.full_name || user.email || 'Không có tên',
+          email: user.email,
+          user_id: user.id,
+          type: 'user' as const
+        }))
+      ]
+
+      // Loại bỏ trùng lặp theo email
+      const uniqueEmployees = Array.from(
+        new Map(allEmployees.map(emp => [emp.email, emp])).values()
+      )
+
+      // Lấy thành viên dự án từ các dự án mà user có quyền
+      const { data: teamMembersData } = await supabase
+        .from('project_team')
+        .select('id, name, email, project_id, user_id')
+        .eq('status', 'active')
+        .in('project_id', allowedProjectIds)
+
+      // Tạo map từ user_id -> employee_id
+      const userIdToEmployeeIdMap = new Map<string, string>()
+      for (const emp of uniqueEmployees) {
+        if (emp.user_id && emp.type === 'employee') {
+          userIdToEmployeeIdMap.set(emp.user_id, emp.id)
+        }
+      }
+
+      // Tạo map để match: user_id -> employee_id -> name -> email -> project_ids
+      const memberProjectMap = new Map<string, string[]>()
+      ;(teamMembersData || []).forEach((member: any) => {
+        // Ưu tiên: user_id -> employee_id (từ user_id) -> name -> email
+        const keys: string[] = []
+        
+        if (member.user_id) {
+          keys.push(`user_${member.user_id}`)
+          // Tìm employee_id từ user_id
+          const empId = userIdToEmployeeIdMap.get(member.user_id)
+          if (empId) {
+            keys.push(`emp_${empId}`)
+          }
+        }
+        if (member.name) {
+          // Normalize name: lowercase, trim, remove extra spaces
+          const normalizedName = member.name.toLowerCase().trim().replace(/\s+/g, ' ')
+          keys.push(`name_${normalizedName}`)
+        }
+        if (member.email) {
+          keys.push(`email_${member.email.toLowerCase().trim()}`)
+        }
+        
+        keys.forEach(key => {
+          if (!memberProjectMap.has(key)) {
+            memberProjectMap.set(key, [])
+          }
+          memberProjectMap.get(key)!.push(member.project_id)
+        })
+      })
+
+      // Hiển thị TẤT CẢ nhân viên trong dropdown
+      // Nhưng chỉ lọc theo project_ids của những nhân viên có trong project_team của các dự án user có quyền
+      const allMembersWithProjects = uniqueEmployees
+        .map(emp => {
+          // Lấy project_ids theo thứ tự ưu tiên: user_id -> employee_id -> name -> email
+          let projectIds: string[] = []
+          
+          if (emp.user_id) {
+            projectIds = memberProjectMap.get(`user_${emp.user_id}`) || []
+          }
+          if (projectIds.length === 0 && emp.type === 'employee') {
+            projectIds = memberProjectMap.get(`emp_${emp.id}`) || []
+          }
+          if (projectIds.length === 0 && emp.name) {
+            const normalizedName = emp.name.toLowerCase().trim().replace(/\s+/g, ' ')
+            projectIds = memberProjectMap.get(`name_${normalizedName}`) || []
+          }
+          if (projectIds.length === 0 && emp.email) {
+            projectIds = memberProjectMap.get(`email_${emp.email.toLowerCase().trim()}`) || []
+          }
+          
+          // Lọc project_ids: chỉ giữ những project_ids mà user đang đăng nhập có quyền
+          const filteredProjectIds = projectIds.filter(pid => allowedProjectIds.includes(pid))
+          
+          return {
+            id: emp.id,
+            name: emp.name,
+            email: emp.email,
+            user_id: emp.user_id,
+            project_ids: [...new Set(filteredProjectIds)], // Chỉ giữ project_ids mà user có quyền
+            project_id: filteredProjectIds[0] || '',
+            hasProjects: filteredProjectIds.length > 0
+          }
+        })
+
+      // CHỈ hiển thị những nhân viên có trong project_team của các dự án user có quyền
+      const filteredMembers = allMembersWithProjects.filter(m => m.hasProjects)
+      setTeamMembers(filteredMembers)
+    } catch (error) {
+      console.error('Error fetching team members:', error)
+      setTeamMembers([])
+    }
+  }
 
   // Load user role
   useEffect(() => {
@@ -1494,10 +1675,26 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
 
     const matchesProject = selectedProjectId === 'all' || expense.project_id === selectedProjectId
 
+    // Filter by team member
+    const matchesTeamMember = selectedTeamMemberId === 'all' || (() => {
+      const selectedMember = teamMembers.find(m => {
+        return m.id === selectedTeamMemberId || m.user_id === selectedTeamMemberId
+      })
+      if (selectedMember) {
+        if (selectedMember.project_ids && selectedMember.project_ids.length > 0) {
+          return selectedMember.project_ids.includes(expense.project_id)
+        } else {
+          // Nếu nhân viên không có project trong danh sách allowed, không hiển thị gì
+          return false
+        }
+      }
+      return true
+    })()
+
     // Không lọc theo trạng thái dự án -> luôn true
     const matchesProjectStatus = true
 
-    return matchesSearch && matchesView && matchesProject && matchesProjectStatus
+    return matchesSearch && matchesView && matchesProject && matchesTeamMember && matchesProjectStatus
   })
 
   // Pagination calculations - use getFilteredExpenses for accurate count
@@ -1509,7 +1706,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
   // Reset to page 1 khi filter thay đổi (không còn phụ thuộc trạng thái dự án)
   useEffect(() => {
     setCurrentPage(1)
-  }, [viewMode, selectedProjectId, searchTerm])
+  }, [viewMode, selectedProjectId, selectedTeamMemberId, searchTerm])
 
   // Calculate summary statistics
   const totalPlanned = expenses
@@ -1641,6 +1838,19 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
             {projectsList.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.project_code ? `${project.project_code} - ` : ''}{project.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedTeamMemberId}
+            onChange={(e) => setSelectedTeamMemberId(e.target.value)}
+            className="px-3 py-2 rounded-lg text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">Tất cả thành viên</option>
+            {teamMembers.map((member) => (
+              <option key={member.id} value={member.user_id || member.id}>
+                {member.name} {member.email ? `(${member.email})` : ''}
               </option>
             ))}
           </select>

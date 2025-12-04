@@ -136,9 +136,52 @@ export const ProjectTeamDrawer: React.FC<ProjectTeamDrawerProps> = ({
 
   const handleSubmit = async () => {
     try {
-      // Create team members in parallel
-      await Promise.all(
-        selectedEmployees.map(employee => 
+      // Kiểm tra trùng lặp trước khi thêm
+      const { data: existingMembers } = await supabase
+        .from('project_team')
+        .select('user_id, email, name')
+        .eq('project_id', projectId)
+        .eq('status', 'active');
+
+      const existingUserIds = new Set((existingMembers || []).map((m: any) => m.user_id).filter(Boolean));
+      const existingEmails = new Set((existingMembers || []).map((m: any) => m.email).filter(Boolean));
+
+      // Lọc ra những thành viên chưa tồn tại
+      const membersToAdd = selectedEmployees.filter(emp => {
+        if (emp.user_id && existingUserIds.has(emp.user_id)) {
+          return false;
+        }
+        if (emp.email && existingEmails.has(emp.email)) {
+          return false;
+        }
+        return true;
+      });
+
+      // Lấy danh sách thành viên đã tồn tại (để hiển thị thông báo)
+      const duplicateMembers = selectedEmployees.filter(emp => {
+        if (emp.user_id && existingUserIds.has(emp.user_id)) {
+          return true;
+        }
+        if (emp.email && existingEmails.has(emp.email)) {
+          return true;
+        }
+        return false;
+      });
+
+      // Nếu không có thành viên nào để thêm
+      if (membersToAdd.length === 0) {
+        if (duplicateMembers.length > 0) {
+          const duplicateNames = duplicateMembers.map(m => m.name).join(', ');
+          alert(`Tất cả thành viên đã có trong dự án:\n${duplicateNames}`);
+        } else {
+          alert('Không có thành viên nào để thêm.');
+        }
+        return;
+      }
+
+      // Thêm những thành viên chưa tồn tại
+      const results = await Promise.allSettled(
+        membersToAdd.map(employee => 
           axios.post('/api/project-team', {
             project_id: projectId,
             name: employee.name,
@@ -151,10 +194,46 @@ export const ProjectTeamDrawer: React.FC<ProjectTeamDrawerProps> = ({
         )
       );
 
-      onSuccess();
-      handleClose();
+      // Check for failures
+      const failed = results.filter(r => r.status === 'rejected');
+      const succeeded = results.filter(r => r.status === 'fulfilled');
+
+      const addedCount = succeeded.length;
+      const skippedCount = duplicateMembers.length;
+      const errorCount = failed.length;
+
+      // Hiển thị thông báo
+      let message = '';
+      if (addedCount > 0) {
+        message += `✅ Đã thêm ${addedCount} thành viên thành công.`;
+      }
+      if (skippedCount > 0) {
+        const duplicateNames = duplicateMembers.map(m => m.name).join(', ');
+        message += `\n\n⚠️ Đã bỏ qua ${skippedCount} thành viên đã có trong dự án:\n${duplicateNames}`;
+      }
+      if (errorCount > 0) {
+        const errorMessages = failed.map((f, idx) => {
+          if (f.status === 'rejected') {
+            const employee = membersToAdd[idx];
+            const errorMsg = f.reason?.response?.data?.detail || f.reason?.message || 'Lỗi không xác định';
+            return `${employee.name}: ${errorMsg}`;
+          }
+          return '';
+        }).filter(Boolean);
+        message += `\n\n❌ Có ${errorCount} lỗi xảy ra:\n${errorMessages.join('\n')}`;
+      }
+
+      if (message) {
+        alert(message);
+      }
+
+      if (addedCount > 0) {
+        onSuccess();
+        handleClose();
+      }
     } catch (error) {
       console.error('Error creating team:', error);
+      alert('Lỗi khi thêm thành viên: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 

@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { 
-  FileText, 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
+import {
+  FileText,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
   Eye,
   Send,
   CheckCircle,
@@ -90,11 +90,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all') // Mặc định: Tất cả
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string, name: string, email?: string, user_id?: string, project_id?: string, project_ids?: string[], hasProjects?: boolean }>>([])
+  const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string>('all')
+  const [userRole, setUserRole] = useState<string>('')
   const [pendingSupportTour, setPendingSupportTour] = useState<{ slug: string; token: number } | null>(null)
   const [forceQuoteTourToken, setForceQuoteTourToken] = useState(0)
   const [forceEmailTourToken, setForceEmailTourToken] = useState(0)
   const [skipQuoteAutoStart, setSkipQuoteAutoStart] = useState(false)
-  
+
   // Tour state
   const QUOTE_CONVERT_TOUR_STORAGE_KEY = 'quote-convert-tour-status-v1'
   const [isConvertTourRunning, setIsConvertTourRunning] = useState(false)
@@ -108,7 +111,186 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   useEffect(() => {
     fetchQuotes()
     fetchProjects()
+    fetchTeamMembers()
   }, [])
+
+  const fetchTeamMembers = async () => {
+    try {
+      // Lấy user đang đăng nhập
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
+
+      // Lấy thông tin user từ bảng users
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, email, role')
+        .eq('id', authUser.id)
+        .single()
+
+      if (!userData) return
+
+      // Lấy danh sách project_ids mà user có quyền truy cập
+      let allowedProjectIds: string[] = []
+
+      // Nếu là admin hoặc accountant, xem tất cả dự án
+      if (userData.role === 'admin' || userData.role === 'accountant') {
+        const { data: allProjects } = await supabase
+          .from('projects')
+          .select('id')
+        allowedProjectIds = (allProjects || []).map(p => p.id)
+      } else {
+        // Lấy project_ids từ project_team theo user_id hoặc email
+        // Thử query riêng biệt để đảm bảo chính xác
+        const [teamDataByUserId, teamDataByEmail] = await Promise.all([
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('user_id', userData.id),
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('email', userData.email)
+        ])
+
+        // Gộp kết quả từ cả hai query
+        const allTeamData = [
+          ...(teamDataByUserId.data || []),
+          ...(teamDataByEmail.data || [])
+        ]
+
+        allowedProjectIds = [...new Set(allTeamData.map(t => t.project_id))]
+      }
+
+      if (allowedProjectIds.length === 0) {
+        setTeamMembers([])
+        return
+      }
+
+      // Lấy tất cả nhân viên từ employees và users
+      const [employeesRes, usersRes] = await Promise.all([
+        supabase
+          .from('employees')
+          .select('id, first_name, last_name, email, user_id')
+          .eq('status', 'active'),
+        supabase
+          .from('users')
+          .select('id, full_name, email, is_active')
+          .eq('is_active', true)
+      ])
+
+      const allEmployees = [
+        ...(employeesRes.data || []).map((emp: any) => ({
+          id: emp.id,
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email || 'Không có tên',
+          email: emp.email,
+          user_id: emp.user_id,
+          type: 'employee' as const
+        })),
+        ...(usersRes.data || []).map((user: any) => ({
+          id: user.id,
+          name: user.full_name || user.email || 'Không có tên',
+          email: user.email,
+          user_id: user.id,
+          type: 'user' as const
+        }))
+      ]
+
+      // Loại bỏ trùng lặp theo email
+      const uniqueEmployees = Array.from(
+        new Map(allEmployees.map(emp => [emp.email, emp])).values()
+      )
+
+      // Lấy thành viên dự án từ các dự án mà user có quyền
+      const { data: teamMembersData } = await supabase
+        .from('project_team')
+        .select('id, name, email, project_id, user_id')
+        .eq('status', 'active')
+        .in('project_id', allowedProjectIds)
+
+      // Tạo map từ user_id -> employee_id
+      const userIdToEmployeeIdMap = new Map<string, string>()
+      for (const emp of uniqueEmployees) {
+        if (emp.user_id && emp.type === 'employee') {
+          userIdToEmployeeIdMap.set(emp.user_id, emp.id)
+        }
+      }
+
+      // Tạo map để match: user_id -> employee_id -> name -> email -> project_ids
+      const memberProjectMap = new Map<string, string[]>()
+        ; (teamMembersData || []).forEach((member: any) => {
+          // Ưu tiên: user_id -> employee_id (từ user_id) -> name -> email
+          const keys: string[] = []
+
+          if (member.user_id) {
+            keys.push(`user_${member.user_id}`)
+            // Tìm employee_id từ user_id
+            const empId = userIdToEmployeeIdMap.get(member.user_id)
+            if (empId) {
+              keys.push(`emp_${empId}`)
+            }
+          }
+          if (member.name) {
+            // Normalize name: lowercase, trim, remove extra spaces
+            const normalizedName = member.name.toLowerCase().trim().replace(/\s+/g, ' ')
+            keys.push(`name_${normalizedName}`)
+          }
+          if (member.email) {
+            keys.push(`email_${member.email.toLowerCase().trim()}`)
+          }
+
+          keys.forEach(key => {
+            if (!memberProjectMap.has(key)) {
+              memberProjectMap.set(key, [])
+            }
+            memberProjectMap.get(key)!.push(member.project_id)
+          })
+        })
+
+      // Hiển thị TẤT CẢ nhân viên trong dropdown
+      // Nhưng chỉ lọc theo project_ids của những nhân viên có trong project_team của các dự án user có quyền
+      const allMembersWithProjects = uniqueEmployees
+        .map(emp => {
+          // Lấy project_ids theo thứ tự ưu tiên: user_id -> employee_id -> name -> email
+          let projectIds: string[] = []
+
+          if (emp.user_id) {
+            projectIds = memberProjectMap.get(`user_${emp.user_id}`) || []
+          }
+          if (projectIds.length === 0 && emp.type === 'employee') {
+            projectIds = memberProjectMap.get(`emp_${emp.id}`) || []
+          }
+          if (projectIds.length === 0 && emp.name) {
+            const normalizedName = emp.name.toLowerCase().trim().replace(/\s+/g, ' ')
+            projectIds = memberProjectMap.get(`name_${normalizedName}`) || []
+          }
+          if (projectIds.length === 0 && emp.email) {
+            projectIds = memberProjectMap.get(`email_${emp.email.toLowerCase().trim()}`) || []
+          }
+
+          // Lọc project_ids: chỉ giữ những project_ids mà user đang đăng nhập có quyền
+          const filteredProjectIds = projectIds.filter(pid => allowedProjectIds.includes(pid))
+
+          return {
+            id: emp.id,
+            name: emp.name,
+            email: emp.email,
+            user_id: emp.user_id,
+            project_ids: [...new Set(filteredProjectIds)], // Chỉ giữ project_ids mà user có quyền
+            project_id: filteredProjectIds[0] || '',
+            hasProjects: filteredProjectIds.length > 0
+          }
+        })
+
+      // CHỈ hiển thị những nhân viên có trong project_team của các dự án user có quyền
+      const filteredMembers = allMembersWithProjects.filter(m => m.hasProjects)
+      setTeamMembers(filteredMembers)
+    } catch (error) {
+      console.error('Error fetching team members:', error)
+      setTeamMembers([])
+    }
+  }
 
   const fetchProjects = async () => {
     try {
@@ -116,9 +298,9 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         .from('projects')
         .select('id, name, project_code, status')
         .order('name', { ascending: true })
-      
+
       if (error) throw error
-      
+
       setProjects(data || [])
     } catch (error) {
       console.error('Error fetching projects:', error)
@@ -153,10 +335,37 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     try {
       setLoading(true)
       console.log('🔍 Fetching quotes from database...')
-      
-      // Use Supabase directly to get quotes with employee in charge info
-      // Get both employee_in_charge_id and created_by employee info
-      const { data: quotes, error } = await supabase
+
+      // Get current user
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        console.log('❌ No auth user found')
+        setQuotes([])
+        setLoading(false)
+        return
+      }
+
+      // Get user data
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, email, role')
+        .eq('id', authUser.id)
+        .single()
+
+      if (!userData) {
+        console.log('❌ No user data found')
+        setQuotes([])
+        setLoading(false)
+        return
+      }
+
+      // Save user role for UI display logic
+      setUserRole(userData.role)
+
+      console.log('🔍 Fetching quotes for user:', userData.email, 'role:', userData.role)
+
+      // Build query
+      let query = supabase
         .from('quotes')
         .select(`
           *,
@@ -177,30 +386,72 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             users!employees_user_id_fkey(full_name)
           )
         `)
-        .order('created_at', { ascending: false })
-      
+
+      // Admin and accountant see all quotes
+      if (userData.role === 'admin' || userData.role === 'accountant') {
+        console.log('👑 Admin/Accountant: Fetching all quotes')
+      } else {
+        // Regular users: only see quotes for projects where they are in project_team
+        console.log('👤 Regular user: Fetching quotes from accessible projects')
+
+        // Get project_ids where user is in team
+        const [teamDataByUserId, teamDataByEmail] = await Promise.all([
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('user_id', userData.id),
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('email', userData.email)
+        ])
+
+        const allTeamData = [
+          ...(teamDataByUserId.data || []),
+          ...(teamDataByEmail.data || [])
+        ]
+
+        const allowedProjectIds = [...new Set(allTeamData.map(t => t.project_id))]
+
+        console.log(`✅ User has access to ${allowedProjectIds.length} projects:`, allowedProjectIds)
+
+        if (allowedProjectIds.length === 0) {
+          console.log('⚠️ User has no project access')
+          setQuotes([])
+          setLoading(false)
+          return
+        }
+
+        // Filter quotes by allowed project IDs
+        query = query.in('project_id', allowedProjectIds)
+      }
+
+      const { data: quotes, error } = await query.order('created_at', { ascending: false })
+
       if (error) {
         console.error('❌ Supabase error fetching quotes:', error)
         throw error
       }
-      
-      console.log('🔍 Quotes data from database:', quotes)
+
+      console.log(`✅ Fetched ${quotes?.length || 0} quotes`)
       // Transform to include customer_name, project fields, and employee in charge name
       const transformed = (quotes || []).map((q: any) => {
         // Get employee in charge name from users table via employees
         // Priority: employee_in_charge_id -> created_by
         let employeeInChargeName = null
         let emp = q.employee_in_charge || q.created_by_employee
-        
+
         if (emp) {
           // Try to get from users table first (via user_id)
           const usersRel = emp.users
           const userFullName = Array.isArray(usersRel) ? usersRel[0]?.full_name : usersRel?.full_name
-          
+
           // Fallback to first_name + last_name from employees
           employeeInChargeName = userFullName || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || null
         }
-        
+
         return {
           ...q,
           customer_name: q.customers?.name,
@@ -251,13 +502,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     }>
   }) => {
     if (!previewQuoteId) return
-    
+
     try {
       console.log('🔍 Sending quote email:', previewQuoteId, customData)
-      
+
       // Close preview modal
       setShowPreviewModal(false)
-      
+
       // Show loading state
       const loadingMessage = document.createElement('div')
       loadingMessage.innerHTML = `
@@ -276,25 +527,25 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         </div>
       `
       document.body.appendChild(loadingMessage)
-      
+
       // Prepare request body with all customization data
       const requestBody: any = {}
-      
+
       // Payment terms
       if (customData?.paymentTerms && Array.isArray(customData.paymentTerms) && customData.paymentTerms.length > 0) {
         requestBody.custom_payment_terms = customData.paymentTerms
       }
-      
+
       // Additional notes
       if (customData?.additionalNotes && customData.additionalNotes.trim()) {
         requestBody.additional_notes = customData.additionalNotes
       }
-      
+
       // Default notes
       if (customData?.defaultNotes && Array.isArray(customData.defaultNotes) && customData.defaultNotes.length > 0) {
         requestBody.default_notes = customData.defaultNotes.filter(note => note && note.trim())
       }
-      
+
       // Company info
       if (customData?.companyName) requestBody.company_name = customData.companyName
       if (customData?.companyShowroom) requestBody.company_showroom = customData.companyShowroom
@@ -303,25 +554,25 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       if (customData?.companyHotline) requestBody.company_hotline = customData.companyHotline
       if (customData?.companyLogoUrl) requestBody.company_logo_url = customData.companyLogoUrl
       if (customData?.companyLogoBase64) requestBody.company_logo_base64 = customData.companyLogoBase64
-      
+
       // Bank info
       if (customData?.bankAccountName) requestBody.bank_account_name = customData.bankAccountName
       if (customData?.bankAccountNumber) requestBody.bank_account_number = customData.bankAccountNumber
       if (customData?.bankName) requestBody.bank_name = customData.bankName
       if (customData?.bankBranch) requestBody.bank_branch = customData.bankBranch
-      
+
       // Raw HTML (exact preview HTML)
       if (customData?.rawHtml && customData.rawHtml.trim()) {
         requestBody.raw_html = customData.rawHtml
       }
-      
+
       // File attachments
       if (customData?.attachments && customData.attachments.length > 0) {
         requestBody.attachments = customData.attachments
       }
-      
+
       console.log('📤 Request body:', JSON.stringify(requestBody, null, 2))
-      
+
       // Call API to send quote email
       const response = await fetch(getApiEndpoint(`/api/sales/quotes/${previewQuoteId}/send`), {
         method: 'POST',
@@ -331,26 +582,26 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         },
         body: Object.keys(requestBody).length > 0 ? JSON.stringify(requestBody) : '{}'
       })
-      
+
       // Remove loading message
       document.body.removeChild(loadingMessage)
-      
+
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Failed to send quote email')
       }
-      
+
       const result = await response.json()
       console.log('🔍 Quote email sent successfully:', result)
-      
+
       // Optimistically update local list to hide send/edit buttons immediately
       setQuotes(prev => prev.map(q => q.id === previewQuoteId ? { ...q, status: 'sent' } : q))
-      
+
       // Ensure DB reflects the new status for consistency with subsequent fetches
       try {
         await supabase
           .from('quotes')
-          .update({ 
+          .update({
             status: 'sent',
             updated_at: new Date().toISOString()
           })
@@ -358,16 +609,16 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       } catch (e) {
         console.error('❌ Failed to persist sent status to DB (will still refetch):', e)
       }
-      
+
       // Reset preview state
       setPreviewQuoteId(null)
-      
+
       // Show success notification with email details
       const successMessage = document.createElement('div')
-      const emailStatus = result.email_sent ? 
+      const emailStatus = result.email_sent ?
         `✅ Email báo giá đã được gửi thành công đến ${result.customer_email || 'khách hàng'}!` :
         `⚠️ Báo giá đã được cập nhật nhưng không thể gửi email: ${result.email_error || 'Lỗi không xác định'}`
-      
+
       successMessage.innerHTML = `
         <div style="
           position: fixed; 
@@ -392,18 +643,18 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         </style>
       `
       document.body.appendChild(successMessage)
-      
+
       // Auto remove success message after 7 seconds
       setTimeout(() => {
         if (document.body.contains(successMessage)) {
           document.body.removeChild(successMessage)
         }
       }, 7000)
-      
+
       fetchQuotes() // Refresh list from server to confirm status
     } catch (error) {
       console.error('❌ Error sending quote email:', error)
-      
+
       // Show error notification
       const errorMessage = document.createElement('div')
       errorMessage.innerHTML = `
@@ -429,7 +680,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         </style>
       `
       document.body.appendChild(errorMessage)
-      
+
       // Auto remove error message after 8 seconds
       setTimeout(() => {
         if (document.body.contains(errorMessage)) {
@@ -442,7 +693,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const convertToInvoice = async (quoteId: string) => {
     try {
       console.log('🔍 Converting quote to invoice:', quoteId)
-      
+
       // First, get the quote details with items
       const { data: quote, error: quoteError } = await supabase
         .from('quotes')
@@ -454,47 +705,47 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         `)
         .eq('id', quoteId)
         .single()
-      
+
       if (quoteError || !quote) {
         console.error('❌ Error fetching quote:', quoteError)
         throw new Error('Không thể tìm thấy báo giá')
       }
-      
+
       console.log('🔍 Quote data:', quote)
-      
+
       // Check if quote can be converted
       if (quote.status === 'closed' || quote.status === 'converted') {
         throw new Error('Báo giá này đã được chuyển thành hóa đơn rồi')
       }
-      
+
       if (quote.status === 'declined') {
         throw new Error('Không thể chuyển báo giá đã bị từ chối')
       }
-      
+
       if (quote.status === 'expired') {
         throw new Error('Không thể chuyển báo giá đã hết hạn')
       }
-      
+
       // Generate invoice number
       const now = new Date()
       const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
       const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase()
       const invoiceNumber = `INV-${dateStr}-${randomStr}`
-      
+
       // Calculate due date (30 days from issue date)
       const issueDate = new Date(quote.issue_date)
       const dueDate = new Date(issueDate)
       dueDate.setDate(dueDate.getDate() + 30)
-      
+
       // Convert quote items to invoice items
       const convertedItems = []
-      
+
       if (quote.quote_items && Array.isArray(quote.quote_items)) {
         // Get all unique product_service_ids from quote items to validate them
         const productServiceIds = quote.quote_items
           .map((item: any) => item.product_service_id)
           .filter((id: any) => id != null)
-        
+
         // Validate product_service_ids exist in products_services table
         // Note: invoice_items.product_service_id references products_services(id), not products(id)
         let validProductIds = new Set<string>()
@@ -505,7 +756,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               .from('products_services')
               .select('id')
               .in('id', productServiceIds)
-            
+
             if (!productsServicesError && validProductsServices) {
               validProductIds = new Set(validProductsServices.map((p: any) => p.id))
               console.log(`✅ Validated ${validProductIds.size} out of ${productServiceIds.length} product_service_ids`)
@@ -518,25 +769,25 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             // Continue anyway, will set to null if invalid
           }
         }
-        
+
         for (const item of quote.quote_items) {
           // Get product_components from quote_item (copy to invoice_item, not invoice)
-          const productComponents = item.product_components && Array.isArray(item.product_components) 
-            ? item.product_components 
+          const productComponents = item.product_components && Array.isArray(item.product_components)
+            ? item.product_components
             : []
-          
+
           // Format product_components as JSONB array (same format as CreateInvoiceSidebarFullscreen)
           const formattedComponents = productComponents.length > 0
             ? productComponents.map((comp: any) => ({
-                expense_object_id: comp.expense_object_id || null,
-                name: comp.name || null,
-                unit: comp.unit || '',
-                unit_price: Number(comp.unit_price || 0),
-                quantity: Number(comp.quantity || 0),
-                total_price: Number(comp.total_price || 0)
-              }))
+              expense_object_id: comp.expense_object_id || null,
+              name: comp.name || null,
+              unit: comp.unit || '',
+              unit_price: Number(comp.unit_price || 0),
+              quantity: Number(comp.quantity || 0),
+              total_price: Number(comp.total_price || 0)
+            }))
             : []
-          
+
           // Validate product_service_id - only use if it exists in products table
           let productServiceId = null
           if (item.product_service_id) {
@@ -546,7 +797,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               console.warn(`⚠️ Invalid product_service_id ${item.product_service_id} for item "${item.name_product}", setting to null`)
             }
           }
-          
+
           const invoiceItem = {
             // Don't include id - let database generate it
             invoice_id: '', // Will be set after invoice creation
@@ -589,23 +840,23 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         notes: `Hóa đơn được tạo từ báo giá ${quote.quote_number}`,
         created_by: quote.created_by
       }
-      
+
       console.log('🔍 Creating invoice with data:', invoiceData)
-      
+
       // Create the invoice
       const { data: newInvoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert(invoiceData)
         .select()
         .single()
-      
+
       if (invoiceError) {
         console.error('❌ Error creating invoice:', invoiceError)
         throw new Error('Không thể tạo hóa đơn')
       }
-      
+
       console.log('🔍 Invoice created successfully:', newInvoice)
-      
+
       // Create invoice items in invoice_items table
       if (convertedItems.length > 0) {
         // Update invoice_id for all converted items
@@ -613,18 +864,18 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           ...item,
           invoice_id: newInvoice.id
         }))
-        
+
         console.log('🔍 Creating invoice items with data:', {
           count: invoiceItemsData.length,
           sample: invoiceItemsData[0],
           allData: invoiceItemsData
         })
-        
+
         const { data: invoiceItems, error: invoiceItemsError } = await supabase
           .from('invoice_items')
           .insert(invoiceItemsData)
           .select()
-        
+
         if (invoiceItemsError) {
           console.error('❌ Error creating invoice items:', {
             error: invoiceItemsError,
@@ -643,24 +894,24 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       } else {
         console.log('⚠️ No items to convert to invoice items')
       }
-      
+
       // Update quote status to 'closed' (following backend logic)
       const { error: updateError } = await supabase
         .from('quotes')
-        .update({ 
+        .update({
           status: 'closed',
           updated_at: new Date().toISOString()
         })
         .eq('id', quoteId)
-      
+
       if (updateError) {
         console.error('❌ Error updating quote status:', updateError)
         // Don't throw error here as invoice was created successfully
       }
-      
+
       console.log('🔍 Quote converted to invoice successfully')
       fetchQuotes() // Refresh list
-      
+
       // Set conversion data for success modal
       setConversionData({
         invoiceNumber,
@@ -669,7 +920,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         convertedItems
       })
       setShowConversionSuccess(true)
-      
+
     } catch (error) {
       console.error('❌ Error converting quote:', error)
       alert(`Lỗi khi chuyển báo giá: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
@@ -977,17 +1228,33 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   }
 
   const filteredQuotes = quotes.filter(quote => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       quote.quote_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (quote.customer_name && quote.customer_name.toLowerCase().includes(searchTerm.toLowerCase()))
-    
+
     const matchesFilter = filter === 'all' || quote.status === filter
-    
+
     const matchesProject = selectedProjectId === 'all' || quote.project_id === selectedProjectId
-    
+
+    // Filter by team member
+    const matchesTeamMember = selectedTeamMemberId === 'all' || (() => {
+      const selectedMember = teamMembers.find(m => {
+        return m.id === selectedTeamMemberId || m.user_id === selectedTeamMemberId
+      })
+      if (selectedMember) {
+        if (selectedMember.project_ids && selectedMember.project_ids.length > 0 && quote.project_id) {
+          return selectedMember.project_ids.includes(quote.project_id)
+        } else {
+          // Nếu nhân viên không có project trong danh sách allowed, không hiển thị gì
+          return false
+        }
+      }
+      return true
+    })()
+
     const matchesProjectStatus = projectStatusFilter === 'all' || (quote as any).project_status === projectStatusFilter
 
-    return matchesSearch && matchesFilter && matchesProject && matchesProjectStatus
+    return matchesSearch && matchesFilter && matchesProject && matchesTeamMember && matchesProjectStatus
   })
 
   // Pagination calculations
@@ -999,7 +1266,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filter, selectedProjectId, projectStatusFilter, searchTerm])
+  }, [filter, selectedProjectId, selectedTeamMemberId, projectStatusFilter, searchTerm])
 
   if (loading) {
     return (
@@ -1012,13 +1279,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   const deleteQuote = async (quoteId: string) => {
     try {
       console.log('🔍 Deleting quote:', quoteId)
-      
+
       // Show confirmation dialog
       const confirmed = window.confirm('Bạn có chắc chắn muốn xóa báo giá này? Hành động này không thể hoàn tác.')
       if (!confirmed) {
         return
       }
-      
+
       // Show loading state
       const loadingMessage = document.createElement('div')
       loadingMessage.innerHTML = `
@@ -1037,34 +1304,34 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         </div>
       `
       document.body.appendChild(loadingMessage)
-      
+
       // Delete quote items first
       const { error: itemsError } = await supabase
         .from('quote_items')
         .delete()
         .eq('quote_id', quoteId)
-      
+
       if (itemsError) {
         console.error('❌ Error deleting quote items:', itemsError)
         throw new Error('Failed to delete quote items')
       }
-      
+
       // Delete quote
       const { error: quoteError } = await supabase
         .from('quotes')
         .delete()
         .eq('id', quoteId)
-      
+
       // Remove loading message
       document.body.removeChild(loadingMessage)
-      
+
       if (quoteError) {
         console.error('❌ Error deleting quote:', quoteError)
         throw new Error(quoteError.message || 'Failed to delete quote')
       }
-      
+
       console.log('🔍 Quote deleted successfully')
-      
+
       // Show success notification
       const successMessage = document.createElement('div')
       successMessage.innerHTML = `
@@ -1090,20 +1357,20 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         </style>
       `
       document.body.appendChild(successMessage)
-      
+
       // Remove success message after 3 seconds
       setTimeout(() => {
         if (document.body.contains(successMessage)) {
           document.body.removeChild(successMessage)
         }
       }, 3000)
-      
+
       // Refresh quotes list
       await fetchQuotes()
-      
+
     } catch (error) {
       console.error('❌ Error deleting quote:', error)
-      
+
       // Show error notification
       const errorMessage = document.createElement('div')
       errorMessage.innerHTML = `
@@ -1129,7 +1396,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         </style>
       `
       document.body.appendChild(errorMessage)
-      
+
       // Remove error message after 5 seconds
       setTimeout(() => {
         if (document.body.contains(errorMessage)) {
@@ -1148,11 +1415,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           <button
             onClick={() => startConvertTour()}
             disabled={isConvertTourRunning}
-            className={`inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium ${
-              isConvertTourRunning
-                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                : 'text-white bg-blue-600 hover:bg-blue-700'
-            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+            className={`inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium ${isConvertTourRunning
+              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+              : 'text-white bg-blue-600 hover:bg-blue-700'
+              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
             title="Hướng dẫn chuyển báo giá thành hóa đơn"
           >
             <CircleHelp className="h-4 w-4 mr-1" />
@@ -1174,45 +1440,41 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         <div className="flex space-x-2 flex-wrap">
           <button
             onClick={() => setFilter('all')}
-            className={`px-3 py-1 rounded-md text-sm ${
-              filter === 'all' 
-                ? 'bg-blue-100 text-blue-800' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-3 py-1 rounded-md text-sm ${filter === 'all'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             Tất cả
           </button>
           <button
             onClick={() => setFilter('draft')}
-            className={`px-3 py-1 rounded-md text-sm ${
-              filter === 'draft' 
-                ? 'bg-blue-100 text-blue-800' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-3 py-1 rounded-md text-sm ${filter === 'draft'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             Nháp
           </button>
           <button
             onClick={() => setFilter('sent')}
-            className={`px-3 py-1 rounded-md text-sm ${
-              filter === 'sent' 
-                ? 'bg-blue-100 text-blue-800' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-3 py-1 rounded-md text-sm ${filter === 'sent'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             Đã gửi
           </button>
           <button
             onClick={() => setFilter('accepted')}
-            className={`px-3 py-1 rounded-md text-sm ${
-              filter === 'accepted' 
-                ? 'bg-blue-100 text-blue-800' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-3 py-1 rounded-md text-sm ${filter === 'accepted'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             Đã chấp nhận
           </button>
-          
+
           {/* Project Filter */}
           <select
             value={selectedProjectId}
@@ -1226,7 +1488,23 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               </option>
             ))}
           </select>
-          
+
+          {/* Team Member Filter - Only show for admin and accountant */}
+          {(userRole === 'admin' || userRole === 'accountant') && (
+            <select
+              value={selectedTeamMemberId}
+              onChange={(e) => setSelectedTeamMemberId(e.target.value)}
+              className="px-3 py-1 rounded-md text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Tất cả thành viên</option>
+              {teamMembers.map((member) => (
+                <option key={member.id} value={member.user_id || member.id}>
+                  {member.name} {member.email ? `(${member.email})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* Project Status Filter */}
           <select
             value={projectStatusFilter}
@@ -1319,8 +1597,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2" data-tour-id="quote-actions-buttons">
-                    <button 
-                      className="text-black hover:text-black" 
+                    <button
+                      className="text-black hover:text-black"
                       title="Xem chi tiết"
                       data-tour-id="quote-button-view"
                       onClick={() => {
@@ -1329,43 +1607,43 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     >
                       <Eye className="h-4 w-4" />
                     </button>
-                    
+
                     <>
-                      <button 
+                      <button
                         onClick={() => {
                           setEditingQuoteId(quote.id)
                           setShowCreateModal(true)
                         }}
-                        className="text-black hover:text-blue-600" 
+                        className="text-black hover:text-blue-600"
                         title="Chỉnh sửa"
                         data-tour-id="quote-button-edit"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => sendQuote(quote.id)}
-                        className="text-black hover:text-green-600" 
+                        className="text-black hover:text-green-600"
                         title="Gửi báo giá"
                         data-tour-id="quote-button-send"
                       >
                         <Send className="h-4 w-4" />
                       </button>
                     </>
-                    
+
                     {(quote.status === 'accepted' || quote.status === 'sent' || quote.status === 'viewed') && quote.status !== 'closed' && quote.status !== 'converted' && (
-                      <button 
+                      <button
                         onClick={() => convertToInvoice(quote.id)}
-                        className="text-black hover:text-purple-600" 
+                        className="text-black hover:text-purple-600"
                         title="Chuyển thành hóa đơn"
                         data-tour-id={`quote-convert-button-${quote.id}`}
                       >
                         <DollarSign className="h-4 w-4" />
                       </button>
                     )}
-                    
-                    <button 
+
+                    <button
                       onClick={() => deleteQuote(quote.id)}
-                      className="text-black hover:text-red-600" 
+                      className="text-black hover:text-red-600"
                       title="Xóa"
                       data-tour-id="quote-button-delete"
                     >
@@ -1377,7 +1655,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             ))}
           </tbody>
         </table>
-        
+
         {filteredQuotes.length === 0 ? (
           <div className="text-center py-8">
             <FileText className="mx-auto h-12 w-12 text-black" />
@@ -1409,11 +1687,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      currentPage === 1
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                    }`}
+                    className={`px-3 py-1 rounded-md text-sm ${currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
                     Trước
                   </button>
@@ -1422,11 +1699,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-1 rounded-md text-sm ${
-                          currentPage === page
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                        }`}
+                        className={`px-3 py-1 rounded-md text-sm ${currentPage === page
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          }`}
                       >
                         {page}
                       </button>
@@ -1435,11 +1711,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      currentPage === totalPages
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                    }`}
+                    className={`px-3 py-1 rounded-md text-sm ${currentPage === totalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
                     Sau
                   </button>
@@ -1555,7 +1830,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             </div>
           ))
         )}
-        
+
         {/* Mobile Pagination Controls */}
         {filteredQuotes.length > 0 && totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
@@ -1568,11 +1843,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className={`px-3 py-1 rounded-md text-sm ${
-                  currentPage === 1
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                }`}
+                className={`px-3 py-1 rounded-md text-sm ${currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
               >
                 Trước
               </button>
@@ -1582,11 +1856,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
-                className={`px-3 py-1 rounded-md text-sm ${
-                  currentPage === totalPages
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                }`}
+                className={`px-3 py-1 rounded-md text-sm ${currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
               >
                 Sau
               </button>

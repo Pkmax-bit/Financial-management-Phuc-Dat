@@ -80,19 +80,60 @@ export default function ProjectsTab({
     from: '',
     to: ''
   })
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string, name: string, email?: string, user_id?: string, project_id?: string, project_ids?: string[], hasProjects?: boolean }>>([])
+  const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string>('all')
+  const [userRole, setUserRole] = useState<string>('')
 
   useEffect(() => {
     fetchProjects()
+    fetchTeamMembers()
   }, [])
 
   useEffect(() => {
+    console.log('🔄 useEffect filterProjects triggered:', {
+      projectsCount: projects.length,
+      teamMembersCount: teamMembers.length,
+      selectedTeamMemberId,
+      searchQuery,
+      statusFilter
+    })
     filterProjects()
-  }, [projects, searchQuery, statusFilter, dateFilter])
+  }, [projects, searchQuery, statusFilter, dateFilter, selectedTeamMemberId, teamMembers])
 
   const fetchProjects = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
+
+      // Get current user
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        console.log('❌ No auth user found')
+        setProjects([])
+        setLoading(false)
+        return
+      }
+
+      // Get user data
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, email, role')
+        .eq('id', authUser.id)
+        .single()
+
+      if (!userData) {
+        console.log('❌ No user data found')
+        setProjects([])
+        setLoading(false)
+        return
+      }
+
+      // Save user role for UI display logic
+      setUserRole(userData.role)
+
+      console.log('🔍 Fetching projects for user:', userData.email, 'role:', userData.role)
+
+      // Build query
+      let query = supabase
         .from('projects')
         .select(`
           id,
@@ -119,7 +160,49 @@ export default function ProjectsTab({
             last_name
           )
         `)
-        .order('created_at', { ascending: false })
+
+      // Admin and accountant see all projects
+      if (userData.role === 'admin' || userData.role === 'accountant') {
+        console.log('👑 Admin/Accountant: Fetching all projects')
+      } else {
+        // Regular users: only see projects where they are in project_team
+        console.log('👤 Regular user: Fetching projects from project_team')
+
+        // Get project_ids where user is in team
+        const [teamDataByUserId, teamDataByEmail] = await Promise.all([
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('user_id', userData.id),
+          supabase
+            .from('project_team')
+            .select('project_id')
+            .eq('status', 'active')
+            .eq('email', userData.email)
+        ])
+
+        const allTeamData = [
+          ...(teamDataByUserId.data || []),
+          ...(teamDataByEmail.data || [])
+        ]
+
+        const allowedProjectIds = [...new Set(allTeamData.map(t => t.project_id))]
+
+        console.log(`✅ User has access to ${allowedProjectIds.length} projects:`, allowedProjectIds)
+
+        if (allowedProjectIds.length === 0) {
+          console.log('⚠️ User has no project access')
+          setProjects([])
+          setLoading(false)
+          return
+        }
+
+        // Filter projects by allowed IDs
+        query = query.in('id', allowedProjectIds)
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false })
 
       if (error) throw error
 
@@ -147,6 +230,7 @@ export default function ProjectsTab({
         updated_at: p.updated_at
       }))
 
+      console.log(`✅ Fetched ${mappedProjects.length} projects`)
       setProjects(mappedProjects)
     } catch (error) {
       console.error('Error fetching projects:', error)
@@ -155,12 +239,303 @@ export default function ProjectsTab({
     }
   }
 
+  const fetchTeamMembers = async () => {
+    try {
+      console.log('🔍 fetchTeamMembers started')
+
+      // Lấy user đang đăng nhập
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        console.log('❌ No auth user found')
+        return
+      }
+      console.log('✅ Auth user:', authUser.id, authUser.email)
+
+      // Lấy thông tin user từ bảng users
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, email, role')
+        .eq('id', authUser.id)
+        .single()
+
+      if (!userData) {
+        console.log('❌ No user data found')
+        return
+      }
+      console.log('✅ User data:', userData)
+
+      // Lấy danh sách project_ids mà user có quyền truy cập
+      let allowedProjectIds: string[] = []
+
+      // Nếu là admin hoặc accountant, xem tất cả dự án
+      if (userData.role === 'admin' || userData.role === 'accountant') {
+        console.log('👑 Admin/Accountant: Getting all projects')
+        const { data: allProjects } = await supabase
+          .from('projects')
+          .select('id')
+        allowedProjectIds = (allProjects || []).map(p => p.id)
+        console.log(`✅ Allowed projects (admin): ${allowedProjectIds.length}`)
+      } else {
+        console.log('👤 Regular user: Getting projects from project_team')
+        console.log('🔍 Searching with:', {
+          user_id: userData.id,
+          email: userData.email
+        })
+
+        // Lấy project_ids từ project_team theo user_id hoặc email
+        // Thử query riêng biệt để debug
+        const [teamDataByUserId, teamDataByEmail] = await Promise.all([
+          supabase
+            .from('project_team')
+            .select('project_id, user_id, email, name')
+            .eq('status', 'active')
+            .eq('user_id', userData.id),
+          supabase
+            .from('project_team')
+            .select('project_id, user_id, email, name')
+            .eq('status', 'active')
+            .eq('email', userData.email)
+        ])
+
+        console.log('📊 Team data by user_id:', teamDataByUserId.data)
+        console.log('📊 Team data by email:', teamDataByEmail.data)
+
+        // Gộp kết quả từ cả hai query
+        const allTeamData = [
+          ...(teamDataByUserId.data || []),
+          ...(teamDataByEmail.data || [])
+        ]
+
+        console.log('📊 All team data (combined):', allTeamData)
+        allowedProjectIds = [...new Set(allTeamData.map(t => t.project_id))]
+        console.log(`✅ Allowed projects (user): ${allowedProjectIds.length}`, allowedProjectIds)
+
+        // Log chi tiết các thành viên tìm được
+        if (allTeamData.length > 0) {
+          console.log('👥 Found team members for current user:')
+          allTeamData.forEach((member: any) => {
+            console.log(`  - ${member.name} (${member.email}) - Project: ${member.project_id}`)
+          })
+        } else {
+          console.log('⚠️ No team members found for current user')
+          console.log('💡 Checking if user exists in project_team table...')
+          // Kiểm tra xem có bất kỳ record nào với email này không
+          const { data: checkData } = await supabase
+            .from('project_team')
+            .select('email, user_id, name')
+            .eq('email', userData.email)
+            .limit(5)
+          console.log('📋 Sample project_team records with this email:', checkData)
+        }
+      }
+
+      if (allowedProjectIds.length === 0) {
+        console.log('⚠️ No allowed projects, setting empty team members')
+        setTeamMembers([])
+        return
+      }
+
+      // Lấy tất cả nhân viên từ employees và users
+      const [employeesRes, usersRes] = await Promise.all([
+        supabase
+          .from('employees')
+          .select('id, first_name, last_name, email, user_id')
+          .eq('status', 'active'),
+        supabase
+          .from('users')
+          .select('id, full_name, email, is_active')
+          .eq('is_active', true)
+      ])
+
+      const allEmployees = [
+        ...(employeesRes.data || []).map((emp: any) => ({
+          id: emp.id,
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email || 'Không có tên',
+          email: emp.email,
+          user_id: emp.user_id,
+          type: 'employee' as const
+        })),
+        ...(usersRes.data || []).map((user: any) => ({
+          id: user.id,
+          name: user.full_name || user.email || 'Không có tên',
+          email: user.email,
+          user_id: user.id,
+          type: 'user' as const
+        }))
+      ]
+
+      // Loại bỏ trùng lặp theo email
+      const uniqueEmployees = Array.from(
+        new Map(allEmployees.map(emp => [emp.email, emp])).values()
+      )
+
+      // Lấy thành viên dự án từ các dự án mà user có quyền
+      // CHỈ lấy những thành viên trong các dự án mà user đang đăng nhập có quyền
+      console.log('🔍 Fetching team members from projects:', allowedProjectIds)
+      const { data: teamMembersData, error: teamMembersError } = await supabase
+        .from('project_team')
+        .select('id, name, email, project_id, user_id')
+        .eq('status', 'active')
+        .in('project_id', allowedProjectIds)
+
+      if (teamMembersError) {
+        console.error('❌ Error fetching team members:', teamMembersError)
+      }
+
+      console.log('📊 Team members data from project_team:', teamMembersData?.length)
+      if (teamMembersData && teamMembersData.length > 0) {
+        console.log('👥 Team members found:', teamMembersData.map((m: any) => ({
+          name: m.name,
+          email: m.email,
+          user_id: m.user_id,
+          project_id: m.project_id
+        })))
+      } else {
+        console.log('⚠️ No team members found in allowed projects')
+      }
+
+      // Tạo map từ user_id -> employee_id
+      const userIdToEmployeeIdMap = new Map<string, string>()
+      for (const emp of uniqueEmployees) {
+        if (emp.user_id && emp.type === 'employee') {
+          userIdToEmployeeIdMap.set(emp.user_id, emp.id)
+        }
+      }
+
+      // Tạo map để match: user_id -> employee_id -> name -> email -> project_ids
+      const memberProjectMap = new Map<string, string[]>()
+        ; (teamMembersData || []).forEach((member: any) => {
+          // Ưu tiên: user_id -> employee_id (từ user_id) -> name -> email
+          const keys: string[] = []
+
+          if (member.user_id) {
+            keys.push(`user_${member.user_id}`)
+            // Tìm employee_id từ user_id
+            const empId = userIdToEmployeeIdMap.get(member.user_id)
+            if (empId) {
+              keys.push(`emp_${empId}`)
+            }
+          }
+          if (member.name) {
+            // Normalize name: lowercase, trim, remove extra spaces
+            const normalizedName = member.name.toLowerCase().trim().replace(/\s+/g, ' ')
+            keys.push(`name_${normalizedName}`)
+          }
+          if (member.email) {
+            keys.push(`email_${member.email.toLowerCase().trim()}`)
+          }
+
+          keys.forEach(key => {
+            if (!memberProjectMap.has(key)) {
+              memberProjectMap.set(key, [])
+            }
+            memberProjectMap.get(key)!.push(member.project_id)
+          })
+        })
+
+      // Hiển thị TẤT CẢ nhân viên trong dropdown
+      // Nhưng chỉ lọc theo project_ids của những nhân viên có trong project_team của các dự án user có quyền
+      console.log('🔍 Matching employees with team members...')
+      console.log('📊 Unique employees:', uniqueEmployees.length)
+      console.log('📊 Team members data:', teamMembersData?.length)
+      console.log('📊 Member project map size:', memberProjectMap.size)
+
+      // TẤT CẢ nhân viên sẽ được hiển thị, nhưng chỉ những người có trong project_team mới có project_ids
+      const allMembersWithProjects = uniqueEmployees
+        .map(emp => {
+          // Lấy project_ids theo thứ tự ưu tiên: user_id -> employee_id -> name -> email
+          let projectIds: string[] = []
+          let matchMethod = ''
+
+          if (emp.user_id) {
+            const key = `user_${emp.user_id}`
+            projectIds = memberProjectMap.get(key) || []
+            if (projectIds.length > 0) {
+              matchMethod = 'user_id'
+              console.log(`  ✅ Matched ${emp.name} by user_id: ${emp.user_id} -> ${projectIds.length} projects`)
+            }
+          }
+          if (projectIds.length === 0 && emp.type === 'employee') {
+            const key = `emp_${emp.id}`
+            projectIds = memberProjectMap.get(key) || []
+            if (projectIds.length > 0) {
+              matchMethod = 'employee_id'
+              console.log(`  ✅ Matched ${emp.name} by employee_id: ${emp.id} -> ${projectIds.length} projects`)
+            }
+          }
+          if (projectIds.length === 0 && emp.name) {
+            const normalizedName = emp.name.toLowerCase().trim().replace(/\s+/g, ' ')
+            const key = `name_${normalizedName}`
+            projectIds = memberProjectMap.get(key) || []
+            if (projectIds.length > 0) {
+              matchMethod = 'name'
+              console.log(`  ✅ Matched ${emp.name} by name: "${normalizedName}" -> ${projectIds.length} projects`)
+            }
+          }
+          if (projectIds.length === 0 && emp.email) {
+            const key = `email_${emp.email.toLowerCase().trim()}`
+            projectIds = memberProjectMap.get(key) || []
+            if (projectIds.length > 0) {
+              matchMethod = 'email'
+              console.log(`  ✅ Matched ${emp.name} by email: ${emp.email} -> ${projectIds.length} projects`)
+            }
+          }
+
+          // Lọc project_ids: chỉ giữ những project_ids mà user đang đăng nhập có quyền
+          const filteredProjectIds = projectIds.filter(pid => allowedProjectIds.includes(pid))
+
+          if (filteredProjectIds.length === 0 && projectIds.length > 0) {
+            console.log(`  ⚠️ ${emp.name} has projects but none are in allowed projects for current user`)
+          }
+
+          return {
+            id: emp.id,
+            name: emp.name,
+            email: emp.email,
+            user_id: emp.user_id,
+            project_ids: [...new Set(filteredProjectIds)], // Chỉ giữ project_ids mà user có quyền
+            project_id: filteredProjectIds[0] || '',
+            matchMethod,
+            hasProjects: filteredProjectIds.length > 0
+          }
+        })
+
+      // CHỈ hiển thị những nhân viên có trong project_team của các dự án user có quyền
+      const filteredMembers = allMembersWithProjects.filter(m => m.hasProjects)
+
+      console.log(`✅ All members: ${allMembersWithProjects.length}`)
+      console.log(`✅ Members with projects (filtered by user access): ${filteredMembers.length}`)
+      console.log('👥 Final team members (only those with projects):', filteredMembers.map(m => ({
+        name: m.name,
+        email: m.email,
+        project_ids: m.project_ids,
+        hasProjects: m.hasProjects,
+        matchMethod: (m as any).matchMethod
+      })))
+
+      // CHỈ hiển thị những nhân viên có trong project_team của các dự án user có quyền
+      setTeamMembers(filteredMembers)
+    } catch (error) {
+      console.error('Error fetching team members:', error)
+      setTeamMembers([])
+    }
+  }
+
   const filterProjects = () => {
+    console.log('🔍 filterProjects called:', {
+      totalProjects: projects.length,
+      searchQuery,
+      statusFilter,
+      selectedTeamMemberId,
+      teamMembersCount: teamMembers.length
+    })
+
     let filtered = [...projects]
 
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
+      const beforeCount = filtered.length
       filtered = filtered.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
@@ -168,12 +543,61 @@ export default function ProjectsTab({
           p.customer_name?.toLowerCase().includes(query) ||
           p.manager_name?.toLowerCase().includes(query)
       )
+      console.log(`📝 Search filter: ${beforeCount} -> ${filtered.length}`)
     }
 
     // Filter by status
     if (statusFilter !== 'all') {
+      const beforeCount = filtered.length
       filtered = filtered.filter((p) => p.status === statusFilter)
+      console.log(`📊 Status filter (${statusFilter}): ${beforeCount} -> ${filtered.length}`)
     }
+
+    // Filter by team member
+    if (selectedTeamMemberId !== 'all') {
+      const beforeCount = filtered.length
+      console.log('👤 Filtering by team member:', selectedTeamMemberId)
+      console.log('👥 Available team members:', teamMembers.map(m => ({
+        id: m.id,
+        user_id: m.user_id,
+        name: m.name,
+        project_ids: m.project_ids,
+        hasProjects: (m as any).hasProjects
+      })))
+
+      const selectedMember = teamMembers.find(m => {
+        // Tìm theo id (có thể là employee id hoặc user id)
+        const matches = m.id === selectedTeamMemberId || m.user_id === selectedTeamMemberId
+        if (matches) {
+          console.log('✅ Found matching member:', m)
+        }
+        return matches
+      })
+
+      if (selectedMember) {
+        if (selectedMember.project_ids && selectedMember.project_ids.length > 0) {
+          console.log('🎯 Filtering projects by project_ids:', selectedMember.project_ids)
+          filtered = filtered.filter((p) => {
+            const included = selectedMember.project_ids!.includes(p.id)
+            if (included) {
+              console.log(`  ✓ Project included: ${p.name} (${p.id})`)
+            }
+            return included
+          })
+          console.log(`👤 Team member filter: ${beforeCount} -> ${filtered.length}`)
+        } else {
+          console.log('⚠️ Selected member has no project_ids in allowed projects - showing no results')
+          filtered = [] // Nếu nhân viên không có project trong danh sách allowed, không hiển thị gì
+        }
+      } else {
+        console.log('⚠️ Selected member not found')
+      }
+    } else {
+      console.log('👤 No team member filter (all selected)')
+    }
+
+    console.log('✅ Final filtered projects:', filtered.length)
+    setFilteredProjects(filtered)
 
     // Filter by date range (start_date and end_date)
     if (dateFilter.from || dateFilter.to) {
@@ -199,7 +623,7 @@ export default function ProjectsTab({
           const startInRange = projectStartDate && projectStartDate >= fromDate && projectStartDate <= toDate
           const endInRange = projectEndDate && projectEndDate >= fromDate && projectEndDate <= toDate
           const spansRange = projectStartDate && projectEndDate && projectStartDate <= fromDate && projectEndDate >= toDate
-          
+
           return startInRange || endInRange || spansRange
         } else if (fromDate) {
           // Only from date: include projects that start on or after this date
@@ -208,11 +632,12 @@ export default function ProjectsTab({
           // Only to date: include projects that end on or before this date
           return projectEndDate && projectEndDate <= toDate
         }
-        
+
         return true
       })
     }
 
+    console.log('✅ Final filtered projects:', filtered.length)
     setFilteredProjects(filtered)
   }
 
@@ -268,11 +693,10 @@ export default function ProjectsTab({
         </div>
         <button
           onClick={() => setShowFilter(!showFilter)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
-            showFilter
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${showFilter
+            ? 'bg-blue-600 text-white hover:bg-blue-700'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
         >
           {showFilter ? <X className="h-5 w-5" /> : <Filter className="h-5 w-5" />}
           {showFilter ? 'Ẩn bộ lọc' : 'Hiện bộ lọc'}
@@ -285,7 +709,7 @@ export default function ProjectsTab({
         {showFilter && (
           <div className="w-1/3 bg-white border border-gray-200 rounded-lg p-6 h-fit sticky top-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Bộ lọc</h3>
-            
+
             {/* Status Filter */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-black mb-2">Trạng thái</label>
@@ -303,6 +727,28 @@ export default function ProjectsTab({
               </select>
             </div>
 
+            {/* Team Member Filter - Only show for admin and accountant */}
+            {(userRole === 'admin' || userRole === 'accountant') && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-black mb-2">Thành viên dự án</label>
+                <select
+                  value={selectedTeamMemberId}
+                  onChange={(e) => {
+                    console.log('📝 Team member filter changed:', e.target.value)
+                    setSelectedTeamMemberId(e.target.value)
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                >
+                  <option value="all">Tất cả thành viên</option>
+                  {teamMembers.map((member) => (
+                    <option key={member.id} value={member.user_id || member.id}>
+                      {member.name} {member.email ? `(${member.email})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Date Range Filter */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-black mb-2">Khoảng thời gian</label>
@@ -311,9 +757,9 @@ export default function ProjectsTab({
                   type="date"
                   placeholder="Từ ngày"
                   value={dateFilter.from}
-                  onChange={(e) => setDateFilter({ 
-                    ...dateFilter, 
-                    from: e.target.value 
+                  onChange={(e) => setDateFilter({
+                    ...dateFilter,
+                    from: e.target.value
                   })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                 />
@@ -321,17 +767,17 @@ export default function ProjectsTab({
                   type="date"
                   placeholder="Đến ngày"
                   value={dateFilter.to}
-                  onChange={(e) => setDateFilter({ 
-                    ...dateFilter, 
-                    to: e.target.value 
+                  onChange={(e) => setDateFilter({
+                    ...dateFilter,
+                    to: e.target.value
                   })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                 />
                 {(dateFilter.from || dateFilter.to) && (
                   <button
-                    onClick={() => setDateFilter({ 
-                      from: '', 
-                      to: '' 
+                    onClick={() => setDateFilter({
+                      from: '',
+                      to: ''
                     })}
                     className="w-full px-3 py-2 text-sm text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                   >
@@ -372,9 +818,8 @@ export default function ProjectsTab({
               {filteredProjects.map((project) => (
                 <div
                   key={project.id}
-                  className={`bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow ${
-                    showFilter ? 'p-6' : 'p-6'
-                  }`}
+                  className={`bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow ${showFilter ? 'p-6' : 'p-6'
+                    }`}
                 >
                   {showFilter ? (
                     // Horizontal card layout when filter is shown

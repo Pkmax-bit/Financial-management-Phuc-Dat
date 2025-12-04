@@ -432,6 +432,63 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
 
   const handleSubmit = async () => {
     try {
+      // Kiểm tra trùng lặp trước khi thêm
+      const { data: existingMembers } = await supabase
+        .from('project_team')
+        .select('user_id, email, name')
+        .eq('project_id', projectId)
+        .eq('status', 'active');
+
+      const existingUserIds = new Set((existingMembers || []).map(m => m.user_id).filter(Boolean));
+      const existingEmails = new Set((existingMembers || []).map(m => m.email).filter(Boolean));
+
+      // Lọc ra những thành viên đã tồn tại (để hiển thị thông báo)
+      const duplicateMembers = selectedEmployees.filter(emp => {
+        if (emp.user_id && existingUserIds.has(emp.user_id)) {
+          return true;
+        }
+        if (emp.email && existingEmails.has(emp.email)) {
+          return true;
+        }
+        return false;
+      });
+
+      // Chỉ lấy những thành viên chưa tồn tại để thêm
+      const membersToAdd = selectedEmployees
+        .filter(emp => {
+          // Bỏ qua nếu đã tồn tại
+          if (emp.user_id && existingUserIds.has(emp.user_id)) {
+            return false;
+          }
+          if (emp.email && existingEmails.has(emp.email)) {
+            return false;
+          }
+          return true;
+        })
+        .map(employee => ({
+          project_id: projectId,
+          name: employee.name,
+          email: employee.email,
+          role: employeeRoles[employee.id] || 'Chưa phân công',
+          start_date: startDate,
+          user_id: employee.user_id,
+          status: 'active',
+          phone: employee.phone,
+          avatar: employee.avatar_url
+        }));
+
+      // Nếu không có thành viên nào để thêm
+      if (membersToAdd.length === 0) {
+        if (duplicateMembers.length > 0) {
+          const duplicateNames = duplicateMembers.map(m => m.name).join(', ');
+          alert(`Tất cả thành viên đã có trong dự án:\n${duplicateNames}`);
+        } else {
+          alert('Không có thành viên nào để thêm.');
+        }
+        return;
+      }
+
+      // Upload avatar nếu có (chỉ upload một lần cho tất cả thành viên)
       let avatarUrl = null;
       if (selectedAvatar) {
         avatarUrl = await handleAvatarUpload(selectedAvatar);
@@ -439,27 +496,30 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           alert('Lỗi khi upload hình ảnh. Vui lòng thử lại.');
           return;
         }
+        // Áp dụng avatar cho tất cả thành viên
+        membersToAdd.forEach(member => {
+          member.avatar = avatarUrl;
+        });
       }
 
+      // Thêm những thành viên chưa tồn tại
       const { error } = await supabase
         .from('project_team')
-        .insert(
-          selectedEmployees.map(employee => ({
-            project_id: projectId,
-            name: employee.name,
-            email: employee.email,
-            role: employeeRoles[employee.id] || 'Chưa phân công',
-            start_date: startDate,
-            user_id: employee.user_id,
-            status: 'active',
-            phone: employee.phone,
-            avatar: avatarUrl || employee.avatar_url
-          }))
-        );
+        .insert(membersToAdd);
 
       if (error) throw error;
 
-      alert('Thêm thành viên thành công');
+      const addedCount = membersToAdd.length;
+      const skippedCount = duplicateMembers.length;
+      
+      // Hiển thị thông báo
+      if (skippedCount > 0) {
+        const duplicateNames = duplicateMembers.map(m => m.name).join(', ');
+        alert(`✅ Đã thêm ${addedCount} thành viên thành công.\n\n⚠️ Đã bỏ qua ${skippedCount} thành viên đã có trong dự án:\n${duplicateNames}`);
+      } else {
+        alert(`✅ Đã thêm ${addedCount} thành viên thành công.`);
+      }
+      
       onSuccess();
       handleClose();
     } catch (error) {
