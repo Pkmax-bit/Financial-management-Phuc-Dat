@@ -24,12 +24,15 @@ class QuoteService:
         
         category_map = {} # category_id -> category_name
         product_category_map = {} # product_id -> category_id
+        product_map = {} # product_id -> product data
 
         if product_ids:
             try:
-                # Fetch products to get category_ids
-                products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
+                # Fetch products to get category_ids, image_url, and image_urls
+                products_result = supabase.table("products").select("id, category_id, image_url, image_urls").in_("id", product_ids).execute()
                 if products_result.data:
+                    # Map product_id -> product data
+                    product_map = {p['id']: p for p in products_result.data}
                     product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
                     
                     # Collect unique category IDs
@@ -41,9 +44,9 @@ class QuoteService:
                         if categories_result.data:
                             category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
             except Exception as e:
-                print(f"Error fetching category info in QuoteService: {e}")
+                print(f"Error fetching category and product image info in QuoteService: {e}")
 
-        # 3. Enrich items with category_name
+        # 3. Enrich items with category_name and product images
         for item in quote_items:
             category_name = ""
             
@@ -70,6 +73,14 @@ class QuoteService:
                     pass
 
             item['category_name'] = category_name
+            
+            # Add product images if available
+            if product_id and product_id in product_map:
+                product = product_map[product_id]
+                if product.get('image_url'):
+                    item['product_image_url'] = product.get('image_url')
+                if product.get('image_urls'):
+                    item['product_image_urls'] = product.get('image_urls')
 
         return quote_items
 

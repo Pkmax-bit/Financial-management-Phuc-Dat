@@ -341,7 +341,7 @@ class EmailService:
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">ĐƠN GIÁ</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">VAT (%)</th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">THÀNH TIỀN</th>
-                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">GHI CHÚ</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">HÌNH ẢNH</th>
                             </tr>
                             <tr style="background: #1e40af; color: #fff;">
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
@@ -355,7 +355,7 @@ class EmailService:
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;"></th>
-                                <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;"></th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -426,6 +426,21 @@ class EmailService:
                     area = item.get('area')
                     print(f"📊 Item {idx} ({item.get('name_product', 'N/A')}): unit_price={unit_price}, quantity={quantity}, area={area}, total_price_before_tax={total_price_before_tax}, tax_rate={vat_rate}%, total_price_after_tax={total_price_after_tax}")
                 
+                # Get product image URL(s)
+                product_image_html = ''
+                product_image_url = item.get('product_image_url') or item.get('image_url')
+                product_image_urls = item.get('product_image_urls') or item.get('image_urls')
+                
+                # Try to get first image from image_urls array or use image_url
+                if product_image_urls and isinstance(product_image_urls, list) and len(product_image_urls) > 0:
+                    # Use first image from array
+                    first_image_url = product_image_urls[0] if isinstance(product_image_urls[0], str) else product_image_urls[0].get('url', '') if isinstance(product_image_urls[0], dict) else ''
+                    if first_image_url:
+                        product_image_html = f'<img src="{first_image_url}" alt="{item.get("name_product", "Product")}" style="max-width: 80px; max-height: 80px; object-fit: contain; display: block; margin: 0 auto;" />'
+                elif product_image_url:
+                    # Use single image_url
+                    product_image_html = f'<img src="{product_image_url}" alt="{item.get("name_product", "Product")}" style="max-width: 80px; max-height: 80px; object-fit: contain; display: block; margin: 0 auto;" />'
+                
                 quote_items_html += f"""
                         <tr>
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{idx}</td>
@@ -442,7 +457,7 @@ class EmailService:
                             <td style=\"padding: 8px; text-align: right; border: 1px solid #000; color:#000000;\">{format_currency(item.get('unit_price', 0))}</td>
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{vat_display}</td>
                             <td style=\"padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold; color:#000000;\">{total_price_display}</td>
-                            <td style=\"padding: 8px; text-align: left; border: 1px solid #000; color:#000000;\"></td>
+                            <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000; vertical-align: middle;\">{product_image_html if product_image_html else '—'}</td>
                         </tr>
                 """
             

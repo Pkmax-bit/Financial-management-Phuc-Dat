@@ -1206,14 +1206,16 @@ async def send_quote_to_customer(
                         quote_items_result = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
                         quote_items = quote_items_result.data if quote_items_result.data else []
                         
-                        # Get category names from product_service_id -> products -> product_categories
+                        # Get category names and product images from product_service_id -> products -> product_categories
                         category_map = {}
                         product_ids = [item.get('product_service_id') for item in quote_items if item.get('product_service_id')]
                         if product_ids:
                             try:
-                                # Get products with their category_id
-                                products_result = supabase.table("products").select("id, category_id").in_("id", product_ids).execute()
+                                # Get products with their category_id, image_url, and image_urls
+                                products_result = supabase.table("products").select("id, category_id, image_url, image_urls").in_("id", product_ids).execute()
                                 if products_result.data:
+                                    # Map product_id -> product data
+                                    product_map = {p['id']: p for p in products_result.data}
                                     # Map product_id -> category_id
                                     product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
                                     # Get unique category_ids
@@ -1224,15 +1226,23 @@ async def send_quote_to_customer(
                                         if categories_result.data:
                                             # Map category_id -> category_name
                                             category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
-                                            # Add category_name to each item based on product_service_id
-                                            for item in quote_items:
-                                                product_id = item.get('product_service_id')
-                                                if product_id and product_id in product_category_map:
-                                                    category_id = product_category_map[product_id]
-                                                    if category_id and category_id in category_map:
-                                                        item['category_name'] = category_map[category_id]
+                                    
+                                    # Add category_name and product images to each item based on product_service_id
+                                    for item in quote_items:
+                                        product_id = item.get('product_service_id')
+                                        if product_id and product_id in product_map:
+                                            product = product_map[product_id]
+                                            # Add category_name
+                                            category_id = product.get('category_id')
+                                            if category_id and category_id in category_map:
+                                                item['category_name'] = category_map[category_id]
+                                            # Add product images
+                                            if product.get('image_url'):
+                                                item['product_image_url'] = product.get('image_url')
+                                            if product.get('image_urls'):
+                                                item['product_image_urls'] = product.get('image_urls')
                             except Exception as e:
-                                print(f"Error fetching category names from product_service_id: {e}")
+                                print(f"Error fetching category names and product images from product_service_id: {e}")
                                 pass
                         
                         # Fallback: if category_name not set, try to get from product_category_id (backward compatibility)

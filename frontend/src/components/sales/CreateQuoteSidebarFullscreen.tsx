@@ -143,6 +143,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [autoCalcDimensions, setAutoCalcDimensions] = useState(true)
   // Always-on auto adjustment
   const autoAdjustEnabled = true
+  const [descriptionModal, setDescriptionModal] = useState<{ isOpen: boolean; index: number; description: string; productName: string }>({ 
+    isOpen: false, 
+    index: -1, 
+    description: '', 
+    productName: '' 
+  })
 
   // Preloaded adjustment rules for instant access
   const adjustmentRulesMap = useRef<Map<string, any[]>>(new Map())
@@ -475,7 +481,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   // Main columns: name 200, description 150, quantity 80, unit 80, unit_price 100, total 120
   const gridTemplateColumns = [
     visibleColumns.name && 'minmax(200px, auto)',
-    visibleColumns.description && 'minmax(150px, auto)',
+    visibleColumns.description && '150px',
     visibleColumns.quantity && 'minmax(80px, auto)',
     visibleColumns.unit && '80px',
     visibleColumns.unit_price && 'minmax(100px, auto)',
@@ -2833,14 +2839,22 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           )}
                           {visibleColumns.description && (
                             <div>
-                              <input
-                                type="text"
-                                value={item.description}
-                                onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                placeholder="Mô tả"
-                                title={item.description}
-                              />
+                              <div
+                                onClick={() => {
+                                  setDescriptionModal({
+                                    isOpen: true,
+                                    index: index,
+                                    description: item.description || '',
+                                    productName: item.name_product || 'Sản phẩm'
+                                  })
+                                }}
+                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black cursor-pointer hover:bg-gray-50 transition-colors flex items-center h-[28px] overflow-hidden"
+                                title={item.description || "Click để chỉnh sửa mô tả"}
+                              >
+                                <span className="truncate flex-1 block">
+                                  {item.description || <span className="text-gray-400">Mô tả</span>}
+                                </span>
+                              </div>
                             </div>
                           )}
                           {visibleColumns.quantity && (
@@ -4042,6 +4056,66 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             </div>
             <div className="px-5 py-3 border-t flex justify-end">
               <button onClick={() => setShowRulesDialog(false)} className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Description Modal */}
+      {descriptionModal.isOpen && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none"
+          onClick={() => setDescriptionModal({ isOpen: false, index: -1, description: '', productName: '' })}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-2xl border-2 border-blue-500 max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Mô tả: {descriptionModal.productName}
+              </h3>
+              <button
+                onClick={() => setDescriptionModal({ isOpen: false, index: -1, description: '', productName: '' })}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 flex-1 overflow-y-auto">
+              <textarea
+                value={descriptionModal.description}
+                onChange={(e) => {
+                  setDescriptionModal(prev => ({ ...prev, description: e.target.value }))
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-black min-h-[200px]"
+                placeholder="Nhập mô tả sản phẩm..."
+                autoFocus
+              />
+            </div>
+            
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200">
+              <button
+                onClick={() => setDescriptionModal({ isOpen: false, index: -1, description: '', productName: '' })}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  if (descriptionModal.index >= 0) {
+                    updateItem(descriptionModal.index, 'description', descriptionModal.description)
+                  }
+                  setDescriptionModal({ isOpen: false, index: -1, description: '', productName: '' })
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Lưu
+              </button>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download, DollarSign, TestTube } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { X, Send, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download, DollarSign, TestTube, Eye, EyeOff, ChevronRight, ChevronLeft } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { useSidebar } from '@/components/LayoutWithSidebar'
 import html2canvas from 'html2canvas'
@@ -61,7 +61,11 @@ export default function QuoteEmailPreviewModal({
   const [quoteStatus, setQuoteStatus] = useState<string>('draft') // Track quote status
   const [projectName, setProjectName] = useState<string>('') // Track project name for PDF filename
   const [projectId, setProjectId] = useState<string>('') // Track project ID for PDF filename
+  const [showEditPanel, setShowEditPanel] = useState(true) // Toggle show/hide edit panel
+  const [editPanelWidth, setEditPanelWidth] = useState<number>(670) // Width of edit panel in pixels
+  const [isResizing, setIsResizing] = useState(false) // Track if user is resizing
   const previewRef = useRef<HTMLDivElement>(null)
+  const resizeRef = useRef<HTMLDivElement>(null)
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermItem[]>([
     { description: 'CỌC ĐỢT 1 : LÊN THIẾT KẾ 3D', amount: '', received: false },
     { description: 'CỌC ĐỢT 2: 50% KÍ HỢP ĐỒNG, RA ĐƠN SẢN XUẤT', amount: '', received: false },
@@ -116,6 +120,46 @@ export default function QuoteEmailPreviewModal({
   type EmailShepherdTour = InstanceType<EmailShepherdType['Tour']>
 
   const { hideSidebar } = useSidebar()
+
+  // Handle resize functionality
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return
+      
+      const container = previewRef.current?.parentElement
+      if (!container) return
+      
+      const containerRect = container.getBoundingClientRect()
+      const newWidth = containerRect.right - e.clientX
+      
+      // Constrain width between 300px and 1200px
+      const minWidth = 300
+      const maxWidth = 1200
+      const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth))
+      
+      setEditPanelWidth(constrainedWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing])
 
   useEffect(() => {
     if (isOpen) {
@@ -953,11 +997,11 @@ export default function QuoteEmailPreviewModal({
       const tempContainer = document.createElement('div')
       tempContainer.style.position = 'absolute'
       tempContainer.style.left = '-9999px'
-      tempContainer.style.width = '210mm' // A4 width
-      tempContainer.style.padding = '10mm' // Giảm padding để tiết kiệm không gian
+      tempContainer.style.width = '297mm' // A3 width (thay vì A4 210mm)
+      tempContainer.style.padding = '15mm' // Tăng padding một chút cho A3
       tempContainer.style.backgroundColor = '#ffffff'
       tempContainer.style.fontFamily = 'Arial, "Times New Roman", "DejaVu Sans", sans-serif' // Font tiếng Việt
-      tempContainer.style.fontSize = '11pt' // Giảm font size một chút
+      tempContainer.style.fontSize = '12pt' // Tăng font size một chút cho A3
       tempContainer.style.color = '#000000'
       
       // Ensure HTML has proper font for Vietnamese and optimize for PDF
@@ -1145,24 +1189,24 @@ export default function QuoteEmailPreviewModal({
         backgroundColor: '#ffffff',
         width: tempContainer.scrollWidth,
         height: tempContainer.scrollHeight,
-        windowWidth: 794, // A4 width in pixels at 96 DPI (210mm)
-        windowHeight: 1123, // A4 height in pixels at 96 DPI (297mm)
+        windowWidth: 1123, // A3 width in pixels at 96 DPI (297mm)
+        windowHeight: 1587, // A3 height in pixels at 96 DPI (420mm)
       })
 
       // Remove temporary container
       document.body.removeChild(tempContainer)
 
-      // Calculate PDF dimensions (A4: 210mm x 297mm)
-      const imgWidth = 210 // A4 width in mm
+      // Calculate PDF dimensions (A3: 297mm x 420mm)
+      const imgWidth = 297 // A3 width in mm (thay vì A4 210mm)
       const imgHeight = (canvas.height * imgWidth) / canvas.width
-      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pdf = new jsPDF('p', 'mm', 'a3') // Đổi sang A3
       
       // Add image to PDF
       const imgData = canvas.toDataURL('image/png', 0.95) // Slightly lower quality for smaller file size
       
       // If content is taller than one page, split into multiple pages
-      const pageHeight = 297 // A4 height in mm
-      const pageWidth = 210 // A4 width in mm
+      const pageHeight = 420 // A3 height in mm (thay vì A4 297mm)
+      const pageWidth = 297 // A3 width in mm (thay vì A4 210mm)
       
       if (imgHeight <= pageHeight) {
         // Content fits on one page - perfect!
@@ -1266,6 +1310,27 @@ export default function QuoteEmailPreviewModal({
         <div className="flex items-center justify-between p-4 border-b border-gray-200" data-tour-id="email-form-header">
           <h2 className="text-xl font-semibold text-gray-900">Xem trước & Chỉnh sửa email báo giá</h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowEditPanel(!showEditPanel)}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                showEditPanel
+                  ? 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+              }`}
+              title={showEditPanel ? 'Ẩn phần chỉnh sửa' : 'Hiện phần chỉnh sửa'}
+            >
+              {showEditPanel ? (
+                <>
+                  <EyeOff className="h-4 w-4" />
+                  <span>Ẩn chỉnh sửa</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4" />
+                  <span>Hiện chỉnh sửa</span>
+                </>
+              )}
+            </button>
             <button
               onClick={() => startEmailTour()}
               disabled={isEmailTourRunning || loading}
@@ -1431,9 +1496,14 @@ export default function QuoteEmailPreviewModal({
           )}
 
           {!loading && !error && (
-            <div className="flex gap-4 h-full flex-1 overflow-hidden">
+            <div className="flex h-full flex-1 overflow-hidden relative">
               {/* Left side: Email Preview */}
-              <div className="flex-1 overflow-auto pr-4 p-4" data-tour-id="email-form-preview" ref={previewRef}>
+              <div 
+                className={`overflow-auto ${showEditPanel ? 'pr-0' : 'px-4'} p-4 transition-all duration-300`}
+                style={showEditPanel ? { width: `calc(100% - ${editPanelWidth}px - 8px)` } : { width: '100%' }}
+                data-tour-id="email-form-preview" 
+                ref={previewRef}
+              >
                 {htmlContent && (
                   <div className="bg-white rounded-lg shadow-sm p-4">
                     <div 
@@ -1444,8 +1514,27 @@ export default function QuoteEmailPreviewModal({
                 )}
               </div>
 
-              {/* Right side: Edit Forms (always visible) */}
-              <div className="w-[670px] flex-shrink-0 overflow-y-auto p-4 space-y-4 bg-gray-50 border-l border-gray-200">
+              {/* Resizer divider */}
+              {showEditPanel && (
+                <div
+                  ref={resizeRef}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    setIsResizing(true)
+                  }}
+                  className="w-2 bg-gray-300 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 relative group"
+                  style={{ minWidth: '8px' }}
+                >
+                  <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 bg-gray-400 group-hover:bg-blue-600 transition-colors" />
+                </div>
+              )}
+
+              {/* Right side: Edit Forms (toggleable) */}
+              {showEditPanel && (
+                <div 
+                  className="flex-shrink-0 overflow-y-auto p-4 space-y-4 bg-gray-50 border-l border-gray-200 transition-all duration-300"
+                  style={{ width: `${editPanelWidth}px` }}
+                >
                 {/* Reset to Default Button */}
                 <div className="bg-white rounded-lg shadow-sm p-4 border border-orange-200">
                   <button
@@ -1998,12 +2087,13 @@ export default function QuoteEmailPreviewModal({
                   </div>
                 </div>
               </div>
+                )}
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="space-y-2">
+        {/* Footer - always visible */}
+        <div className="space-y-2 border-t border-gray-200">
           {/* Test email result message */}
           {testEmailResult && (
             <div className={`px-4 py-2 mx-4 rounded-lg text-sm ${
@@ -2015,7 +2105,8 @@ export default function QuoteEmailPreviewModal({
             </div>
           )}
           
-          <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+          {/* Action buttons - always visible */}
+          <div className="flex items-center justify-end gap-3 p-4 bg-gray-50">
             <button
               onClick={onClose}
               className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
