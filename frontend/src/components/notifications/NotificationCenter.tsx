@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { 
   Bell, 
   Check, 
@@ -36,7 +37,13 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
 
   useEffect(() => {
     if (isOpen) {
@@ -71,10 +78,11 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
         throw new Error('Not authenticated')
       }
 
-      // Lấy dữ liệu trực tiếp từ bảng notifications trong database (giống trang thông báo)
+      // Lấy dữ liệu trực tiếp từ bảng notifications trong database (lọc theo user_id)
       const { data: notifications, error } = await supabase
         .from('notifications')
         .select('*')
+        .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -104,7 +112,7 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      // Cập nhật trực tiếp trong database (giống trang thông báo)
+      // Cập nhật trực tiếp trong database (chỉ cho phép user đánh dấu thông báo của chính họ)
       const { error } = await supabase
         .from('notifications')
         .update({ 
@@ -112,6 +120,7 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
           read_at: new Date().toISOString() 
         })
         .eq('id', notificationId)
+        .eq('user_id', session.user.id)
 
       if (error) {
         console.error('Error marking notification as read:', error)
@@ -159,12 +168,12 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
     }
   }
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
-  return (
+  const content = (
     <div 
       ref={dropdownRef}
-      className="fixed top-16 right-4 z-50 w-96 max-h-[80vh] overflow-hidden animate-in slide-in-from-top-2 duration-200"
+      className="fixed top-16 right-4 z-[100] w-96 max-h-[80vh] overflow-hidden animate-in slide-in-from-top-2 duration-200"
     >
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-h-[80vh] overflow-hidden">
         {/* Header */}
@@ -324,4 +333,6 @@ export default function NotificationCenter({ isOpen, onClose, onNotificationRead
       </div>
     </div>
   )
+
+  return createPortal(content, document.body)
 }
