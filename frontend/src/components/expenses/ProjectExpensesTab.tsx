@@ -181,7 +181,62 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
 
     if (window.confirm(confirmMessage)) {
       try {
+        // Helper function to extract file path from storage URL
+        const extractFilePathFromUrl = (url: string | null | undefined): string | null => {
+          if (!url) return null
+          try {
+            const match = url.match(/\/storage\/v1\/object\/[^\/]+\/(.+)$/)
+            if (match && match[1]) {
+              return match[1]
+            }
+          } catch (e) {
+            console.warn('Failed to extract file path from URL:', url, e)
+          }
+          return null
+        }
+
+        // Helper function to delete file from storage
+        const deleteFileFromStorage = async (filePath: string): Promise<void> => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session?.access_token) {
+              console.warn('No session token, skipping file deletion')
+              return
+            }
+
+            const parts = filePath.split('/')
+            const filename = parts.pop() || ''
+            const folderPath = parts.join('/')
+
+            const response = await fetch(`/api/uploads/${folderPath}/${encodeURIComponent(filename)}`, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+            })
+
+            if (!response.ok) {
+              console.warn(`Failed to delete file ${filePath}:`, await response.text())
+            }
+          } catch (e) {
+            console.warn('Error deleting file from storage:', e)
+          }
+        }
+
+        // Helper function to delete receipt file for an expense
+        const deleteExpenseReceipt = async (expenseData: any): Promise<void> => {
+          if (expenseData?.receipt_url) {
+            const filePath = extractFilePathFromUrl(expenseData.receipt_url)
+            if (filePath) {
+              await deleteFileFromStorage(filePath)
+            }
+          }
+        }
+
         if (isPlanned) {
+          // Delete receipt file before deleting expense
+          await deleteExpenseReceipt(expense)
+
           // For planned expenses, just delete the single expense
           const { error } = await supabase
             .from(tableName)
@@ -192,6 +247,17 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
         } else {
           // For actual expenses, implement cascade delete
           console.log('🗑️ Deleting expense with cascade:', expenseId)
+
+          // Get all child expenses to delete their receipt files
+          const childExpenses = expenses.filter(e => e.id_parent === expenseId)
+          
+          // Delete receipt files for all child expenses
+          for (const childExpense of childExpenses) {
+            await deleteExpenseReceipt(childExpense)
+          }
+
+          // Delete receipt file for parent expense
+          await deleteExpenseReceipt(expense)
 
           // First, delete all child expenses
           console.log('🔍 Step 1: Deleting child expenses...')

@@ -455,6 +455,70 @@ const ProductCatalog = forwardRef<ProductCatalogRef>((props, ref) => {
   const deleteItem = async (p: ProductItem) => {
     if (!confirm(`Xóa sản phẩm "${p.name}"?`)) return
     try {
+      // Helper function to extract file path from storage URL
+      const extractFilePathFromUrl = (url: string | null): string | null => {
+        if (!url) return null
+        try {
+          // Extract path from Supabase storage URL
+          // Format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+          const match = url.match(/\/storage\/v1\/object\/public\/[^\/]+\/(.+)$/)
+          if (match && match[1]) {
+            return match[1]
+          }
+          // Alternative format: /storage/v1/object/{bucket}/{path}
+          const match2 = url.match(/\/storage\/v1\/object\/[^\/]+\/(.+)$/)
+          if (match2 && match2[1]) {
+            return match2[1]
+          }
+        } catch (e) {
+          console.warn('Failed to extract file path from URL:', url, e)
+        }
+        return null
+      }
+
+      // Helper function to delete file from storage
+      const deleteFileFromStorage = async (filePath: string): Promise<void> => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session?.access_token) {
+            console.warn('No session token, skipping file deletion')
+            return
+          }
+
+          // Extract folder and filename from path
+          const parts = filePath.split('/')
+          const filename = parts.pop() || ''
+          const folderPath = parts.join('/')
+
+          const response = await fetch(`/api/uploads/${folderPath}/${encodeURIComponent(filename)}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+          })
+
+          if (!response.ok) {
+            console.warn(`Failed to delete file ${filePath}:`, await response.text())
+          }
+        } catch (e) {
+          console.warn('Error deleting file from storage:', e)
+        }
+      }
+
+      // Delete product images from storage
+      const imageUrlsToDelete = [
+        p.image_url,
+        ...(p.image_urls || [])
+      ].filter((url): url is string => !!url)
+
+      for (const imageUrl of imageUrlsToDelete) {
+        const filePath = extractFilePathFromUrl(imageUrl)
+        if (filePath) {
+          await deleteFileFromStorage(filePath)
+        }
+      }
+
+      // Delete product from database
       const { error: delErr } = await supabase
         .from('products')
         .delete()
@@ -462,7 +526,8 @@ const ProductCatalog = forwardRef<ProductCatalogRef>((props, ref) => {
       if (delErr) throw delErr
       setItems(prev => prev.filter(it => it.id !== p.id))
     } catch (e) {
-      // minimal handling
+      console.error('Error deleting product:', e)
+      alert('Lỗi khi xóa sản phẩm. Vui lòng thử lại.')
     }
   }
 

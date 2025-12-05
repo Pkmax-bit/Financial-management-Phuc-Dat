@@ -18,6 +18,31 @@ from services.project_profitability_service import ProjectProfitabilityService
 
 router = APIRouter()
 
+def sanitize_search_input(search: str) -> str:
+    """Sanitize search input to prevent SQL injection and DoS attacks
+    
+    Args:
+        search: Raw search string from user input
+        
+    Returns:
+        Sanitized search string safe for use in queries
+    """
+    if not search:
+        return ""
+    
+    # Remove or escape special characters that could be used for injection
+    # Escape % and _ which are special in LIKE queries
+    sanitized = search.replace('%', '\\%').replace('_', '\\_')
+    
+    # Remove null bytes and other control characters
+    sanitized = ''.join(char for char in sanitized if ord(char) >= 32 or char in '\n\r\t')
+    
+    # Limit length to prevent DoS attacks
+    if len(sanitized) > 200:
+        sanitized = sanitized[:200]
+    
+    return sanitized.strip()
+
 # Time Entry model
 class TimeEntry(BaseModel):
     id: str
@@ -116,8 +141,9 @@ async def get_projects(
         
         # Apply filters
         if search:
-            # Use individual ilike queries to prevent injection
-            query = query.or_(f"name.ilike.%{search}%,description.ilike.%{search}%")
+            sanitized_search = sanitize_search_input(search)
+            if sanitized_search:
+                query = query.or_(f"name.ilike.%{sanitized_search}%,description.ilike.%{sanitized_search}%")
         
         if customer_id:
             query = query.eq("customer_id", customer_id)

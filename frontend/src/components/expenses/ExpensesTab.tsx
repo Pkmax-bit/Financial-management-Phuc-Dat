@@ -25,6 +25,7 @@ import CreateExpenseDialog from './CreateExpenseDialog'
 import CreateExpenseCategoryDialog from './CreateExpenseCategoryDialog'
 import ExpenseRestoreButton from './ExpenseRestoreButton'
 import SnapshotStatusIndicator from './SnapshotStatusIndicator'
+import { TableCard, TableCardRow } from '@/components/ui/MobileTableCard'
 import { supabase } from '@/lib/supabase'
 
 interface Expense {
@@ -602,6 +603,146 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
     return !hasChildren(id)
   }
 
+  const renderMobileCards = (items: Expense[] = [], depth = 0): JSX.Element[] => {
+    return items.flatMap((exp) => {
+      const isExpanded = !!expandedIds[exp.id]
+      const cards: JSX.Element[] = [
+        (
+          <TableCard key={exp.id} className={depth > 0 ? 'ml-4 border-l-2 border-orange-200' : ''}>
+            <div className="flex items-start justify-between mb-2 pb-2 border-b border-gray-200">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  {hasChildren(exp.id) ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(exp.id)}
+                      className={`w-6 h-6 flex items-center justify-center rounded-full border ${
+                        isExpanded
+                          ? 'border-gray-300 bg-gray-50 text-gray-700'
+                          : 'border-orange-300 bg-orange-50 text-orange-700'
+                      }`}
+                    >
+                      {isExpanded ? (
+                        <Minus className="h-3 w-3" />
+                      ) : (
+                        <Plus className="h-3 w-3" />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="w-6 h-6" />
+                  )}
+                  <Receipt className="h-4 w-4 text-orange-600" />
+                  <h3 className="text-sm font-semibold text-gray-900">{exp.expense_code}</h3>
+                </div>
+                <p className="text-xs text-gray-500">{exp.expense_categories?.name || 'Chưa phân loại'}</p>
+              </div>
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(exp.status)}`}>
+                {getStatusIcon(exp.status)}
+                <span className="ml-1">{getStatusText(exp.status)}</span>
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <TableCardRow
+                title="Mô tả"
+                value={
+                  <div>
+                    <div className="text-sm text-gray-900">{exp.description}</div>
+                    {(exp.employees?.users?.full_name || exp.employees?.first_name) && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Nhân viên: {exp.employees?.users?.full_name || `${exp.employees?.first_name || ''} ${exp.employees?.last_name || ''}`.trim()}
+                      </div>
+                    )}
+                    {exp.notes && (
+                      <div className="text-xs text-gray-500 mt-1">{exp.notes}</div>
+                    )}
+                  </div>
+                }
+              />
+              <TableCardRow
+                title="Số tiền"
+                value={
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{formatCurrency(getDisplayAmount(exp))}</div>
+                    <div className="text-xs text-gray-500">{exp.currency}</div>
+                    {!hasChildren(exp.id) && getChildPercent(exp) && (
+                      <div className="text-xs text-gray-500 mt-1">Tỉ lệ trong cha: {getChildPercent(exp)}</div>
+                    )}
+                  </div>
+                }
+              />
+              <TableCardRow
+                title="Ngày"
+                value={<span className="text-sm text-gray-900">{new Date(exp.expense_date).toLocaleDateString('vi-VN')}</span>}
+              />
+            </div>
+
+            {/* Mobile Actions */}
+            <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-2">
+              {hasChildren(exp.id) && (
+                <button
+                  onClick={() => {
+                    setDefaultParentId(exp.id)
+                    setShowCreateDialog(true)
+                  }}
+                  className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-orange-600 bg-orange-50 rounded-md hover:bg-orange-100"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Tạo con
+                </button>
+              )}
+              <button
+                className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                title="Xem chi tiết"
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                Xem
+              </button>
+              <button
+                onClick={() => handleEditExpense(exp.id, exp.expense_code)}
+                className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 rounded-md hover:bg-gray-100"
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Sửa
+              </button>
+              {exp.status === 'pending' && (
+                <button
+                  onClick={() => handleApproveExpense(exp.id, exp.expense_code)}
+                  className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100"
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Duyệt
+                </button>
+              )}
+              {!exp.id_parent && (
+                <div className="flex-1">
+                  <SnapshotStatusIndicator
+                    parentId={exp.id}
+                    tableName="expenses"
+                    onRestore={handleRestoreSuccess}
+                    className="inline-flex"
+                  />
+                </div>
+              )}
+              <button
+                onClick={() => handleDeleteExpense(exp.id, exp.expense_code)}
+                className="px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          </TableCard>
+        )
+      ]
+
+      if (isExpanded && hasChildren(exp.id)) {
+        cards.push(...renderMobileCards(childrenMap[exp.id], depth + 1))
+      }
+
+      return cards
+    })
+  }
+
   const renderRows = (items: Expense[] = [], depth = 0): JSX.Element[] => {
     return items.flatMap((exp) => {
       const isExpanded = !!expandedIds[exp.id]
@@ -840,35 +981,43 @@ export default function ExpensesTab({ searchTerm, onCreateExpense, shouldOpenCre
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Mã chi phí
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Mô tả
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Số tiền
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ngày
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Trạng thái
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Thao tác
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {renderRows(childrenMap['root'] || [])}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Desktop Table - Hidden on mobile */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Mã chi phí
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Mô tả
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Số tiền
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ngày
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Trạng thái
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Thao tác
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {renderRows(childrenMap['root'] || [])}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card Layout - Visible on mobile only */}
+          <div className="md:hidden space-y-4">
+            {renderMobileCards(childrenMap['root'] || [])}
+          </div>
+        </>
       )}
     </div>
   )

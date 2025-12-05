@@ -643,6 +643,68 @@ export default function ProjectsTab({
 
   const handleDelete = async (project: Project) => {
     try {
+      // Helper function to delete files from storage folder
+      const deleteProjectFiles = async (projectId: string): Promise<void> => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session?.access_token) {
+            console.warn('No session token, skipping file deletion')
+            return
+          }
+
+          // Get all timeline attachments for this project
+          const { data: timelineEntries } = await supabase
+            .from('project_timeline')
+            .select('id')
+            .eq('project_id', projectId)
+
+          if (timelineEntries && timelineEntries.length > 0) {
+            const timelineIds = timelineEntries.map(e => e.id)
+            const { data: attachments } = await supabase
+              .from('timeline_attachments')
+              .select('url')
+              .in('timeline_entry_id', timelineIds)
+
+            if (attachments) {
+              for (const attachment of attachments) {
+                if (attachment.url) {
+                  try {
+                    // Extract file path from URL
+                    const match = attachment.url.match(/\/storage\/v1\/object\/[^\/]+\/(.+)$/)
+                    if (match && match[1]) {
+                      const filePath = match[1]
+                      const parts = filePath.split('/')
+                      const filename = parts.pop() || ''
+                      const folderPath = parts.join('/')
+
+                      await fetch(`/api/uploads/${folderPath}/${encodeURIComponent(filename)}`, {
+                        method: 'DELETE',
+                        headers: {
+                          'Authorization': `Bearer ${session.access_token}`,
+                        },
+                      })
+                    }
+                  } catch (e) {
+                    console.warn('Error deleting timeline attachment:', e)
+                  }
+                }
+              }
+            }
+          }
+
+          // Try to delete entire project folder (if API supports it)
+          // Note: This may require backend support for folder deletion
+          // For now, we delete individual files found above
+        } catch (e) {
+          console.warn('Error deleting project files:', e)
+          // Continue with project deletion even if file deletion fails
+        }
+      }
+
+      // Delete project files before deleting project
+      await deleteProjectFiles(project.id)
+
+      // Delete project from database
       const { error } = await supabase.from('projects').delete().eq('id', project.id)
 
       if (error) throw error
@@ -704,10 +766,10 @@ export default function ProjectsTab({
       </div>
 
       {/* Main Content: Filter + Projects */}
-      <div className={`flex gap-6 ${showFilter ? 'flex-row' : ''}`}>
+      <div className={`flex flex-col lg:flex-row gap-6`}>
         {/* Filter Sidebar */}
         {showFilter && (
-          <div className="w-1/3 bg-white border border-gray-200 rounded-lg p-6 h-fit sticky top-6">
+          <div className="w-full lg:w-1/3 bg-white border border-gray-200 rounded-lg p-6 h-fit lg:sticky lg:top-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Bộ lọc</h3>
 
             {/* Status Filter */}
@@ -790,7 +852,7 @@ export default function ProjectsTab({
         )}
 
         {/* Projects Section */}
-        <div className={`${showFilter ? 'w-2/3' : 'w-full'}`}>
+        <div className={`${showFilter ? 'w-full lg:w-2/3' : 'w-full'}`}>
 
           {/* Projects Grid */}
           {filteredProjects.length === 0 ? (
@@ -814,7 +876,7 @@ export default function ProjectsTab({
               )}
             </div>
           ) : (
-            <div className={`grid gap-6 ${showFilter ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+            <div className={`grid gap-6 ${showFilter ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
               {filteredProjects.map((project) => (
                 <div
                   key={project.id}
@@ -822,8 +884,8 @@ export default function ProjectsTab({
                     }`}
                 >
                   {showFilter ? (
-                    // Horizontal card layout when filter is shown
-                    <div className="flex flex-col lg:flex-row gap-6">
+                    // Horizontal card layout when filter is shown - Responsive: Stack on mobile, horizontal on large screens
+                    <div className="flex flex-col sm:flex-row gap-6">
                       <div className="flex-1">
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex-1">
@@ -875,7 +937,7 @@ export default function ProjectsTab({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-600">
                           {project.customer_name && (
                             <div className="flex items-center gap-2">
                               <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
@@ -902,7 +964,7 @@ export default function ProjectsTab({
                         </div>
                       </div>
 
-                      <div className="lg:w-80 flex-shrink-0">
+                      <div className="w-full sm:w-60 lg:w-80 flex-shrink-0 mt-4 sm:mt-0">
                         <div className="mb-4">
                           <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
                             <span>Tiến độ</span>

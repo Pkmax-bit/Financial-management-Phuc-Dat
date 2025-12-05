@@ -2,7 +2,7 @@
 
 import { useState, createContext, useContext } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { 
+import {
   Home,
   Users,
   Building2,
@@ -75,37 +75,37 @@ function BackgroundRenderer() {
           backgroundSize: background.size || '40px 40px',
           backgroundColor: 'white'
         }
-      
+
       case 'solid-white':
         return { backgroundColor: 'white' }
-      
+
       case 'solid-gray':
         return { backgroundColor: '#f9fafb' } // gray-50
-      
+
       case 'solid-blue':
         return { backgroundColor: '#eff6ff' } // blue-50
-      
+
       case 'dots':
         return {
           backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)',
           backgroundSize: background.size || '20px 20px',
           backgroundColor: 'white'
         }
-      
+
       case 'dots-large':
         return {
           backgroundImage: 'radial-gradient(circle, #e5e7eb 2px, transparent 2px)',
           backgroundSize: background.size || '30px 30px',
           backgroundColor: 'white'
         }
-      
+
       case 'dots-small':
         return {
           backgroundImage: 'radial-gradient(circle, #e5e7eb 0.5px, transparent 0.5px)',
           backgroundSize: background.size || '15px 15px',
           backgroundColor: 'white'
         }
-      
+
       case 'dots-cross':
         return {
           backgroundImage: `
@@ -116,7 +116,7 @@ function BackgroundRenderer() {
           backgroundPosition: '0 0, 10px 10px',
           backgroundColor: 'white'
         }
-      
+
       case 'grid':
         return {
           backgroundImage: `
@@ -126,7 +126,7 @@ function BackgroundRenderer() {
           backgroundSize: background.size || '40px 40px',
           backgroundColor: 'white'
         }
-      
+
       case 'grid-small':
         return {
           backgroundImage: `
@@ -136,7 +136,7 @@ function BackgroundRenderer() {
           backgroundSize: background.size || '20px 20px',
           backgroundColor: 'white'
         }
-      
+
       case 'grid-large':
         return {
           backgroundImage: `
@@ -146,7 +146,7 @@ function BackgroundRenderer() {
           backgroundSize: background.size || '60px 60px',
           backgroundColor: 'white'
         }
-      
+
       case 'grid-thick':
         return {
           backgroundImage: `
@@ -156,7 +156,7 @@ function BackgroundRenderer() {
           backgroundSize: background.size || '40px 40px',
           backgroundColor: 'white'
         }
-      
+
       case 'grid-thin':
         return {
           backgroundImage: `
@@ -166,25 +166,25 @@ function BackgroundRenderer() {
           backgroundSize: background.size || '40px 40px',
           backgroundColor: 'white'
         }
-      
+
       case 'diagonal-lines':
         return {
           backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #e5e7eb 10px, #e5e7eb 11px)',
           backgroundColor: 'white'
         }
-      
+
       case 'vertical-lines':
         return {
           backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 39px, #e5e7eb 39px, #e5e7eb 40px)',
           backgroundColor: 'white'
         }
-      
+
       case 'horizontal-lines':
         return {
           backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 39px, #e5e7eb 39px, #e5e7eb 40px)',
           backgroundColor: 'white'
         }
-      
+
       case 'isometric-grid':
         return {
           backgroundImage: `
@@ -195,7 +195,7 @@ function BackgroundRenderer() {
           backgroundSize: '60px 60px',
           backgroundColor: 'white'
         }
-      
+
       case 'hexagonal-grid':
         return {
           backgroundImage: `
@@ -206,7 +206,7 @@ function BackgroundRenderer() {
           backgroundSize: '60px 60px',
           backgroundColor: 'white'
         }
-      
+
       case 'grid-spotlight':
         return {
           backgroundImage: `
@@ -217,7 +217,7 @@ function BackgroundRenderer() {
           backgroundSize: '24px 24px, 24px 24px, 24px 24px',
           backgroundColor: 'white'
         }
-      
+
       case 'waves':
         return {
           backgroundImage: `
@@ -231,17 +231,17 @@ function BackgroundRenderer() {
           `,
           backgroundColor: 'white'
         }
-      
+
       case 'custom':
         return background.customImage
           ? {
-              backgroundImage: `url(${background.customImage})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat'
-            }
+            backgroundImage: `url(${background.customImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }
           : { backgroundColor: 'white' }
-      
+
       default:
         return { backgroundColor: 'white' }
     }
@@ -269,7 +269,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
   // Get user role and navigation based on role
   const userRole = (user?.role?.toLowerCase() || 'customer') as UserRole
   const navigationByCategory = getNavigationByCategory(userRole)
-  
+
   // Icon mapping for dynamic icons
   const iconMap: Record<string, any> = {
     Home,
@@ -315,11 +315,19 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
       <div className="min-h-screen w-full relative">
         {/* Background Renderer */}
         <BackgroundRenderer />
-        
+
+        {/* Mobile Sidebar Backdrop */}
+        {shouldShowSidebar && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ${
-          shouldShowSidebar ? 'w-64' : 'w-0'
-        } overflow-hidden ${shouldShowSidebar ? 'block' : 'hidden'}`}>
+        <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-transform duration-300 transform ${shouldShowSidebar ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 lg:static lg:h-screen lg:shrink-0 ${!sidebarOpen && 'lg:hidden'
+          } w-64`}>
           {/* Logo */}
           <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
             <div className="flex items-center space-x-2">
@@ -338,73 +346,77 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
             {/* Scroll indicator */}
             <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-white to-transparent pointer-events-none z-10"></div>
             <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
-            
+
             {/* Navigation items with padding for scroll indicators */}
             <div className="pt-1 pb-1">
-            {Object.entries(navigationByCategory).map(([category, items]) => (
-              <div key={category} className="mb-2">
-                {/* Category header */}
-                <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {getCategoryDisplayName(category)}
+              {Object.entries(navigationByCategory).map(([category, items]) => (
+                <div key={category} className="mb-2">
+                  {/* Category header */}
+                  <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {getCategoryDisplayName(category)}
+                  </div>
+
+                  {/* Category items */}
+                  {items.map((item) => {
+                    const Icon = iconMap[item.icon] || Home
+                    const isActive = pathname === item.href
+
+                    return (
+                      <button
+                        key={item.name}
+                        onClick={() => {
+                          handleNavigation(item.href)
+                          // Close sidebar on mobile when navigating
+                          if (window.innerWidth < 1024) {
+                            setSidebarOpen(false)
+                          }
+                        }}
+                        className={`w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group ${isActive
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
+                            : 'text-gray-700'
+                          }`}
+                        title={item.description}
+                      >
+                        <Icon className={`mr-3 h-4 w-4 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'
+                          }`} />
+                        <span className="truncate">{item.name}</span>
+                      </button>
+                    )
+                  })}
                 </div>
-                
-                {/* Category items */}
-                {items.map((item) => {
-                  const Icon = iconMap[item.icon] || Home
-                  const isActive = pathname === item.href
-                  
-                  return (
-                    <button
-                      key={item.name}
-                      onClick={() => handleNavigation(item.href)}
-                      className={`w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
-                        isActive
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                          : 'text-gray-700'
-                      }`}
-                      title={item.description}
-                    >
-                      <Icon className={`mr-3 h-4 w-4 flex-shrink-0 ${
-                        isActive ? 'text-blue-600' : 'text-gray-400'
-                      }`} />
-                      <span className="truncate">{item.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            ))}
+              ))}
 
-            {/* Settings - Background */}
-            <div className="mt-4 mb-2">
-              <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Cài đặt
-              </div>
-              <button
-                onClick={() => setShowBackgroundSettings(true)}
-                className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50"
-                title="Cài đặt nền"
-              >
-                <Palette className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
-                <span className="truncate">Nền</span>
-              </button>
-            </div>
-
-            {/* Support Center - Moved into scrollable area */}
-            <div className="mt-2 mb-2 space-y-2">
-              <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Hỗ trợ
-              </div>
-              <div className="px-3 space-y-2">
-                <SupportCenterButton />
+              {/* Settings - Background */}
+              <div className="mt-4 mb-2">
+                <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Cài đặt
+                </div>
                 <button
-                  onClick={() => handleNavigation('/change-password')}
-                  className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50 border border-gray-200"
+                  onClick={() => setShowBackgroundSettings(true)}
+                  className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50"
+                  title="Cài đặt nền"
                 >
-                  <Lock className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
-                  <span className="truncate">Đổi mật khẩu</span>
+                  <Palette className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
+                  <span className="truncate">Nền</span>
                 </button>
               </div>
-            </div>
+
+              {/* Support Center - Moved into scrollable area */}
+              <div className="mt-2 mb-2 space-y-2">
+                <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Hỗ trợ
+                </div>
+                <div className="px-3 space-y-2">
+                  <SupportCenterButton />
+                  <button
+                    onClick={() => handleNavigation('/change-password')}
+                    className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50 border border-gray-200"
+                  >
+                    <Lock className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <span className="truncate">Đổi mật khẩu</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </nav>
 
@@ -427,7 +439,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                     </span>
                   </div>
                 </div>
-              <div className="flex items-center space-x-2 mt-3">
+                <div className="flex items-center space-x-2 mt-3">
                   <div className="relative">
                     <NotificationBell />
                   </div>
@@ -449,10 +461,10 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         {/* Toggle Button */}
         <button
           onClick={toggleSidebar}
-          className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 hover:bg-gray-50 ${
-            shouldShowSidebar ? 'left-60' : 'left-4'
-          }`}
-          title={shouldShowSidebar ? 'Đóng sidebar' : 'Mở sidebar'}
+          className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 hover:bg-gray-50 ${shouldShowSidebar ? 'left-64 lg:left-64' : 'left-4'
+            } lg:hidden`} // Only show on mobile or when sidebar is hidden? Actually usually we want it always visible to toggle.
+        // Let's adjust: It should be visible on mobile always (to open) and on desktop to toggle.
+        // But with the new layout, on desktop the sidebar is static.
         >
           {shouldShowSidebar ? (
             <ChevronLeft className="h-5 w-5 text-gray-600" />
@@ -461,10 +473,22 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           )}
         </button>
 
+        {/* Desktop Toggle Button - Positioned differently */}
+        <button
+          onClick={toggleSidebar}
+          className={`hidden lg:flex fixed top-4 z-40 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 hover:bg-gray-50 ${sidebarOpen ? 'left-60' : 'left-4'
+            }`}
+        >
+          {sidebarOpen ? (
+            <ChevronLeft className="h-5 w-5 text-gray-600" />
+          ) : (
+            <ChevronRight className="h-5 w-5 text-gray-600" />
+          )}
+        </button>
+
+
         {/* Content Area */}
-        <div className={`transition-all duration-300 relative z-0 ${
-          shouldShowSidebar ? 'ml-64' : 'ml-0'
-        }`}>
+        <div className="flex-1 min-w-0 overflow-auto">
           {children}
         </div>
 

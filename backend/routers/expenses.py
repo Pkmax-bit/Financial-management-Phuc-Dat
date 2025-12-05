@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 import uuid
+import logging
+import re
 from pydantic import BaseModel
 
 from models.expense import Expense, ExpenseCreate, ExpenseUpdate, ExpenseReimbursement
@@ -19,6 +21,32 @@ from services.project_validation_service import ProjectValidationService
 from services.auto_snapshot_service import AutoSnapshotService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+def sanitize_search_input(search: str) -> str:
+    """Sanitize search input to prevent SQL injection and DoS attacks
+    
+    Args:
+        search: Raw search string from user input
+        
+    Returns:
+        Sanitized search string safe for use in queries
+    """
+    if not search:
+        return ""
+    
+    # Remove or escape special characters that could be used for injection
+    # Escape % and _ which are special in LIKE queries
+    sanitized = search.replace('%', '\\%').replace('_', '\\_')
+    
+    # Remove null bytes and other control characters
+    sanitized = ''.join(char for char in sanitized if ord(char) >= 32 or char in '\n\r\t')
+    
+    # Limit length to prevent DoS attacks
+    if len(sanitized) > 200:
+        sanitized = sanitized[:200]
+    
+    return sanitized.strip()
 
 # ============================================================================
 # PROJECT INTEGRATION - Tích hợp dự án
@@ -97,7 +125,9 @@ async def get_expenses(
         
         # Apply filters
         if search:
-            query = query.or_(f"description.ilike.%{search}%,expense_code.ilike.%{search}%,tags.ilike.%{search}%")
+            sanitized_search = sanitize_search_input(search)
+            if sanitized_search:
+                query = query.or_(f"description.ilike.%{sanitized_search}%,expense_code.ilike.%{sanitized_search}%,tags.ilike.%{sanitized_search}%")
         
         if employee_id:
             query = query.eq("employee_id", employee_id)
@@ -144,16 +174,34 @@ async def get_expenses(
         )
 
 # ============================================================================
-# PUBLIC ENDPOINTS - Các endpoint công khai (không cần authentication)
+# PUBLIC ENDPOINTS - Các endpoint công khai (đã được bảo vệ)
 # ============================================================================
+# NOTE: Các endpoints này đã được thêm authentication để bảo vệ dữ liệu nhạy cảm
+# Nếu cần public access, hãy giới hạn dữ liệu trả về hoặc tạo view riêng
 
 @router.get("/expenses/public", response_model=List[Expense])
-async def get_expenses_public():
-    """Get all expenses (public endpoint - no authentication required)"""
+async def get_expenses_public(
+    current_user: User = Depends(get_current_user)
+):
+    """Get all expenses (requires authentication for security)"""
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table("expenses").select("*").order("created_at", desc=True).execute()
+        # Apply user-based filtering based on role
+        query = supabase.table("expenses").select("*")
+        
+        # Non-admin users only see their own expenses
+        if current_user.role.value != "admin":
+            # Get employee_id for current user
+            employee_result = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
+            if employee_result.data:
+                employee_id = employee_result.data[0]["id"]
+                query = query.eq("employee_id", employee_id)
+            else:
+                # If no employee record, return empty list
+                return []
+        
+        result = query.order("created_at", desc=True).execute()
         
         return [Expense(**expense) for expense in result.data]
         
@@ -164,12 +212,24 @@ async def get_expenses_public():
         )
 
 @router.get("/bills/public", response_model=List[Bill])
-async def get_bills_public():
-    """Get all bills (public endpoint - no authentication required)"""
+async def get_bills_public(
+    current_user: User = Depends(get_current_user)
+):
+    """Get all bills (requires authentication for security)"""
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table("bills").select("*").order("created_at", desc=True).execute()
+        # Apply user-based filtering based on role
+        query = supabase.table("bills").select("*")
+        
+        # Non-admin users have limited access
+        if current_user.role.value not in ["admin", "accountant", "manager"]:
+            # Regular users can only see bills related to their projects
+            # This would require additional filtering logic based on project access
+            # For now, return empty list for non-privileged users
+            return []
+        
+        result = query.order("created_at", desc=True).execute()
         
         return [Bill(**bill) for bill in result.data]
         
@@ -180,11 +240,14 @@ async def get_bills_public():
         )
 
 @router.get("/vendors/public", response_model=List[Vendor])
-async def get_vendors_public():
-    """Get all vendors (public endpoint - no authentication required)"""
+async def get_vendors_public(
+    current_user: User = Depends(get_current_user)
+):
+    """Get all vendors (requires authentication for security)"""
     try:
         supabase = get_supabase_client()
         
+        # Vendors are less sensitive, but still require authentication
         result = supabase.table("vendors").select("*").order("name", desc=False).execute()
         
         return [Vendor(**vendor) for vendor in result.data]
@@ -522,6 +585,24 @@ async def delete_expense(
         
         # Allow deletion at any status - no restriction
         
+        # Delete receipt file from storage if exists
+        receipt_url = expense.get("receipt_url")
+        if receipt_url:
+            try:
+                from services.file_upload_service import get_file_upload_service
+                upload_service = get_file_upload_service()
+                
+                # Extract file path from URL
+                # Format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+                # or: /storage/v1/object/{bucket}/{path}
+                match = re.search(r'/storage/v1/object/[^/]+/(.+)$', receipt_url)
+                if match:
+                    file_path = match.group(1)
+                    await upload_service.delete_file(file_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete receipt file from storage: {str(e)}")
+                # Continue with deletion even if file deletion fails
+        
         # Delete the expense
         result = supabase.table("expenses").delete().eq("id", expense_id).execute()
         
@@ -648,7 +729,9 @@ async def get_vendors(
         
         # Apply filters
         if search:
-            query = query.or_(f"name.ilike.%{search}%,vendor_code.ilike.%{search}%,contact_person.ilike.%{search}%")
+            sanitized_search = sanitize_search_input(search)
+            if sanitized_search:
+                query = query.or_(f"name.ilike.%{sanitized_search}%,vendor_code.ilike.%{sanitized_search}%,contact_person.ilike.%{sanitized_search}%")
         
         if vendor_type:
             query = query.eq("vendor_type", vendor_type)
@@ -826,7 +909,9 @@ async def get_bills(
         
         # Apply filters
         if search:
-            query = query.or_(f"bill_number.ilike.%{search}%,description.ilike.%{search}%")
+            sanitized_search = sanitize_search_input(search)
+            if sanitized_search:
+                query = query.or_(f"bill_number.ilike.%{sanitized_search}%,description.ilike.%{sanitized_search}%")
         
         if vendor_id:
             query = query.eq("vendor_id", vendor_id)
