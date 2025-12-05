@@ -12,8 +12,12 @@ Chức năng import/export nhân viên bằng Excel đã được **viết lại
 
 #### Bước 1: Restart Backend
 ```bash
-# Double click file này:
-restart_backend.bat
+# Chạy lệnh này trong terminal:
+cd backend
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Hoặc sử dụng npm script:
+npm run dev:backend
 ```
 
 #### Bước 2: Mở Tool Test

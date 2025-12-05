@@ -6,10 +6,34 @@ Các file script này giúp bạn tắt Backend và Frontend server một cách 
 
 ## 📁 Các file đã tạo
 
-### Windows (.bat)
-- `stop_backend.bat` - Tắt Backend server
-- `stop_frontend.bat` - Tắt Frontend server  
-- `stop_all.bat` - Tắt cả Backend và Frontend
+### Windows
+**Lưu ý:** Các file .bat đã được xóa. Sử dụng các phương pháp sau:
+
+#### Tắt Backend:
+```bash
+# Tìm và kill process trên port 8000
+netstat -ano | findstr :8000
+taskkill /F /PID <PID_NUMBER>
+
+# Hoặc kill tất cả Python processes
+taskkill /F /IM python.exe
+```
+
+#### Tắt Frontend:
+```bash
+# Tìm và kill process trên port 3000
+netstat -ano | findstr :3000
+taskkill /F /PID <PID_NUMBER>
+
+# Hoặc kill tất cả Node processes
+taskkill /F /IM node.exe
+```
+
+#### Tắt tất cả:
+```bash
+taskkill /F /IM python.exe
+taskkill /F /IM node.exe
+```
 
 ### Linux/Mac (.sh)
 - `stop_backend.sh` - Tắt Backend server
@@ -21,43 +45,56 @@ Các file script này giúp bạn tắt Backend và Frontend server một cách 
 ### Windows
 
 #### Tắt Backend
+Sử dụng Task Manager hoặc lệnh:
 ```bash
-stop_backend.bat
+# Tìm process trên port 8000
+netstat -ano | findstr :8000
+# Kill process (thay <PID> bằng số PID tìm được)
+taskkill /F /PID <PID>
 ```
-Hoặc double-click vào file `stop_backend.bat`
 
 #### Tắt Frontend
+Sử dụng Task Manager hoặc lệnh:
 ```bash
-stop_frontend.bat
+# Tìm process trên port 3000
+netstat -ano | findstr :3000
+# Kill process (thay <PID> bằng số PID tìm được)
+taskkill /F /PID <PID>
 ```
-Hoặc double-click vào file `stop_frontend.bat`
 
 #### Tắt tất cả
 ```bash
-stop_all.bat
+taskkill /F /IM python.exe
+taskkill /F /IM node.exe
 ```
-Hoặc double-click vào file `stop_all.bat`
 
 ### Linux/Mac
 
-Trước tiên, cần cấp quyền thực thi:
-```bash
-chmod +x stop_backend.sh stop_frontend.sh stop_all.sh
-```
-
 #### Tắt Backend
 ```bash
-./stop_backend.sh
+# Tìm và kill process trên port 8000
+lsof -ti:8000 | xargs kill -9
+
+# Hoặc kill tất cả uvicorn processes
+pkill -f uvicorn
 ```
 
 #### Tắt Frontend
 ```bash
-./stop_frontend.sh
+# Tìm và kill process trên port 3000
+lsof -ti:3000 | xargs kill -9
+
+# Hoặc kill tất cả Next.js processes
+pkill -f "next.*dev"
 ```
 
 #### Tắt tất cả
 ```bash
-./stop_all.sh
+lsof -ti:8000 | xargs kill -9
+lsof -ti:3000 | xargs kill -9
+# hoặc
+pkill -f uvicorn
+pkill -f "next.*dev"
 ```
 
 ## 🔍 Chi tiết
@@ -152,7 +189,7 @@ stop_all.bat
 
 ## 🔗 Liên quan
 
-- File start: `start_network.bat` / `start_network.sh`
-- File restart: `restart_backend.bat`
+- Start network: `npm run dev:network` hoặc `python3 start_network.py`
 - Package.json scripts: `npm run dev`, `npm run dev:backend`, `npm run dev:frontend`
+- **Lưu ý:** Các file .bat và .sh helper scripts đã được xóa, sử dụng npm scripts hoặc lệnh thủ công
 

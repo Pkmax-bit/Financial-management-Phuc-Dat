@@ -89,7 +89,7 @@ SUPABASE_ANON_KEY="your_anon_key_here"
 
 # Database connection details
 SUPABASE_DB_HOST="aws-1-ap-southeast-1.pooler.supabase.com"
-SUPABASE_DB_USER="postgres.mfmijckzlhevduwfigkl"
+SUPABASE_DB_USER="postgres..............."
 SUPABASE_DB_PASSWORD="your_password_here"
 SUPABASE_DB_NAME="postgres"
 SUPABASE_DB_PORT="6543"

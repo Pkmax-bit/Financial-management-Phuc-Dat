@@ -2,10 +2,14 @@
 
 ## Linux
 
-### Cài đặt tự động (Khuyến nghị):
+### Cài đặt tự động:
 ```bash
-chmod +x setup_linux.sh
-./setup_linux.sh
+# Sử dụng npm scripts (khuyến nghị)
+npm run install:all
+
+# Hoặc cài đặt riêng:
+npm run install:backend
+npm run install:frontend
 ```
 
 ### Cài đặt thủ công:
@@ -52,7 +56,9 @@ copy env.local.example .env.local
 
 4. **Hoặc chạy với network access:**
    ```bash
-   python start_network.py  # Tự động cấu hình và khởi động
+   npm run dev:network  # Sử dụng npm script (khuyến nghị)
+   # hoặc
+   python start_network.py  # Chạy trực tiếp Python script
    ```
 
 ## Xem thêm
