@@ -426,10 +426,91 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const [projectRevenueTotal, setProjectRevenueTotal] = useState<number>(0)
   const isEdit = mode === 'edit'
 
+  // Helper function to auto-calculate parent total from children in the same row
+  const updateParentTotalFromChildren = (row: InvoiceItemRow): InvoiceItemRow => {
+    const updated = { ...row }
+    
+    // Find all parent objects that are selected
+    const parentObjects = expenseObjectsOptions.filter(obj => 
+      obj.is_parent && selectedExpenseObjectIds.includes(obj.id)
+    )
+    
+    // For each parent, calculate total from its children
+    parentObjects.forEach(parent => {
+      // Find all children of this parent that are also selected
+      const children = expenseObjectsOptions.filter(obj => 
+        obj.parent_id === parent.id && selectedExpenseObjectIds.includes(obj.id)
+      )
+      
+      if (children.length > 0) {
+        // Calculate total from children - use the actual amount value
+        // Priority: componentsAmt > (componentsQuantity * componentsUnitPrice) > (lineTotal * componentsPct / 100)
+        let parentTotal = 0
+        let parentQuantity = 0
+        let parentUnitPrice = 0
+        
+        children.forEach(child => {
+          // Get child amount - prioritize direct amount input
+          let childAmt = updated.componentsAmt[child.id]
+          
+          // If no direct amount, calculate from quantity * unit price
+          if (childAmt === undefined || childAmt === 0) {
+            const childQty = updated.componentsQuantity[child.id] || 0
+            const childUnitPrice = updated.componentsUnitPrice[child.id] || 0
+            childAmt = childQty * childUnitPrice
+          }
+          
+          // If still no amount, calculate from percentage
+          if (childAmt === 0 || childAmt === undefined) {
+            const childPct = updated.componentsPct[child.id] || 0
+            const lineTotal = updated.lineTotal || 0
+            childAmt = Math.round((lineTotal * childPct) / 100)
+          }
+          
+          const childQty = updated.componentsQuantity[child.id] || 0
+          const childUnitPrice = updated.componentsUnitPrice[child.id] || 0
+          
+          parentTotal += (childAmt || 0)
+          parentQuantity += childQty
+        })
+        
+        // Update parent values
+        updated.componentsAmt[parent.id] = parentTotal
+        
+        // Calculate parent percentage based on lineTotal
+        const lineTotal = updated.lineTotal || 0
+        const parentPct = lineTotal > 0 ? (parentTotal / lineTotal) * 100 : 0
+        updated.componentsPct[parent.id] = Math.round(parentPct * 100) / 100
+        
+        // Update parent quantity and unit price
+        // Calculate average unit price if there are quantities
+        if (parentQuantity > 0) {
+          parentUnitPrice = parentTotal / parentQuantity
+        } else if (parentTotal > 0) {
+          // If no quantity but has total, set unit price to total
+          parentUnitPrice = parentTotal
+          parentQuantity = 1
+        }
+        
+        updated.componentsQuantity[parent.id] = parentQuantity
+        updated.componentsUnitPrice[parent.id] = Math.round(parentUnitPrice)
+      } else {
+        // If no children selected, clear parent values
+        updated.componentsAmt[parent.id] = 0
+        updated.componentsPct[parent.id] = 0
+        updated.componentsQuantity[parent.id] = 0
+        updated.componentsUnitPrice[parent.id] = 0
+      }
+    })
+    
+    return updated
+  }
+
   const updateRow = (rowIndex: number, updater: (row: InvoiceItemRow) => InvoiceItemRow) => {
     setInvoiceItems(prev => {
       const next = [...prev]
-      const updated = updater(next[rowIndex])
+      let updated = updater(next[rowIndex])
+      
       // Recompute line total
       // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
       const unitPrice = Number(updated.unitPrice) || 0
@@ -443,6 +524,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         // Không có diện tích: thành tiền = đơn giá × số lượng
         updated.lineTotal = Math.round(unitPrice * quantity * 100) / 100
       }
+      
+      // Auto-calculate parent totals from children in the same row
+      updated = updateParentTotalFromChildren(updated)
+      
       next[rowIndex] = updated
       return next
     })

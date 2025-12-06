@@ -172,8 +172,9 @@ export default function ExpenseObjectTreeView({
       newSelectedIds = [...new Set([...selectedIds, objectId, ...childrenIds])]
     }
 
-    // Auto-select parents if all children are selected
-    newSelectedIds = autoSelectParents(newSelectedIds)
+    // DISABLED: Auto-select parents when all children are selected
+    // Users can manually select parent if needed, and parent total will be auto-calculated from children
+    // newSelectedIds = autoSelectParents(newSelectedIds)
     
     onSelectionChange(newSelectedIds)
   }

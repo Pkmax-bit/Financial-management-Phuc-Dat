@@ -171,8 +171,9 @@ export default function ExpenseObjectMultiSelectorEnhanced({
     // Note: Removed auto-switch to showOnlyLevel3 mode when selecting level 3
     // Users can manually toggle this mode using the "Hiện tất cả cấp" button
 
-    // Auto-select parents if all children are selected
-    newValues = autoSelectParents(newValues)
+    // DISABLED: Auto-select parents when all children are selected
+    // Users can manually select parent if needed, and parent total will be auto-calculated from children
+    // newValues = autoSelectParents(newValues)
     
     // Auto-deselect parents if not all children are selected
     newValues = autoDeselectParents(newValues)
