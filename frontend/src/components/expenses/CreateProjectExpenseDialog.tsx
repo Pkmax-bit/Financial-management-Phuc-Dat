@@ -770,16 +770,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         console.log('📋 Loading quote_items with product_components for planned expense, project:', projectId)
         
         // Load revenue (invoices) for profit calculation in planned expenses
+        // Use subtotal (before tax) to match with expense amounts (which are also before tax)
         try {
           const { data: invForRevenue } = await supabase
             .from('invoices')
-            .select('id, total_amount, items')
+            .select('id, subtotal, total_amount, tax_rate, items')
             .eq('project_id', projectId)
           if (Array.isArray(invForRevenue)) {
             const sumRevenue = invForRevenue.reduce((s: number, inv: any) => {
+              // Prefer subtotal (before tax) to match with expense lineTotal
+              // Check if subtotal exists and is a valid number (not null, not undefined)
+              if (inv.subtotal !== null && inv.subtotal !== undefined && inv.subtotal !== '') {
+                const subtotal = Number(inv.subtotal)
+                if (!isNaN(subtotal)) {
+                  // Use subtotal if it exists (even if 0, as it's a valid value)
+                  return s + subtotal
+                }
+              }
+              // Fallback: calculate from total_amount by removing tax
               const totalAmt = Number(inv.total_amount)
-              if (!isNaN(totalAmt) && totalAmt > 0) return s + totalAmt
-              // fallback: sum items if total_amount missing
+              const taxRate = Number(inv.tax_rate) || 10 // Default 10% VAT
+              if (!isNaN(totalAmt) && totalAmt > 0) {
+                // Calculate subtotal from total_amount: subtotal = total_amount / (1 + tax_rate/100)
+                const calculatedSubtotal = totalAmt / (1 + taxRate / 100)
+                console.log(`💰 Invoice ${inv.id}: total_amount=${totalAmt}, tax_rate=${taxRate}%, calculated_subtotal=${calculatedSubtotal}`)
+                return s + calculatedSubtotal
+              }
+              // Last fallback: sum items if both subtotal and total_amount missing
               const items = Array.isArray(inv.items) ? inv.items : []
               const itemsSum = items.reduce((ss: number, it: any) => {
                 const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
@@ -789,8 +806,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               }, 0)
               return s + itemsSum
             }, 0)
+            console.log(`✅ Calculated revenue (subtotal before tax) for planned expense: ${sumRevenue}`)
             setProjectRevenueTotal(sumRevenue)
-            console.log('✅ Loaded revenue for planned expense:', sumRevenue)
           } else {
             setProjectRevenueTotal(0)
           }
@@ -987,7 +1004,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         // First, get invoice IDs for this project
         const { data: invoicesData, error: invoicesError } = await supabase
           .from('invoices')
-          .select('id, total_amount')
+          .select('id, subtotal, total_amount, tax_rate, items')
           .eq('project_id', projectId)
         
         if (invoicesError) {
@@ -995,12 +1012,38 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           // Continue with fallback logic below
         }
         
-        // Load revenue for profit calculation
+        // Load revenue for profit calculation - use subtotal (before tax) to match with expense amounts
         if (Array.isArray(invoicesData) && invoicesData.length > 0) {
           const sumRevenue = invoicesData.reduce((s: number, inv: any) => {
+            // Prefer subtotal (before tax) to match with expense lineTotal
+            // Check if subtotal exists and is a valid number (not null, not undefined)
+            if (inv.subtotal !== null && inv.subtotal !== undefined && inv.subtotal !== '') {
+              const subtotal = Number(inv.subtotal)
+              if (!isNaN(subtotal)) {
+                // Use subtotal if it exists (even if 0, as it's a valid value)
+                return s + subtotal
+              }
+            }
+            // Fallback: calculate from total_amount by removing tax
             const totalAmt = Number(inv.total_amount) || 0
-            return s + (totalAmt > 0 ? totalAmt : 0)
+            const taxRate = Number(inv.tax_rate) || 10 // Default 10% VAT
+            if (totalAmt > 0) {
+              // Calculate subtotal from total_amount: subtotal = total_amount / (1 + tax_rate/100)
+              const calculatedSubtotal = totalAmt / (1 + taxRate / 100)
+              console.log(`💰 Invoice ${inv.id}: total_amount=${totalAmt}, tax_rate=${taxRate}%, calculated_subtotal=${calculatedSubtotal}`)
+              return s + calculatedSubtotal
+            }
+            // Last fallback: sum items if both subtotal and total_amount missing
+            const items = Array.isArray(inv.items) ? inv.items : []
+            const itemsSum = items.reduce((ss: number, it: any) => {
+              const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
+              const qty = Number(it.quantity ?? it.qty) || 0
+              const lineTotal = Number(it.line_total ?? it.total ?? it.lineTotal) || (unitPrice * qty)
+              return ss + (lineTotal || 0)
+            }, 0)
+            return s + itemsSum
           }, 0)
+          console.log(`✅ Calculated revenue (subtotal before tax) for actual expense (early load): ${sumRevenue}`)
           setProjectRevenueTotal(sumRevenue)
           
           const invoiceIds = invoicesData.map((inv: any) => inv.id)
@@ -1191,16 +1234,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       // For actual expenses: load revenue and continue with fallback logic if no invoice_items with product_components found
       if (category === 'actual') {
         // Load revenue (invoices) to compute profit
+        // Use subtotal (before tax) to match with expense amounts (which are also before tax)
         try {
           const { data: invForRevenue } = await supabase
             .from('invoices')
-            .select('id, total_amount, items')
+            .select('id, subtotal, total_amount, tax_rate, items')
             .eq('project_id', projectId)
           if (Array.isArray(invForRevenue)) {
             const sumRevenue = invForRevenue.reduce((s: number, inv: any) => {
+              // Prefer subtotal (before tax) to match with expense lineTotal
+              // Check if subtotal exists and is a valid number (not null, not undefined)
+              if (inv.subtotal !== null && inv.subtotal !== undefined && inv.subtotal !== '') {
+                const subtotal = Number(inv.subtotal)
+                if (!isNaN(subtotal)) {
+                  // Use subtotal if it exists (even if 0, as it's a valid value)
+                  return s + subtotal
+                }
+              }
+              // Fallback: calculate from total_amount by removing tax
               const totalAmt = Number(inv.total_amount)
-              if (!isNaN(totalAmt) && totalAmt > 0) return s + totalAmt
-              // fallback: sum items if total_amount missing
+              const taxRate = Number(inv.tax_rate) || 10 // Default 10% VAT
+              if (!isNaN(totalAmt) && totalAmt > 0) {
+                // Calculate subtotal from total_amount: subtotal = total_amount / (1 + tax_rate/100)
+                const calculatedSubtotal = totalAmt / (1 + taxRate / 100)
+                console.log(`💰 Invoice ${inv.id}: total_amount=${totalAmt}, tax_rate=${taxRate}%, calculated_subtotal=${calculatedSubtotal}`)
+                return s + calculatedSubtotal
+              }
+              // Last fallback: sum items if both subtotal and total_amount missing
               const items = Array.isArray(inv.items) ? inv.items : []
               const itemsSum = items.reduce((ss: number, it: any) => {
                 const unitPrice = Number(it.unit_price ?? it.price ?? it.unitPrice) || 0
@@ -1210,6 +1270,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               }, 0)
               return s + itemsSum
             }, 0)
+            console.log(`✅ Calculated revenue (subtotal before tax) for actual expense: ${sumRevenue}`)
             setProjectRevenueTotal(sumRevenue)
           } else {
             setProjectRevenueTotal(0)
@@ -5263,7 +5324,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           )}
                         </div>
                       )}
-                      {category === 'planned' && plannedAmountComputed > 0 && (
+                      {plannedAmountComputed > 0 && (
                         <div className="text-sm text-gray-700">
                           Lợi nhuận: <span className={`font-semibold ${
                             (plannedAmountComputed - grandAllocationTotal) > 0 ? 'text-green-600' : (plannedAmountComputed - grandAllocationTotal) < 0 ? 'text-red-600' : 'text-gray-600'
@@ -5750,7 +5811,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           </div>
           
           {/* Total Summary with Profit Percentage */}
-          {category === 'planned' && projectRevenueTotal > 0 && (
+          {projectRevenueTotal > 0 && (
             <div className="bg-white border border-green-200 rounded-lg p-4 space-y-3">
               <div className="text-sm font-semibold text-gray-900 mb-3">📊 Tổng kết</div>
               <div className="space-y-2">
@@ -5761,7 +5822,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-gray-700">Chi phí kế hoạch</div>
+                  <div className="text-sm font-medium text-gray-700">
+                    {category === 'planned' ? 'Chi phí kế hoạch' : 'Chi phí thực tế'}
+                  </div>
                   <div className="text-base font-semibold text-blue-700">
                     {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
                   </div>
