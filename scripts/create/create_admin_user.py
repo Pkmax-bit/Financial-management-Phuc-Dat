@@ -8,9 +8,15 @@ def create_admin_user():
     """Create admin user for testing"""
     print("=== CREATING ADMIN USER ===")
     
-    # Supabase configuration
-    SUPABASE_URL = "https://mfmijckzlhevduwfigkl.supabase.co"
-    SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUzOTExMiwiZXhwIjoyMDcyMTE1MTEyfQ.rlFwoXK_Yls7kRxL_lYqYWe3huJhs0V60Wa4Ddd7Ero"
+    # ⚠️ SECURITY: Get Supabase configuration from environment variables
+    import os
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+    
+    if not SUPABASE_URL:
+        raise ValueError("SUPABASE_URL environment variable is required")
+    if not SUPABASE_SERVICE_KEY:
+        raise ValueError("SUPABASE_SERVICE_KEY environment variable is required")
     
     try:
         # Create user via admin API
@@ -50,9 +56,14 @@ def test_admin_login():
     """Test admin login"""
     print("\n=== TESTING ADMIN LOGIN ===")
     
-    # Supabase configuration
-    SUPABASE_URL = "https://mfmijckzlhevduwfigkl.supabase.co"
-    SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MzkxMTIsImV4cCI6MjA3MjExNTExMn0.VPFmvLghhO32JybxDzq-CGVQedgI-LN7Q07rwDhxU4E"
+    # ⚠️ SECURITY: Get Supabase configuration from environment variables
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+    
+    if not SUPABASE_URL:
+        raise ValueError("SUPABASE_URL environment variable is required")
+    if not SUPABASE_ANON_KEY:
+        raise ValueError("SUPABASE_ANON_KEY environment variable is required")
     
     try:
         # Test login

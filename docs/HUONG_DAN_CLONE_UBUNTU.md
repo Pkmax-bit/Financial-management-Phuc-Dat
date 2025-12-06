@@ -156,28 +156,33 @@ vim .env
 Cấu hình trong `backend/.env`:
 ```env
 # Supabase Configuration
-SUPABASE_URL="https://mfmijckzlhevduwfigkl.supabase.co"
-SUPABASE_SERVICE_KEY="your_service_key_here"
-SUPABASE_ANON_KEY="your_anon_key_here"
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+SUPABASE_URL="https://your-project-id.supabase.co"
+SUPABASE_SERVICE_KEY="your_supabase_service_role_key_here"
+SUPABASE_ANON_KEY="your_supabase_anon_key_here"
 
 # Database connection details
+# ⚠️ Lấy từ Supabase Dashboard → Settings → Database
 SUPABASE_DB_HOST="aws-1-ap-southeast-1.pooler.supabase.com"
-SUPABASE_DB_USER="postgres.mfmijckzlhevduwfigkl"
-SUPABASE_DB_PASSWORD="your_password_here"
+SUPABASE_DB_USER="postgres.your_project_id"
+SUPABASE_DB_PASSWORD="your_database_password_here"
 SUPABASE_DB_NAME="postgres"
 SUPABASE_DB_PORT="6543"
 
 # Dify API Configuration
+# ⚠️ Lấy từ Dify Dashboard → API Keys
 DIFY_API_BASE_URL="https://api.dify.ai/v1"
 DIFY_API_KEY="your_dify_api_key_here"
 
 # Email configuration
+# ⚠️ Lấy từ Google Account → Security → App Passwords (cho Gmail)
 SMTP_USER="your_email@gmail.com"
-SMTP_PASSWORD="your_app_password"
+SMTP_PASSWORD="your_gmail_app_password_here"
 SMTP_SERVER="smtp.gmail.com"
 SMTP_PORT="587"
 
 # JWT Configuration
+# ⚠️ Generate bằng: openssl rand -base64 32
 SECRET_KEY="your_secret_key_here"
 ALGORITHM="HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES="30"
@@ -200,10 +205,12 @@ vim .env.local
 
 Cấu hình trong `frontend/.env.local`:
 ```env
-NEXT_PUBLIC_SUPABASE_URL="https://mfmijckzlhevduwfigkl.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your_anon_key_here"
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+NEXT_PUBLIC_SUPABASE_URL="https://your-project-id.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your_supabase_anon_key_here"
 NEXT_PUBLIC_API_URL="http://localhost:8000"
 NEXT_PUBLIC_DIFY_API_BASE_URL="https://api.dify.ai/v1"
+# ⚠️ Lấy từ Dify Dashboard → API Keys
 NEXT_PUBLIC_DIFY_API_KEY="your_dify_api_key_here"
 ```
 

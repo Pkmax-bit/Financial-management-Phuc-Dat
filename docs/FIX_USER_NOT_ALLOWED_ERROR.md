@@ -28,7 +28,8 @@ Mở file `backend/.env` và kiểm tra:
 
 ```env
 # Phải là SERVICE_ROLE key, không phải ANON key
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUzOTExMiwiZXhwIjoyMDcyMTE1MTEyfQ.rlFwoXK_Yls7kRxL_lYqYWe3huJhs0V60Wa4Ddd7Ero
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API → Service Role Key
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key_here
 ```
 
 **Lưu ý quan trọng:**

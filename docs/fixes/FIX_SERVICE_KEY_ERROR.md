@@ -29,7 +29,8 @@ Lỗi này xảy ra khi `SUPABASE_SERVICE_KEY` trong file `.env` không đúng h
 1. Mở file `backend/.env`
 2. Cập nhật dòng:
    ```env
-   SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvdXJfcHJvamVjdF9yZWYiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNjE2MjM5MDIyLCJleHAiOjE5Nzc4MTUwMjJ9.your_service_role_key_here"
+   # ⚠️ Lấy từ Supabase Dashboard → Settings → API → Service Role Key
+   SUPABASE_SERVICE_KEY="your_supabase_service_role_key_here"
    ```
    (Thay bằng service_role key thực tế của bạn)
 

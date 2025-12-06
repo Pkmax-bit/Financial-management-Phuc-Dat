@@ -9,8 +9,15 @@ from supabase import create_client, Client
 
 class NotificationService:
     def __init__(self):
-        self.supabase_url = os.getenv("SUPABASE_URL", "https://mfmijckzlhevduwfigkl.supabase.co")
-        self.supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUzOTExMiwiZXhwIjoyMDcyMTE1MTEyfQ.rlFwoXK_Yls7kRxL_lYqYWe3huJhs0V60Wa4Ddd7Ero")
+        # ⚠️ SECURITY: No hardcoded credentials - must use environment variables
+        self.supabase_url = os.getenv("SUPABASE_URL")
+        self.supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+        
+        if not self.supabase_url:
+            raise ValueError("SUPABASE_URL environment variable is required")
+        if not self.supabase_key:
+            raise ValueError("SUPABASE_SERVICE_KEY environment variable is required")
+        
         self.supabase = create_client(self.supabase_url, self.supabase_key)
     
     async def create_quote_notification(self, quote_data: Dict[str, Any], employee_id: str) -> bool:

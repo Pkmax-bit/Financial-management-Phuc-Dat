@@ -20,25 +20,29 @@ Bạn đang có các biến với tên **SAI**, cần đổi tên:
 
 ### 1. Supabase Database Connection (BẮT BUỘC)
 ```
+# ⚠️ Lấy từ Supabase Dashboard → Settings → Database
 SUPABASE_DB_HOST=aws-1-ap-southeast-1.pooler.supabase.com
-SUPABASE_DB_USER=postgres.mfmijckzlhevduwfigkl
-SUPABASE_DB_PASSWORD=tudonghoa2025
+SUPABASE_DB_USER=postgres.your_project_id
+SUPABASE_DB_PASSWORD=your_database_password_here
 SUPABASE_DB_NAME=postgres
 SUPABASE_DB_PORT=6543
 ```
 
 ### 2. Dify API (Nếu dùng tính năng AI)
 ```
+# ⚠️ Lấy từ Dify Dashboard → API Keys
 DIFY_API_BASE_URL=https://api.dify.ai/v1
-DIFY_API_KEY=app-8gGZ55XJ7uNafs4TRAkqO0xl
+DIFY_API_KEY=your_dify_api_key_here
 ```
 
 ### 3. JWT Configuration (BẮT BUỘC)
 ```
-SECRET_KEY=ueqFQZLT+nMVthV1awuH7+L1MgBXHZGaW51CNBjLfLg=
+# ⚠️ Generate bằng: openssl rand -base64 32 (hoặc PowerShell equivalent)
+SECRET_KEY=your_secret_key_here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-SUPABASE_JWT_SECRET=DIiyyRJCCJrFc2FnmaKroTnzZh2I2JqouXOdhSdqu58SkZ3PTGYkpZFN9WrmP7hGfZbXgD4EdkEoatekEIrX0A==
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API → JWT Settings
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret_here
 ```
 
 ### 4. Application Settings (QUAN TRỌNG)
@@ -65,28 +69,32 @@ Copy và paste vào Render Dashboard → Environment Variables:
 PYTHON_VERSION=3.11.9
 
 # Supabase Configuration
-SUPABASE_URL=https://mfmijckzlhevduwfigkl.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUzOTExMiwiZXhwIjoyMDcyMTE1MTEyfQ.rlFwoXK_Yls7kRxL_lYqYWe3huJhs0V60Wa4Ddd7Ero
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MzkxMTIsImV4cCI6MjA3MjExNTExMn0.VPFmvLghhO32JybxDzq-CGVQedgI-LN7Q07rwDhxU4E
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key_here
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
 
 # Database Connection
+# ⚠️ Lấy từ Supabase Dashboard → Settings → Database
 SUPABASE_DB_HOST=aws-1-ap-southeast-1.pooler.supabase.com
-SUPABASE_DB_USER=postgres.mfmijckzlhevduwfigkl
-SUPABASE_DB_PASSWORD=tudonghoa2025
+SUPABASE_DB_USER=postgres.your_project_id
+SUPABASE_DB_PASSWORD=your_database_password_here
 SUPABASE_DB_NAME=postgres
 SUPABASE_DB_PORT=6543
 
 # Dify API
+# ⚠️ Lấy từ Dify Dashboard → API Keys
 DIFY_API_BASE_URL=https://api.dify.ai/v1
-DIFY_API_KEY=app-8gGZ55XJ7uNafs4TRAkqO0xl
+DIFY_API_KEY=your_dify_api_key_here
 
 # Email Configuration
 # Email provider: 'smtp' (default), 'resend', or 'n8n'
 EMAIL_PROVIDER=n8n
 
 # SMTP Configuration (for local development or fallback)
-SMTP_USER=phannguyendangkhoa0915@gmail.com
-SMTP_PASSWORD=wozhwluxehsfuqjm
+# ⚠️ Lấy từ Google Account → Security → App Passwords (cho Gmail)
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_gmail_app_password_here
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_TIMEOUT=30
@@ -103,10 +111,12 @@ N8N_API_KEY=your_n8n_api_key_here
 EMAIL_DEBUG=1
 
 # JWT Configuration
-SECRET_KEY=ueqFQZLT+nMVthV1awuH7+L1MgBXHZGaW51CNBjLfLg=
+# ⚠️ Generate bằng: openssl rand -base64 32 (hoặc PowerShell equivalent)
+SECRET_KEY=your_secret_key_here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-SUPABASE_JWT_SECRET=DIiyyRJCCJrFc2FnmaKroTnzZh2I2JqouXOdhSdqu58SkZ3PTGYkpZFN9WrmP7hGfZbXgD4EdkEoatekEIrX0A==
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API → JWT Settings
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret_here
 
 # Application Settings
 ENVIRONMENT=production

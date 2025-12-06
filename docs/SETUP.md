@@ -35,9 +35,10 @@ cp env.example .env
 
 Edit `backend/.env` with your Supabase credentials:
 ```env
-SUPABASE_URL="https://mfmijckzlhevduwfigkl.supabase.co"
-SUPABASE_SERVICE_KEY="your_service_key_here"
-SUPABASE_ANON_KEY="your_anon_key_here"
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+SUPABASE_URL="https://your-project-id.supabase.co"
+SUPABASE_SERVICE_KEY="your_supabase_service_role_key_here"
+SUPABASE_ANON_KEY="your_supabase_anon_key_here"
 ```
 
 #### Frontend Configuration
@@ -48,8 +49,9 @@ cp env.local.example .env.local
 
 Edit `frontend/.env.local`:
 ```env
-NEXT_PUBLIC_SUPABASE_URL="https://mfmijckzlhevduwfigkl.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your_anon_key_here"
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+NEXT_PUBLIC_SUPABASE_URL="https://your-project-id.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your_supabase_anon_key_here"
 NEXT_PUBLIC_API_URL="http://localhost:8000"
 ```
 

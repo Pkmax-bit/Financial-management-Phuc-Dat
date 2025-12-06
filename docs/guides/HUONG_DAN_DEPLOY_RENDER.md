@@ -69,25 +69,30 @@ Trong phần **Environment Variables**, thêm các biến sau:
 
 ```
 PYTHON_VERSION=3.11.0
-SUPABASE_URL=https://mfmijckzlhevduwfigkl.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUzOTExMiwiZXhwIjoyMDcyMTE1MTEyfQ.rlFwoXK_Yls7kRxL_lYqYWe3huJhs0V60Wa4Ddd7Ero
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MzkxMTIsImV4cCI6MjA3MjExNTExMn0.VPFmvLghhO32JybxDzq-CGVQedgI-LN7Q07rwDhxU4E
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key_here
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+# ⚠️ Lấy từ Supabase Dashboard → Settings → Database
 SUPABASE_DB_HOST=aws-1-ap-southeast-1.pooler.supabase.com
-SUPABASE_DB_USER=postgres.mfmijckzlhevduwfigkl
-SUPABASE_DB_PASSWORD=tudonghoa2025
+SUPABASE_DB_USER=postgres.your_project_id
+SUPABASE_DB_PASSWORD=your_database_password_here
 SUPABASE_DB_NAME=postgres
 SUPABASE_DB_PORT=6543
 DIFY_API_BASE_URL=https://api.dify.ai/v1
-DIFY_API_KEY=app-8gGZ55XJ7uNafs4TRAkqO0xl
-SMTP_USER=phannguyendangkhoa0915@gmail.com
-SMTP_PASSWORD=wozhwluxehsfuqjm
+# ⚠️ Lấy từ Dify Dashboard → API Keys
+DIFY_API_KEY=your_dify_api_key_here
+# ⚠️ Lấy từ Google Account → Security → App Passwords (cho Gmail)
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_gmail_app_password_here
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 EMAIL_DEBUG=1
 SECRET_KEY=your_secret_key_here_financial_management_2025
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-SUPABASE_JWT_SECRET=DIiyyRJCCJrFc2FnmaKroTnzZh2I2JqouXOdhSdqu58SkZ3PTGYkpZFN9WrmP7hGfZbXgD4EdkEoatekEIrX0A==
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API → JWT Settings
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret_here
 DEBUG=False
 ENVIRONMENT=production
 ```
@@ -135,11 +140,13 @@ Thêm các biến môi trường:
 
 ```
 NODE_VERSION=20.x
-NEXT_PUBLIC_SUPABASE_URL=https://mfmijckzlhevduwfigkl.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MzkxMTIsImV4cCI6MjA3MjExNTExMn0.VPFmvLghhO32JybxDzq-CGVQedgI-LN7Q07rwDhxU4E
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 NEXT_PUBLIC_API_URL=https://financial-management-backend.onrender.com
 NEXT_PUBLIC_DIFY_API_BASE_URL=https://api.dify.ai/v1
-NEXT_PUBLIC_DIFY_API_KEY=app-8gGZ55XJ7uNafs4TRAkqO0xl
+# ⚠️ Lấy từ Dify Dashboard → API Keys
+NEXT_PUBLIC_DIFY_API_KEY=your_dify_api_key_here
 ```
 
 **Lưu ý**: Thay `https://financial-management-backend.onrender.com` bằng URL backend thực tế của bạn.

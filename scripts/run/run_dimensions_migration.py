@@ -8,10 +8,15 @@ import sys
 from supabase import create_client, Client
 
 def get_supabase_client() -> Client:
-    """Get Supabase client"""
-    # Use hardcoded values from config.py
-    url = "https://mfmijckzlhevduwfigkl.supabase.co"
-    key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MzkxMTIsImV4cCI6MjA3MjExNTExMn0.VPFmvLghhO32JybxDzq-CGVQedgI-LN7Q07rwDhxU4E"
+    """Get Supabase client from environment variables"""
+    # ⚠️ SECURITY: No hardcoded credentials - must use environment variables
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_ANON_KEY")
+    
+    if not url:
+        raise ValueError("SUPABASE_URL environment variable is required")
+    if not key:
+        raise ValueError("SUPABASE_ANON_KEY environment variable is required")
     
     return create_client(url, key)
 

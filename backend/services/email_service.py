@@ -29,8 +29,9 @@ class EmailService:
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         # Support both SMTP_USER (from config.py) and SMTP_USERNAME (legacy) for backward compatibility
-        self.smtp_username = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME") or "phannguyendangkhoa0915@gmail.com"
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "wozhwluxehsfuqjm")
+        # ⚠️ SECURITY: No default values for credentials
+        self.smtp_username = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME")
+        self.smtp_password = os.getenv("SMTP_PASSWORD")
         # SMTP timeout in seconds (important for Render to avoid hanging)
         self.smtp_timeout = int(os.getenv("SMTP_TIMEOUT", "30"))
         

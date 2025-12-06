@@ -47,11 +47,13 @@ Trong phần **Environment Variables**, thêm các biến sau:
 
 ```
 NODE_VERSION=20.x
-NEXT_PUBLIC_SUPABASE_URL=https://mfmijckzlhevduwfigkl.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MzkxMTIsImV4cCI6MjA3MjExNTExMn0.VPFmvLghhO32JybxDzq-CGVQedgI-LN7Q07rwDhxU4E
-NEXT_PUBLIC_API_URL=https://financial-management-phuc-dat.onrender.com
+# ⚠️ Lấy từ Supabase Dashboard → Settings → API
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+NEXT_PUBLIC_API_URL=https://your-backend-url.onrender.com
 NEXT_PUBLIC_DIFY_API_BASE_URL=https://api.dify.ai/v1
-NEXT_PUBLIC_DIFY_API_KEY=app-8gGZ55XJ7uNafs4TRAkqO0xl
+# ⚠️ Lấy từ Dify Dashboard → API Keys
+NEXT_PUBLIC_DIFY_API_KEY=your_dify_api_key_here
 ```
 
 **Lưu ý quan trọng**:
