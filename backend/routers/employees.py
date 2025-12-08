@@ -147,11 +147,12 @@ async def get_employees(
     try:
         supabase = get_supabase_client()
         
-        # Select with JOIN to get department and position names
+        # Select with JOIN to get department, position names and user full_name
         query = supabase.table("employees").select("""
             *,
             departments:department_id(id, name, code),
-            positions:position_id(id, name, code)
+            positions:position_id(id, name, code),
+            users:user_id(full_name)
         """)
         
         # Apply filters
@@ -170,24 +171,33 @@ async def get_employees(
         if not result.data:
             return []
         
-        # Process data to add department_name and position_name
+        # Process data to add department_name, position_name and override name from user
         processed_employees = []
         for emp in result.data:
             emp_data = dict(emp)
             
-            # Handle department_name - Supabase join returns dict or None
+            # Handle department_name
             departments = emp.get('departments')
             if departments and isinstance(departments, dict):
                 emp_data['department_name'] = departments.get('name')
             else:
                 emp_data['department_name'] = None
             
-            # Handle position_name - Supabase join returns dict or None
+            # Handle position_name
             positions = emp.get('positions')
             if positions and isinstance(positions, dict):
                 emp_data['position_name'] = positions.get('name')
             else:
                 emp_data['position_name'] = None
+                
+            # Handle full_name from users table
+            users = emp.get('users')
+            if users and isinstance(users, dict) and users.get('full_name'):
+                emp_data['full_name'] = users.get('full_name')
+                # Optional: Update first/last name if needed, but full_name is safer
+            else:
+                # Fallback to constructing from first/last name
+                emp_data['full_name'] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
             
             processed_employees.append(emp_data)
         

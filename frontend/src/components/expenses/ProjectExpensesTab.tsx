@@ -1731,6 +1731,39 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
     setShowCreateModal(false)
   }
 
+  // Handle auto-trigger actions from query parameters
+  const actionTriggeredRef = useRef(false)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && expenses.length > 0 && !actionTriggeredRef.current) {
+      const urlParams = new URLSearchParams(window.location.search)
+      const action = urlParams.get('action')
+      const projectId = urlParams.get('project')
+      
+      if (action && projectId && (action === 'export-pdf' || action === 'send' || action === 'approve' || action === 'convert')) {
+        // Find first planned expense for this project
+        const projectExpense = expenses.find(e => 
+          e.project_id === projectId && e.category === 'planned'
+        )
+        
+        if (projectExpense) {
+          actionTriggeredRef.current = true
+          if (action === 'export-pdf' || action === 'send') {
+            // Auto-click Send button (icon máy bay) - opens preview modal
+            setTimeout(() => {
+              handleOpenPreview(projectExpense.id)
+            }, 800)
+          } else if (action === 'approve' || action === 'convert') {
+            // Auto-click Approve button (icon $) - converts to actual expense
+            setTimeout(() => {
+              handleApprove(projectExpense.id)
+            }, 800)
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses, selectedProjectId])
+
   const filteredExpenses = expenses.filter(expense => {
     const matchesSearch = !searchTerm ||
       expense.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||

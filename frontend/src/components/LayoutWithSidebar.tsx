@@ -26,11 +26,13 @@ import {
   Eye,
   Palette,
   Lock,
-  CheckSquare
+  CheckSquare,
+  PlayCircle
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
 import BackgroundSettings from './BackgroundSettings'
+import WorkflowFloatingButton from './workflow/WorkflowFloatingButton'
 import { useBackground } from '@/contexts/BackgroundContext'
 import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
 
@@ -287,7 +289,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     TestTube,
     Settings,
     HelpCircle,
-    CheckSquare
+    CheckSquare,
+    PlayCircle
   }
 
   const handleNavigation = (href: string) => {
@@ -547,6 +550,9 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           isOpen={showBackgroundSettings}
           onClose={() => setShowBackgroundSettings(false)}
         />
+
+        {/* Workflow Floating Button */}
+        <WorkflowFloatingButton />
       </div>
     </SidebarContext.Provider>
   )

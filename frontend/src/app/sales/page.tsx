@@ -68,17 +68,46 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
 
   useEffect(() => {
     const action = searchParams.get('action')
+    const tab = searchParams.get('tab')
 
+    // If tab is specified in URL, set it first
+    if (tab && ['overview', 'all-sales', 'quotes', 'invoices', 'receipts', 'payments', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments'].includes(tab)) {
+      setActiveTab(tab)
+    }
+
+    // Then check for action
     if (action === 'create') {
-      if (activeTab === 'quotes') {
-        setShouldOpenCreateModal(true)
-      } else if (activeTab === 'invoices') {
-        setShouldOpenCreateModal(true)
-      } else if (activeTab === 'receipts') {
-        setShowCreateReceiptModal(true)
+      // Use tab from URL if available, otherwise use current activeTab
+      const targetTab = tab || activeTab
+      
+      // Use setTimeout to ensure activeTab is updated first if tab was set
+      const openModal = () => {
+        if (targetTab === 'quotes') {
+          setActiveTab('quotes')
+          setShouldOpenCreateModal(true)
+        } else if (targetTab === 'invoices') {
+          setActiveTab('invoices')
+          setShouldOpenCreateModal(true)
+        } else if (targetTab === 'receipts') {
+          setActiveTab('receipts')
+          setShowCreateReceiptModal(true)
+        } else if (activeTab === 'quotes') {
+          setShouldOpenCreateModal(true)
+        } else if (activeTab === 'invoices') {
+          setShouldOpenCreateModal(true)
+        } else if (activeTab === 'receipts') {
+          setShowCreateReceiptModal(true)
+        }
+      }
+
+      // If tab was set, wait a bit for it to update, otherwise open immediately
+      if (tab) {
+        setTimeout(openModal, 150)
+      } else {
+        openModal()
       }
     }
-  }, [activeTab, searchParams])
+  }, [searchParams, activeTab])
 
   useEffect(() => {
     if (shouldOpenCreateModal && (activeTab === 'quotes' || activeTab === 'invoices')) {
@@ -678,7 +707,7 @@ function SalesPageWithParams() {
 
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments'].includes(tab)) {
+    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments', 'all-sales'].includes(tab)) {
       setActiveTab(tab)
     }
   }, [searchParams])

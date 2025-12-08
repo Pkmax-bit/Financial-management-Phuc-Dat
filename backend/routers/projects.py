@@ -874,6 +874,18 @@ async def create_project(
         project_dict["created_at"] = datetime.utcnow().isoformat()
         project_dict["updated_at"] = datetime.utcnow().isoformat()
         
+        # Convert date objects to strings for JSON serialization
+        if 'start_date' in project_dict and isinstance(project_dict['start_date'], date):
+            project_dict['start_date'] = project_dict['start_date'].isoformat()
+        if 'end_date' in project_dict and isinstance(project_dict['end_date'], date):
+            project_dict['end_date'] = project_dict['end_date'].isoformat()
+            
+        # Convert enum objects to strings for JSON serialization
+        if 'status' in project_dict and hasattr(project_dict['status'], 'value'):
+            project_dict['status'] = project_dict['status'].value
+        if 'priority' in project_dict and hasattr(project_dict['priority'], 'value'):
+            project_dict['priority'] = project_dict['priority'].value
+        
         result = supabase.table("projects").insert(project_dict).execute()
         
         if result.data:

@@ -567,6 +567,17 @@ export default function ProjectsPage() {
     fetchStats()
   }, [])
 
+  // Handle action=create from query parameters
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const action = urlParams.get('action')
+      if (action === 'create') {
+        setShowCreateModal(true)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     if (!isBrowser) return
     if (autoStartAttemptedRef.current) return

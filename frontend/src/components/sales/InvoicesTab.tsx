@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   Receipt, 
   Plus, 
@@ -103,6 +103,33 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
     fetchProjects()
     fetchTeamMembers()
   }, [])
+
+  // Handle auto-trigger actions from query parameters
+  const actionTriggeredRef = useRef(false)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && invoices.length > 0 && !actionTriggeredRef.current) {
+      const urlParams = new URLSearchParams(window.location.search)
+      const action = urlParams.get('action')
+      const projectId = urlParams.get('project')
+      
+      if (action && projectId && action === 'payment') {
+        // Find first invoice for this project that can be paid
+        const projectInvoice = invoices.find(inv => 
+          inv.project_id === projectId && 
+          (inv.payment_status === 'pending' || inv.payment_status === 'partial')
+        )
+        
+        if (projectInvoice) {
+          actionTriggeredRef.current = true
+          // Auto-click Payment button (icon $) - opens payment modal
+          setTimeout(() => {
+            openPaymentModal(projectInvoice)
+          }, 800)
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices, selectedProjectId])
 
   const fetchTeamMembers = async () => {
     try {

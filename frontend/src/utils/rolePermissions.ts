@@ -44,6 +44,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'main'
   },
   {
+    name: 'Quy trình',
+    href: '/workflow',
+    icon: 'PlayCircle',
+    description: 'Xem hướng dẫn quy trình quản lý tài chính',
+    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker', 'customer'],
+    category: 'main'
+  },
+  {
     name: 'Khách hàng',
     href: '/customers',
     icon: 'Building2',

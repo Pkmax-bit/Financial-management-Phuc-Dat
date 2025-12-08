@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { Calendar, FileText, DollarSign } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getApiEndpoint, getApiUrl } from '@/lib/apiUrl'
+import QuoteEmailPreviewModal from '@/components/sales/QuoteEmailPreviewModal'
 
 interface QuoteItem {
   id: string
@@ -23,10 +24,12 @@ interface QuoteItem {
 
 export default function QuoteDetailPage() {
   const params = useParams() as { quoteId?: string }
+  const searchParams = useSearchParams()
   const quoteId = params?.quoteId as string
   const [loading, setLoading] = useState(true)
   const [quote, setQuote] = useState<any>(null)
   const [items, setItems] = useState<QuoteItem[]>([])
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -116,6 +119,14 @@ export default function QuoteDetailPage() {
     }
     if (quoteId) fetchData()
   }, [quoteId])
+
+  // Check if should open preview modal
+  useEffect(() => {
+    const action = searchParams.get('action')
+    if (action === 'preview' && quote && !showPreviewModal) {
+      setShowPreviewModal(true)
+    }
+  }, [searchParams, quote, showPreviewModal])
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0)
   const formatDate = (d?: string) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')
@@ -219,6 +230,41 @@ export default function QuoteDetailPage() {
         </table>
       </div>
       </main>
+
+      {/* Quote Email Preview Modal */}
+      {quote && (
+        <QuoteEmailPreviewModal
+          isOpen={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          quoteId={quoteId}
+          onConfirmSend={async () => {
+            // Refresh quote data after sending
+            const token = (await supabase.auth.getSession()).data.session?.access_token
+            const qRes = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}`), {
+              headers: { Authorization: `Bearer ${token || ''}` }
+            })
+            if (qRes.ok) {
+              const qData = await qRes.json()
+              setQuote(qData)
+            }
+            setShowPreviewModal(false)
+          }}
+          onQuoteStatusUpdated={() => {
+            // Refresh quote data
+            const fetchData = async () => {
+              const token = (await supabase.auth.getSession()).data.session?.access_token
+              const qRes = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}`), {
+                headers: { Authorization: `Bearer ${token || ''}` }
+              })
+              if (qRes.ok) {
+                const qData = await qRes.json()
+                setQuote(qData)
+              }
+            }
+            fetchData()
+          }}
+        />
+      )}
     </div>
   )
 }

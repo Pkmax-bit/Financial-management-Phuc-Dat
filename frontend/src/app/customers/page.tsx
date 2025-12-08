@@ -150,6 +150,17 @@ export default function CustomersPage() {
     checkUser()
   }, [])
 
+  // Handle action=create from query parameters
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const action = urlParams.get('action')
+      if (action === 'create') {
+        setShowAddModal(true)
+      }
+    }
+  }, [])
+
   const checkUser = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()

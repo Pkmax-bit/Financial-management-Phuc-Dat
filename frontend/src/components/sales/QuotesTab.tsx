@@ -331,6 +331,37 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     }
   }, [shouldOpenCreateModal])
 
+  // Handle auto-trigger actions from query parameters
+  const actionTriggeredRef = useRef(false)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && quotes.length > 0 && !actionTriggeredRef.current) {
+      const urlParams = new URLSearchParams(window.location.search)
+      const action = urlParams.get('action')
+      const projectId = urlParams.get('project')
+      
+      if (action && projectId) {
+        // Find first quote for this project
+        const projectQuote = quotes.find(q => q.project_id === projectId)
+        
+        if (projectQuote) {
+          actionTriggeredRef.current = true
+          if (action === 'preview' || action === 'export-pdf' || action === 'send') {
+            // Auto-click Send button (icon máy bay) - opens preview modal with PDF download
+            setTimeout(() => {
+              sendQuote(projectQuote.id)
+            }, 800)
+          } else if (action === 'approve' || action === 'convert') {
+            // Auto-click Convert to Invoice button (icon $)
+            setTimeout(() => {
+              convertToInvoice(projectQuote.id)
+            }, 800)
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes, selectedProjectId])
+
   const fetchQuotes = async () => {
     try {
       setLoading(true)
