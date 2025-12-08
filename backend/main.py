@@ -178,8 +178,14 @@ async def root():
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "financial-management-api"}
+    """Health check endpoint for Render deployment - must be fast and always return 200"""
+    # Simple health check - always return 200 quickly
+    # Render needs a fast response to know the service is up
+    return {
+        "status": "healthy",
+        "service": "financial-management-api",
+        "version": "1.0.0"
+    }
 
 # Import routers
 from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks
