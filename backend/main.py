@@ -188,7 +188,7 @@ async def health_check():
     }
 
 # Import routers
-from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks
+from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks, products
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -197,6 +197,7 @@ app.include_router(employees.router, prefix="/api/employees", tags=["Employees"]
 app.include_router(employee_excel.router, prefix="/api/employee-excel", tags=["Employee Excel"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])
 app.include_router(sales.router, prefix="/api/sales", tags=["Sales"])
+app.include_router(products.router, prefix="/api/sales", tags=["Products"])
 app.include_router(sales_receipts.router, prefix="/api/sales", tags=["Sales Receipts"])
 app.include_router(credit_memos.router, tags=["Credit Memos"])
 app.include_router(expenses.router, prefix="/api/expenses", tags=["Expenses"])

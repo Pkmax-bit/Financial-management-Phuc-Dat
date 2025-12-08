@@ -29,7 +29,7 @@ class QuoteService:
         if product_ids:
             try:
                 # Fetch products to get category_ids, image_url, and image_urls
-                products_result = supabase.table("products").select("id, category_id, image_url, image_urls").in_("id", product_ids).execute()
+                products_result = supabase.table("products").select("id, category_id, image_url, image_urls, name, description, unit, price").in_("id", product_ids).execute()
                 if products_result.data:
                     # Map product_id -> product data
                     product_map = {p['id']: p for p in products_result.data}
@@ -74,14 +74,102 @@ class QuoteService:
 
             item['category_name'] = category_name
             
-            # Add product images if available
+            # Add product information if available
             if product_id and product_id in product_map:
                 product = product_map[product_id]
                 if product.get('image_url'):
                     item['product_image_url'] = product.get('image_url')
                 if product.get('image_urls'):
                     item['product_image_urls'] = product.get('image_urls')
+                # Add product name, description, unit, price for mobile app
+                if product.get('name'):
+                    item['product_name'] = product.get('name')
+                if product.get('description'):
+                    item['product_description'] = product.get('description')
+                if product.get('unit'):
+                    item['product_unit'] = product.get('unit')
+                if product.get('price'):
+                    item['product_price'] = product.get('price')
 
         return quote_items
+
+    async def get_invoice_items_with_categories(self, invoice_id: str) -> List[Dict[str, Any]]:
+        """
+        Fetch invoice items and efficiently populate their category names and product information.
+        Similar to get_quote_items_with_categories but for invoices.
+        """
+        supabase = get_supabase_client()
+        
+        # 1. Get invoice items
+        invoice_items_result = supabase.table("invoice_items").select("*").eq("invoice_id", invoice_id).execute()
+        invoice_items = invoice_items_result.data if invoice_items_result.data else []
+        
+        if not invoice_items:
+            return []
+
+        # 2. Collect product IDs to fetch categories in bulk
+        product_ids = [item.get('product_service_id') for item in invoice_items if item.get('product_service_id')]
+        
+        category_map = {} # category_id -> category_name
+        product_category_map = {} # product_id -> category_id
+        product_map = {} # product_id -> product data
+
+        if product_ids:
+            try:
+                # Fetch products to get category_ids, image_url, and image_urls
+                products_result = supabase.table("products").select("id, category_id, image_url, image_urls, name, description, unit, price").in_("id", product_ids).execute()
+                if products_result.data:
+                    # Map product_id -> product data
+                    product_map = {p['id']: p for p in products_result.data}
+                    product_category_map = {p['id']: p.get('category_id') for p in products_result.data if p.get('category_id')}
+                    
+                    # Collect unique category IDs
+                    category_ids = list(set(product_category_map.values()))
+                    
+                    if category_ids:
+                        # Fetch category names
+                        categories_result = supabase.table("product_categories").select("id, name").in_("id", category_ids).execute()
+                        if categories_result.data:
+                            category_map = {cat['id']: cat.get('name', '') for cat in categories_result.data}
+            except Exception as e:
+                print(f"Error fetching category and product image info in QuoteService (invoice): {e}")
+
+        # 3. Enrich items with category_name and product images
+        for item in invoice_items:
+            category_name = ""
+            
+            # Strategy A: From product_service_id -> product -> category
+            product_id = item.get('product_service_id')
+            if product_id and product_id in product_category_map:
+                category_id = product_category_map[product_id]
+                if category_id in category_map:
+                    category_name = category_map[category_id]
+            
+            # Strategy B: Fallback to product_category_id (legacy field on item)
+            if not category_name and item.get('product_category_id'):
+                cat_id = item.get('product_category_id')
+                if cat_id in category_map:
+                    category_name = category_map[cat_id]
+
+            item['category_name'] = category_name
+            
+            # Add product information if available
+            if product_id and product_id in product_map:
+                product = product_map[product_id]
+                if product.get('image_url'):
+                    item['product_image_url'] = product.get('image_url')
+                if product.get('image_urls'):
+                    item['product_image_urls'] = product.get('image_urls')
+                # Add product name, description, unit, price for mobile app
+                if product.get('name'):
+                    item['product_name'] = product.get('name')
+                if product.get('description'):
+                    item['product_description'] = product.get('description')
+                if product.get('unit'):
+                    item['product_unit'] = product.get('unit')
+                if product.get('price'):
+                    item['product_price'] = product.get('price')
+
+        return invoice_items
 
 quote_service = QuoteService()
