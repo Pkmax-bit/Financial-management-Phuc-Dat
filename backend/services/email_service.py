@@ -534,9 +534,9 @@ class EmailService:
         
         # Get company info from customization or use defaults
         company_name_display = (company_info.get("company_name") if company_info else None) or "Công Ty TNHH Nhôm Kính Phúc Đạt"
-        company_showroom = (company_info.get("company_showroom") if company_info else None) or "480/3 Tân Kỳ Tân Quý, P. Sơn Kỳ, Q. Tân Phú, TP.HCM"
-        company_factory = (company_info.get("company_factory") if company_info else None) or "334/6A Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú"
-        company_website = (company_info.get("company_website") if company_info else None) or "https://www.kinhphucdat.com"
+        company_showroom = (company_info.get("company_showroom") if company_info else None) or "480/3 Tân Kỳ Tân Quý, P.Sơn Kỳ, Q.Tân Phú, TpHCM"
+        company_factory = (company_info.get("company_factory") if company_info else None) or "165/4 Bờ Bao Tân Thắng, P.Tân Quý, Q.Tân Phú, TpHCM"
+        company_website = (company_info.get("company_website") if company_info else None) or "http://phucdatdoor.vn"
         company_hotline = (company_info.get("company_hotline") if company_info else None) or "0901.116.118"
         
         # Logo handling - always use CID for email (will be attached when sending)
@@ -568,8 +568,8 @@ class EmailService:
                             </td>
                             <td style="width:60%; text-align:right; vertical-align:middle; padding:10px 0;">
                                 <div style="font-size:13px; color:#000000; font-weight:600;">{company_name_display}</div>
-                                <div style="font-size:12px; color:#000000; margin-top:4px;">Showroom: {company_showroom}</div>
-                                <div style="font-size:12px; color:#000000;">Xưởng sản xuất: {company_factory}</div>
+                                <div style="font-size:12px; color:#000000; margin-top:4px;">1. Trụ sở: {company_showroom}</div>
+                                <div style="font-size:12px; color:#000000;">2. Showroom & Xưởng SX nhôm: {company_factory}</div>
                                 <div style="font-size:12px; color:#000000;">
                                     {f'<a href="{company_website}" style="color:#2563eb; text-decoration:none;">{company_website.replace("https://", "").replace("http://", "")}</a>' if company_website else ''}
                                     {f'<span style="color:#000000;"> | Hotline: {company_hotline}</span>' if company_hotline else ''}

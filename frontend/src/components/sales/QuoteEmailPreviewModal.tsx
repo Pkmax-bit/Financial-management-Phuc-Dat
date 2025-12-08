@@ -1602,7 +1602,7 @@ export default function QuoteEmailPreviewModal({
                         value={companyShowroom}
                         onChange={(e) => setCompanyShowroom(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                        placeholder="480/3 Tân Kỳ Tân Quý, P. Sơn Kỳ, Q. Tân Phú, TP.HCM"
+                        placeholder="480/3 Tân Kỳ Tân Quý, P.Sơn Kỳ, Q.Tân Phú, TpHCM"
                       />
                     </div>
                     <div>
@@ -1612,7 +1612,7 @@ export default function QuoteEmailPreviewModal({
                         value={companyFactory}
                         onChange={(e) => setCompanyFactory(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                        placeholder="334/6A Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú"
+                        placeholder="165/4 Bờ Bao Tân Thắng, P.Tân Quý, Q.Tân Phú, TpHCM"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
