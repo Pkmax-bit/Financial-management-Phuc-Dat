@@ -82,15 +82,22 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
       
       // Use setTimeout to ensure activeTab is updated first if tab was set
       const openModal = () => {
-        if (targetTab === 'quotes') {
+        if (targetTab === 'quotes' || tab === 'quotes') {
           setActiveTab('quotes')
-          setShouldOpenCreateModal(true)
-        } else if (targetTab === 'invoices') {
+          // Use a small delay to ensure tab is set before opening modal
+          setTimeout(() => {
+            setShouldOpenCreateModal(true)
+          }, 100)
+        } else if (targetTab === 'invoices' || tab === 'invoices') {
           setActiveTab('invoices')
-          setShouldOpenCreateModal(true)
-        } else if (targetTab === 'receipts') {
+          setTimeout(() => {
+            setShouldOpenCreateModal(true)
+          }, 100)
+        } else if (targetTab === 'receipts' || tab === 'receipts') {
           setActiveTab('receipts')
-          setShowCreateReceiptModal(true)
+          setTimeout(() => {
+            setShowCreateReceiptModal(true)
+          }, 100)
         } else if (activeTab === 'quotes') {
           setShouldOpenCreateModal(true)
         } else if (activeTab === 'invoices') {
@@ -102,7 +109,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
 
       // If tab was set, wait a bit for it to update, otherwise open immediately
       if (tab) {
-        setTimeout(openModal, 150)
+        setTimeout(openModal, 200)
       } else {
         openModal()
       }
@@ -111,10 +118,10 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
 
   useEffect(() => {
     if (shouldOpenCreateModal && (activeTab === 'quotes' || activeTab === 'invoices')) {
-      // Reset the flag after a short delay to allow the modal to open
+      // Reset the flag after a longer delay to ensure modal opens
       const timer = setTimeout(() => {
         setShouldOpenCreateModal(false)
-      }, 100)
+      }, 500)
       return () => clearTimeout(timer)
     }
   }, [shouldOpenCreateModal, activeTab])

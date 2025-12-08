@@ -61,9 +61,10 @@ interface ProjectExpense {
 interface ProjectExpensesTabProps {
   searchTerm?: string
   onCreateExpense: () => void
+  shouldOpenCreateModal?: boolean
 }
 
-export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: ProjectExpensesTabProps) {
+export default function ProjectExpensesTab({ searchTerm, onCreateExpense, shouldOpenCreateModal }: ProjectExpensesTabProps) {
   const [expenses, setExpenses] = useState<ProjectExpense[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1720,6 +1721,15 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense }: Proj
     setShowCreateModal(true)
     onCreateExpense()
   }
+
+  // Handle shouldOpenCreateModal prop
+  useEffect(() => {
+    if (shouldOpenCreateModal) {
+      console.log('✅ Opening create expense modal from shouldOpenCreateModal')
+      setShowCreateModal(true)
+      onCreateExpense()
+    }
+  }, [shouldOpenCreateModal, onCreateExpense])
 
   const handleCloseModal = () => {
     setShowCreateModal(false)

@@ -621,6 +621,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }
 
+
   // Auto-select expense objects from product_components when both are ready (for both planned and actual expenses)
   useEffect(() => {
     if (
@@ -1446,6 +1447,40 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       }
     }
   }, [isOpen])
+
+  // Auto-fill project info from query params (separate effect to run after reset)
+  useEffect(() => {
+    if (isOpen && !isEdit && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const projectId = urlParams.get('project')
+      
+      if (projectId) {
+        // Small delay to ensure form is reset first
+        const timer = setTimeout(() => {
+          // Fetch project details
+          supabase
+            .from('projects')
+            .select('id, name, customer_id, start_date, end_date')
+            .eq('id', projectId)
+            .single()
+            .then(({ data: project, error }) => {
+              if (!error && project) {
+                console.log('✅ Auto-filling project info for expense:', project)
+                // Auto-fill project
+                setFormData(prev => ({
+                  ...prev,
+                  project_id: project.id,
+                  expense_date: project.start_date ? new Date(project.start_date).toISOString().split('T')[0] : prev.expense_date
+                }))
+                console.log('✅ Auto-filled project info:', project.name)
+              }
+            })
+        }, 200)
+        
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [isOpen, isEdit])
 
   // Load user role and expense objects when dialog opens
   useEffect(() => {

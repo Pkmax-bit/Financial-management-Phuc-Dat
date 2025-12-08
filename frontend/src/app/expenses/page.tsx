@@ -58,7 +58,10 @@ function ExpensesPageContent() {
     const action = searchParams.get('action')
     if (action === 'create') {
       if (tab === 'project-expenses' || tab === 'expenses') {
-        setShouldOpenCreateModal(true)
+        // Use setTimeout to ensure tab is set before opening modal
+        setTimeout(() => {
+          setShouldOpenCreateModal(true)
+        }, 200)
       }
     }
   }, [searchParams])
@@ -492,6 +495,7 @@ function ExpensesPageContent() {
                   <ProjectExpensesTab
                     searchTerm={searchTerm}
                     onCreateExpense={handleCreateProjectExpense}
+                    shouldOpenCreateModal={shouldOpenCreateModal}
                   />
                 )}
                 {activeTab === 'expenses' && (

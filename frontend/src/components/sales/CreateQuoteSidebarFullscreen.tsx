@@ -543,6 +543,41 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     calculateSubtotal()
   }, [items])
 
+  // Auto-fill project info when modal opens with project from query params
+  useEffect(() => {
+    if (isOpen && !quoteId && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const projectId = urlParams.get('project')
+      
+      if (projectId && !formData.project_id) {
+        // Fetch project details
+        supabase
+          .from('projects')
+          .select('id, name, customer_id, start_date, end_date')
+          .eq('id', projectId)
+          .single()
+          .then(({ data: project, error }) => {
+            if (!error && project) {
+              console.log('✅ Auto-filling project info:', project)
+              // Auto-fill customer and project
+              setFormData(prev => ({
+                ...prev,
+                customer_id: project.customer_id || prev.customer_id,
+                project_id: project.id,
+                issue_date: project.start_date ? normalizeDateInput(project.start_date) || new Date().toISOString().split('T')[0] : prev.issue_date,
+                valid_until: project.end_date ? normalizeDateInput(project.end_date) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : prev.valid_until
+              }))
+              
+              // Fetch projects for this customer
+              if (project.customer_id) {
+                fetchProjectsByCustomer(project.customer_id)
+              }
+            }
+          })
+      }
+    }
+  }, [isOpen, quoteId, formData.project_id])
+
   // Fetch projects when customer changes
   useEffect(() => {
     if (formData.customer_id) {

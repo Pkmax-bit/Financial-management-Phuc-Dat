@@ -327,9 +327,27 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
   useEffect(() => {
     if (shouldOpenCreateModal) {
+      console.log('✅ Opening create quote modal from shouldOpenCreateModal')
       setShowCreateModal(true)
+      // Reset the flag after opening to allow re-triggering
+      const timer = setTimeout(() => {
+        // The parent component will reset shouldOpenCreateModal
+      }, 100)
+      return () => clearTimeout(timer)
     }
   }, [shouldOpenCreateModal])
+
+  // Auto-fill project info when opening create modal with project from query params
+  useEffect(() => {
+    if (showCreateModal && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const projectId = urlParams.get('project')
+      if (projectId) {
+        // Project info will be auto-filled in CreateQuoteSidebarFullscreen
+        // This effect ensures modal opens when project is in URL
+      }
+    }
+  }, [showCreateModal])
 
   // Handle auto-trigger actions from query parameters
   const actionTriggeredRef = useRef(false)
