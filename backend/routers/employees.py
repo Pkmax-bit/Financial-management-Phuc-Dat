@@ -146,6 +146,7 @@ async def get_employees(
     """Get all employees with optional filtering - returns dict with joined data"""
     try:
         supabase = get_supabase_client()
+        # Fetching employees with full details
         
         # Select with JOIN to get department, position names and user full_name
         query = supabase.table("employees").select("""

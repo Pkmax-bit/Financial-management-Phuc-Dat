@@ -177,8 +177,16 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
 
   if (!isOpen || !project) return null
 
-  const statusInfo = statusConfig[project.status]
-  const priorityInfo = priorityConfig[project.priority]
+  // Safe access with fallback values
+  const statusInfo = statusConfig[project.status] || {
+    label: project.status || 'Không xác định',
+    color: 'bg-gray-100 text-gray-800',
+    icon: AlertCircle
+  }
+  const priorityInfo = priorityConfig[project.priority] || {
+    label: project.priority || 'Không xác định',
+    color: 'bg-gray-100 text-gray-800'
+  }
   const StatusIcon = statusInfo.icon
 
   return (

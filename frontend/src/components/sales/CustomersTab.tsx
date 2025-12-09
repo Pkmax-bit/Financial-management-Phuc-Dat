@@ -194,9 +194,55 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
     // Open edit modal or navigate to edit page
   }
 
-  const handleDeleteCustomer = (customerId: string) => {
-    console.log('Delete customer:', customerId)
-    // Show confirmation dialog and delete
+  const handleDeleteCustomer = async (customer: Customer) => {
+    const customerId = customer.id
+    const customerName = customer.name
+    
+    // Show dialog with options: Soft delete or Hard delete
+    const deleteOption = window.confirm(
+      `Xóa khách hàng "${customerName}"?\n\n` +
+      `Chọn OK để xóa tạm thời (có thể khôi phục)\n` +
+      `Hoặc hủy và chọn "Xóa hoàn toàn" từ menu để xóa vĩnh viễn`
+    )
+    
+    if (!deleteOption) return
+    
+    try {
+      // Soft delete by default
+      await customerApi.deleteCustomer(customerId, false)
+      alert('Đã xóa khách hàng thành công (có thể khôi phục bằng cách đổi trạng thái)')
+      await fetchCustomers()
+    } catch (err: unknown) {
+      console.error('Error deleting customer:', err)
+      alert((err as Error)?.message || 'Không thể xóa khách hàng')
+    }
+  }
+
+  const handleHardDeleteCustomer = async (customer: Customer) => {
+    const customerId = customer.id
+    const customerName = customer.name
+    
+    // Show warning for hard delete
+    const confirmHardDelete = window.confirm(
+      `⚠️ CẢNH BÁO: Xóa hoàn toàn khách hàng "${customerName}"\n\n` +
+      `Hành động này sẽ xóa vĩnh viễn khách hàng khỏi hệ thống và KHÔNG THỂ khôi phục!\n\n` +
+      `Chỉ có thể xóa hoàn toàn nếu khách hàng không có:\n` +
+      `- Hóa đơn\n` +
+      `- Báo giá\n` +
+      `- Dự án\n\n` +
+      `Bạn có chắc chắn muốn tiếp tục?`
+    )
+    
+    if (!confirmHardDelete) return
+    
+    try {
+      await customerApi.deleteCustomer(customerId, true)
+      alert('Đã xóa hoàn toàn khách hàng khỏi hệ thống')
+      await fetchCustomers()
+    } catch (err: unknown) {
+      console.error('Error hard deleting customer:', err)
+      alert((err as Error)?.message || 'Không thể xóa hoàn toàn khách hàng. Có thể khách hàng đang có dữ liệu liên quan.')
+    }
   }
 
   const handleCreateInvoice = (customerId: string) => {
@@ -506,13 +552,38 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      <button 
-                        onClick={() => handleDeleteCustomer(customer.id)}
-                        className="text-red-600 hover:text-red-900 p-1"
-                        title="Xóa"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="relative group">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteCustomer(customer)
+                          }}
+                          className="text-red-600 hover:text-red-900 p-1"
+                          title="Xóa"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteCustomer(customer)
+                            }}
+                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-md"
+                          >
+                            Xóa tạm thời (có thể khôi phục)
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleHardDeleteCustomer(customer)
+                            }}
+                            className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-md border-t border-gray-200"
+                          >
+                            Xóa hoàn toàn (không thể khôi phục)
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </td>
                 </tr>
