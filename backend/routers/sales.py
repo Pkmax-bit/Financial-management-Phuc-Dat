@@ -220,7 +220,12 @@ async def get_quotes(
         # Get accessible project_ids for current user
         accessible_project_ids = get_user_accessible_project_ids(supabase, current_user)
         
-        query = supabase.table("quotes").select("*")
+        query = supabase.table("quotes").select("""
+            *,
+            customers!quotes_customer_id_fkey(id, name, email, phone, company),
+            projects!quotes_project_id_fkey(id, name, project_code),
+            quote_items(*)
+        """)
         
         # Filter by accessible projects if user is not admin/accountant
         if accessible_project_ids is not None:  # None means all projects (admin/accountant)
@@ -333,7 +338,12 @@ async def get_quote(
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        result = supabase.table("quotes").select("""
+            *,
+            customers!quotes_customer_id_fkey(id, name, email, phone, company),
+            projects!quotes_project_id_fkey(id, name, project_code),
+            quote_items(*)
+        """).eq("id", quote_id).execute()
         
         if not result.data:
             raise HTTPException(
@@ -351,7 +361,13 @@ async def get_quote(
                 detail="You don't have access to this quote"
             )
         
-        return Quote(**result.data[0])
+        # Get quote items with product information (category, images, etc.)
+        quote_items_with_products = await quote_service.get_quote_items_with_categories(quote_id)
+        
+        # Replace quote_items in the response with enriched items
+        quote["quote_items"] = quote_items_with_products
+        
+        return Quote(**quote)
         
     except HTTPException:
         raise
@@ -1887,7 +1903,11 @@ async def get_invoices(
         # Get accessible project_ids for current user
         accessible_project_ids = get_user_accessible_project_ids(supabase, current_user)
         
-        query = supabase.table("invoices").select("*")
+        query = supabase.table("invoices").select("""
+            *,
+            customers!invoices_customer_id_fkey(id, name, email, phone, company),
+            projects!invoices_project_id_fkey(id, name, project_code)
+        """)
         
         # Filter by accessible projects if user is not admin/accountant
         if accessible_project_ids is not None:  # None means all projects (admin/accountant)
@@ -2003,7 +2023,14 @@ async def get_invoice(
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table("invoices").select("*").eq("id", invoice_id).execute()
+        result = supabase.table("invoices").select("""
+            *,
+            *,
+            customers!invoices_customer_id_fkey(id, name, email, phone, company),
+            projects!invoices_project_id_fkey(id, name, project_code),
+            invoice_items(*),
+            payments(*)
+        """).eq("id", invoice_id).execute()
         
         if not result.data:
             raise HTTPException(
@@ -2021,7 +2048,13 @@ async def get_invoice(
                 detail="You don't have access to this invoice"
             )
         
-        return Invoice(**result.data[0])
+        # Get invoice items with product information (category, images, etc.)
+        invoice_items_with_products = await quote_service.get_invoice_items_with_categories(invoice_id)
+        
+        # Replace invoice_items in the response with enriched items
+        invoice["invoice_items"] = invoice_items_with_products
+        
+        return Invoice(**invoice)
         
     except HTTPException:
         raise
