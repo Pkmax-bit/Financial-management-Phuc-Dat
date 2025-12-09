@@ -18,10 +18,12 @@ import {
   X,
   Package,
   CheckCircle2,
-  CircleHelp
+  CircleHelp,
+  Sparkles
 } from 'lucide-react'
 import CreateQuoteSidebarFullscreen from './CreateQuoteSidebarFullscreen'
 import QuoteEmailPreviewModal from './QuoteEmailPreviewModal'
+import { useRouter } from 'next/navigation'
 import { apiGet, apiPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { getApiEndpoint } from '@/lib/apiUrl'
@@ -70,6 +72,7 @@ interface QuotesTabProps {
 }
 
 export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateModal }: QuotesTabProps) {
+  const router = useRouter()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
@@ -1457,6 +1460,26 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
   return (
     <div className="space-y-4">
+      {/* Excel Import Section */}
+      <div className="mb-6 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center">
+              <Sparkles className="h-5 w-5 mr-2 text-blue-600" />
+              Import Báo giá từ Excel với AI
+            </h3>
+            <p className="text-sm text-gray-600">Upload file Excel và để AI tự động phân tích, trích xuất thông tin</p>
+          </div>
+          <button
+            onClick={() => router.push('/sales/upload-quote')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center space-x-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>Mở giao diện AI Import</span>
+          </button>
+        </div>
+      </div>
+
       {/* Header with Help Button */}
       <div className="flex items-center justify-between mb-4" data-tour-id="quotes-list-header">
         <div className="flex items-center space-x-4">

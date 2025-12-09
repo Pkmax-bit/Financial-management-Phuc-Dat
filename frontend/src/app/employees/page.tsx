@@ -243,7 +243,7 @@ export default function EmployeesPage() {
 
     try {
       if (typeof window !== 'undefined' && 
-          window.confirm(`Bạn có chắc chắn muốn xóa nhân viên ${employee.first_name} ${employee.last_name}?\n\nHành động này không thể hoàn tác!`)) {
+          window.confirm(`Bạn có chắc chắn muốn xóa nhân viên ${employee.first_name} ${employee.last_name}?\n\nHành động này sẽ xóa vĩnh viễn nhân viên khỏi hệ thống và không thể hoàn tác!\n\nLưu ý: Không thể xóa nhân viên đang trong dự án hoạt động hoặc có bản ghi thời gian làm việc.`)) {
         console.log('Delete employee:', employeeId)
         
         await employeeApi.deleteEmployee(employeeId)

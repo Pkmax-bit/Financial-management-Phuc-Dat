@@ -20,6 +20,12 @@ export default function ProductCategoriesTab() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const loadCategories = async () => {
     try {
@@ -82,6 +88,95 @@ export default function ProductCategoriesTab() {
       setCategories(prev => prev.map(c => c.id === id ? { ...c, is_active: !isActive } : c))
     } catch (e) {
       // ignore minimal error handling
+    }
+  }
+
+  const startEdit = (category: Category) => {
+    setEditingId(category.id)
+    setEditName(category.name)
+    setEditDescription(category.description || '')
+    setError(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditName('')
+    setEditDescription('')
+    setError(null)
+  }
+
+  const handleUpdate = async (id: string) => {
+    if (!editName.trim()) {
+      setError('Tên hạng mục không được để trống')
+      return
+    }
+    try {
+      setSubmitting(true)
+      setError(null)
+      setSuccess(null)
+      const { error } = await supabase
+        .from('product_categories')
+        .update({ 
+          name: editName.trim(), 
+          description: editDescription.trim() || null 
+        })
+        .eq('id', id)
+      if (error) throw error
+      
+      setSuccess(`Hạng mục "${editName.trim()}" đã được cập nhật thành công!`)
+      await loadCategories()
+      cancelEdit()
+      
+      setTimeout(() => {
+        setSuccess(null)
+      }, 3000)
+    } catch (e: any) {
+      setError(e.message || 'Không thể cập nhật hạng mục')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (id: string, categoryName: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa hạng mục "${categoryName}"?\n\nLưu ý: Các sản phẩm thuộc hạng mục này sẽ không bị xóa, nhưng sẽ không còn thuộc hạng mục nào.`)) {
+      return
+    }
+    
+    try {
+      setDeletingId(id)
+      setError(null)
+      setSuccess(null)
+      
+      // Check if there are products using this category
+      const { data: products } = await supabase
+        .from('products')
+        .select('id')
+        .eq('category_id', id)
+        .limit(1)
+      
+      if (products && products.length > 0) {
+        setError(`Không thể xóa hạng mục "${categoryName}" vì còn sản phẩm đang sử dụng. Vui lòng chuyển các sản phẩm sang hạng mục khác trước.`)
+        setDeletingId(null)
+        return
+      }
+      
+      const { error } = await supabase
+        .from('product_categories')
+        .delete()
+        .eq('id', id)
+      
+      if (error) throw error
+      
+      setSuccess(`Hạng mục "${categoryName}" đã được xóa thành công!`)
+      await loadCategories()
+      
+      setTimeout(() => {
+        setSuccess(null)
+      }, 3000)
+    } catch (e: any) {
+      setError(e.message || 'Không thể xóa hạng mục')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -202,39 +297,97 @@ export default function ProductCategoriesTab() {
             <div className="space-y-4">
               {categories.map((c) => (
                 <div key={c.id} className="flex items-center justify-between p-6 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm">
-                  <div className="flex-1">
-                    <h5 className="text-lg font-semibold text-gray-900 mb-2">{c.name}</h5>
-                    <div className="flex items-center space-x-6">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        c.is_active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full mr-2 ${
-                          c.is_active ? 'bg-green-400' : 'bg-gray-400'
-                        }`}></span>
-                        {c.is_active ? 'Đang hoạt động' : 'Đã ngưng'}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        Tạo: {new Date(c.created_at).toLocaleDateString('vi-VN')}
-                      </span>
+                  {editingId === c.id ? (
+                    // Edit mode
+                    <div className="flex-1 space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-800 mb-2">
+                          Tên hạng mục <span className="text-red-500 font-bold">*</span>
+                        </label>
+                        <input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          placeholder="Ví dụ: Nội thất"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-800 mb-2">Mô tả</label>
+                        <input
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          placeholder="Ghi chú mô tả cho hạng mục"
+                        />
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => handleUpdate(c.id)}
+                          disabled={submitting || !editName.trim()}
+                          className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {submitting ? 'Đang lưu...' : 'Lưu'}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          disabled={submitting}
+                          className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Hủy
+                        </button>
+                      </div>
                     </div>
-                    {c.description && (
-                      <p className="text-sm text-gray-600 mt-2">{c.description}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={() => toggleActive(c.id, c.is_active)}
-                      className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                        c.is_active 
-                          ? 'bg-red-50 text-red-700 hover:bg-red-100 border-2 border-red-200 hover:border-red-300' 
-                          : 'bg-green-50 text-green-700 hover:bg-green-100 border-2 border-green-200 hover:border-green-300'
-                      }`}
-                    >
-                      {c.is_active ? 'Ngưng hoạt động' : 'Kích hoạt'}
-                    </button>
-                  </div>
+                  ) : (
+                    // View mode
+                    <>
+                      <div className="flex-1">
+                        <h5 className="text-lg font-semibold text-gray-900 mb-2">{c.name}</h5>
+                        <div className="flex items-center space-x-6">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                            c.is_active 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            <span className={`w-2 h-2 rounded-full mr-2 ${
+                              c.is_active ? 'bg-green-400' : 'bg-gray-400'
+                            }`}></span>
+                            {c.is_active ? 'Đang hoạt động' : 'Đã ngưng'}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            Tạo: {new Date(c.created_at).toLocaleDateString('vi-VN')}
+                          </span>
+                        </div>
+                        {c.description && (
+                          <p className="text-sm text-gray-600 mt-2">{c.description}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => startEdit(c)}
+                          className="px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-300 rounded-lg transition-colors"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => handleDelete(c.id, c.name)}
+                          disabled={deletingId === c.id}
+                          className="px-4 py-2 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border-2 border-red-200 hover:border-red-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingId === c.id ? 'Đang xóa...' : 'Xóa'}
+                        </button>
+                        <button
+                          onClick={() => toggleActive(c.id, c.is_active)}
+                          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                            c.is_active 
+                              ? 'bg-orange-50 text-orange-700 hover:bg-orange-100 border-2 border-orange-200 hover:border-orange-300' 
+                              : 'bg-green-50 text-green-700 hover:bg-green-100 border-2 border-green-200 hover:border-green-300'
+                          }`}
+                        >
+                          {c.is_active ? 'Ngưng hoạt động' : 'Kích hoạt'}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

@@ -3,11 +3,14 @@ Sales Management Router - Sales Center
 Comprehensive sales management with quotes, invoices, sales receipts, and payments
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, UploadFile, File
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 import uuid
 import asyncio
+import pandas as pd
+import io
+import json
 from pydantic import BaseModel
 
 from models.quote import Quote, QuoteCreate, QuoteUpdate, QuoteConvertToInvoice
@@ -25,6 +28,7 @@ from services.email_service import email_service
 from services.notification_service import notification_service
 from services.quote_service import quote_service
 from utils.file_utils import get_company_logo_path
+from utils.customer_code_generator import get_next_available_customer_code
 
 router = APIRouter()
 
@@ -3285,4 +3289,724 @@ async def approve_cost(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to approve cost: {str(e)}"
+        )
+
+# ============================================================================
+# EXCEL IMPORT - Import báo giá từ Excel
+# ============================================================================
+
+def calculate_string_similarity(str1: str, str2: str) -> float:
+    """Calculate similarity between two strings using Levenshtein distance"""
+    s1 = str1.lower().strip()
+    s2 = str2.lower().strip()
+    
+    if s1 == s2:
+        return 100.0
+    
+    len1, len2 = len(s1), len(s2)
+    if len1 == 0 or len2 == 0:
+        return 0.0
+    
+    # Create matrix
+    matrix = [[0] * (len2 + 1) for _ in range(len1 + 1)]
+    
+    for i in range(len1 + 1):
+        matrix[i][0] = i
+    for j in range(len2 + 1):
+        matrix[0][j] = j
+    
+    # Calculate Levenshtein distance
+    for i in range(1, len1 + 1):
+        for j in range(1, len2 + 1):
+            cost = 0 if s1[i - 1] == s2[j - 1] else 1
+            matrix[i][j] = min(
+                matrix[i - 1][j] + 1,      # deletion
+                matrix[i][j - 1] + 1,      # insertion
+                matrix[i - 1][j - 1] + cost  # substitution
+            )
+    
+    distance = matrix[len1][len2]
+    max_len = max(len1, len2)
+    similarity = ((max_len - distance) / max_len) * 100
+    
+    return similarity
+
+def find_best_product_match(product_name: str, products: List[Dict]) -> Optional[Dict]:
+    """Find best matching product using fuzzy matching"""
+    if not product_name or not product_name.strip():
+        return None
+    
+    best_match = None
+    best_score = 0
+    
+    for product in products:
+        similarity = calculate_string_similarity(product_name, product.get('name', ''))
+        if similarity > best_score and similarity >= 60:  # Minimum 60% similarity
+            best_score = similarity
+            best_match = {
+                'id': product.get('id'),
+                'name': product.get('name'),
+                'similarity': round(similarity, 2)
+            }
+    
+    return best_match
+
+@router.post("/quotes/import-excel")
+async def import_quotes_from_excel(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Import quotes from Excel file - creates customers, projects, products, and quotes"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Validate file type
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(
+                status_code=400,
+                detail="File phải là Excel (.xlsx hoặc .xls)"
+            )
+        
+        # Read file content
+        content = await file.read()
+        
+        # Parse Excel file
+        try:
+            df = pd.read_excel(io.BytesIO(content))
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Lỗi khi đọc file Excel: {str(e)}"
+            )
+        
+        # Validate required columns - support both old and new format
+        available_columns = [col for col in df.columns]
+        has_required = False
+        column_mapping = {}
+        
+        # Map Vietnamese and non-accent columns for customer name
+        for req_col in ['Tên khách hàng', 'Ten khach hang']:
+            if req_col in available_columns:
+                column_mapping['customer_name'] = req_col
+                has_required = True
+                break
+        
+        for req_col in ['Địa chỉ khách hàng', 'Dia chi khach hang']:
+            if req_col in available_columns:
+                column_mapping['customer_address'] = req_col
+                break
+        
+        for req_col in ['Tên dự án', 'Ten du an']:
+            if req_col in available_columns:
+                column_mapping['project_name'] = req_col
+                has_required = True
+                break
+        
+        # Try to find product name column - can be "Hạng mục thi công" or "Tên sản phẩm"
+        for req_col in ['Hạng mục thi công', 'Hang muc thi cong', 'Tên sản phẩm', 'Ten san pham']:
+            if req_col in available_columns:
+                column_mapping['product_name'] = req_col
+                has_required = True
+                break
+        
+        for req_col in ['Số lượng', 'So luong']:
+            if req_col in available_columns:
+                column_mapping['quantity'] = req_col
+                has_required = True
+                break
+        
+        for req_col in ['Đơn giá (VNĐ/ĐVT)', 'Don gia', 'Đơn giá']:
+            if req_col in available_columns:
+                column_mapping['unit_price'] = req_col
+                has_required = True
+                break
+        
+        for req_col in ['ĐVT', 'Đơn vị', 'Don vi']:
+            if req_col in available_columns:
+                column_mapping['unit'] = req_col
+                break
+        
+        for req_col in ['Mô tả', 'Mo ta']:
+            if req_col in available_columns:
+                column_mapping['description'] = req_col
+                break
+        
+        for req_col in ['Tạo sản phẩm mới', 'Tao san pham moi']:
+            if req_col in available_columns:
+                column_mapping['create_new'] = req_col
+                break
+        
+        # Check if we have product name (either from "Hạng mục thi công" or "Tên sản phẩm")
+        if 'product_name' not in column_mapping:
+            has_required = False
+        
+        if not has_required:
+            raise HTTPException(
+                status_code=400,
+                detail="File thiếu các cột bắt buộc: Tên khách hàng, Tên dự án, Hạng mục thi công (hoặc Tên sản phẩm), Số lượng, Đơn giá"
+            )
+        
+        # Get all products for matching
+        products_result = supabase.table("products").select("id, name, category_id, price, unit").eq("is_active", True).execute()
+        products = products_result.data if products_result.data else []
+        
+        # Get all categories
+        categories_result = supabase.table("product_categories").select("id, name").eq("is_active", True).execute()
+        categories = {cat['name']: cat['id'] for cat in (categories_result.data or [])}
+        
+        # Track created entities
+        customer_map = {}  # customer_name -> customer_id
+        project_map = {}  # (customer_id, project_name) -> project_id
+        product_map = {}  # product_name -> product_id
+        created_customers = 0
+        created_projects = 0
+        created_products = 0
+        created_quotes = 0
+        errors = []
+        
+        # Group rows by customer and project
+        quote_groups = {}  # (customer_id, project_id) -> list of items
+        
+        # Process each row
+        for index, row in df.iterrows():
+            try:
+                # Extract data
+                customer_name = str(row.get(column_mapping.get('customer_name', ''), '')).strip()
+                customer_address = str(row.get(column_mapping.get('customer_address', ''), '')).strip()
+                project_name = str(row.get(column_mapping.get('project_name', ''), '')).strip()
+                
+                # Get product name from "Hạng mục thi công" - take first line
+                construction_item = str(row.get(column_mapping.get('product_name', ''), '')).strip()
+                product_name = construction_item.split('\n')[0] if '\n' in construction_item else construction_item
+                if not product_name:
+                    product_name = construction_item
+                
+                quantity = float(row.get(column_mapping.get('quantity', ''), 1)) or 1
+                unit_price = float(row.get(column_mapping.get('unit_price', ''), 0)) or 0
+                unit = str(row.get(column_mapping.get('unit', ''), 'cái')).strip() or 'cái'
+                description = construction_item  # Use full construction item as description
+                create_new = str(row.get(column_mapping.get('create_new', ''), 'Không')).lower() == 'có'
+                
+                # Get dimensions - convert from meters to mm if needed
+                area = None
+                height = None
+                length = None
+                
+                # Try to get area from "Diện tích (m²)"
+                for area_col in ['Diện tích (m²)', 'Dien tich', 'Diện tích']:
+                    if area_col in available_columns:
+                        area_val = row.get(area_col, '')
+                        if pd.notna(area_val) and str(area_val).strip():
+                            try:
+                                area = float(area_val)
+                            except:
+                                pass
+                        break
+                
+                # Try to get height from "Cao (m)" - convert to mm
+                for height_col in ['Cao (m)', 'Cao']:
+                    if height_col in available_columns:
+                        height_val = row.get(height_col, '')
+                        if pd.notna(height_val) and str(height_val).strip():
+                            try:
+                                height = float(height_val) * 1000  # Convert m to mm
+                            except:
+                                pass
+                        break
+                
+                # Try to get length from "Ngang (m)" - convert to mm
+                for length_col in ['Ngang (m)', 'Ngang', 'Dài (m)', 'Dai']:
+                    if length_col in available_columns:
+                        length_val = row.get(length_col, '')
+                        if pd.notna(length_val) and str(length_val).strip():
+                            try:
+                                length = float(length_val) * 1000  # Convert m to mm
+                            except:
+                                pass
+                        break
+                
+                # Validate required fields
+                if not customer_name:
+                    errors.append(f"Dòng {index + 2}: Thiếu tên khách hàng")
+                    continue
+                if not project_name:
+                    errors.append(f"Dòng {index + 2}: Thiếu tên dự án")
+                    continue
+                if not product_name:
+                    errors.append(f"Dòng {index + 2}: Thiếu tên sản phẩm")
+                    continue
+                if unit_price <= 0:
+                    errors.append(f"Dòng {index + 2}: Đơn giá phải lớn hơn 0")
+                    continue
+                
+                # Get or create customer
+                if customer_name not in customer_map:
+                    # Check if customer exists
+                    existing_customer = supabase.table("customers").select("id").ilike("name", customer_name).limit(1).execute()
+                    if existing_customer.data:
+                        customer_id = existing_customer.data[0]['id']
+                    else:
+                        # Create new customer
+                        customer_code = get_next_available_customer_code()
+                        customer_data = {
+                            "id": str(uuid.uuid4()),
+                            "customer_code": customer_code,
+                            "name": customer_name,
+                            "type": "individual",
+                            "address": customer_address if customer_address else None,
+                            "status": "active",
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                        result = supabase.table("customers").insert(customer_data).execute()
+                        if result.data:
+                            customer_id = result.data[0]['id']
+                            created_customers += 1
+                        else:
+                            errors.append(f"Dòng {index + 2}: Không thể tạo khách hàng")
+                            continue
+                    customer_map[customer_name] = customer_id
+                
+                customer_id = customer_map[customer_name]
+                
+                # Get or create project
+                project_key = (customer_id, project_name)
+                if project_key not in project_map:
+                    # Check if project exists
+                    existing_project = supabase.table("projects").select("id").eq("customer_id", customer_id).ilike("name", project_name).limit(1).execute()
+                    if existing_project.data:
+                        project_id = existing_project.data[0]['id']
+                    else:
+                        # Create new project
+                        project_code = f"PRJ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+                        project_data = {
+                            "id": str(uuid.uuid4()),
+                            "project_code": project_code,
+                            "name": project_name,
+                            "customer_id": customer_id,
+                            "start_date": datetime.now().date().isoformat(),
+                            "status": "planning",
+                            "priority": "medium",
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                        result = supabase.table("projects").insert(project_data).execute()
+                        if result.data:
+                            project_id = result.data[0]['id']
+                            created_projects += 1
+                        else:
+                            errors.append(f"Dòng {index + 2}: Không thể tạo dự án")
+                            continue
+                    project_map[project_key] = project_id
+                
+                project_id = project_map[project_key]
+                
+                # Get or create product
+                if product_name not in product_map:
+                    if create_new:
+                        # Create new product
+                        # Try to find category (use first available or create default)
+                        category_id = None
+                        if categories:
+                            category_id = list(categories.values())[0]
+                        
+                        product_data = {
+                            "id": str(uuid.uuid4()),
+                            "name": product_name,
+                            "price": unit_price,
+                            "unit": unit,
+                            "description": description if description else None,
+                            "category_id": category_id,
+                            "is_active": True,
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                        
+                        # Add dimensions if available
+                        if area is not None:
+                            product_data['area'] = area
+                        if height is not None:
+                            product_data['height'] = height
+                        if length is not None:
+                            product_data['length'] = length
+                        
+                        result = supabase.table("products").insert(product_data).execute()
+                        if result.data:
+                            product_id = result.data[0]['id']
+                            product_map[product_name] = product_id
+                            created_products += 1
+                        else:
+                            errors.append(f"Dòng {index + 2}: Không thể tạo sản phẩm")
+                            continue
+                    else:
+                        # Find matching product
+                        match = find_best_product_match(product_name, products)
+                        if match:
+                            product_id = match['id']
+                            product_map[product_name] = product_id
+                        else:
+                            errors.append(f"Dòng {index + 2}: Không tìm thấy sản phẩm tương tự cho '{product_name}'")
+                            continue
+                
+                product_id = product_map[product_name]
+                
+                # Add to quote group
+                quote_key = (customer_id, project_id)
+                if quote_key not in quote_groups:
+                    quote_groups[quote_key] = []
+                
+                quote_groups[quote_key].append({
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "unit": unit,
+                    "description": description
+                })
+                
+            except Exception as e:
+                errors.append(f"Dòng {index + 2}: Lỗi xử lý - {str(e)}")
+                continue
+        
+        # Create quotes
+        for (customer_id, project_id), items in quote_groups.items():
+            try:
+                # Calculate totals
+                subtotal = sum(item['quantity'] * item['unit_price'] for item in items)
+                tax_rate = 0.08  # 8% VAT
+                tax_amount = subtotal * tax_rate
+                total_amount = subtotal + tax_amount
+                
+                # Generate quote number
+                quote_number = f"BG{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+                
+                # Create quote
+                quote_data = {
+                    "id": str(uuid.uuid4()),
+                    "quote_number": quote_number,
+                    "customer_id": customer_id,
+                    "project_id": project_id,
+                    "issue_date": datetime.now().date().isoformat(),
+                    "valid_until": (datetime.now() + timedelta(days=7)).date().isoformat(),
+                    "subtotal": subtotal,
+                    "tax_rate": tax_rate,
+                    "tax_amount": tax_amount,
+                    "total_amount": total_amount,
+                    "currency": "VND",
+                    "status": "draft",
+                    "created_by": current_user.id,
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                quote_result = supabase.table("quotes").insert(quote_data).execute()
+                if not quote_result.data:
+                    errors.append(f"Không thể tạo báo giá cho dự án {project_id}")
+                    continue
+                
+                quote_id = quote_result.data[0]['id']
+                created_quotes += 1
+                
+                # Create quote items
+                quote_items = []
+                for item in items:
+                    quote_item = {
+                        "id": str(uuid.uuid4()),
+                        "quote_id": quote_id,
+                        "product_service_id": item['product_id'],
+                        "description": item['description'] or item['product_name'],
+                        "quantity": item['quantity'],
+                        "unit_price": item['unit_price'],
+                        "total_price": item['quantity'] * item['unit_price'],
+                        "created_at": datetime.utcnow().isoformat()
+                    }
+                    quote_items.append(quote_item)
+                
+                if quote_items:
+                    supabase.table("quote_items").insert(quote_items).execute()
+                    
+            except Exception as e:
+                errors.append(f"Lỗi khi tạo báo giá: {str(e)}")
+                continue
+        
+        return {
+            "success": len(errors) == 0,
+            "message": f"Import hoàn thành. Đã tạo {created_customers} khách hàng, {created_projects} dự án, {created_quotes} báo giá, {created_products} sản phẩm mới",
+            "createdCustomers": created_customers,
+            "createdProjects": created_projects,
+            "createdQuotes": created_quotes,
+            "createdProducts": created_products,
+            "errors": errors
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Lỗi khi import file: {str(e)}"
+        )
+
+@router.post("/quotes/import-from-analysis")
+async def import_quote_from_ai_analysis(
+    analysis_data: Dict[str, Any],
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Import quote from AI analysis result"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Extract data from analysis
+        customer_info = analysis_data.get('customer', {})
+        project_info = analysis_data.get('project', {})
+        items = analysis_data.get('items', [])
+        
+        if not customer_info.get('name'):
+            raise HTTPException(
+                status_code=400,
+                detail="Thiếu thông tin khách hàng"
+            )
+        
+        # Get project name from project info or create from customer
+        project_name = project_info.get('name') if project_info else ''
+        if not project_name:
+            # Create project name from customer name + address
+            customer_name = customer_info.get('name', '')
+            customer_address = customer_info.get('address', '')
+            project_name = f"{customer_name}{' - ' + customer_address if customer_address else ''}"
+        
+        project_address = project_info.get('address') if project_info else customer_info.get('address')
+        project_supervisor = project_info.get('supervisor') if project_info else None
+        
+        if not items or len(items) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Không có hạng mục nào"
+            )
+        
+        # Get all products for matching
+        products_result = supabase.table("products").select("id, name, category_id, price, unit").eq("is_active", True).execute()
+        products = products_result.data if products_result.data else []
+        
+        # Get all categories
+        categories_result = supabase.table("product_categories").select("id, name").eq("is_active", True).execute()
+        categories = {cat['name']: cat['id'] for cat in (categories_result.data or [])}
+        
+        created_customers = 0
+        created_projects = 0
+        created_products = 0
+        created_quotes = 0
+        product_map = {}  # product_name -> product_id
+        
+        # Get or create customer
+        customer_name = customer_info.get('name', '').strip()
+        existing_customer = supabase.table("customers").select("id").ilike("name", customer_name).limit(1).execute()
+        
+        if existing_customer.data:
+            customer_id = existing_customer.data[0]['id']
+        else:
+            # Create new customer
+            customer_code = get_next_available_customer_code()
+            customer_data = {
+                "id": str(uuid.uuid4()),
+                "customer_code": customer_code,
+                "name": customer_name,
+                "type": "individual",
+                "address": customer_info.get('address') or None,
+                "phone": customer_info.get('phone') or None,
+                "email": customer_info.get('email') or None,
+                "status": "active",
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            result = supabase.table("customers").insert(customer_data).execute()
+            if result.data:
+                customer_id = result.data[0]['id']
+                created_customers = 1
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Không thể tạo khách hàng"
+                )
+        
+        # Get or create project
+        existing_project = supabase.table("projects").select("id").eq("customer_id", customer_id).ilike("name", project_name).limit(1).execute()
+        
+        if existing_project.data:
+            project_id = existing_project.data[0]['id']
+        else:
+            # Create new project
+            project_code = f"PRJ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            project_data = {
+                "id": str(uuid.uuid4()),
+                "project_code": project_code,
+                "name": project_name,
+                "customer_id": customer_id,
+                "description": project_address if project_address else None,
+                "start_date": datetime.now().date().isoformat(),
+                "status": "planning",
+                "priority": "medium",
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            # If supervisor is provided, try to find employee and assign as manager
+            if project_supervisor:
+                # Try to find employee by name
+                supervisor_employee = supabase.table("employees").select("id").or_(f"first_name.ilike.%{project_supervisor}%,last_name.ilike.%{project_supervisor}%").limit(1).execute()
+                if supervisor_employee.data:
+                    project_data["manager_id"] = supervisor_employee.data[0]['id']
+            
+            result = supabase.table("projects").insert(project_data).execute()
+            if result.data:
+                project_id = result.data[0]['id']
+                created_projects = 1
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Không thể tạo dự án"
+                )
+        
+        # Process items and create products if needed
+        quote_items = []
+        for item in items:
+            product_name = item.get('hang_muc_thi_cong', '').strip()
+            if not product_name:
+                continue
+            
+            # Get first line as product name for matching
+            product_name_short = product_name.split('\n')[0] if '\n' in product_name else product_name
+            
+            # Find or create product
+            if product_name_short not in product_map:
+                # Try to find matching product
+                match = find_best_product_match(product_name_short, products)
+                
+                if match:
+                    product_id = match['id']
+                else:
+                    # Create new product
+                    category_id = None
+                    if categories:
+                        category_id = list(categories.values())[0]
+                    
+                    product_data = {
+                        "id": str(uuid.uuid4()),
+                        "name": product_name_short,
+                        "price": item.get('don_gia', 0),
+                        "unit": item.get('dvt', 'cái'),
+                        "description": product_name,  # Full description
+                        "category_id": category_id,
+                        "is_active": True,
+                        "created_at": datetime.utcnow().isoformat(),
+                        "updated_at": datetime.utcnow().isoformat()
+                    }
+                    
+                    # Add dimensions
+                    if item.get('dien_tich'):
+                        product_data['area'] = float(item['dien_tich'])
+                    if item.get('cao'):
+                        product_data['height'] = float(item['cao']) * 1000  # Convert m to mm
+                    if item.get('ngang'):
+                        product_data['length'] = float(item['ngang']) * 1000  # Convert m to mm
+                    
+                    result = supabase.table("products").insert(product_data).execute()
+                    if result.data:
+                        product_id = result.data[0]['id']
+                        created_products += 1
+                    else:
+                        continue  # Skip this item if product creation failed
+                
+                product_map[product_name_short] = product_id
+            
+            product_id = product_map[product_name_short]
+            
+            # Add to quote items
+            quote_items.append({
+                "product_id": product_id,
+                "product_name": product_name_short,
+                "quantity": item.get('so_luong', 1),
+                "unit_price": item.get('don_gia', 0),
+                "unit": item.get('dvt', 'cái'),
+                "description": product_name
+            })
+        
+        if not quote_items:
+            raise HTTPException(
+                status_code=400,
+                detail="Không có hạng mục hợp lệ để tạo báo giá"
+            )
+        
+        # Calculate totals
+        subtotal = sum(item['quantity'] * item['unit_price'] for item in quote_items)
+        tax_rate = analysis_data.get('tax_rate', 0.08)
+        tax_amount = subtotal * tax_rate
+        total_amount = subtotal + tax_amount
+        
+        # Generate quote number
+        quote_number = f"BG{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+        
+        # Create quote
+        quote_data = {
+            "id": str(uuid.uuid4()),
+            "quote_number": quote_number,
+            "customer_id": customer_id,
+            "project_id": project_id,
+            "issue_date": analysis_data.get('date') or datetime.now().date().isoformat(),
+            "valid_until": analysis_data.get('valid_until') or (datetime.now() + timedelta(days=7)).date().isoformat(),
+            "subtotal": subtotal,
+            "tax_rate": tax_rate,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "currency": "VND",
+            "status": "draft",
+            "created_by": current_user.id,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        quote_result = supabase.table("quotes").insert(quote_data).execute()
+        if not quote_result.data:
+            raise HTTPException(
+                status_code=400,
+                detail="Không thể tạo báo giá"
+            )
+        
+        quote_id = quote_result.data[0]['id']
+        created_quotes = 1
+        
+        # Create quote items
+        quote_item_records = []
+        for item in quote_items:
+            quote_item = {
+                "id": str(uuid.uuid4()),
+                "quote_id": quote_id,
+                "product_service_id": item['product_id'],
+                "description": item['description'],
+                "quantity": item['quantity'],
+                "unit_price": item['unit_price'],
+                "total_price": item['quantity'] * item['unit_price'],
+                "created_at": datetime.utcnow().isoformat()
+            }
+            quote_item_records.append(quote_item)
+        
+        if quote_item_records:
+            supabase.table("quote_items").insert(quote_item_records).execute()
+        
+        return {
+            "success": True,
+            "message": f"Import thành công. Đã tạo {created_customers} khách hàng, {created_projects} dự án, {created_quotes} báo giá, {created_products} sản phẩm mới",
+            "createdCustomers": created_customers,
+            "createdProjects": created_projects,
+            "createdQuotes": created_quotes,
+            "createdProducts": created_products,
+            "quoteId": quote_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Lỗi khi import từ phân tích AI: {str(e)}"
         )

@@ -685,7 +685,7 @@ async def delete_employee(
     employee_id: str,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Delete employee (soft delete by setting status to terminated)"""
+    """Delete employee permanently from database (hard delete)"""
     try:
         supabase = get_supabase_client()
         
@@ -697,19 +697,34 @@ async def delete_employee(
                 detail="Employee not found"
             )
         
-        # Soft delete by setting status to terminated
-        result = supabase.table("employees").update({
-            "status": "terminated",
-            "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", employee_id).execute()
+        # Check if employee is in any active project teams
+        project_teams = supabase.table("project_team").select("id").eq("user_id", employee_id).eq("status", "active").limit(1).execute()
+        if project_teams.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete employee who is in active project teams. Please remove from projects first."
+            )
         
-        if result.data:
-            return {"message": "Employee deleted successfully"}
+        # Check if employee has time entries
+        time_entries = supabase.table("time_entries").select("id").eq("employee_id", employee_id).limit(1).execute()
+        if time_entries.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete employee with time entries. Please handle time entries first."
+            )
         
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to delete employee"
-        )
+        # Hard delete - permanently remove from database
+        result = supabase.table("employees").delete().eq("id", employee_id).execute()
+        
+        # Verify deletion
+        verify = supabase.table("employees").select("id").eq("id", employee_id).execute()
+        if verify.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to delete employee"
+            )
+        
+        return {"message": "Employee deleted successfully"}
         
     except HTTPException:
         raise

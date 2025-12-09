@@ -377,10 +377,10 @@ export default function CustomersPage() {
   }
 
   const deleteCustomer = async (customer: Customer) => {
-    if (!confirm(`Xóa khách hàng "${customer.name}"?`)) return
+    if (!confirm(`Bạn có chắc chắn muốn xóa khách hàng "${customer.name}"?\n\nHành động này sẽ xóa vĩnh viễn khách hàng khỏi hệ thống và không thể hoàn tác!\n\nLưu ý: Không thể xóa khách hàng có dự án đang hoạt động hoặc có hóa đơn.`)) return
     try {
       await customerApi.deleteCustomer(customer.id)
-      setNotice({ type: 'success', text: 'Đã xóa khách hàng' })
+      setNotice({ type: 'success', text: 'Đã xóa khách hàng khỏi hệ thống' })
       await fetchCustomers()
     } catch (err: unknown) {
       setNotice({ type: 'error', text: (err as Error)?.message || 'Không thể xóa khách hàng' })

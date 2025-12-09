@@ -379,7 +379,7 @@ async def delete_customer(
     customer_id: str,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Delete customer (soft delete by setting status to inactive)"""
+    """Delete customer permanently from database (hard delete)"""
     try:
         supabase = get_supabase_client()
         
@@ -391,27 +391,34 @@ async def delete_customer(
                 detail="Customer not found"
             )
         
-        # Check if customer has active projects or invoices
+        # Check if customer has active projects
         active_projects = supabase.table("projects").select("id").eq("customer_id", customer_id).eq("status", "active").execute()
         if active_projects.data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete customer with active projects"
+                detail="Cannot delete customer with active projects. Please complete or cancel projects first."
             )
         
-        # Soft delete by setting status to inactive
-        result = supabase.table("customers").update({
-            "status": "inactive",
-            "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", customer_id).execute()
+        # Check if customer has invoices
+        invoices = supabase.table("invoices").select("id").eq("customer_id", customer_id).limit(1).execute()
+        if invoices.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete customer with existing invoices. Please handle invoices first."
+            )
         
-        if result.data:
-            return {"message": "Customer deleted successfully"}
+        # Hard delete - permanently remove from database
+        result = supabase.table("customers").delete().eq("id", customer_id).execute()
         
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to delete customer"
-        )
+        # Verify deletion
+        verify = supabase.table("customers").select("id").eq("id", customer_id).execute()
+        if verify.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to delete customer"
+            )
+        
+        return {"message": "Customer deleted successfully"}
         
     except HTTPException:
         raise

@@ -18,7 +18,8 @@ import {
   Users,
   CreditCard,
   BookOpen,
-  HelpCircle
+  HelpCircle,
+  Sparkles
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
@@ -28,6 +29,7 @@ import ProductCatalog, { ProductCatalogRef } from '@/components/sales/ProductCat
 import ProductCategoriesTab from '@/components/sales/ProductCategoriesTab'
 import ProductCreateModal from '@/components/sales/ProductCreateModal'
 import ProductExcelUpload from '@/components/sales/ProductExcelUpload'
+import QuoteExcelUploadAI from '@/components/sales/QuoteExcelUploadAI'
 import AllSalesTab from '@/components/sales/AllSalesTab'
 import QuotesTab from '@/components/sales/QuotesTab'
 import InvoicesTab from '@/components/sales/InvoicesTab'
@@ -71,7 +73,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
     const tab = searchParams.get('tab')
 
     // If tab is specified in URL, set it first
-    if (tab && ['overview', 'all-sales', 'quotes', 'invoices', 'receipts', 'payments', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments'].includes(tab)) {
+    if (tab && ['overview', 'all-sales', 'quotes', 'invoices', 'receipts', 'payments', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments', 'upload-quote'].includes(tab)) {
       setActiveTab(tab)
     }
 
@@ -563,6 +565,16 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                 >
                   Điều chỉnh
                 </button>
+                <button
+                  onClick={() => setActiveTab('upload-quote')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-1 ${activeTab === 'upload-quote'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>Import Excel với AI</span>
+                </button>
               </nav>
             </div>
 
@@ -674,6 +686,16 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   </div>
                   <MaterialAdjustmentRulesTab />
                 </div>
+              )}
+              {activeTab === 'upload-quote' && (
+                <QuoteExcelUploadAI onImportSuccess={() => {
+                  // Refresh data after import
+                  setActiveTab('quotes')
+                  // Trigger refresh if needed
+                  if (typeof window !== 'undefined') {
+                    window.location.reload()
+                  }
+                }} />
               )}
             </div>
           </div>
