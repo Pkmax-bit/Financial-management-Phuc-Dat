@@ -380,11 +380,7 @@ async def delete_customer(
     hard_delete: bool = Query(False, description="Permanently delete customer from database"),
     current_user: User = Depends(require_manager_or_admin)
 ):
-<<<<<<< HEAD
-    """Delete customer permanently from database (hard delete)"""
-=======
     """Delete customer (soft delete by default, hard delete if hard_delete=true)"""
->>>>>>> fd99fce (Add /api/products-services endpoint alias for mobile app compatibility)
     try:
         supabase = get_supabase_client()
         
@@ -404,22 +400,6 @@ async def delete_customer(
                 detail="Cannot delete customer with active projects. Please complete or cancel projects first."
             )
         
-<<<<<<< HEAD
-        # Check if customer has invoices
-        invoices = supabase.table("invoices").select("id").eq("customer_id", customer_id).limit(1).execute()
-        if invoices.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete customer with existing invoices. Please handle invoices first."
-            )
-        
-        # Hard delete - permanently remove from database
-        result = supabase.table("customers").delete().eq("id", customer_id).execute()
-        
-        # Verify deletion
-        verify = supabase.table("customers").select("id").eq("id", customer_id).execute()
-        if verify.data:
-=======
         if hard_delete:
             # Hard delete - permanently remove from database
             # Check for any related records that might prevent deletion
@@ -453,16 +433,10 @@ async def delete_customer(
             if result.data:
                 return {"message": "Customer deleted successfully (soft delete)"}
             
->>>>>>> fd99fce (Add /api/products-services endpoint alias for mobile app compatibility)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to delete customer"
             )
-<<<<<<< HEAD
-        
-        return {"message": "Customer deleted successfully"}
-=======
->>>>>>> fd99fce (Add /api/products-services endpoint alias for mobile app compatibility)
         
     except HTTPException:
         raise
