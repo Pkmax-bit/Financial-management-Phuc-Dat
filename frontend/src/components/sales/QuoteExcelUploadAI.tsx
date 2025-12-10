@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
-import { Upload, Download, FileSpreadsheet, FileText, X, CheckCircle2, AlertCircle, Loader2, User, Building2, Package, DollarSign, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
+import { Upload, Download, FileSpreadsheet, FileText, X, CheckCircle2, AlertCircle, Loader2, User, Building2, Package, DollarSign, Sparkles, ChevronDown, ChevronUp, Edit, Save } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // Lazy import xlsx with retry mechanism
@@ -59,9 +59,33 @@ async function extractTextFromPDF(file: File): Promise<string> {
       throw new Error(`File PDF quá lớn (${(file.size / 1024 / 1024).toFixed(2)}MB). Vui lòng chọn file nhỏ hơn 10MB.`)
     }
     
-    const token = localStorage.getItem('access_token')
+    // Get token from Supabase session or localStorage
+    let token: string | null = null
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mfmijckzlhevduwfigkl.supabase.co'
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mbWlqY2t6bGhldmR1d2ZpZ2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MzkxMTIsImV4cCI6MjA3MjExNTExMn0.VPFmvLghhO32JybxDzq-CGVQedgI-LN7Q07rwDhxU4E'
+      const supabase = createClient(supabaseUrl, supabaseAnonKey)
+      
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (!sessionError && session?.access_token) {
+        token = session.access_token
+        console.log('✅ Got token from Supabase session (PDF extraction)')
+      }
+    } catch (e) {
+      console.warn('⚠️ Error getting session for PDF extraction:', e)
+    }
+    
+    // Fallback to localStorage
     if (!token) {
-      throw new Error('Chưa đăng nhập')
+      token = localStorage.getItem('access_token')
+      if (token) {
+        console.log('⚠️ Using token from localStorage (PDF extraction fallback)')
+      }
+    }
+    
+    if (!token) {
+      throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại.')
     }
 
     // Convert file to base64 using chunked method
@@ -135,6 +159,9 @@ interface QuoteItem {
   stt?: number
   ky_hieu?: string
   hang_muc_thi_cong: string
+  item_type?: 'product' | 'material_cost'  // Phân loại: sản phẩm hoặc chi phí vật tư
+  belongs_to_product_id?: string  // ID sản phẩm mà chi phí này thuộc về (chỉ dùng khi item_type = 'material_cost')
+  belongs_to_product_name?: string  // Tên sản phẩm (để hiển thị)
   ten_san_pham?: string  // Tên sản phẩm chính (dòng đầu)
   loai_san_pham?: string // Loại/Category (ví dụ: Nhôm Xingfa Việt Nam)
   mo_ta?: string         // Mô tả chi tiết (phần còn lại)
@@ -145,6 +172,7 @@ interface QuoteItem {
   dien_tich?: number
   don_gia: number
   thanh_tien: number
+  has_tax?: boolean      // Có thuế VAT hay không (true = có thuế, false = không có thuế)
   ghi_chu?: string
 }
 
@@ -217,10 +245,34 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
   const [success, setSuccess] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   
+  // Edit item state
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
+  const [editingItem, setEditingItem] = useState<QuoteItem | null>(null)
+  
+  // Edit tax rate state
+  const [editingTaxRate, setEditingTaxRate] = useState<boolean>(false)
+  const [tempTaxRate, setTempTaxRate] = useState<number>(0.08)
+  
+  // AI Model selection
+  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o')
+  const availableModels = [
+    { value: 'gpt-4o', label: 'GPT-4o (Mới nhất, Chính xác nhất)', description: 'Model mới nhất, độ chính xác cao nhất' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (Nhanh & Chính xác)', description: 'Cân bằng tốt giữa tốc độ và độ chính xác' },
+    { value: 'gpt-4', label: 'GPT-4 (Chuẩn)', description: 'Model GPT-4 chuẩn' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Nhanh, Tiết kiệm)', description: 'Nhanh và tiết kiệm chi phí' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Nhanh nhất)', description: 'Nhanh nhất, chi phí thấp nhất' }
+  ]
+  
   // Dropdown data
   const [customers, setCustomers] = useState<Array<{ id: string; name: string; phone?: string; email?: string }>>([])
   const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
-  const [employees, setEmployees] = useState<Array<{ id: string; full_name: string }>>([])
+  const [employees, setEmployees] = useState<Array<{ 
+    id: string; 
+    full_name: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+  }>>([])
   const [products, setProducts] = useState<Array<{ id: string; name: string; price: number; unit: string }>>([])
   
   // Editable customer and project info
@@ -243,6 +295,15 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
   const [isNewCustomer, setIsNewCustomer] = useState(false)
   const [isNewProject, setIsNewProject] = useState(false)
   
+  // Current user info
+  const [currentUser, setCurrentUser] = useState<{
+    id: string
+    email?: string
+    full_name?: string
+    role?: string
+  } | null>(null)
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null)
+  
   // Product matching status for each item
   const [productMatchStatus, setProductMatchStatus] = useState<Array<{
     index: number
@@ -250,12 +311,61 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
     matchedProduct?: { id: string; name: string; price: number }
   }>>([])
 
+  // Load current user info on mount
+  React.useEffect(() => {
+    fetchCurrentUser()
+  }, [])
+
   // Load customers, employees, and products on mount
   React.useEffect(() => {
     fetchCustomers()
     fetchEmployees()
     fetchProducts()
   }, [])
+  
+  // Fetch current logged in user and employee info
+  const fetchCurrentUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (authUser) {
+        // Get user info from users table
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, email, full_name, role')
+          .eq('id', authUser.id)
+          .single()
+        
+        if (!userError && userData) {
+          setCurrentUser(userData)
+          console.log('✅ Current user loaded:', userData)
+          
+          // Check if user exists in employees table
+          const { data: employeeData, error: employeeError } = await supabase
+            .from('employees')
+            .select('id')
+            .eq('id', authUser.id)
+            .single()
+          
+          if (!employeeError && employeeData) {
+            setCurrentEmployeeId(employeeData.id)
+            console.log('✅ Current employee ID:', employeeData.id)
+            
+            // Auto-select current employee if not already selected
+            if (!selectedEmployeeId) {
+              setSelectedEmployeeId(employeeData.id)
+            }
+          } else {
+            console.log('ℹ️ User is not in employees table')
+          }
+        } else {
+          console.error('❌ Error fetching user data:', userError)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching current user:', error)
+    }
+  }
   
   // Load projects when customer is selected
   React.useEffect(() => {
@@ -265,6 +375,13 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       setProjects([])
     }
   }, [selectedCustomerId])
+  
+  // Sync tempTaxRate when analyzedData changes
+  React.useEffect(() => {
+    if (analyzedData && !editingTaxRate) {
+      setTempTaxRate(analyzedData.tax_rate || 0.08)
+    }
+  }, [analyzedData, editingTaxRate])
   
   // Check product matches when analyzed data changes
   React.useEffect(() => {
@@ -302,14 +419,57 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
 
   const fetchEmployees = async () => {
     try {
-      const { data } = await supabase
+      console.log('🔍 Fetching employees for comparison...')
+      
+      // Fetch employees with user info to get full_name
+      const { data, error } = await supabase
         .from('employees')
-        .select('id, full_name')
-        .eq('is_active', true)
-        .order('full_name')
-      setEmployees(data || [])
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          user_id,
+          users!employees_user_id_fkey(full_name)
+        `)
+        .eq('status', 'active')
+        .order('first_name')
+      
+      if (error) {
+        console.error('❌ Error fetching employees:', error)
+        setEmployees([])
+        return
+      }
+      
+      if (data && data.length > 0) {
+        // Transform employees to include full_name
+        const transformedEmployees = data.map((emp: any) => {
+          // Try to get full_name from users table, otherwise use first_name + last_name
+          const usersRel = emp.users
+          const userFullName = Array.isArray(usersRel) 
+            ? usersRel[0]?.full_name 
+            : usersRel?.full_name
+          
+          const fullName = userFullName || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email || 'Unknown'
+          
+          return {
+            id: emp.id,
+            full_name: fullName,
+            first_name: emp.first_name,
+            last_name: emp.last_name,
+            email: emp.email
+          }
+        })
+        
+        setEmployees(transformedEmployees)
+        console.log(`✅ Loaded ${transformedEmployees.length} employees for comparison`)
+      } else {
+        console.log('⚠️ No employees found')
+        setEmployees([])
+      }
     } catch (error) {
-      console.error('Error fetching employees:', error)
+      console.error('❌ Error fetching employees:', error)
+      setEmployees([])
     }
   }
 
@@ -403,16 +563,30 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
     
     return bestMatch
   }
-
+  
   const checkProductMatches = () => {
     if (!analyzedData?.items) return
     
     const matches = analyzedData.items.map((item, index) => {
       // Use ten_san_pham if available, otherwise extract from hang_muc_thi_cong
-      const itemName = (item.ten_san_pham || item.hang_muc_thi_cong.split('\n')[0]).trim().toLowerCase()
+      // Handle null/undefined cases safely
+      let itemName = ''
+      if (item.ten_san_pham) {
+        itemName = item.ten_san_pham
+      } else if (item.hang_muc_thi_cong) {
+        // Split only if hang_muc_thi_cong is not null/undefined
+        itemName = typeof item.hang_muc_thi_cong === 'string' 
+          ? item.hang_muc_thi_cong.split('\n')[0] 
+          : String(item.hang_muc_thi_cong || '')
+      } else {
+        // Fallback to empty string or use index
+        itemName = `Item ${index + 1}`
+      }
       
-      // Clean itemName for better matching
-      const cleanedItemName = itemName.replace(/cửa sổ/g, '').replace(/cửa/g, '').trim()
+      // Clean itemName for better matching (only if itemName is not empty)
+      const cleanedItemName = itemName 
+        ? itemName.trim().toLowerCase().replace(/cửa sổ/g, '').replace(/cửa/g, '').trim()
+        : `item-${index + 1}`
       
       // Try exact match first
       let matchedProduct = products.find(p => {
@@ -733,9 +907,10 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       const requestId = `${Date.now()}-${Math.random().toString(36).substring(7)}`
       console.log('🆔 Request ID:', requestId)
       
-      const token = localStorage.getItem('access_token')
+      // Get token using helper function
+      const token = await getAccessToken()
       if (!token) {
-        throw new Error('Chưa đăng nhập')
+        throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại.')
       }
 
       // Add timestamp and unique ID to prevent caching
@@ -749,7 +924,8 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
         timestamp: timestamp,
         requestId: uniqueId,
         fileSize: file.size,
-        fileLastModified: file.lastModified
+        fileLastModified: file.lastModified,
+        model: selectedModel  // Include selected AI model
       }
       
       console.log('📤 Request body metadata:', {
@@ -757,7 +933,8 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
         fileType: requestBody.fileType,
         fileSize: requestBody.fileSize,
         documentDataLength: requestBody.documentData.length,
-        requestId: requestBody.requestId
+        requestId: requestBody.requestId,
+        model: requestBody.model
       })
       
       const response = await fetch(`/api/sales/quotes/analyze-excel-ai?t=${timestamp}&id=${uniqueId}`, {
@@ -873,13 +1050,15 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       // Initialize editable customer and project info from analyzed data
       const customerName = result.analysis.customer?.name || ''
       const customerAddress = result.analysis.customer?.address || ''
-      const customerPhone = result.analysis.customer?.phone || ''
+      const customerPhone = result.analysis.customer?.phone || ''  // Lưu để hiển thị trong debug, nhưng không điền vào form
       const customerEmail = result.analysis.customer?.email || ''
       
+      // Lưu ý: Không điền phone từ AI analysis vì đó có thể là số điện thoại của nhân viên
+      // Người dùng sẽ tự nhập số điện thoại khách hàng sau khi phân tích
       setCustomerInfo({
         name: customerName,
         address: customerAddress,
-        phone: customerPhone,
+        phone: '',  // Để trống để người dùng tự nhập
         email: customerEmail
       })
       
@@ -899,10 +1078,11 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
           setIsNewCustomer(false)
           
           // Update customer info with data from database
+          // Lưu ý: Không lấy phone từ AI analysis, chỉ lấy từ database hoặc để trống
           setCustomerInfo({
             name: matchedCustomer.name,
             address: customerAddress || matchedCustomer.address || '',
-            phone: customerPhone || matchedCustomer.phone || '',
+            phone: matchedCustomer.phone || '',  // Chỉ lấy từ database, không lấy từ AI analysis
             email: customerEmail || matchedCustomer.email || ''
           })
           
@@ -935,6 +1115,82 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
         address: projectAddress,
         supervisor: projectSupervisor
       })
+      
+      // 🔍 AUTO-MATCH SUPERVISOR WITH EMPLOYEES
+      if (projectSupervisor) {
+        console.log('🔍 Loading employees for supervisor matching...')
+        
+        // Fetch employees directly (not relying on state)
+        try {
+          const { data: employeesData, error: employeesError } = await supabase
+            .from('employees')
+            .select(`
+              id,
+              first_name,
+              last_name,
+              email,
+              user_id,
+              users!employees_user_id_fkey(full_name)
+            `)
+            .eq('status', 'active')
+            .order('first_name')
+          
+          if (!employeesError && employeesData && employeesData.length > 0) {
+            // Transform employees to include full_name
+            const transformedEmployees = employeesData.map((emp: any) => {
+              const usersRel = emp.users
+              const userFullName = Array.isArray(usersRel) 
+                ? usersRel[0]?.full_name 
+                : usersRel?.full_name
+              
+              const fullName = userFullName || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email || 'Unknown'
+              
+              return {
+                id: emp.id,
+                full_name: fullName,
+                first_name: emp.first_name,
+                last_name: emp.last_name,
+                email: emp.email
+              }
+            })
+            
+            // Update state
+            setEmployees(transformedEmployees)
+            
+            // Find matching employee
+            const normalizedSupervisor = normalizeText(projectSupervisor)
+            const matchedEmployee = transformedEmployees.find((emp: any) => {
+              const empFullName = normalizeText(emp.full_name)
+              const empFirstName = normalizeText(emp.first_name || '')
+              const empLastName = normalizeText(emp.last_name || '')
+              
+              // Check if supervisor matches full name, first name, or last name
+              return empFullName.includes(normalizedSupervisor) || 
+                     normalizedSupervisor.includes(empFullName) ||
+                     empFirstName.includes(normalizedSupervisor) ||
+                     normalizedSupervisor.includes(empFirstName) ||
+                     empLastName.includes(normalizedSupervisor) ||
+                     normalizedSupervisor.includes(empLastName)
+            })
+            
+            if (matchedEmployee) {
+              console.log(`✅ Found matching employee for supervisor "${projectSupervisor}": ${matchedEmployee.full_name} (ID: ${matchedEmployee.id})`)
+              setSelectedEmployeeId(matchedEmployee.id)
+              setProjectInfo(prev => ({
+                ...prev,
+                supervisor: matchedEmployee.full_name
+              }))
+            } else {
+              console.log(`⚠️ No matching employee found for supervisor "${projectSupervisor}"`)
+              // Keep the supervisor name from analysis, user can manually select
+            }
+          } else {
+            console.log('⚠️ No employees found in database for comparison')
+          }
+        } catch (error) {
+          console.error('❌ Error loading employees for supervisor matching:', error)
+        }
+      }
       
       // 🔍 AUTO-MATCH PROJECT IF CUSTOMER MATCHED
       if (matchedCustomer) {
@@ -969,7 +1225,7 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
             })
           } else if (projectMatch) {
             console.log(`⚠️ Found similar project: "${projectMatch.project.name}" but similarity too low (${(projectMatch.similarity * 100).toFixed(0)}%)`)
-            setIsNewProject(true)
+        setIsNewProject(true)
           } else {
             console.log('❌ No matching project found, will create new project')
             setIsNewProject(true)
@@ -981,10 +1237,10 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       } else {
         // Customer is new, so project must be new too
         if (!projectName && customerName) {
-          setProjectInfo(prev => ({
-            ...prev,
-            name: customerAddress ? `${customerName} - ${customerAddress}` : customerName
-          }))
+        setProjectInfo(prev => ({
+          ...prev,
+          name: customerAddress ? `${customerName} - ${customerAddress}` : customerName
+        }))
         }
         setIsNewProject(true)
       }
@@ -1021,17 +1277,94 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
     console.log('✅ Data cleared, ready for new upload')
   }
 
-  const getValidToken = async (): Promise<string> => {
-    let token: string | null = localStorage.getItem('access_token')
-    if (!token) {
-      throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại.')
+  // Helper function to format UTC time (default timezone)
+  const formatUTCTime = (timestamp: number): string => {
+    const date = new Date(timestamp)
+    return date.toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
+  }
+
+  // Helper function to get access token from Supabase session or localStorage
+  const getAccessToken = async (): Promise<string | null> => {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (!sessionError && session?.access_token) {
+        return session.access_token
+      }
+    } catch (e) {
+      console.warn('⚠️ Error getting session:', e)
     }
+    
+    // Fallback to localStorage
+    return localStorage.getItem('access_token')
+  }
+
+  // Helper function to log detailed token info
+  const logTokenInfo = (token: string, label: string = 'Token') => {
+    try {
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]))
+        const exp = payload.exp * 1000
+        const now = Date.now()
+        const expiresIn = exp - now
+        
+        console.log(`🔑 ${label} Info:`, {
+          userId: payload.sub || payload.user_id || 'unknown',
+          email: payload.email || 'unknown',
+          expiresAt: formatUTCTime(exp),
+          currentTime: formatUTCTime(now),
+          expiresInMinutes: Math.floor(expiresIn / 1000 / 60),
+          expiresInSeconds: Math.floor(expiresIn / 1000),
+          isExpired: expiresIn < 0,
+          tokenLength: token.length,
+          tokenPreview: token.substring(0, 30) + '...' + token.substring(token.length - 10)
+        })
+      }
+    } catch (e) {
+      console.warn(`⚠️ Could not decode ${label}:`, e)
+    }
+  }
+
+  const getValidToken = async (): Promise<string> => {
+    // Try to get token from Supabase session first, then localStorage
+    let token: string | null = await getAccessToken()
+    
+    if (!token) {
+      console.error('❌ No access_token found in session or localStorage')
+      throw new Error(
+        `🔐 Chưa đăng nhập.\n\n` +
+        `📋 Thông tin chi tiết:\n` +
+        `- Access token: Không có trong Supabase session hoặc localStorage\n` +
+        `- Refresh token: ${localStorage.getItem('refresh_token') ? 'Có' : 'Không có'}\n\n` +
+        `💡 Cách khắc phục:\n` +
+        `1. Đăng nhập lại để lấy token mới\n` +
+        `2. Kiểm tra xem có đang ở trang đăng nhập không\n` +
+        `3. Thử refresh trang (F5)`
+      )
+    }
+    
+    // Log current token info
+    logTokenInfo(token, 'Current')
     
     // Validate token format
     const tokenParts = token.split('.')
     if (tokenParts.length !== 3) {
-      console.error('❌ Invalid token format')
-      throw new Error('Token không đúng định dạng. Vui lòng đăng nhập lại.')
+      console.error('❌ Invalid token format:', {
+        partsCount: tokenParts.length,
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 50)
+      })
+      throw new Error(
+        `🔐 Token không đúng định dạng.\n\n` +
+        `📋 Thông tin chi tiết:\n` +
+        `- Token format: ${tokenParts.length} parts (expected 3)\n` +
+        `- Token length: ${token.length} ký tự\n` +
+        `- Token preview: ${token.substring(0, 50)}...\n\n` +
+        `💡 Cách khắc phục:\n` +
+        `1. Đăng nhập lại để lấy token mới\n` +
+        `2. Xóa localStorage: localStorage.clear() trong Console (F12)\n` +
+        `3. Refresh và đăng nhập lại`
+      )
     }
     
     // Check if token is expired (simple check - decode JWT and check exp)
@@ -1040,51 +1373,292 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       const exp = payload.exp * 1000 // Convert to milliseconds
       const now = Date.now()
       const expiresIn = exp - now
+      const expiresInMinutes = Math.floor(expiresIn / 1000 / 60)
+      const expiresInSeconds = Math.floor(expiresIn / 1000)
       
       console.log('🔑 Token status:', {
-        expiresAt: new Date(exp).toISOString(),
-        expiresInMinutes: Math.floor(expiresIn / 1000 / 60),
-        isExpired: expiresIn < 0
+        userId: payload.sub || payload.user_id || 'unknown',
+        email: payload.email || 'unknown',
+        expiresAt: formatUTCTime(exp),
+        currentTime: formatUTCTime(now),
+        expiresInMinutes,
+        expiresInSeconds,
+        isExpired: expiresIn < 0,
+        needsRefresh: expiresIn < 5 * 60 * 1000
       })
       
       // If token is expired or expires in less than 5 minutes, try to refresh
       if (expiresIn < 5 * 60 * 1000) {
+        const isExpired = expiresIn < 0
+        const expiresInMinutes = Math.floor(expiresIn / 1000 / 60)
+        
+        console.log('🔄 Token status:', {
+          isExpired,
+          expiresInMinutes,
+          expiresAt: formatUTCTime(exp),
+          currentTime: formatUTCTime(now)
+        })
+        
         console.log('🔄 Token sắp hết hạn hoặc đã hết hạn, đang refresh...')
+        
         // Try to refresh token
         const refreshToken = localStorage.getItem('refresh_token')
-        if (refreshToken) {
-          try {
-            const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-            const response = await fetch(`${backendUrl}/api/auth/refresh`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refresh_token: refreshToken })
-            })
+        
+        if (!refreshToken) {
+          console.error('❌ No refresh token available in localStorage')
+          
+          // If token is expired and no refresh token, redirect to login
+          if (isExpired) {
+            console.warn('🔄 Token expired and no refresh token. Redirecting to login...')
             
-            if (response.ok) {
-              const data = await response.json()
-              const newToken = data.access_token
-              if (newToken && typeof newToken === 'string') {
-                localStorage.setItem('access_token', newToken)
-                console.log('✅ Token refreshed successfully')
-                return newToken
-              } else {
-                console.warn('⚠️ Invalid access_token in refresh response')
-              }
-            } else {
-              console.warn('⚠️ Token refresh failed:', response.status, response.statusText)
+            // Clear all auth data
+            localStorage.removeItem('access_token')
+            localStorage.removeItem('refresh_token')
+            
+            // Redirect to login page
+            if (typeof window !== 'undefined') {
+              const loginUrl = '/login'
+              const currentUrl = window.location.pathname + window.location.search
+              
+              // Store return URL for after login
+              sessionStorage.setItem('returnUrl', currentUrl)
+              
+              // Show message before redirect
+              alert(
+                '🔐 Phiên đăng nhập đã hết hạn.\n\n' +
+                'Vui lòng đăng nhập lại để tiếp tục sử dụng.\n\n' +
+                'Bạn sẽ được chuyển đến trang đăng nhập...'
+              )
+              
+              // Redirect after short delay
+              setTimeout(() => {
+                window.location.href = loginUrl
+              }, 500)
             }
-          } catch (refreshError) {
-            console.warn('⚠️ Token refresh error:', refreshError)
+            
+            // Throw error with redirect flag
+            const error = new Error(
+              `🔐 Token đã hết hạn và không có refresh token.\n\n` +
+              `📋 Thông tin chi tiết:\n` +
+              `- Token hết hạn lúc: ${formatUTCTime(exp)}\n` +
+              `- Thời gian hiện tại: ${formatUTCTime(now)}\n` +
+              `- Refresh token: Không có trong localStorage\n\n` +
+              `🔄 Đang chuyển đến trang đăng nhập...`
+            ) as Error & { redirectToLogin?: boolean }
+            error.redirectToLogin = true
+            throw error
+          } else {
+            // Token not expired yet but no refresh token - just warn
+            throw new Error(
+              `🔐 Token ${isExpired ? 'đã hết hạn' : `sắp hết hạn (còn ${expiresInMinutes} phút)`} và không có refresh token.\n\n` +
+              `📋 Thông tin chi tiết:\n` +
+              `- Token hết hạn lúc: ${formatUTCTime(exp)}\n` +
+              `- Thời gian hiện tại: ${formatUTCTime(now)}\n` +
+              `- Refresh token: Không có trong localStorage\n\n` +
+              `💡 Cách khắc phục:\n` +
+              `1. Nhấn F5 để tải lại trang\n` +
+              `2. Đăng xuất và đăng nhập lại\n` +
+              `3. Nếu vẫn lỗi, xóa cache: localStorage.clear() trong Console (F12)`
+            )
           }
-        } else {
-          console.warn('⚠️ No refresh token available')
+        }
+        
+        console.log('🔄 Attempting token refresh with refresh_token:', refreshToken.substring(0, 20) + '...')
+        
+        try {
+          const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          const refreshUrl = `${backendUrl}/api/auth/refresh`
+          
+          console.log('📤 Sending refresh request to:', refreshUrl)
+          
+          const response = await fetch(refreshUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken })
+          })
+          
+          console.log('📥 Refresh response status:', response.status, response.statusText)
+          
+          if (response.ok) {
+            const data = await response.json()
+            console.log('📦 Refresh response data keys:', Object.keys(data))
+            
+            const newToken = data.access_token
+            if (newToken && typeof newToken === 'string') {
+              localStorage.setItem('access_token', newToken)
+              
+              // Also update refresh_token if provided
+              if (data.refresh_token) {
+                localStorage.setItem('refresh_token', data.refresh_token)
+                console.log('✅ Refresh token also updated')
+              }
+              
+              console.log('✅ Token refreshed successfully')
+              
+              // Log new token info
+              logTokenInfo(newToken, 'New (Refreshed)')
+              
+              return newToken
+            } else {
+              console.error('❌ Invalid access_token in refresh response:', {
+                hasAccessToken: !!data.access_token,
+                type: typeof data.access_token,
+                dataKeys: Object.keys(data)
+              })
+              
+              throw new Error(
+                `🔐 Token refresh failed: Response không chứa access_token hợp lệ.\n\n` +
+                `📋 Thông tin chi tiết:\n` +
+                `- Response status: ${response.status}\n` +
+                `- Response keys: ${Object.keys(data).join(', ')}\n` +
+                `- Access token type: ${typeof data.access_token}\n\n` +
+                `💡 Cách khắc phục:\n` +
+                `1. Kiểm tra backend API /api/auth/refresh có hoạt động không\n` +
+                `2. Đăng xuất và đăng nhập lại để lấy token mới\n` +
+                `3. Liên hệ admin nếu lỗi vẫn tiếp tục`
+              )
+            }
+          } else {
+            let errorDetail = ''
+            try {
+              const errorData = await response.json()
+              errorDetail = errorData.detail || errorData.error || errorData.message || ''
+              console.error('❌ Refresh error response:', errorData)
+            } catch (e) {
+              const errorText = await response.text()
+              errorDetail = errorText || response.statusText
+              console.error('❌ Refresh error text:', errorText)
+            }
+            
+            // If refresh failed with 401, redirect to login
+            if (response.status === 401) {
+              console.warn('🔄 Refresh token invalid (401). Redirecting to login...')
+              
+              // Clear all auth data
+              localStorage.removeItem('access_token')
+              localStorage.removeItem('refresh_token')
+              
+              // Redirect to login page
+              if (typeof window !== 'undefined') {
+                const loginUrl = '/login'
+                const currentUrl = window.location.pathname + window.location.search
+                
+                // Store return URL for after login
+                sessionStorage.setItem('returnUrl', currentUrl)
+                
+                // Show message before redirect
+                alert(
+                  '🔐 Phiên đăng nhập đã hết hạn.\n\n' +
+                  'Refresh token không hợp lệ hoặc đã hết hạn.\n\n' +
+                  'Vui lòng đăng nhập lại để tiếp tục sử dụng.\n\n' +
+                  'Bạn sẽ được chuyển đến trang đăng nhập...'
+                )
+                
+                // Redirect after short delay
+                setTimeout(() => {
+                  window.location.href = loginUrl
+                }, 500)
+              }
+              
+              // Throw error with redirect flag
+              const error = new Error(
+                `🔐 Token refresh failed (HTTP 401 Unauthorized).\n\n` +
+                `📋 Thông tin chi tiết:\n` +
+                `- Token ${isExpired ? 'đã hết hạn' : `sắp hết hạn (còn ${expiresInMinutes} phút)`}\n` +
+                `- Refresh endpoint: ${refreshUrl}\n` +
+                `- Response status: 401 Unauthorized\n` +
+                `- Error detail: ${errorDetail || 'Refresh token invalid or expired'}\n\n` +
+                `🔄 Đang chuyển đến trang đăng nhập...`
+              ) as Error & { redirectToLogin?: boolean }
+              error.redirectToLogin = true
+              throw error
+            }
+            
+            throw new Error(
+              `🔐 Token refresh failed (HTTP ${response.status}).\n\n` +
+              `📋 Thông tin chi tiết:\n` +
+              `- Token ${isExpired ? 'đã hết hạn' : `sắp hết hạn (còn ${expiresInMinutes} phút)`}\n` +
+              `- Refresh endpoint: ${refreshUrl}\n` +
+              `- Response status: ${response.status} ${response.statusText}\n` +
+              `- Error detail: ${errorDetail || 'Không có thông tin chi tiết'}\n\n` +
+              `💡 Cách khắc phục:\n` +
+              `1. Kiểm tra kết nối đến backend: ${backendUrl}\n` +
+              `2. Nhấn F5 để tải lại trang\n` +
+              `3. Đăng xuất và đăng nhập lại\n` +
+              `4. Xóa localStorage: localStorage.clear() trong Console (F12)\n` +
+              `5. Nếu vẫn lỗi, liên hệ admin để kiểm tra cấu hình auth`
+            )
+          }
+        } catch (refreshError) {
+          console.error('❌ Token refresh exception:', refreshError)
+          
+          // If it's already our custom error, re-throw it
+          if (refreshError instanceof Error && refreshError.message.includes('Token refresh failed')) {
+            throw refreshError
+          }
+          
+          // Otherwise create detailed error
+          const errorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError)
+          
+          throw new Error(
+            `🔐 Lỗi khi refresh token.\n\n` +
+            `📋 Thông tin chi tiết:\n` +
+            `- Token ${isExpired ? 'đã hết hạn' : `sắp hết hạn (còn ${expiresInMinutes} phút)`}\n` +
+            `- Error type: ${refreshError instanceof Error ? refreshError.constructor.name : typeof refreshError}\n` +
+            `- Error message: ${errorMessage}\n\n` +
+            `💡 Cách khắc phục:\n` +
+            `1. Kiểm tra kết nối mạng\n` +
+            `2. Nhấn F5 để tải lại trang\n` +
+            `3. Đăng xuất và đăng nhập lại\n` +
+            `4. Xóa cache: localStorage.clear() trong Console (F12)`
+          )
         }
       }
       
-      // If token is expired and refresh failed, throw error
+      // If token is expired and refresh failed, redirect to login
       if (expiresIn < 0) {
-        throw new Error('Token đã hết hạn và không thể refresh. Vui lòng đăng nhập lại.')
+        const expiredMinutes = Math.floor(Math.abs(expiresIn) / 1000 / 60)
+        
+        console.warn(`🔄 Token expired ${expiredMinutes} minutes ago. Redirecting to login...`)
+        
+        // Clear all auth data
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        
+        // Redirect to login page
+        if (typeof window !== 'undefined') {
+          const loginUrl = '/login'
+          const currentUrl = window.location.pathname + window.location.search
+          
+          // Store return URL for after login
+          sessionStorage.setItem('returnUrl', currentUrl)
+          
+          // Show message before redirect
+          alert(
+            '🔐 Phiên đăng nhập đã hết hạn.\n\n' +
+            `Token đã hết hạn ${expiredMinutes} phút trước.\n\n` +
+            'Vui lòng đăng nhập lại để tiếp tục sử dụng.\n\n' +
+            'Bạn sẽ được chuyển đến trang đăng nhập...'
+          )
+          
+          // Redirect after short delay
+          setTimeout(() => {
+            window.location.href = loginUrl
+          }, 500)
+        }
+        
+        // Throw error with redirect flag
+        const error = new Error(
+          `🔐 Token đã hết hạn ${expiredMinutes} phút trước và không thể refresh.\n\n` +
+          `📋 Thông tin chi tiết:\n` +
+          `- Token hết hạn lúc: ${formatUTCTime(exp)}\n` +
+          `- Thời gian hiện tại: ${formatUTCTime(now)}\n` +
+          `- Đã hết hạn: ${expiredMinutes} phút\n` +
+          `- Refresh token: ${localStorage.getItem('refresh_token') ? 'Có' : 'Không có'}\n\n` +
+          `🔄 Đang chuyển đến trang đăng nhập...`
+        ) as Error & { redirectToLogin?: boolean }
+        error.redirectToLogin = true
+        throw error
       }
       
       // Ensure token is not null
@@ -1094,15 +1668,37 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       
       return token
     } catch (e) {
-      if (e instanceof Error && e.message.includes('hết hạn')) {
+      // If it's our custom error (expired token), re-throw it
+      if (e instanceof Error && (e.message.includes('hết hạn') || e.message.includes('refresh') || e.message.includes('Token'))) {
+        console.error('🔐 Token error from getValidToken:', {
+          message: e.message,
+          stack: e.stack,
+          type: e.constructor.name
+        })
         throw e
       }
-      // If can't decode, log warning but return token (let backend verify)
-      console.warn('⚠️ Could not decode token, will let backend verify:', e)
+      
+      // If can't decode, log detailed warning but return token (let backend verify)
+      console.warn('⚠️ Could not decode token, will let backend verify:', {
+        error: e,
+        errorType: e instanceof Error ? e.constructor.name : typeof e,
+        errorMessage: e instanceof Error ? e.message : String(e),
+        tokenLength: token?.length || 0,
+        tokenPreview: token ? token.substring(0, 30) + '...' : 'null'
+      })
       
       // Ensure token is not null before returning
       if (!token) {
-        throw new Error('Token không hợp lệ. Vui lòng đăng nhập lại.')
+        throw new Error(
+          `🔐 Token không hợp lệ.\n\n` +
+          `📋 Thông tin chi tiết:\n` +
+          `- Token: Không tồn tại trong localStorage\n` +
+          `- Error khi decode: ${e instanceof Error ? e.message : String(e)}\n\n` +
+          `💡 Cách khắc phục:\n` +
+          `1. Đăng nhập lại để lấy token mới\n` +
+          `2. Xóa localStorage: localStorage.clear() trong Console (F12)\n` +
+          `3. Refresh và đăng nhập lại`
+        )
       }
       
       return token
@@ -1157,7 +1753,11 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
           id: isNewProject ? undefined : selectedProjectId,  // Include project ID if using existing
           customer_id: isNewCustomer ? undefined : selectedCustomerId
         },
-        employee_id: selectedEmployeeId || null,
+        // Use selected employee or current employee as fallback
+        employee_id: selectedEmployeeId || currentEmployeeId || null,
+        // Include current user info for tracking
+        created_by: currentUser?.id || null,
+        created_by_name: currentUser?.full_name || currentUser?.email || null,
         is_new_customer: isNewCustomer,
         is_new_project: isNewProject
       }
@@ -1170,7 +1770,15 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
         projectId: importData.project.id,
         isNewProject,
         itemsCount: importData.items.length,
-        employeeId: importData.employee_id
+        employeeId: importData.employee_id,
+        createdBy: importData.created_by,
+        createdByName: importData.created_by_name,
+        currentUser: currentUser ? {
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.full_name,
+          role: currentUser.role
+        } : null
       })
 
       // Try calling backend directly (to avoid Next.js middleman issues)
@@ -1287,18 +1895,46 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       const result = await response.json()
       console.log('✅ Import successful:', result)
       
-      // Create detailed success message
-      const successParts = []
-      if (result.createdCustomers > 0) successParts.push(`✨ ${result.createdCustomers} khách hàng mới`)
-      if (result.createdProjects > 0) successParts.push(`🏗️ ${result.createdProjects} dự án mới`)
-      if (result.createdQuotes > 0) successParts.push(`📄 ${result.createdQuotes} báo giá`)
-      if (result.matchedProducts > 0) successParts.push(`✓ ${result.matchedProducts} sản phẩm có sẵn`)
-      if (result.createdProducts > 0) successParts.push(`✨ ${result.createdProducts} sản phẩm mới`)
+      // Create detailed success message with all information
+      const successDetails: string[] = []
       
-      setSuccess(
-        `🎉 Import thành công!\n\n${successParts.join('\n')}\n\n` +
-        `Báo giá ID: ${result.quoteId}`
-      )
+      // Customer information
+      if (result.createdCustomers > 0) {
+        successDetails.push(`✨ Đã tạo ${result.createdCustomers} khách hàng mới`)
+      }
+      
+      // Project information
+      if (result.createdProjects > 0) {
+        successDetails.push(`🏗️ Đã tạo ${result.createdProjects} dự án mới`)
+      }
+      
+      // Quote information
+      if (result.createdQuotes > 0) {
+        successDetails.push(`📄 Đã tạo ${result.createdQuotes} báo giá`)
+        if (result.quoteNumber) {
+          successDetails.push(`   └─ Số báo giá: ${result.quoteNumber}`)
+        } else if (result.quoteId) {
+          successDetails.push(`   └─ ID báo giá: ${result.quoteId}`)
+        }
+      }
+      
+      // Product information
+      if (result.matchedProducts > 0) {
+        successDetails.push(`✓ Đã sử dụng ${result.matchedProducts} sản phẩm có sẵn`)
+      }
+      if (result.createdProducts > 0) {
+        successDetails.push(`✨ Đã tạo ${result.createdProducts} sản phẩm mới`)
+      }
+      
+      // Cost items information
+      if (result.costItems > 0) {
+        successDetails.push(`💰 Đã lưu ${result.costItems} chi phí vật tư vào sản phẩm`)
+      }
+      
+      // Create formatted success message
+      const successMessage = `🎉 Import thành công!\n\n${successDetails.join('\n')}`
+      
+      setSuccess(successMessage)
       
       // Log detailed matching info
       if (result.matchedProductDetails && result.matchedProductDetails.length > 0) {
@@ -1317,12 +1953,68 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       }
     } catch (error: any) {
       console.error('❌ Error importing:', error)
+      console.error('❌ Error stack:', error.stack)
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        type: typeof error,
+        constructor: error.constructor?.name
+      })
       
       let errorMessage = error.message || 'Lỗi khi import'
       
-      // Add helpful hints for common errors
-      if (errorMessage.includes('JWT') || errorMessage.includes('token') || errorMessage.includes('Phiên đăng nhập')) {
-        errorMessage += '\n\n💡 Hướng dẫn: Nhấn Ctrl+F5 để tải lại trang, sau đó đăng nhập lại.'
+      // Check if error is from getValidToken (token expiration/refresh issues)
+      if (errorMessage.includes('hết hạn') || errorMessage.includes('refresh') || errorMessage.includes('Token')) {
+        // Check if this is a redirect case
+        const shouldRedirect = (error as any)?.redirectToLogin === true
+        
+        if (shouldRedirect) {
+          // Don't set error message, redirect is already happening
+          console.log('🔄 Redirecting to login page...')
+          return // Exit early, redirect is handled in getValidToken
+        }
+        
+        // Error already has detailed information from getValidToken
+        // Just ensure it's displayed properly
+        console.error('🔐 Token-related error detected:', {
+          message: errorMessage,
+          hasDetailedInfo: errorMessage.includes('📋 Thông tin chi tiết'),
+          hasInstructions: errorMessage.includes('💡 Cách khắc phục'),
+          shouldRedirect
+        })
+      } else if (errorMessage.includes('JWT') || errorMessage.includes('token') || errorMessage.includes('Phiên đăng nhập') || errorMessage.includes('Unauthorized')) {
+        // Generic token error - add more context
+        const token = localStorage.getItem('access_token')
+        const refreshToken = localStorage.getItem('refresh_token')
+        
+        errorMessage = 
+          `🔐 Lỗi xác thực token\n\n` +
+          `📋 Thông tin chi tiết:\n` +
+          `- Lỗi: ${errorMessage}\n` +
+          `- Access token: ${token ? `Có (${token.length} ký tự)` : 'Không có'}\n` +
+          `- Refresh token: ${refreshToken ? `Có (${refreshToken.length} ký tự)` : 'Không có'}\n` +
+          `- Backend URL: ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}\n\n` +
+          `💡 Cách khắc phục:\n` +
+          `1. Nhấn F5 để tải lại trang\n` +
+          `2. Đăng xuất và đăng nhập lại\n` +
+          `3. Xóa localStorage:\n` +
+          `   - Mở DevTools (F12)\n` +
+          `   - Console: localStorage.clear()\n` +
+          `   - Refresh và đăng nhập lại\n` +
+          `4. Nếu vẫn lỗi, liên hệ admin để kiểm tra cấu hình auth`
+      } else {
+        // Other errors - add context
+        errorMessage = 
+          `❌ Lỗi khi import\n\n` +
+          `📋 Chi tiết lỗi:\n` +
+          `${errorMessage}\n\n` +
+          `💡 Cách khắc phục:\n` +
+          `1. Kiểm tra lại thông tin đã nhập\n` +
+          `2. Thử lại sau vài giây\n` +
+          `3. Nếu lỗi vẫn tiếp tục, liên hệ admin\n\n` +
+          `Thông tin debug:\n` +
+          `- Error type: ${error.name || 'Unknown'}\n` +
+          `- Timestamp: ${formatUTCTime(Date.now())}`
       }
       
       setError(errorMessage)
@@ -1367,6 +2059,75 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               )}
               <span>Tải file mẫu</span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Current User Info */}
+      {currentUser && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <User className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  👤 Người thực hiện: {currentUser.full_name || currentUser.email || 'N/A'}
+                </p>
+                {currentUser.role && (
+                  <p className="text-xs text-gray-600">
+                    Vai trò: {currentUser.role}
+                  </p>
+                )}
+                {currentEmployeeId && (
+                  <p className="text-xs text-gray-600">
+                    Nhân viên ID: {currentEmployeeId}
+                  </p>
+                )}
+              </div>
+            </div>
+            {currentEmployeeId && (
+              <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
+                ✓ Đã liên kết với nhân viên
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Model Selection */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-1">
+                🤖 Chọn Model AI
+              </label>
+              <p className="text-xs text-gray-600">
+                Chọn model AI để phân tích file Excel
+              </p>
+            </div>
+          </div>
+          <div className="flex-1 max-w-md ml-4">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={analyzing}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-semibold text-gray-900 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              {availableModels.map((model) => (
+                <option key={model.value} value={model.value}>
+                  {model.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {availableModels.find(m => m.value === selectedModel)?.description}
+            </p>
           </div>
         </div>
       </div>
@@ -1453,17 +2214,52 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
 
       {/* Success Message */}
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="bg-green-50 border-2 border-green-300 rounded-lg p-5 shadow-md">
           <div className="flex items-start space-x-3">
-            <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-6 w-6 text-green-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-green-800">{success}</p>
+              <h3 className="text-lg font-bold text-green-800 mb-3">🎉 Import thành công!</h3>
+              <div className="space-y-2">
+                {success.split('\n').map((line, index) => {
+                  // Skip empty lines
+                  if (!line.trim()) return null
+                  
+                  // Format different types of lines
+                  if (line.startsWith('🎉')) {
+                    return null // Skip the title line as we have it in h3
+                  } else if (line.startsWith('   └─')) {
+                    // Sub-item (indented)
+                    return (
+                      <p key={index} className="text-sm text-green-700 ml-4 font-mono">
+                        {line}
+                      </p>
+                    )
+                  } else if (line.trim().startsWith('✨') || line.trim().startsWith('🏗️') || 
+                             line.trim().startsWith('📄') || line.trim().startsWith('✓') || 
+                             line.trim().startsWith('💰')) {
+                    // Main item with icon
+                    return (
+                      <p key={index} className="text-sm font-semibold text-green-800">
+                        {line}
+                      </p>
+                    )
+                  } else {
+                    // Regular line
+                    return (
+                      <p key={index} className="text-sm text-green-700">
+                        {line}
+                      </p>
+                    )
+                  }
+                })}
+              </div>
             </div>
             <button
               onClick={() => setSuccess(null)}
-              className="text-green-600 hover:text-green-500"
+              className="text-green-600 hover:text-green-500 transition-colors"
+              title="Đóng"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -1553,6 +2349,9 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                     )}
                     <span className={debugInfo.extractedInfo.phoneFound ? 'text-gray-900' : 'text-gray-500'}>
                       SĐT: {debugInfo.extractedInfo.phone || 'Không tìm thấy'}
+                      {debugInfo.extractedInfo.phoneFound && (
+                        <span className="text-xs text-yellow-600 ml-1">(Có thể là SĐT nhân viên, không tự động điền)</span>
+                      )}
                     </span>
                   </div>
                   
@@ -1599,7 +2398,9 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                     <div className="mt-2 space-y-2">
                       {debugInfo.extractedInfo.itemsPreview.map((item, index) => (
                         <div key={index} className="p-2 bg-gray-50 rounded text-xs">
-                          <div className="font-semibold text-gray-900">{item.ten_san_pham}</div>
+                          <div className="font-semibold text-gray-900">
+                            {item.ten_san_pham || `Item ${index + 1}`}
+                          </div>
                           <div className="text-gray-600">
                             Loại: {item.loai_san_pham || 'N/A'} | 
                             SL: {item.so_luong} | 
@@ -1706,10 +2507,11 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                     const customer = customers.find(c => c.id === e.target.value)
                     setSelectedCustomerId(e.target.value)
                     if (customer) {
+                      // Chỉ lấy phone từ database, không lấy từ customerInfo (có thể từ AI analysis)
                       setCustomerInfo({
                         name: customer.name,
                         address: customerInfo.address || '',
-                        phone: customer.phone || customerInfo.phone || '',
+                        phone: customer.phone || '',  // Chỉ lấy từ database
                         email: customer.email || customerInfo.email || ''
                       })
                     }
@@ -1968,8 +2770,11 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Trạng thái</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">STT</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Loại</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Ký hiệu</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Loại SP</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Tên sản phẩm</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Thuộc sản phẩm</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Mô tả</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">ĐVT</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase" colSpan={2}>
@@ -1979,6 +2784,8 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Diện tích (m²)</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Đơn giá</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Thành tiền</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase">Có VAT</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase">Thao tác</th>
                   </tr>
                   <tr className="bg-gray-50">
                     <th colSpan={6}></th>
@@ -1993,6 +2800,9 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                     const exists = matchStatus?.exists || false
                     const bgColor = exists ? 'bg-green-50' : 'bg-amber-50'
                     const borderColor = exists ? 'border-l-4 border-green-500' : 'border-l-4 border-amber-500'
+                    
+                    const isEditing = editingItemIndex === index
+                    const itemType = item.item_type || 'product'
                     
                     return (
                       <tr key={index} className={`hover:bg-gray-100 ${bgColor} ${borderColor}`}>
@@ -2009,75 +2819,438 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-bold">{item.stt || index + 1}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-bold">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={editingItem?.stt || index + 1}
+                              onChange={(e) => setEditingItem({ ...editingItem!, stt: parseInt(e.target.value) || index + 1 })}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                            />
+                          ) : (
+                            item.stt || index + 1
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {isEditing ? (
+                            <select
+                              value={editingItem?.item_type || 'product'}
+                              onChange={(e) => setEditingItem({ ...editingItem!, item_type: e.target.value as 'product' | 'material_cost' })}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-semibold"
+                            >
+                              <option value="product">Sản phẩm</option>
+                              <option value="material_cost">Chi phí vật tư</option>
+                            </select>
+                          ) : (
+                            <div className={`px-2 py-1 rounded text-xs font-bold ${
+                              itemType === 'material_cost' 
+                                ? 'bg-orange-100 text-orange-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {itemType === 'material_cost' ? '💰 Chi phí' : '📦 Sản phẩm'}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
-                          {item.loai_san_pham ? (
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingItem?.ky_hieu || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem!, ky_hieu: e.target.value })}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                              placeholder="Ký hiệu"
+                            />
+                          ) : (
+                            item.ky_hieu || <span className="text-gray-400 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingItem?.loai_san_pham || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem!, loai_san_pham: e.target.value })}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                              placeholder="Loại sản phẩm"
+                            />
+                          ) : (
+                            item.loai_san_pham ? (
                             <div className="font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded">
                               {item.loai_san_pham}
                             </div>
                           ) : (
                             <span className="text-gray-400 text-xs">Chưa phân loại</span>
+                            )
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingItem?.ten_san_pham || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem!, ten_san_pham: e.target.value })}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-bold"
+                              placeholder="Tên sản phẩm"
+                            />
+                          ) : (
+                            <>
                           <div className="font-bold text-gray-900">
-                            {item.ten_san_pham || item.hang_muc_thi_cong?.split('\n')[0] || 'Chưa có tên'}
+                                {item.ten_san_pham || 
+                                 (item.hang_muc_thi_cong && typeof item.hang_muc_thi_cong === 'string' 
+                                   ? item.hang_muc_thi_cong.split('\n')[0] 
+                                   : item.hang_muc_thi_cong) || 
+                                 'Chưa có tên'}
                           </div>
                           {matchStatus?.matchedProduct && (
                             <div className="mt-1 text-xs text-green-700 font-semibold">
                               ✓ Khớp: {matchStatus.matchedProduct.name}
                             </div>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          {itemType === 'material_cost' ? (
+                            isEditing ? (
+                              <select
+                                value={editingItem?.belongs_to_product_id || ''}
+                                onChange={(e) => {
+                                  const selectedIndex = parseInt(e.target.value)
+                                  const selectedProduct = analyzedData?.items[selectedIndex]
+                                  setEditingItem({ 
+                                    ...editingItem!, 
+                                    belongs_to_product_id: e.target.value,
+                                    belongs_to_product_name: selectedProduct?.ten_san_pham || 
+                                      (selectedProduct?.hang_muc_thi_cong && typeof selectedProduct.hang_muc_thi_cong === 'string'
+                                        ? selectedProduct.hang_muc_thi_cong.split('\n')[0]
+                                        : '') || 
+                                      `Sản phẩm ${selectedIndex + 1}`
+                                  })
+                                }}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                              >
+                                <option value="">-- Chọn sản phẩm --</option>
+                                {analyzedData?.items.map((it, idx) => {
+                                  if (it.item_type === 'product') {
+                                    const productName = it.ten_san_pham || 
+                                      (it.hang_muc_thi_cong && typeof it.hang_muc_thi_cong === 'string'
+                                        ? it.hang_muc_thi_cong.split('\n')[0]
+                                        : '') || 
+                                      `Sản phẩm ${idx + 1}`
+                                    return (
+                                      <option key={idx} value={idx}>
+                                        {productName}
+                                      </option>
+                                    )
+                                  }
+                                  return null
+                                })}
+                              </select>
+                            ) : (
+                              item.belongs_to_product_name ? (
+                                <div className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                                  {item.belongs_to_product_name}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">Chưa chọn</span>
+                              )
+                            )
+                          ) : (
+                            <span className="text-gray-400 text-xs">-</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700 max-w-md">
-                          <div className="whitespace-pre-line text-xs leading-relaxed">
-                            {item.mo_ta || item.hang_muc_thi_cong?.split('\n').slice(1).join('\n') || '-'}
+                          {isEditing ? (
+                            <textarea
+                              value={editingItem?.mo_ta || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem!, mo_ta: e.target.value })}
+                              className="px-2 py-1 border border-gray-300 rounded text-xs resize-y"
+                              placeholder="Mô tả"
+                              rows={3}
+                              cols={100}
+                              style={{ 
+                                width: '100%',
+                                maxWidth: '400px',
+                                minWidth: '200px',
+                                wordWrap: 'break-word',
+                                overflowWrap: 'break-word'
+                              }}
+                            />
+                          ) : (
+                            (() => {
+                              const fullDescription = item.mo_ta || 
+                                (item.hang_muc_thi_cong && typeof item.hang_muc_thi_cong === 'string'
+                                  ? item.hang_muc_thi_cong.split('\n').slice(1).join('\n')
+                                  : '') || 
+                                '-'
+                              const truncatedDescription = fullDescription.length > 30 
+                                ? fullDescription.substring(0, 30) + '...' 
+                                : fullDescription
+                              
+                              return (
+                                <div 
+                                  className="text-xs leading-relaxed cursor-help"
+                                  title={fullDescription.length > 30 ? fullDescription : undefined}
+                                >
+                                  {truncatedDescription}
                           </div>
+                              )
+                            })()
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.dvt || '-'}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          {item.ngang != null && item.ngang !== undefined ? (
-                            <span className="font-bold text-blue-700">
-                              {typeof item.ngang === 'number' 
-                                ? item.ngang.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
-                                : item.ngang}
-                            </span>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingItem?.dvt || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem!, dvt: e.target.value })}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              placeholder="ĐVT"
+                            />
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            item.dvt || '-'
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          {item.cao != null && item.cao !== undefined ? (
-                            <span className="font-bold text-blue-700">
-                              {typeof item.cao === 'number' 
-                                ? item.cao.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
-                                : item.cao}
-                            </span>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingItem?.ngang || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem!, ngang: parseFloat(e.target.value) || undefined })}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              placeholder="Ngang"
+                            />
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            item.ngang != null && item.ngang !== undefined ? (
+                              <span className="font-bold text-blue-700">
+                                {typeof item.ngang === 'number' 
+                                  ? item.ngang.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+                                  : item.ngang}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          <span className="font-bold text-purple-700">
-                            {item.so_luong || 0}
-                          </span>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingItem?.cao || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem!, cao: parseFloat(e.target.value) || undefined })}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              placeholder="Cao"
+                            />
+                          ) : (
+                            item.cao != null && item.cao !== undefined ? (
+                              <span className="font-bold text-blue-700">
+                                {typeof item.cao === 'number' 
+                                  ? item.cao.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+                                  : item.cao}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          {item.dien_tich != null && item.dien_tich !== undefined ? (
-                            <span className="font-bold text-green-700">
-                              {typeof item.dien_tich === 'number' 
-                                ? item.dien_tich.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                : item.dien_tich}
-                            </span>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingItem?.so_luong || 0}
+                              onChange={(e) => {
+                                const newSoLuong = parseFloat(e.target.value) || 0
+                                const donGia = editingItem?.don_gia || 0
+                                const dienTich = editingItem?.dien_tich
+                                // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
+                                const newThanhTien = dienTich && dienTich > 0 
+                                  ? donGia * dienTich * newSoLuong
+                                  : donGia * newSoLuong
+                                setEditingItem({ ...editingItem!, so_luong: newSoLuong, thanh_tien: newThanhTien })
+                              }}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                            />
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="font-bold text-purple-700">
+                              {item.so_luong || 0}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingItem?.dien_tich || ''}
+                              onChange={(e) => {
+                                const newDienTich = parseFloat(e.target.value) || undefined
+                                const donGia = editingItem?.don_gia || 0
+                                const soLuong = editingItem?.so_luong || 0
+                                // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
+                                const newThanhTien = newDienTich && newDienTich > 0
+                                  ? donGia * newDienTich * soLuong
+                                  : donGia * soLuong
+                                setEditingItem({ ...editingItem!, dien_tich: newDienTich, thanh_tien: newThanhTien })
+                              }}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              placeholder="Diện tích"
+                            />
+                          ) : (
+                            item.dien_tich != null && item.dien_tich !== undefined ? (
+                              <span className="font-bold text-green-700">
+                                {typeof item.dien_tich === 'number' 
+                                  ? item.dien_tich.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                  : item.dien_tich}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-right">
-                          {(item.don_gia || 0).toLocaleString('vi-VN')} VNĐ
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingItem?.don_gia || 0}
+                              onChange={(e) => {
+                                const newDonGia = parseFloat(e.target.value) || 0
+                                const soLuong = editingItem?.so_luong || 0
+                                const dienTich = editingItem?.dien_tich
+                                // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
+                                const newThanhTien = dienTich && dienTich > 0
+                                  ? newDonGia * dienTich * soLuong
+                                  : newDonGia * soLuong
+                                setEditingItem({ ...editingItem!, don_gia: newDonGia, thanh_tien: newThanhTien })
+                              }}
+                              className="w-28 px-2 py-1 border border-gray-300 rounded text-xs text-right"
+                            />
+                          ) : (
+                            (item.don_gia || 0).toLocaleString('vi-VN') + ' VNĐ'
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
-                          {(item.thanh_tien || 0).toLocaleString('vi-VN')} VNĐ
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingItem?.thanh_tien || 0}
+                              onChange={(e) => {
+                                const newThanhTien = parseFloat(e.target.value) || 0
+                                // Auto-calculate don_gia if so_luong exists
+                                const soLuong = editingItem?.so_luong || 1
+                                const newDonGia = soLuong > 0 ? newThanhTien / soLuong : 0
+                                setEditingItem({ 
+                                  ...editingItem!, 
+                                  thanh_tien: newThanhTien,
+                                  don_gia: newDonGia
+                                })
+                              }}
+                              className="w-32 px-2 py-1 border border-gray-300 rounded text-xs text-right"
+                            />
+                          ) : (
+                            (item.thanh_tien || 0).toLocaleString('vi-VN') + ' VNĐ'
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {isEditing ? (
+                            <input
+                              type="checkbox"
+                              checked={editingItem?.has_tax !== false}
+                              onChange={(e) => setEditingItem({ ...editingItem!, has_tax: e.target.checked })}
+                              className="w-5 h-5 cursor-pointer"
+                              title={editingItem?.has_tax !== false ? "Có VAT" : "Không VAT"}
+                            />
+                          ) : (
+                            <div className={`px-2 py-1 rounded text-xs font-bold ${
+                              item.has_tax !== false 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {item.has_tax !== false ? '✓ Có' : '✗ Không'}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center space-x-2">
+                              <button
+                                onClick={() => {
+                                  if (editingItem && analyzedData) {
+                                    // Ensure thanh_tien is calculated correctly
+                                    const soLuong = editingItem.so_luong || 0
+                                    const donGia = editingItem.don_gia || 0
+                                    const dienTich = editingItem.dien_tich
+                                    // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
+                                    const calculatedThanhTien = dienTich && dienTich > 0
+                                      ? donGia * dienTich * soLuong
+                                      : donGia * soLuong
+                                    
+                                    const finalItem = {
+                                      ...editingItem,
+                                      thanh_tien: calculatedThanhTien
+                                    }
+                                    
+                                    const updatedItems = [...analyzedData.items]
+                                    updatedItems[index] = finalItem
+                                    
+                                    // Recalculate totals
+                                    const newSubtotal = updatedItems.reduce((sum, item) => sum + (item.thanh_tien || 0), 0)
+                                    const taxRate = analyzedData.tax_rate || 0.08
+                                    
+                                    // Calculate tax only for items with has_tax = true
+                                    const taxableSubtotal = updatedItems.reduce((sum, item) => {
+                                      if (item.has_tax !== false) {  // Default to true if not specified
+                                        return sum + (item.thanh_tien || 0)
+                                      }
+                                      return sum
+                                    }, 0)
+                                    
+                                    const newTaxAmount = taxableSubtotal * taxRate
+                                    const newTotalAmount = newSubtotal + newTaxAmount
+                                    
+                                    setAnalyzedData({
+                                      ...analyzedData,
+                                      items: updatedItems,
+                                      subtotal: newSubtotal,
+                                      tax_amount: newTaxAmount,
+                                      total_amount: newTotalAmount
+                                    })
+                                    setEditingItemIndex(null)
+                                    setEditingItem(null)
+                                  }
+                                }}
+                                className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                                title="Lưu"
+                              >
+                                <Save className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingItemIndex(null)
+                                  setEditingItem(null)
+                                }}
+                                className="p-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                                title="Hủy"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingItemIndex(index)
+                                setEditingItem({ ...item })
+                              }}
+                              className="p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                              title="Chỉnh sửa"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                          )}
                         </td>
                     </tr>
                     )
@@ -2112,7 +3285,94 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">VAT ({(analyzedData.tax_rate || 0) * 100}%)</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  VAT
+                  {editingTaxRate ? (
+                    <div className="flex items-center space-x-2 mt-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={tempTaxRate * 100}
+                        onChange={(e) => {
+                          const newTaxRatePercent = parseFloat(e.target.value) || 0
+                          const newTaxRate = newTaxRatePercent / 100
+                          setTempTaxRate(newTaxRate)
+                          
+                          // Recalculate tax and total
+                          const subtotal = analyzedData.subtotal || 0
+                          const taxableSubtotal = analyzedData.items.reduce((sum, item) => {
+                            if (item.has_tax !== false) {
+                              return sum + (item.thanh_tien || 0)
+                            }
+                            return sum
+                          }, 0)
+                          const newTaxAmount = taxableSubtotal * newTaxRate
+                          const newTotalAmount = subtotal + newTaxAmount
+                          
+                          setAnalyzedData({
+                            ...analyzedData,
+                            tax_rate: newTaxRate,
+                            tax_amount: newTaxAmount,
+                            total_amount: newTotalAmount
+                          })
+                        }}
+                        className="w-20 px-2 py-1 border-2 border-blue-500 rounded text-sm font-bold text-center"
+                        autoFocus
+                      />
+                      <span className="text-sm font-bold">%</span>
+                      <button
+                        onClick={() => setEditingTaxRate(false)}
+                        className="p-1 bg-green-500 text-white rounded hover:bg-green-600"
+                        title="Xong"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTempTaxRate(analyzedData.tax_rate || 0.08)
+                          setEditingTaxRate(false)
+                          // Revert to original
+                          const subtotal = analyzedData.subtotal || 0
+                          const originalTaxRate = analyzedData.tax_rate || 0.08
+                          const taxableSubtotal = analyzedData.items.reduce((sum, item) => {
+                            if (item.has_tax !== false) {
+                              return sum + (item.thanh_tien || 0)
+                            }
+                            return sum
+                          }, 0)
+                          const originalTaxAmount = taxableSubtotal * originalTaxRate
+                          const originalTotalAmount = subtotal + originalTaxAmount
+                          setAnalyzedData({
+                            ...analyzedData,
+                            tax_rate: originalTaxRate,
+                            tax_amount: originalTaxAmount,
+                            total_amount: originalTotalAmount
+                          })
+                        }}
+                        className="p-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                        title="Hủy"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="ml-2">
+                      ({(analyzedData.tax_rate || 0) * 100}%)
+                      <button
+                        onClick={() => {
+                          setTempTaxRate(analyzedData.tax_rate || 0.08)
+                          setEditingTaxRate(true)
+                        }}
+                        className="ml-2 p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                        title="Chỉnh sửa % thuế"
+                      >
+                        <Edit className="h-4 w-4 inline" />
+                      </button>
+                    </span>
+                  )}
+                </label>
                 <div className="text-xl font-bold text-gray-900">
                   {(analyzedData.tax_amount || 0).toLocaleString('vi-VN')} VNĐ
                 </div>
@@ -2173,16 +3433,16 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               {/* Customer */}
               <div className={`p-4 rounded-lg border-2 ${isNewCustomer ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-300'}`}>
                 <div className="flex items-center space-x-3 mb-2">
-                  <div className={`p-2 rounded-lg ${isNewCustomer ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                    <User className={`h-5 w-5 ${isNewCustomer ? 'text-blue-600' : 'text-gray-600'}`} />
-                  </div>
-                  <div>
+                <div className={`p-2 rounded-lg ${isNewCustomer ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                  <User className={`h-5 w-5 ${isNewCustomer ? 'text-blue-600' : 'text-gray-600'}`} />
+                </div>
+                <div>
                     <p className="text-xs font-semibold text-gray-600 uppercase">Khách hàng</p>
                     <p className={`text-sm font-bold ${isNewCustomer ? 'text-blue-700' : 'text-gray-700'}`}>
                       {isNewCustomer ? '✨ Tạo mới' : '✓ Sử dụng có sẵn'}
-                    </p>
-                  </div>
+                  </p>
                 </div>
+              </div>
                 <p className="text-xs text-gray-600 font-medium truncate" title={customerInfo.name}>
                   {customerInfo.name || 'Chưa có tên'}
                 </p>
@@ -2191,16 +3451,16 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               {/* Project */}
               <div className={`p-4 rounded-lg border-2 ${isNewProject ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-300'}`}>
                 <div className="flex items-center space-x-3 mb-2">
-                  <div className={`p-2 rounded-lg ${isNewProject ? 'bg-purple-100' : 'bg-gray-100'}`}>
-                    <Building2 className={`h-5 w-5 ${isNewProject ? 'text-purple-600' : 'text-gray-600'}`} />
-                  </div>
-                  <div>
+                <div className={`p-2 rounded-lg ${isNewProject ? 'bg-purple-100' : 'bg-gray-100'}`}>
+                  <Building2 className={`h-5 w-5 ${isNewProject ? 'text-purple-600' : 'text-gray-600'}`} />
+                </div>
+                <div>
                     <p className="text-xs font-semibold text-gray-600 uppercase">Dự án</p>
                     <p className={`text-sm font-bold ${isNewProject ? 'text-purple-700' : 'text-gray-700'}`}>
                       {isNewProject ? '✨ Tạo mới' : '✓ Sử dụng có sẵn'}
-                    </p>
-                  </div>
+                  </p>
                 </div>
+              </div>
                 <p className="text-xs text-gray-600 font-medium truncate" title={projectInfo.name}>
                   {projectInfo.name || 'Chưa có tên'}
                 </p>
@@ -2209,20 +3469,20 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               {/* Products */}
               <div className="p-4 rounded-lg border-2 bg-amber-50 border-amber-300">
                 <div className="flex items-center space-x-3 mb-2">
-                  <div className="p-2 rounded-lg bg-amber-100">
-                    <Package className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-600 uppercase">Sản phẩm mới</p>
-                    <p className="text-sm text-amber-700 font-bold">
-                      ✨ {productMatchStatus.filter(m => !m.exists).length} sản phẩm
-                    </p>
-                  </div>
+                <div className="p-2 rounded-lg bg-amber-100">
+                  <Package className="h-5 w-5 text-amber-600" />
                 </div>
+                <div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase">Sản phẩm mới</p>
+                  <p className="text-sm text-amber-700 font-bold">
+                    ✨ {productMatchStatus.filter(m => !m.exists).length} sản phẩm
+                  </p>
+                </div>
+              </div>
                 <p className="text-xs text-gray-600 font-medium">
                   {productMatchStatus.filter(m => m.exists).length} sản phẩm đã có
                 </p>
-              </div>
+            </div>
               
               {/* Quote */}
               <div className="p-4 rounded-lg border-2 bg-green-50 border-green-300">
@@ -2265,15 +3525,15 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
             </div>
             
             <div className="flex space-x-3">
-              <button
-                onClick={handleClearData}
+            <button
+              onClick={handleClearData}
                 className="px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-semibold flex items-center space-x-2 transition-colors"
-              >
-                <X className="h-5 w-5" />
+            >
+              <X className="h-5 w-5" />
                 <span>Hủy & Upload khác</span>
-              </button>
-              <button
-                onClick={handleImport}
+            </button>
+            <button
+              onClick={handleImport}
                 disabled={loading || !customerInfo.name || !projectInfo.name || !analyzedData.items || analyzedData.items.length === 0}
                 className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold flex items-center space-x-2 shadow-lg transition-all transform hover:scale-105"
                 title={
@@ -2282,21 +3542,21 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                   !analyzedData.items || analyzedData.items.length === 0 ? 'Chưa có hạng mục nào' :
                   `Import ${isNewCustomer ? 'khách hàng mới' : 'khách hàng có sẵn'}, ${isNewProject ? 'dự án mới' : 'dự án có sẵn'}, 1 báo giá với ${analyzedData.items.length} hạng mục`
                 }
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Đang import...</span>
-                  </>
-                ) : (
-                  <>
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Đang import...</span>
+                </>
+              ) : (
+                <>
                     <Sparkles className="h-5 w-5" />
                     <span>
                       {isNewCustomer && isNewProject ? 'Tạo mới & Import' : 'Xác nhận Import'}
                     </span>
-                  </>
-                )}
-              </button>
+                </>
+              )}
+            </button>
             </div>
           </div>
         </div>

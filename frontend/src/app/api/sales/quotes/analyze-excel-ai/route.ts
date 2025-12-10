@@ -11,6 +11,7 @@ interface DocumentAnalysisRequest {
   requestId?: string
   fileSize?: number
   fileLastModified?: number
+  model?: string  // AI model to use (e.g., 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo')
 }
 
 interface DebugInfo {
@@ -61,7 +62,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body: DocumentAnalysisRequest = await request.json()
-    const { documentData, fileName, fileType = 'excel', timestamp, requestId, fileSize, fileLastModified } = body
+    const { documentData, fileName, fileType = 'excel', timestamp, requestId, fileSize, fileLastModified, model = 'gpt-4o' } = body
+    
+    // Validate model
+    const validModels = ['gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-4o-mini']
+    const selectedModel = validModels.includes(model) ? model : 'gpt-4o'
+    
+    console.log('🤖 Selected AI model:', selectedModel)
     
     console.log('📥 Received request:', {
       fileName,
@@ -467,6 +474,38 @@ YÊU CẦU PHÂN TÍCH CHI TIẾT:
        - "CỬA TRƯỢT QUAY 4 CÁNH + MỞ TRONG" → ten_san_pham: "CỬA TRƯỢT QUAY 4 CÁNH"
      * Quy tắc: Lấy TRƯỚC dấu +, hoặc toàn bộ dòng đầu nếu không có +
    
+   - item_type: PHÂN LOẠI ITEM - "product" HOẶC "material_cost"
+     * QUAN TRỌNG: Phân biệt rõ ràng giữa SẢN PHẨM và CHI PHÍ VẬT TƯ
+     
+     QUY TẮC PHÂN LOẠI:
+     
+     ✅ item_type: "product" (SẢN PHẨM) - Nếu là:
+        - Sản phẩm hoàn chỉnh: Cửa, Cửa sổ, Cửa đi, Vách kính, Lan can, v.v.
+        - Có thể bán trực tiếp cho khách hàng
+        - Có đầy đủ thông tin: tên sản phẩm, kích thước, vật liệu, phụ kiện
+        - Ví dụ:
+          * "CỬA SỔ MỞ 1 CÁNH" → item_type: "product"
+          * "Cửa đi 2 cánh mở quay" → item_type: "product"
+          * "VÁCH KÍNH VĂN PHÒNG" → item_type: "product"
+          * "Lan can kính" → item_type: "product"
+     
+     ✅ item_type: "material_cost" (CHI PHÍ VẬT TƯ) - Nếu là:
+        - Vật tư, nguyên vật liệu: Nhôm, Kính, Inox, Sắt, Nhựa, Gỗ, Phụ kiện riêng lẻ
+        - Chi phí sản xuất: Vật liệu dùng để sản xuất sản phẩm
+        - Có từ khóa: "chi phí", "vật tư", "nguyên vật liệu", "vật liệu", "phụ kiện" (riêng lẻ)
+        - Ví dụ:
+          * "Nhôm Xingfa TDA" (riêng lẻ, không phải sản phẩm hoàn chỉnh) → item_type: "material_cost"
+          * "Kính cường lực 10mm" (riêng lẻ) → item_type: "material_cost"
+          * "Phụ kiện Kinlong" (riêng lẻ) → item_type: "material_cost"
+          * "Chi phí vận chuyển" → item_type: "material_cost"
+          * "Nhôm xưởng" → item_type: "material_cost"
+          * "Kính Thiên Phát" → item_type: "material_cost"
+     
+     ⚠️ LƯU Ý:
+        - Nếu item có tên sản phẩm hoàn chỉnh (Cửa, Cửa sổ, Vách kính) → item_type: "product"
+        - Nếu item chỉ là vật liệu/phụ kiện riêng lẻ → item_type: "material_cost"
+        - Nếu không rõ → mặc định là "product"
+   
    - loai_san_pham: Loại/Category sản phẩm - PHÂN LOẠI DỰA VÀO VẬT LIỆU
      * ĐỌC KỸ các dòng mô tả để xác định vật liệu chính
      
@@ -520,7 +559,26 @@ YÊU CẦU PHÂN TÍCH CHI TIẾT:
    - Số lượng: Từ cột "Số lượng", "SL", "Số lượng"
    - Diện tích (m²): Từ cột "Diện tích", "Diện tích (m²)", "Diện tích (m2)"
    - Đơn giá: Từ cột "Đơn giá", "Đơn giá (VNĐ/ĐVT)", "Đơn giá (VNĐ·ĐVT)" - loại bỏ dấu phẩy, chấm, CHỈ lấy số
-   - Thành tiền: Từ cột "Thành tiền", "Thành tiền (VNĐ)" - loại bỏ dấu phẩy, chấm, CHỈ lấy số. Nếu không có thì tính = Số lượng × Đơn giá
+   - Thành tiền: Từ cột "Thành tiền", "Thành tiền (VNĐ)" - loại bỏ dấu phẩy, chấm, CHỈ lấy số. 
+     * QUAN TRỌNG - CÔNG THỨC TÍNH THÀNH TIỀN:
+       - Nếu có Diện tích: Thành tiền = Đơn giá × Diện tích × Số lượng
+       - Nếu không có Diện tích: Thành tiền = Đơn giá × Số lượng
+     * Nếu không có trong file, tính theo công thức trên
+   - has_tax: Có thuế VAT hay không (boolean)
+     * QUAN TRỌNG: Phân biệt các item có thuế và không có thuế
+     * has_tax: true (CÓ THUẾ) - Nếu:
+       - Item là sản phẩm thông thường (Cửa, Cửa sổ, Vách kính, v.v.)
+       - Không có dấu hiệu miễn thuế
+       - Mặc định là true nếu không rõ
+     * has_tax: false (KHÔNG CÓ THUẾ) - Nếu:
+       - Có ghi chú "Không VAT", "Miễn VAT", "Không thuế", "Miễn thuế"
+       - Có dấu "*" hoặc ký hiệu đặc biệt chỉ miễn thuế
+       - Item là "Vận chuyển", "Lắp đặt" (một số trường hợp)
+       - Có ghi chú "Giá chưa VAT" và item đó được liệt kê riêng
+     * Ví dụ:
+       - "CỬA SỔ MỞ 1 CÁNH" → has_tax: true
+       - "Vận chuyển lắp đặt (Không VAT)" → has_tax: false
+       - "Phụ kiện *" (có dấu * chỉ miễn thuế) → has_tax: false
    - Ghi chú: Từ cột "Ghi chú", "Hình ảnh minh họa" (nếu có)
 
 4. TÍNH TOÁN (TỪ DỮ LIỆU TRÊN):
@@ -743,6 +801,7 @@ Trả về JSON với format CHÍNH XÁC:
       "stt": number hoặc null,
       "ky_hieu": "string hoặc null",
       "hang_muc_thi_cong": "string (toàn bộ mô tả gốc)",
+      "item_type": "string (BẮT BUỘC: 'product' hoặc 'material_cost')",
       "ten_san_pham": "string (tên sản phẩm chính, CHỈ lấy phần tên, bỏ phần phụ)",
       "loai_san_pham": "string (loại/category: Nhôm Xingfa Việt Nam, Nhôm Xingfa Trung Quốc, Nhôm Zhongkai, Kính cường lực, Phụ kiện, etc.)",
       "mo_ta": "string (mô tả chi tiết: vật liệu, kích thước, màu sắc, phụ kiện)",
@@ -753,6 +812,7 @@ Trả về JSON với format CHÍNH XÁC:
       "dien_tich": number hoặc null,
       "don_gia": number,
       "thanh_tien": number,
+      "has_tax": boolean (BẮT BUỘC: true nếu có thuế VAT, false nếu không có thuế),
       "ghi_chu": "string hoặc null"
     }
   ],
@@ -784,6 +844,7 @@ VÍ DỤ JSON ĐÚNG (CHI TIẾT):
       "stt": 1,
       "ky_hieu": "Cửa chính",
       "hang_muc_thi_cong": "CỬA SỔ MỞ 1 CÁNH + 1 FIX CỐ ĐỊNH\\nNhôm : Xingfa Tiến Đạt Việt Nam hệ 55\\nDày : 1.4mm\\nMàu : xám ghi\\nKính mờ 8mm cường lực\\nPhụ Kiến Kinlong chính hãng đồng bộ cửa\\n4 bánh xe lùa cửa sổ\\n2 bộ khóa sập\\nVà 1 số phụ kiện phụ khác đồng bộ cửa",
+      "item_type": "product",
       "ten_san_pham": "CỬA SỔ MỞ 1 CÁNH",
       "loai_san_pham": "Nhôm Xingfa Việt Nam",
       "mo_ta": "+ 1 FIX CỐ ĐỊNH\\nNhôm : Xingfa Tiến Đạt Việt Nam hệ 55\\nDày : 1.4mm\\nMàu : xám ghi\\nKính mờ 8mm cường lực\\nPhụ Kiến Kinlong chính hãng đồng bộ cửa\\n4 bánh xe lùa cửa sổ\\n2 bộ khóa sập\\nVà 1 số phụ kiện phụ khác đồng bộ cửa",
@@ -794,12 +855,14 @@ VÍ DỤ JSON ĐÚNG (CHI TIẾT):
       "dien_tich": 1.54,
       "don_gia": 2000000,
       "thanh_tien": 3080000,
+      "has_tax": true,
       "ghi_chu": null
     },
     {
       "stt": 2,
       "ky_hieu": null,
       "hang_muc_thi_cong": "VÁCH KÍNH VĂN PHÒNG\\nKính trắng 10mm cường lực\\nSử dụng đế nẹp sập tiêu chuẩn màu trắng sữa lắp kính",
+      "item_type": "product",
       "ten_san_pham": "VÁCH KÍNH VĂN PHÒNG",
       "loai_san_pham": "Kính cường lực",
       "mo_ta": "Kính trắng 10mm cường lực\\nSử dụng đế nẹp sập tiêu chuẩn màu trắng sữa lắp kính",
@@ -810,7 +873,44 @@ VÍ DỤ JSON ĐÚNG (CHI TIẾT):
       "dien_tich": 9.04,
       "don_gia": 850000,
       "thanh_tien": 7684000,
+      "has_tax": true,
       "ghi_chu": null
+    },
+    {
+      "stt": 3,
+      "ky_hieu": null,
+      "hang_muc_thi_cong": "Nhôm xưởng\\nNhôm Xingfa TDA hệ 55",
+      "item_type": "material_cost",
+      "ten_san_pham": "Nhôm xưởng",
+      "loai_san_pham": "Nhôm Xingfa Việt Nam",
+      "mo_ta": "Nhôm Xingfa TDA hệ 55",
+      "dvt": "kg",
+      "ngang": null,
+      "cao": null,
+      "so_luong": 50,
+      "dien_tich": null,
+      "don_gia": 150000,
+      "thanh_tien": 7500000,
+      "has_tax": true,
+      "ghi_chu": null
+    },
+    {
+      "stt": 4,
+      "ky_hieu": null,
+      "hang_muc_thi_cong": "Vận chuyển lắp đặt (Không VAT)",
+      "item_type": "material_cost",
+      "ten_san_pham": "Vận chuyển lắp đặt",
+      "loai_san_pham": "Dịch vụ",
+      "mo_ta": null,
+      "dvt": "xe",
+      "ngang": null,
+      "cao": null,
+      "so_luong": 1,
+      "dien_tich": null,
+      "don_gia": 500000,
+      "thanh_tien": 500000,
+      "has_tax": false,
+      "ghi_chu": "Không VAT"
     }
   ],
   "subtotal": 10764000,
@@ -854,10 +954,21 @@ Không bao gồm \`\`\`json hoặc \`\`\` trong response. Chỉ trả về JSON 
 - KHÔNG ĐƯỢC thêm bất kỳ comments nào (// hoặc /* */) vào JSON
 - KHÔNG ĐƯỢC thêm text giải thích, note, hoặc bất kỳ text nào ngoài JSON
 - Tất cả newline trong string phải là \\n (escape), không phải ký tự xuống dòng thực
+- Tất cả ký tự đặc biệt trong string phải được escape: \\n, \\r, \\t, \\", \\\\
 - MỖI key PHẢI có dấu : và value riêng biệt. Ví dụ: "thanh_tien": 1000000 (ĐÚNG), không được "thanh_tien-1000000" (SAI)
 - Kiểm tra lại JSON trước khi trả về để đảm bảo không có lỗi syntax
 - Đảm bảo format chuẩn: "key": value, không được thiếu dấu : hoặc gộp key-value thành một string
-- Nếu không tìm thấy thông tin, để null, KHÔNG thêm comment giải thích`
+- Nếu không tìm thấy thông tin, để null, KHÔNG thêm comment giải thích
+- Đảm bảo tất cả dấu ngoặc { } và [ ] đều được đóng đúng cách
+- Không được có trailing comma trước ] hoặc }
+- Tất cả string values phải được bao quanh bởi dấu ngoặc kép ""
+
+QUAN TRỌNG: Trước khi trả về, hãy kiểm tra JSON bằng cách:
+1. Đếm số dấu { và } phải bằng nhau
+2. Đếm số dấu [ và ] phải bằng nhau
+3. Tất cả string values phải được escape đúng cách
+4. Không có trailing comma
+5. Tất cả keys đều có dấu : sau đó`
 
     // Call OpenAI API
     console.log('🔵 Calling OpenAI API...')
@@ -879,7 +990,7 @@ Không bao gồm \`\`\`json hoặc \`\`\` trong response. Chỉ trả về JSON 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: selectedModel,  // Use selected model from request
         messages: [
           {
             role: 'system',
@@ -1199,12 +1310,35 @@ Không bao gồm \`\`\`json hoặc \`\`\` trong response. Chỉ trả về JSON 
           altJson = altJson.replace(/```\s*/g, '')
         }
         
-        // Find JSON boundaries
+        // Remove any text before first { and after last }
+        // This handles cases where AI adds explanatory text
         let jsonStart = altJson.indexOf('{')
         let jsonEnd = altJson.lastIndexOf('}')
         
         if (jsonStart >= 0 && jsonEnd > jsonStart) {
           altJson = altJson.substring(jsonStart, jsonEnd + 1)
+        } else {
+          // If no clear boundaries, try to find JSON object by counting braces
+          let braceCount = 0
+          let startIdx = -1
+          let endIdx = -1
+          
+          for (let i = 0; i < altJson.length; i++) {
+            if (altJson[i] === '{') {
+              if (braceCount === 0) startIdx = i
+              braceCount++
+            } else if (altJson[i] === '}') {
+              braceCount--
+              if (braceCount === 0 && startIdx >= 0) {
+                endIdx = i
+                break
+              }
+            }
+          }
+          
+          if (startIdx >= 0 && endIdx > startIdx) {
+            altJson = altJson.substring(startIdx, endIdx + 1)
+          }
         }
         
         // Fix unescaped newlines in string values more carefully
@@ -1318,24 +1452,142 @@ Không bao gồm \`\`\`json hoặc \`\`\` trong response. Chỉ trả về JSON 
         const altErrorMatch = altError.message?.match(/position (\d+)/)
         const altErrorPos = altErrorMatch ? parseInt(altErrorMatch[1]) : null
         
-        // Add parsing error to debug info
-        debugInfo.warnings.push('❌ Lỗi parse JSON: AI trả về dữ liệu không hợp lệ')
-        debugInfo.processingSteps.push('❌ JSON parsing failed')
-        debugInfo.processingSteps.push(`Error: ${parseError.message}`)
-        if (altError.message) {
-          debugInfo.processingSteps.push(`Alternative parsing error: ${altError.message}`)
+        // Try one more time with aggressive JSON fixing
+        try {
+          console.log('🔄 Attempting aggressive JSON fixing...')
+          
+          // Extract JSON object from content more aggressively
+          let jsonContent = content.trim()
+          
+          // Remove markdown code blocks
+          jsonContent = jsonContent.replace(/```json\s*/g, '').replace(/```\s*/g, '')
+          
+          // Find JSON object boundaries
+          const firstBrace = jsonContent.indexOf('{')
+          const lastBrace = jsonContent.lastIndexOf('}')
+          
+          if (firstBrace >= 0 && lastBrace > firstBrace) {
+            jsonContent = jsonContent.substring(firstBrace, lastBrace + 1)
+          }
+          
+          // Fix unescaped characters in strings more aggressively
+          let fixed = ''
+          let inString = false
+          let escapeNext = false
+          
+          for (let i = 0; i < jsonContent.length; i++) {
+            const char = jsonContent[i]
+            
+            if (escapeNext) {
+              fixed += char
+              escapeNext = false
+              continue
+            }
+            
+            if (char === '\\') {
+              escapeNext = true
+              fixed += char
+              continue
+            }
+            
+            if (char === '"') {
+              inString = !inString
+              fixed += char
+              continue
+            }
+            
+            if (inString) {
+              // Escape special characters
+              if (char === '\n') {
+                fixed += '\\n'
+              } else if (char === '\r') {
+                fixed += '\\r'
+              } else if (char === '\t') {
+                fixed += '\\t'
+              } else if (char === '"') {
+                fixed += '\\"'
+              } else if (char === '\\') {
+                fixed += '\\\\'
+              } else {
+                fixed += char
+              }
+            } else {
+              fixed += char
+            }
+          }
+          
+          jsonContent = fixed
+          
+          // Fix trailing commas
+          jsonContent = jsonContent.replace(/,\s*([}\]])/g, '$1')
+          
+          // Fix missing colons between keys and values
+          jsonContent = jsonContent.replace(/"([^"]+)"\s+(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)\s*([,}\]])/g, '"$1": $2$3')
+          jsonContent = jsonContent.replace(/"([^"]+)"\s+(null|true|false)\s*([,}\]])/g, '"$1": $2$3')
+          
+          // Fix incomplete JSON by closing braces/brackets
+          let openBraces = (jsonContent.match(/\{/g) || []).length - (jsonContent.match(/\}/g) || []).length
+          let openBrackets = (jsonContent.match(/\[/g) || []).length - (jsonContent.match(/\]/g) || []).length
+          
+          // Only close if we're at the end and not in a string
+          let inStr = false
+          let escNext = false
+          for (let i = jsonContent.length - 1; i >= 0; i--) {
+            const char = jsonContent[i]
+            if (escNext) {
+              escNext = false
+              continue
+            }
+            if (char === '\\') {
+              escNext = true
+              continue
+            }
+            if (char === '"') {
+              inStr = !inStr
+              continue
+            }
+            if (!inStr) break
+          }
+          
+          if (!inStr) {
+            while (openBrackets > 0) {
+              jsonContent += ']'
+              openBrackets--
+            }
+            while (openBraces > 0) {
+              jsonContent += '}'
+              openBraces--
+            }
+          }
+          
+          // Try parsing
+          analysis = JSON.parse(jsonContent)
+          console.log('✅ Aggressive JSON fixing succeeded')
+        } catch (finalError: any) {
+          console.error('❌ All JSON parsing attempts failed:', finalError)
+          
+          // Add parsing error to debug info
+          debugInfo.warnings.push('❌ Lỗi parse JSON: AI trả về dữ liệu không hợp lệ')
+          debugInfo.processingSteps.push('❌ JSON parsing failed')
+          debugInfo.processingSteps.push(`Error: ${parseError.message}`)
+          if (altError.message) {
+            debugInfo.processingSteps.push(`Alternative parsing error: ${altError.message}`)
+          }
+          if (finalError.message) {
+            debugInfo.processingSteps.push(`Aggressive fixing error: ${finalError.message}`)
+          }
+          
+          return NextResponse.json(
+            { 
+              success: false,
+              error: 'Failed to parse AI response', 
+              details: errorPos ? `Lỗi tại vị trí ${errorPos} trong JSON` : (altErrorPos ? `Lỗi tại vị trí ${altErrorPos}` : 'JSON không hợp lệ'),
+              message: 'AI trả về dữ liệu không đúng format. Vui lòng thử lại hoặc kiểm tra file.',
+              debug: debugInfo  // Include debug info even on error
+            },
+            { status: 500 }
+          )
         }
-        
-      return NextResponse.json(
-        { 
-            success: false,
-          error: 'Failed to parse AI response', 
-            details: errorPos ? `Lỗi tại vị trí ${errorPos} trong JSON` : (altErrorPos ? `Lỗi tại vị trí ${altErrorPos}` : 'JSON không hợp lệ'),
-          message: 'AI trả về dữ liệu không đúng format. Vui lòng thử lại hoặc kiểm tra file.',
-          debug: debugInfo  // Include debug info even on error
-        },
-        { status: 500 }
-      )
       }
     }
 

@@ -1415,6 +1415,11 @@ async def send_quote_to_customer(
                             if additional_notes is None and request and request.additional_notes and request.additional_notes.strip():
                                 additional_notes = request.additional_notes
                             
+                            # Fallback to quotes.notes if not found in customization or request
+                            if additional_notes is None and quote_data.get('notes'):
+                                additional_notes = quote_data.get('notes')
+                                print(f"📝 Using notes from quotes.notes: {additional_notes[:100] if additional_notes else 'None'}...")
+                            
                             if default_notes is None and request and request.default_notes:
                                 default_notes = request.default_notes
                             
@@ -3809,33 +3814,47 @@ async def import_quote_from_ai_analysis(
         supabase = get_supabase_client()
         
         # Extract data from analysis
-        customer_info = analysis_data.get('customer', {})
-        project_info = analysis_data.get('project', {})
-        items = analysis_data.get('items', [])
+        customer_info = analysis_data.get('customer', {}) or {}
+        project_info = analysis_data.get('project', {}) or {}
+        items = analysis_data.get('items', []) or []
         is_new_customer = analysis_data.get('is_new_customer', True)
         is_new_project = analysis_data.get('is_new_project', True)
         employee_id = analysis_data.get('employee_id')
+        created_by = analysis_data.get('created_by')  # User ID from frontend
+        created_by_name = analysis_data.get('created_by_name')  # User name from frontend
+        
+        # Ensure customer_info and project_info are dictionaries
+        if not isinstance(customer_info, dict):
+            customer_info = {}
+        if not isinstance(project_info, dict):
+            project_info = {}
+        if not isinstance(items, list):
+            items = []
         
         print(f"📋 Import request: is_new_customer={is_new_customer}, is_new_project={is_new_project}")
-        print(f"📋 Customer ID provided: {customer_info.get('id')}")
-        print(f"📋 Project ID provided: {project_info.get('id')}")
+        print(f"📋 Customer ID provided: {customer_info.get('id') if customer_info else None}")
+        print(f"📋 Project ID provided: {project_info.get('id') if project_info else None}")
+        print(f"👤 Created by: {created_by_name or current_user.email} (ID: {created_by or current_user.id})")
+        print(f"👷 Employee ID: {employee_id}")
         
-        if not customer_info.get('name'):
+        # Get customer name safely
+        customer_name_value = (customer_info.get('name') if customer_info else None) or ''
+        if not customer_name_value or not str(customer_name_value).strip():
             raise HTTPException(
                 status_code=400,
                 detail="Thiếu thông tin khách hàng"
             )
         
         # Get project name from project info or create from customer
-        project_name = project_info.get('name') if project_info else ''
+        project_name = (project_info.get('name') if project_info else None) or ''
         if not project_name:
             # Create project name from customer name + address
-            customer_name = customer_info.get('name', '')
-            customer_address = customer_info.get('address', '')
+            customer_name = str((customer_info.get('name') or '') if customer_info else '').strip()
+            customer_address = str((customer_info.get('address') or '') if customer_info else '').strip()
             project_name = f"{customer_name}{' - ' + customer_address if customer_address else ''}"
         
-        project_address = project_info.get('address') if project_info else customer_info.get('address')
-        project_supervisor = project_info.get('supervisor') if project_info else None
+        project_address = (project_info.get('address') if project_info else None) or (customer_info.get('address') if customer_info else None) or None
+        project_supervisor = (project_info.get('supervisor') if project_info else None) or None
         
         if not items or len(items) == 0:
             raise HTTPException(
@@ -3851,6 +3870,11 @@ async def import_quote_from_ai_analysis(
         categories_result = supabase.table("product_categories").select("id, name").eq("is_active", True).execute()
         categories = {cat['name']: cat['id'] for cat in (categories_result.data or [])}
         
+        # Get all expense objects for cost matching
+        expense_objects_result = supabase.table("expense_objects").select("id, name, description, level, role").eq("is_active", True).execute()
+        expense_objects = expense_objects_result.data if expense_objects_result.data else []
+        print(f"📋 Loaded {len(expense_objects)} expense objects for cost matching")
+        
         created_customers = 0
         created_projects = 0
         created_products = 0
@@ -3858,8 +3882,8 @@ async def import_quote_from_ai_analysis(
         product_map = {}  # product_name -> product_id
         
         # Get or create customer
-        customer_name = customer_info.get('name', '').strip()
-        customer_id = customer_info.get('id')  # Check if customer ID is provided
+        customer_name = str(customer_name_value).strip()
+        customer_id = customer_info.get('id') if customer_info else None  # Check if customer ID is provided
         
         if customer_id and not is_new_customer:
             # Use existing customer (ID provided from frontend)
@@ -3873,15 +3897,78 @@ async def import_quote_from_ai_analysis(
                 )
             print(f"✅ Verified customer: {verify_customer.data[0]['name']}")
         else:
-            # Search for existing customer by name
+            # Search for existing customer by name, phone, or email
             print(f"🔍 Searching for existing customer: {customer_name}")
-            existing_customer = supabase.table("customers").select("id, name").ilike("name", customer_name).limit(1).execute()
             
-            if existing_customer.data and not is_new_customer:
-                customer_id = existing_customer.data[0]['id']
-                print(f"✅ Found existing customer: {existing_customer.data[0]['name']}")
+            # Get phone and email for duplicate checking
+            customer_phone = (customer_info.get('phone') or '').strip() if customer_info else ''
+            customer_email = (customer_info.get('email') or '').strip() if customer_info else ''
+            
+            existing_customer = None
+            
+            # 1. Check by name (fuzzy match)
+            if customer_name:
+                name_result = supabase.table("customers").select("id, name, phone, email").ilike("name", customer_name).limit(5).execute()
+                if name_result.data:
+                    # Try exact match first
+                    for cust in name_result.data:
+                        if cust.get('name', '').lower().strip() == customer_name.lower().strip():
+                            existing_customer = cust
+                            print(f"✅ Found exact name match: {cust.get('name')}")
+                            break
+                    
+                    # If no exact match, use first result (fuzzy match)
+                    if not existing_customer:
+                        existing_customer = name_result.data[0]
+                        print(f"✅ Found fuzzy name match: {existing_customer.get('name')}")
+            
+            # 2. Check by phone (if provided and no match found yet)
+            if not existing_customer and customer_phone:
+                phone_result = supabase.table("customers").select("id, name, phone, email").eq("phone", customer_phone).limit(1).execute()
+                if phone_result.data:
+                    existing_customer = phone_result.data[0]
+                    print(f"✅ Found phone match: {existing_customer.get('phone')} - {existing_customer.get('name')}")
+            
+            # 3. Check by email (if provided and no match found yet)
+            if not existing_customer and customer_email:
+                email_result = supabase.table("customers").select("id, name, phone, email").eq("email", customer_email).limit(1).execute()
+                if email_result.data:
+                    existing_customer = email_result.data[0]
+                    print(f"✅ Found email match: {existing_customer.get('email')} - {existing_customer.get('name')}")
+            
+            # Use existing customer if found and not forcing new customer
+            if existing_customer and not is_new_customer:
+                customer_id = existing_customer['id']
+                print(f"✅ Using existing customer: {existing_customer.get('name')} (ID: {customer_id})")
+            elif existing_customer and is_new_customer:
+                # Found duplicate but user wants to create new - warn but still create
+                print(f"⚠️ Found duplicate customer but creating new: {existing_customer.get('name')} (ID: {existing_customer.get('id')})")
+                # Still create new customer as requested
+                customer_code = get_next_available_customer_code()
+                customer_data = {
+                    "id": str(uuid.uuid4()),
+                    "customer_code": customer_code,
+                    "name": customer_name,
+                    "type": "individual",
+                    "address": (customer_info.get('address') or '').strip() if customer_info else None,
+                    "phone": customer_phone if customer_phone else None,
+                    "email": customer_email if customer_email else None,
+                    "status": "active",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                result = supabase.table("customers").insert(customer_data).execute()
+                if result.data:
+                    customer_id = result.data[0]['id']
+                    created_customers = 1
+                    print(f"✅ Created new customer with ID: {customer_id} (duplicate exists: {existing_customer.get('id')})")
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Không thể tạo khách hàng"
+                    )
             else:
-                # Create new customer
+                # No duplicate found, create new customer
                 print(f"✨ Creating new customer: {customer_name}")
                 customer_code = get_next_available_customer_code()
                 customer_data = {
@@ -3889,9 +3976,9 @@ async def import_quote_from_ai_analysis(
                     "customer_code": customer_code,
                     "name": customer_name,
                     "type": "individual",
-                    "address": customer_info.get('address') or None,
-                    "phone": customer_info.get('phone') or None,
-                    "email": customer_info.get('email') or None,
+                    "address": (customer_info.get('address') or '').strip() if customer_info else None,
+                    "phone": customer_phone if customer_phone else None,
+                    "email": customer_email if customer_email else None,
                     "status": "active",
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat()
@@ -3950,8 +4037,8 @@ async def import_quote_from_ai_analysis(
                 if employee_id:
                     project_data["manager_id"] = employee_id
                 elif project_supervisor:
-                    # Try to find employee by name
-                    supervisor_employee = supabase.table("employees").select("id").or_(f"first_name.ilike.%{project_supervisor}%,last_name.ilike.%{project_supervisor}%,full_name.ilike.%{project_supervisor}%").limit(1).execute()
+                    # Try to find employee by name (employees table has first_name and last_name, not full_name)
+                    supervisor_employee = supabase.table("employees").select("id").or_(f"first_name.ilike.%{project_supervisor}%,last_name.ilike.%{project_supervisor}%").limit(1).execute()
                     if supervisor_employee.data:
                         project_data["manager_id"] = supervisor_employee.data[0]['id']
                 
@@ -3966,23 +4053,80 @@ async def import_quote_from_ai_analysis(
                         detail="Không thể tạo dự án"
                     )
         
+        # Helper function to check if item is a cost/material expense
+        def is_cost_item(item: dict) -> bool:
+            """Check if item is a cost/material expense based on category or name"""
+            loai_san_pham = str(item.get('loai_san_pham', '')).lower()
+            ten_san_pham = str(item.get('ten_san_pham', '')).lower()
+            hang_muc = str(item.get('hang_muc_thi_cong', '')).lower()
+            
+            cost_keywords = ['chi phí', 'vật tư', 'nguyên vật liệu', 'vật liệu', 'phụ kiện', 'nhôm', 'kính', 'inox', 'sắt', 'nhựa', 'gỗ']
+            return any(keyword in loai_san_pham or keyword in ten_san_pham or keyword in hang_muc for keyword in cost_keywords)
+        
+        # Helper function to find matching expense object
+        def find_expense_object(item: dict, expense_objects: list) -> Optional[str]:
+            """Find matching expense object ID for the item"""
+            if not expense_objects:
+                return None
+            
+            ten_san_pham = str(item.get('ten_san_pham', '')).lower()
+            hang_muc = str(item.get('hang_muc_thi_cong', '')).lower()
+            search_text = f"{ten_san_pham} {hang_muc}".lower()
+            
+            best_match = None
+            best_score = 0
+            
+            for exp_obj in expense_objects:
+                exp_name = str(exp_obj.get('name', '')).lower()
+                exp_desc = str(exp_obj.get('description', '')).lower()
+                
+                # Check if expense object name or description matches item
+                if exp_name in search_text or search_text in exp_name:
+                    score = len(exp_name)  # Longer match = better
+                    if score > best_score:
+                        best_score = score
+                        best_match = exp_obj['id']
+                
+                # Also check description
+                if exp_desc and (exp_desc in search_text or search_text in exp_desc):
+                    score = len(exp_desc) * 0.8  # Description match is slightly less important
+                    if score > best_score:
+                        best_score = score
+                        best_match = exp_obj['id']
+            
+            if best_match:
+                print(f"✅ Matched expense object: '{search_text[:50]}' → expense_object_id: {best_match}")
+            
+            return best_match
+        
         # Process items and create products if needed
         quote_items = []
         matched_products = []  # Track which products were matched
         new_products = []      # Track which products were created
+        cost_items = []        # Track items that are costs for material cost tracking
         
         for item in items:
-            product_name = item.get('hang_muc_thi_cong', '').strip()
+            # Ensure item is a dictionary
+            if not isinstance(item, dict):
+                print(f"⚠️ Skipping invalid item (not a dict): {item}")
+                continue
+            
+            # Handle None values safely
+            hang_muc = item.get('hang_muc_thi_cong')
+            product_name = str(hang_muc).strip() if hang_muc else ''
             if not product_name:
+                print(f"⚠️ Skipping item with empty hang_muc_thi_cong")
                 continue
             
             # Use ten_san_pham if available, otherwise extract from hang_muc_thi_cong
-            product_name_short = item.get('ten_san_pham', '').strip()
+            ten_san_pham = item.get('ten_san_pham')
+            product_name_short = str(ten_san_pham).strip() if ten_san_pham else ''
             if not product_name_short:
                 product_name_short = product_name.split('\n')[0] if '\n' in product_name else product_name
             
             # Get category name for matching
-            category_name = item.get('loai_san_pham', '').strip()
+            loai_san_pham = item.get('loai_san_pham')
+            category_name = str(loai_san_pham).strip() if loai_san_pham else ''
             
             # Find or create product
             if product_name_short not in product_map:
@@ -4017,15 +4161,22 @@ async def import_quote_from_ai_analysis(
                         category_id = list(categories.values())[0]
                     
                     # Use mo_ta if available, otherwise full hang_muc_thi_cong
-                    description = item.get('mo_ta', '').strip()
+                    mo_ta = item.get('mo_ta')
+                    description = str(mo_ta).strip() if mo_ta else ''
                     if not description:
                         description = product_name
+                    
+                    # Get unit safely - ensure it's not None
+                    dvt = item.get('dvt')
+                    unit = str(dvt).strip() if dvt else 'cái'
+                    if not unit:
+                        unit = 'cái'  # Default unit
                     
                     product_data = {
                         "id": str(uuid.uuid4()),
                         "name": product_name_short,
                         "price": item.get('don_gia', 0),
-                        "unit": item.get('dvt', 'cái'),
+                        "unit": unit,  # Always has a value, never None
                         "description": description,
                         "category_id": category_id,
                         "is_active": True,
@@ -4033,13 +4184,22 @@ async def import_quote_from_ai_analysis(
                         "updated_at": datetime.utcnow().isoformat()
                     }
                     
-                    # Add dimensions
-                    if item.get('dien_tich'):
-                        product_data['area'] = float(item['dien_tich'])
-                    if item.get('cao'):
-                        product_data['height'] = float(item['cao']) * 1000  # Convert m to mm
-                    if item.get('ngang'):
-                        product_data['length'] = float(item['ngang']) * 1000  # Convert m to mm
+                    # Add dimensions - safely handle None values
+                    if item.get('dien_tich') is not None and item.get('dien_tich') != '':
+                        try:
+                            product_data['area'] = float(item['dien_tich'])
+                        except (ValueError, TypeError):
+                            pass
+                    if item.get('cao') is not None and item.get('cao') != '':
+                        try:
+                            product_data['height'] = float(item['cao']) * 1000  # Convert m to mm
+                        except (ValueError, TypeError):
+                            pass
+                    if item.get('ngang') is not None and item.get('ngang') != '':
+                        try:
+                            product_data['length'] = float(item['ngang']) * 1000  # Convert m to mm
+                        except (ValueError, TypeError):
+                            pass
                     
                     result = supabase.table("products").insert(product_data).execute()
                     if result.data:
@@ -4049,9 +4209,9 @@ async def import_quote_from_ai_analysis(
                             'name': product_name_short,
                             'category': category_name or 'Chưa phân loại',
                             'price': item.get('don_gia', 0),
-                            'unit': item.get('dvt', 'cái')
+                            'unit': unit  # Use the safe unit variable
                         })
-                        print(f"✨ Created new product: '{product_name_short}' (price: {item.get('don_gia', 0)}, unit: {item.get('dvt', 'cái')})")
+                        print(f"✨ Created new product: '{product_name_short}' (price: {item.get('don_gia', 0)}, unit: {unit})")
                     else:
                         continue  # Skip this item if product creation failed
                 
@@ -4059,15 +4219,215 @@ async def import_quote_from_ai_analysis(
             
             product_id = product_map[product_name_short]
             
-            # Add to quote items
-            quote_items.append({
+            # Check if item is a cost/material expense based on item_type from frontend
+            item_type = item.get('item_type', 'product')  # Default to 'product' if not specified
+            is_cost = item_type == 'material_cost'
+            
+            # Also check using legacy method if item_type is not provided
+            if not is_cost and is_cost_item(item):
+                is_cost = True
+                print(f"⚠️ Item '{product_name_short}' detected as cost using legacy method (item_type not set)")
+            
+            # Initialize expense_object_id for quote items
+            expense_object_id_for_quote = None
+            
+            # Save to actual_material_components if it's a cost
+            if is_cost:
+                expense_object_id = find_expense_object(item, expense_objects)
+                
+                # If expense object not found, create it under "Đối tượng chi phí khác"
+                if not expense_object_id:
+                    print(f"⚠️ Expense object not found for '{product_name_short}', creating new one under 'Đối tượng chi phí khác'")
+                    
+                    # Find or create "Đối tượng chi phí khác" parent
+                    other_cost_parent = None
+                    for exp_obj in expense_objects:
+                        if exp_obj.get('name', '').lower() in ['đối tượng chi phí khác', 'chi phí khác', 'khác']:
+                            other_cost_parent = exp_obj['id']
+                            break
+                    
+                    # If parent not found, create it
+                    if not other_cost_parent:
+                        print(f"📋 Creating parent 'Đối tượng chi phí khác'...")
+                        parent_data = {
+                            "id": str(uuid.uuid4()),
+                            "name": "Đối tượng chi phí khác",
+                            "description": "Các đối tượng chi phí khác không phân loại",
+                            "level": 1,
+                            "role": "other",
+                            "is_active": True,
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                        parent_result = supabase.table("expense_objects").insert(parent_data).execute()
+                        if parent_result.data:
+                            other_cost_parent = parent_result.data[0]['id']
+                            print(f"✅ Created parent expense object: {other_cost_parent}")
+                            # Reload expense objects to include the new parent
+                            expense_objects_result = supabase.table("expense_objects").select("id, name, description, level, role").eq("is_active", True).execute()
+                            expense_objects = expense_objects_result.data if expense_objects_result.data else []
+                    
+                    # Create new expense object for this cost
+                    if other_cost_parent:
+                        expense_object_name = product_name_short or f"Chi phí {item.get('loai_san_pham', '')}"
+                        expense_object_data = {
+                            "id": str(uuid.uuid4()),
+                            "name": expense_object_name,
+                            "description": item.get('mo_ta') or product_name,
+                            "parent_id": other_cost_parent,
+                            "level": 2,
+                            "role": "material",
+                            "is_active": True,
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                        expense_result = supabase.table("expense_objects").insert(expense_object_data).execute()
+                        if expense_result.data:
+                            expense_object_id = expense_result.data[0]['id']
+                            print(f"✅ Created new expense object: '{expense_object_name}' (ID: {expense_object_id})")
+                            # Add to expense_objects list for future lookups
+                        expense_objects.append({
+                            "id": expense_object_id,
+                            "name": expense_object_name,
+                            "description": expense_object_data["description"],
+                            "level": 2,
+                            "role": "material"
+                        })
+                
+                # Save expense_object_id for quote item
+                expense_object_id_for_quote = expense_object_id
+                
+                if expense_object_id:
+                    # Determine which product to update actual_material_components
+                    # If belongs_to_product_id is provided, use that product
+                    # Otherwise, use the current product (product_id)
+                    target_product_id = product_id
+                    belongs_to_product_id = item.get('belongs_to_product_id')
+                    
+                    if belongs_to_product_id:
+                        # Find the product by index in items array
+                        try:
+                            belongs_index = int(belongs_to_product_id)
+                            if belongs_index < len(items):
+                                belongs_item = items[belongs_index]
+                                belongs_product_name = str(belongs_item.get('ten_san_pham', '')).strip()
+                                if belongs_product_name and belongs_product_name in product_map:
+                                    target_product_id = product_map[belongs_product_name]
+                                    print(f"✅ Cost '{product_name_short}' belongs to product '{belongs_product_name}' (ID: {target_product_id})")
+                        except (ValueError, IndexError) as e:
+                            print(f"⚠️ Invalid belongs_to_product_id: {belongs_to_product_id}, using current product")
+                    
+                    # Get current product to update actual_material_components
+                    product_result = supabase.table("products").select("actual_material_components, actual_material_cost").eq("id", target_product_id).single().execute()
+                    current_components = product_result.data.get('actual_material_components', []) if product_result.data else []
+                    current_cost = float(product_result.data.get('actual_material_cost', 0)) if product_result.data else 0.0
+                    
+                    # Calculate cost for this item - safely handle None values
+                    so_luong_val = item.get('so_luong') or 1
+                    quantity = float(so_luong_val) if so_luong_val is not None else 1.0
+                    
+                    don_gia_val = item.get('don_gia') or 0
+                    unit_price = float(don_gia_val) if don_gia_val is not None else 0.0
+                    
+                    item_cost = quantity * unit_price
+                    
+                    # Create component entry
+                    component = {
+                        "expense_object_id": expense_object_id,
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "unit": str(item.get('dvt', 'cái')).strip() or 'cái',
+                        "description": product_name_short,
+                        "total_cost": item_cost
+                    }
+                    
+                    # Add to components list
+                    if not isinstance(current_components, list):
+                        current_components = []
+                    current_components.append(component)
+                    
+                    # Update total cost
+                    new_total_cost = current_cost + item_cost
+                    
+                    # Update product with actual_material_components
+                    supabase.table("products").update({
+                        "actual_material_components": current_components,
+                        "actual_material_cost": new_total_cost,
+                        "updated_at": datetime.utcnow().isoformat()
+                    }).eq("id", target_product_id).execute()
+                    
+                    cost_items.append({
+                        'product_id': target_product_id,
+                        'product_name': product_name_short,
+                        'belongs_to_product_id': belongs_to_product_id,
+                        'expense_object_id': expense_object_id,
+                        'cost': item_cost
+                    })
+                    print(f"💰 Saved cost to product material components: {product_name_short} → expense_object_id: {expense_object_id}, cost: {item_cost}, target_product_id: {target_product_id}")
+                else:
+                    print(f"⚠️ Cost item detected but no matching expense object found: {product_name_short}")
+            
+            # Add to quote items with full details
+            # Get unit safely for quote item
+            quote_unit = item.get('dvt')
+            quote_unit = str(quote_unit).strip() if quote_unit else 'cái'
+            if not quote_unit:
+                quote_unit = 'cái'
+            
+            # Safely convert values to float, handling None
+            so_luong_val = item.get('so_luong') or 1
+            quantity_val = float(so_luong_val) if so_luong_val is not None else 1.0
+            
+            don_gia_val = item.get('don_gia') or 0
+            unit_price_val = float(don_gia_val) if don_gia_val is not None else 0.0
+            
+            # Handle dimensions safely
+            ngang_val = item.get('ngang')
+            ngang_float = None
+            if ngang_val is not None and ngang_val != '':
+                try:
+                    ngang_float = float(ngang_val)
+                except (ValueError, TypeError):
+                    pass
+            
+            cao_val = item.get('cao')
+            cao_float = None
+            if cao_val is not None and cao_val != '':
+                try:
+                    cao_float = float(cao_val)
+                except (ValueError, TypeError):
+                    pass
+            
+            dien_tich_val = item.get('dien_tich')
+            dien_tich_float = None
+            if dien_tich_val is not None and dien_tich_val != '':
+                try:
+                    dien_tich_float = float(dien_tich_val)
+                except (ValueError, TypeError):
+                    pass
+            
+            quote_item_data = {
                 "product_id": product_id,
                 "product_name": product_name_short,
-                "quantity": item.get('so_luong', 1),
-                "unit_price": item.get('don_gia', 0),
-                "unit": item.get('dvt', 'cái'),
-                "description": product_name
-            })
+                "quantity": quantity_val,
+                "unit_price": unit_price_val,
+                "unit": quote_unit,  # Always has a value, never None
+                "description": product_name,
+                # Add dimensions
+                "ngang": ngang_float,
+                "cao": cao_float,
+                "dien_tich": dien_tich_float,
+                "ky_hieu": item.get('ky_hieu') or None,
+                "hang_muc_thi_cong": product_name,
+                "ten_san_pham": product_name_short,
+                "loai_san_pham": category_name or None,
+                "mo_ta": item.get('mo_ta') or None
+            }
+            
+            # Add expense_object_id if it's a cost
+            if expense_object_id_for_quote:
+                quote_item_data["expense_object_id"] = expense_object_id_for_quote
+            quote_items.append(quote_item_data)
         
         if not quote_items:
             raise HTTPException(
@@ -4075,11 +4435,70 @@ async def import_quote_from_ai_analysis(
                 detail="Không có hạng mục hợp lệ để tạo báo giá"
             )
         
-        # Calculate totals
-        subtotal = sum(item['quantity'] * item['unit_price'] for item in quote_items)
+        # Helper function to calculate item total
+        def calculate_item_total(item):
+            """Calculate item total: unit_price × dien_tich × quantity if dien_tich exists, otherwise unit_price × quantity"""
+            # Safely get and convert to float, handling None values
+            quantity_val = item.get('quantity') or item.get('so_luong') or 1
+            quantity = float(quantity_val) if quantity_val is not None else 1.0
+            
+            unit_price_val = item.get('unit_price') or item.get('don_gia') or 0
+            unit_price = float(unit_price_val) if unit_price_val is not None else 0.0
+            
+            dien_tich = item.get('dien_tich')
+            
+            if dien_tich is not None and dien_tich != '':
+                try:
+                    dien_tich_float = float(dien_tich)
+                    if dien_tich_float > 0:
+                        # Formula: đơn giá × diện tích × số lượng
+                        return unit_price * dien_tich_float * quantity
+                except (ValueError, TypeError):
+                    pass
+            
+            # Formula: đơn giá × số lượng
+            return unit_price * quantity
+        
+        # Calculate totals from quote_items using correct formula
+        subtotal = sum(calculate_item_total(item) for item in quote_items)
+        
+        # Get tax rate from analysis or use default
         tax_rate = analysis_data.get('tax_rate', 0.08)
-        tax_amount = subtotal * tax_rate
+        if tax_rate is None:
+            tax_rate = 0.08
+        elif isinstance(tax_rate, str):
+            # Handle percentage string like "8%" or "0.08"
+            try:
+                tax_rate = float(tax_rate.replace('%', '')) / 100 if '%' in tax_rate else float(tax_rate)
+            except (ValueError, TypeError):
+                tax_rate = 0.08
+        else:
+            try:
+                tax_rate = float(tax_rate)
+            except (ValueError, TypeError):
+                tax_rate = 0.08
+        
+        # Calculate tax amount only for items with has_tax = true
+        taxable_subtotal = sum(
+            calculate_item_total(item)
+            for item in quote_items 
+            if item.get('has_tax', True)  # Default to True if not specified
+        )
+        tax_amount = taxable_subtotal * tax_rate
         total_amount = subtotal + tax_amount
+        
+        print(f"💰 Financial summary:")
+        print(f"  - Subtotal (all items): {subtotal:,.0f} VNĐ")
+        print(f"  - Taxable subtotal (items with tax): {taxable_subtotal:,.0f} VNĐ")
+        print(f"  - Tax rate: {tax_rate * 100}%")
+        print(f"  - Tax amount: {tax_amount:,.0f} VNĐ")
+        print(f"  - Total: {total_amount:,.0f} VNĐ")
+        
+        print(f"💰 Financial summary:")
+        print(f"  - Subtotal: {subtotal:,.0f} VNĐ")
+        print(f"  - Tax rate: {tax_rate * 100}%")
+        print(f"  - Tax amount: {tax_amount:,.0f} VNĐ")
+        print(f"  - Total: {total_amount:,.0f} VNĐ")
         
         # Generate quote number
         quote_number = f"BG{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
@@ -4090,27 +4509,132 @@ async def import_quote_from_ai_analysis(
             notes_parts.append(analysis_data.get('notes'))
         if analysis_data.get('terms'):
             notes_parts.append(analysis_data.get('terms'))
+        
+        # Add import metadata
+        import_metadata = []
+        if created_by_name:
+            import_metadata.append(f"Người tạo: {created_by_name}")
+        elif current_user.email:
+            import_metadata.append(f"Người tạo: {current_user.email}")
+        if created_by:
+            import_metadata.append(f"User ID: {created_by}")
+        if employee_id:
+            # Try to get employee name (employees table has first_name and last_name, not full_name)
+            try:
+                emp_result = supabase.table("employees").select("first_name, last_name").eq("id", employee_id).limit(1).execute()
+                if emp_result.data and emp_result.data[0]:
+                    first_name = emp_result.data[0].get('first_name', '')
+                    last_name = emp_result.data[0].get('last_name', '')
+                    full_name = f"{first_name} {last_name}".strip()
+                    if full_name:
+                        import_metadata.append(f"Nhân viên phụ trách: {full_name}")
+            except Exception as e:
+                print(f"⚠️ Could not get employee name: {e}")
+                pass
+        
+        if import_metadata:
+            notes_parts.append(f"\n[Import từ AI Analysis]\n" + "\n".join(import_metadata))
+        
         notes = '\n\n'.join(notes_parts) if notes_parts else None
         
-        # Create quote
+        # Parse dates
+        issue_date = analysis_data.get('date')
+        if issue_date:
+            try:
+                # Try parsing ISO format or other common formats
+                if isinstance(issue_date, str):
+                    issue_date = datetime.fromisoformat(issue_date.replace('Z', '+00:00')).date()
+                elif isinstance(issue_date, date):
+                    issue_date = issue_date
+                else:
+                    issue_date = datetime.now().date()
+            except:
+                issue_date = datetime.now().date()
+        else:
+            issue_date = datetime.now().date()
+        
+        # Parse valid_until date
+        valid_until = analysis_data.get('valid_until')
+        if valid_until:
+            try:
+                if isinstance(valid_until, str):
+                    # Try to parse ISO format
+                    valid_until = datetime.fromisoformat(valid_until.replace('Z', '+00:00')).date()
+                elif isinstance(valid_until, date):
+                    valid_until = valid_until
+                elif isinstance(valid_until, datetime):
+                    valid_until = valid_until.date()
+                else:
+                    # Invalid type, use default
+                    valid_until = (datetime.now() + timedelta(days=7)).date()
+            except Exception as e:
+                print(f"⚠️ Error parsing valid_until: {e}, using default")
+                valid_until = (datetime.now() + timedelta(days=7)).date()
+        else:
+            # No valid_until provided, use default (7 days from now)
+            valid_until = (datetime.now() + timedelta(days=7)).date()
+        
+        # Final check: ensure valid_until is always a valid date object
+        if not valid_until or not isinstance(valid_until, date):
+            print(f"⚠️ valid_until is invalid: {valid_until}, using default")
+            valid_until = (datetime.now() + timedelta(days=7)).date()
+        
+        print(f"📅 Valid until date: {valid_until.isoformat()}")
+        
+        # Safely convert financial values to float
+        subtotal_float = float(subtotal) if subtotal is not None else 0.0
+        tax_rate_float = float(tax_rate) if tax_rate is not None else 0.08
+        tax_amount_float = float(tax_amount) if tax_amount is not None else 0.0
+        total_amount_float = float(total_amount) if total_amount is not None else 0.0
+        
         quote_data = {
             "id": str(uuid.uuid4()),
             "quote_number": quote_number,
             "customer_id": customer_id,
             "project_id": project_id,
-            "issue_date": analysis_data.get('date') or datetime.now().date().isoformat(),
-            "valid_until": analysis_data.get('valid_until') or (datetime.now() + timedelta(days=7)).date().isoformat(),
-            "subtotal": subtotal,
-            "tax_rate": tax_rate,
-            "tax_amount": tax_amount,
-            "total_amount": total_amount,
+            "issue_date": issue_date.isoformat(),
+            "expiry_date": valid_until.isoformat(),  # Use expiry_date as per schema
+            "valid_until": valid_until.isoformat(),  # Also set valid_until in case schema has this column
+            "subtotal": subtotal_float,
+            "tax_rate": tax_rate_float,
+            "tax_amount": tax_amount_float,
+            "total_amount": total_amount_float,
             "currency": "VND",
             "status": "draft",
             "notes": notes,
-            "created_by": current_user.id,
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         }
+        
+        # Set employee_in_charge: priority: employee_id > supervisor from project > None
+        quote_employee_id = None
+        if employee_id:
+            quote_employee_id = employee_id
+            print(f"✅ Using provided employee_id for quote: {employee_id}")
+        elif project_supervisor:
+            # Try to find supervisor employee by name
+            print(f"🔍 Searching for supervisor employee: {project_supervisor}")
+            supervisor_employee = supabase.table("employees").select("id, first_name, last_name").or_(f"first_name.ilike.%{project_supervisor}%,last_name.ilike.%{project_supervisor}%").limit(1).execute()
+            if supervisor_employee.data:
+                quote_employee_id = supervisor_employee.data[0]['id']
+                print(f"✅ Found supervisor employee: {supervisor_employee.data[0].get('first_name', '')} {supervisor_employee.data[0].get('last_name', '')} (ID: {quote_employee_id})")
+            else:
+                print(f"⚠️ Supervisor '{project_supervisor}' not found in employees table")
+        
+        if quote_employee_id:
+            quote_data["employee_in_charge_id"] = quote_employee_id
+        else:
+            print(f"⚠️ No employee_in_charge_id set for quote (no employee_id or supervisor found)")
+        
+        print(f"📄 Creating quote:")
+        print(f"  - Quote number: {quote_number}")
+        print(f"  - Customer: {customer_id}")
+        print(f"  - Project: {project_id}")
+        print(f"  - Issue date: {issue_date}")
+        print(f"  - Expiry date: {valid_until}")
+        print(f"  - Items count: {len(quote_items)}")
+        print(f"  - Created by: {created_by_name or current_user.email} (ID: {created_by or current_user.id})")
+        print(f"  - Employee in charge: {employee_id}")
         
         quote_result = supabase.table("quotes").insert(quote_data).execute()
         if not quote_result.data:
@@ -4122,33 +4646,128 @@ async def import_quote_from_ai_analysis(
         quote_id = quote_result.data[0]['id']
         created_quotes = 1
         
-        # Create quote items
+        # Create quote items with full details
         quote_item_records = []
-        for item in quote_items:
+        for idx, item in enumerate(quote_items):
+            # Calculate total price
+            # Formula: If dien_tich exists: unit_price × dien_tich × quantity
+            # Otherwise: unit_price × quantity
+            # Safely convert values to float, handling None
+            quantity_val = item.get('quantity') or item.get('so_luong') or 1
+            quantity = float(quantity_val) if quantity_val is not None else 1.0
+            
+            unit_price_val = item.get('unit_price') or item.get('don_gia') or 0
+            unit_price = float(unit_price_val) if unit_price_val is not None else 0.0
+            
+            dien_tich = item.get('dien_tich')
+            
+            if dien_tich is not None and dien_tich != '':
+                try:
+                    dien_tich_float = float(dien_tich)
+                    if dien_tich_float > 0:
+                        # Use formula: đơn giá × diện tích × số lượng
+                        total_price = unit_price * dien_tich_float * quantity
+                        print(f"💰 Item {idx + 1}: Using formula (đơn giá × diện tích × số lượng): {unit_price} × {dien_tich_float} × {quantity} = {total_price}")
+                    else:
+                        # Use formula: đơn giá × số lượng
+                        total_price = unit_price * quantity
+                        print(f"💰 Item {idx + 1}: Using formula (đơn giá × số lượng): {unit_price} × {quantity} = {total_price}")
+                except (ValueError, TypeError):
+                    # Use formula: đơn giá × số lượng
+                    total_price = unit_price * quantity
+                    print(f"💰 Item {idx + 1}: Using formula (đơn giá × số lượng): {unit_price} × {quantity} = {total_price}")
+            else:
+                # Use formula: đơn giá × số lượng
+                total_price = unit_price * quantity
+                print(f"💰 Item {idx + 1}: Using formula (đơn giá × số lượng): {unit_price} × {quantity} = {total_price}")
+            
+            # Build comprehensive description with all details
+            description_parts = []
+            
+            # Main description (hang_muc_thi_cong)
+            main_desc = item.get('hang_muc_thi_cong') or item.get('description') or item.get('product_name', '')
+            if main_desc:
+                description_parts.append(main_desc)
+            
+            # Add ký hiệu if available
+            if item.get('ky_hieu'):
+                description_parts.append(f"Ký hiệu: {item['ky_hieu']}")
+            
+            # Add dimensions
+            dim_parts = []
+            if item.get('ngang'):
+                dim_parts.append(f"Ngang: {item['ngang']}m")
+            if item.get('cao'):
+                dim_parts.append(f"Cao: {item['cao']}m")
+            if item.get('dien_tich'):
+                dim_parts.append(f"Diện tích: {item['dien_tich']}m²")
+            if dim_parts:
+                description_parts.append(f"Quy cách: {', '.join(dim_parts)}")
+            
+            # Add product type if available
+            if item.get('loai_san_pham'):
+                description_parts.append(f"Loại: {item['loai_san_pham']}")
+            
+            # Add detailed description (mo_ta) if available
+            if item.get('mo_ta'):
+                description_parts.append(f"Chi tiết: {item['mo_ta']}")
+            
+            # Join all parts
+            full_description = '\n'.join(description_parts) if description_parts else item.get('description', '')
+            
+            # Get unit safely for quote_item
+            quote_item_unit = item.get('unit')
+            quote_item_unit = str(quote_item_unit).strip() if quote_item_unit else 'cái'
+            if not quote_item_unit:
+                quote_item_unit = 'cái'
+            
+            # Prepare quote item data - match structure used in create_quote endpoint
+            # Note: tax_rate is handled at quote level, not item level
+            # has_tax flag is used for calculating taxable_subtotal, not stored in quote_items
+            # Use same columns as regular quote creation to ensure compatibility
             quote_item = {
                 "id": str(uuid.uuid4()),
                 "quote_id": quote_id,
                 "product_service_id": item['product_id'],
-                "description": item['description'],
-                "quantity": item['quantity'],
-                "unit_price": item['unit_price'],
-                "total_price": item['quantity'] * item['unit_price'],
+                "name_product": product_name_short,  # Product name
+                "description": full_description,
+                "quantity": float(item['quantity']),
+                "unit": quote_item_unit,  # Always has a value, never None
+                "unit_price": float(item['unit_price']),
+                "total_price": float(total_price),  # Use total_price (not line_total)
                 "created_at": datetime.utcnow().isoformat()
             }
+            
+            # Add optional dimension fields if available
+            if item.get('dien_tich'):
+                quote_item["area"] = float(item['dien_tich'])
+            if item.get('cao'):
+                quote_item["height"] = float(item['cao']) * 1000  # Convert m to mm
+            if item.get('ngang'):
+                quote_item["length"] = float(item['ngang']) * 1000  # Convert m to mm
+            
+            # Note: tax_rate is handled at quote level, not item level
+            # Note: sort_order doesn't exist in actual schema, so we skip it
+            
             quote_item_records.append(quote_item)
+            
+            print(f"📦 Quote item {idx + 1}: {item.get('product_name', 'N/A')} - Qty: {item['quantity']}, Price: {item['unit_price']}, Total: {total_price}")
         
         if quote_item_records:
             supabase.table("quote_items").insert(quote_item_records).execute()
         
         return {
             "success": True,
-            "message": f"Import thành công. Đã tạo {created_customers} khách hàng, {created_projects} dự án, {created_quotes} báo giá, {created_products} sản phẩm mới. Sử dụng {len(matched_products)} sản phẩm có sẵn.",
+            "message": f"Import thành công. Đã tạo {created_customers} khách hàng, {created_projects} dự án, {created_quotes} báo giá, {created_products} sản phẩm mới. Sử dụng {len(matched_products)} sản phẩm có sẵn. Đã lưu {len(cost_items)} chi phí vật tư vào sản phẩm.",
             "createdCustomers": created_customers,
             "createdProjects": created_projects,
             "createdQuotes": created_quotes,
             "createdProducts": created_products,
             "matchedProducts": len(matched_products),
+            "costItems": len(cost_items),
+            "costItemsDetails": cost_items,
             "quoteId": quote_id,
+            "quoteNumber": quote_number,
             "matchedProductDetails": matched_products,
             "newProductDetails": new_products
         }

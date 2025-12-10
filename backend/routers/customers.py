@@ -392,39 +392,110 @@ async def delete_customer(
                 detail="Customer not found"
             )
         
-        # Check if customer has active projects
-        active_projects = supabase.table("projects").select("id").eq("customer_id", customer_id).eq("status", "active").execute()
-        if active_projects.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete customer with active projects. Please complete or cancel projects first."
-            )
-        
         if hard_delete:
             # Hard delete - permanently remove from database
-            # Check for any related records that might prevent deletion
-            invoices = supabase.table("invoices").select("id").eq("customer_id", customer_id).limit(1).execute()
-            quotes = supabase.table("quotes").select("id").eq("customer_id", customer_id).limit(1).execute()
-            projects = supabase.table("projects").select("id").eq("customer_id", customer_id).limit(1).execute()
-            
-            if invoices.data or quotes.data or projects.data:
+            # Delete related records first to ensure complete deletion
+            try:
+                # 1. Delete payments related to this customer
+                try:
+                    supabase.table("payments").delete().eq("customer_id", customer_id).execute()
+                    print(f"✅ Deleted payments for customer {customer_id}")
+                except Exception as e:
+                    print(f"⚠️ Error deleting payments (may not exist): {str(e)}")
+                
+                # 2. Delete invoice items (via invoices)
+                try:
+                    invoices = supabase.table("invoices").select("id").eq("customer_id", customer_id).execute()
+                    if invoices.data:
+                        invoice_ids = [inv['id'] for inv in invoices.data]
+                        for invoice_id in invoice_ids:
+                            supabase.table("invoice_items").delete().eq("invoice_id", invoice_id).execute()
+                        print(f"✅ Deleted invoice items for {len(invoice_ids)} invoices")
+                except Exception as e:
+                    print(f"⚠️ Error deleting invoice items (may not exist): {str(e)}")
+                
+                # 3. Delete invoices
+                try:
+                    supabase.table("invoices").delete().eq("customer_id", customer_id).execute()
+                    print(f"✅ Deleted invoices for customer {customer_id}")
+                except Exception as e:
+                    print(f"⚠️ Error deleting invoices (may not exist): {str(e)}")
+                
+                # 4. Delete quote items (via quotes)
+                try:
+                    quotes = supabase.table("quotes").select("id").eq("customer_id", customer_id).execute()
+                    if quotes.data:
+                        quote_ids = [q['id'] for q in quotes.data]
+                        for quote_id in quote_ids:
+                            supabase.table("quote_items").delete().eq("quote_id", quote_id).execute()
+                        print(f"✅ Deleted quote items for {len(quote_ids)} quotes")
+                except Exception as e:
+                    print(f"⚠️ Error deleting quote items (may not exist): {str(e)}")
+                
+                # 5. Delete quotes
+                try:
+                    supabase.table("quotes").delete().eq("customer_id", customer_id).execute()
+                    print(f"✅ Deleted quotes for customer {customer_id}")
+                except Exception as e:
+                    print(f"⚠️ Error deleting quotes (may not exist): {str(e)}")
+                
+                # 6. Delete expenses related to projects of this customer
+                try:
+                    projects = supabase.table("projects").select("id").eq("customer_id", customer_id).execute()
+                    if projects.data:
+                        project_ids = [p['id'] for p in projects.data]
+                        for project_id in project_ids:
+                            supabase.table("expenses").delete().eq("project_id", project_id).execute()
+                        print(f"✅ Deleted expenses for {len(project_ids)} projects")
+                except Exception as e:
+                    print(f"⚠️ Error deleting expenses (may not exist): {str(e)}")
+                
+                # 7. Delete projects
+                try:
+                    supabase.table("projects").delete().eq("customer_id", customer_id).execute()
+                    print(f"✅ Deleted projects for customer {customer_id}")
+                except Exception as e:
+                    print(f"⚠️ Error deleting projects (may not exist): {str(e)}")
+                
+                # 8. Finally, delete the customer
+                result = supabase.table("customers").delete().eq("id", customer_id).execute()
+                
+                # Verify deletion - Supabase sometimes returns empty data even on success
+                # So we check if customer still exists
+                verification = supabase.table("customers").select("id").eq("id", customer_id).execute()
+                
+                if verification.data and len(verification.data) > 0:
+                    # Customer still exists - deletion failed
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Failed to permanently delete customer - customer still exists in database"
+                    )
+                else:
+                    # Customer successfully deleted
+                    return {
+                        "message": "Customer permanently deleted successfully along with all related records",
+                        "deleted": True,
+                        "customer_id": customer_id
+                    }
+            except HTTPException:
+                raise
+            except Exception as db_error:
+                # If deletion fails, return detailed error
+                error_msg = str(db_error)
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot permanently delete customer with existing invoices, quotes, or projects. Please use soft delete instead."
-                )
-            
-            # Permanently delete customer
-            result = supabase.table("customers").delete().eq("id", customer_id).execute()
-            
-            if result.data:
-                return {"message": "Customer permanently deleted successfully"}
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Failed to permanently delete customer"
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to permanently delete customer: {error_msg}"
                 )
         else:
             # Soft delete by setting status to inactive
+            # Check if customer has active projects (only for soft delete)
+            active_projects = supabase.table("projects").select("id").eq("customer_id", customer_id).eq("status", "active").execute()
+            if active_projects.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot delete customer with active projects. Please complete or cancel projects first."
+                )
+            
             result = supabase.table("customers").update({
                 "status": "inactive",
                 "updated_at": datetime.utcnow().isoformat()

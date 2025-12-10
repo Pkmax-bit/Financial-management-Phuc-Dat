@@ -16,7 +16,8 @@ import {
   Eye,
   Filter,
   Star,
-  DollarSign
+  DollarSign,
+  X
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Customer } from '@/types'
@@ -34,6 +35,8 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
   const [sortBy, setSortBy] = useState('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [unpaidAmounts, setUnpaidAmounts] = useState<Record<string, number>>({})
+  const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -208,13 +211,32 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
     if (!deleteOption) return
     
     try {
+      setDeletingCustomerId(customerId)
+      setDeleteMessage(null)
+      
       // Soft delete by default
       await customerApi.deleteCustomer(customerId, false)
-      alert('Đã xóa khách hàng thành công (có thể khôi phục bằng cách đổi trạng thái)')
+      
+      // Show success message
+      setDeleteMessage({ 
+        type: 'success', 
+        text: '✅ Đã xóa khách hàng thành công (có thể khôi phục bằng cách đổi trạng thái)' 
+      })
+      
+      // Refresh customer list (no page reload)
       await fetchCustomers()
+      
+      // Auto-hide message after 3 seconds
+      setTimeout(() => setDeleteMessage(null), 3000)
     } catch (err: unknown) {
       console.error('Error deleting customer:', err)
-      alert((err as Error)?.message || 'Không thể xóa khách hàng')
+      setDeleteMessage({ 
+        type: 'error', 
+        text: (err as Error)?.message || 'Không thể xóa khách hàng' 
+      })
+      setTimeout(() => setDeleteMessage(null), 5000)
+    } finally {
+      setDeletingCustomerId(null)
     }
   }
 
@@ -224,24 +246,43 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
     
     // Show warning for hard delete
     const confirmHardDelete = window.confirm(
-      `⚠️ CẢNH BÁO: Xóa hoàn toàn khách hàng "${customerName}"\n\n` +
-      `Hành động này sẽ xóa vĩnh viễn khách hàng khỏi hệ thống và KHÔNG THỂ khôi phục!\n\n` +
-      `Chỉ có thể xóa hoàn toàn nếu khách hàng không có:\n` +
-      `- Hóa đơn\n` +
-      `- Báo giá\n` +
-      `- Dự án\n\n` +
+      `⚠️ CẢNH BÁO: Xóa vĩnh viễn khách hàng "${customerName}"\n\n` +
+      `Hành động này sẽ xóa vĩnh viễn khách hàng khỏi database và KHÔNG THỂ khôi phục!\n\n` +
+      `Lưu ý: Nếu khách hàng có dữ liệu liên quan (hóa đơn, báo giá, dự án), ` +
+      `hệ thống sẽ cố gắng xóa. Nếu database có ràng buộc foreign key, ` +
+      `việc xóa có thể thất bại và bạn sẽ nhận được thông báo lỗi chi tiết.\n\n` +
       `Bạn có chắc chắn muốn tiếp tục?`
     )
     
     if (!confirmHardDelete) return
     
     try {
+      setDeletingCustomerId(customerId)
+      setDeleteMessage(null)
+      
       await customerApi.deleteCustomer(customerId, true)
-      alert('Đã xóa hoàn toàn khách hàng khỏi hệ thống')
+      
+      // Show success message
+      setDeleteMessage({ 
+        type: 'success', 
+        text: '✅ Đã xóa vĩnh viễn khách hàng khỏi database thành công' 
+      })
+      
+      // Refresh customer list (no page reload)
       await fetchCustomers()
+      
+      // Auto-hide message after 3 seconds
+      setTimeout(() => setDeleteMessage(null), 3000)
     } catch (err: unknown) {
       console.error('Error hard deleting customer:', err)
-      alert((err as Error)?.message || 'Không thể xóa hoàn toàn khách hàng. Có thể khách hàng đang có dữ liệu liên quan.')
+      const errorMessage = (err as Error)?.message || 'Không thể xóa vĩnh viễn khách hàng'
+      setDeleteMessage({ 
+        type: 'error', 
+        text: `❌ ${errorMessage}` 
+      })
+      setTimeout(() => setDeleteMessage(null), 5000)
+    } finally {
+      setDeletingCustomerId(null)
     }
   }
 
@@ -312,6 +353,27 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
 
   return (
     <div className="space-y-4">
+      {/* Delete Message Notification */}
+      {deleteMessage && (
+        <div
+          className={`p-4 rounded-lg shadow-md ${
+            deleteMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200 text-green-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">{deleteMessage.text}</p>
+            <button
+              onClick={() => setDeleteMessage(null)}
+              className="ml-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex flex-col sm:flex-row gap-4">
