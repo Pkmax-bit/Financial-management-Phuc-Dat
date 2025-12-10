@@ -3372,14 +3372,33 @@ def find_best_product_match(product_name: str, products: List[Dict]) -> Optional
     best_match = None
     best_score = 0
     
+    # Clean product name for better matching
+    search_name = product_name.lower().strip()
+    
+    # Remove common prefixes/suffixes that don't affect matching
+    search_name = search_name.replace('cửa sổ', '').replace('cửa', '').strip()
+    
     for product in products:
-        similarity = calculate_string_similarity(product_name, product.get('name', ''))
+        db_product_name = product.get('name', '').lower().strip()
+        
+        # Try exact match first (case insensitive)
+        if search_name == db_product_name or search_name in db_product_name or db_product_name in search_name:
+            return {
+                'id': product.get('id'),
+                'name': product.get('name'),
+                'similarity': 100,
+                'match_type': 'exact'
+            }
+        
+        # Try fuzzy matching
+        similarity = calculate_string_similarity(search_name, db_product_name)
         if similarity > best_score and similarity >= 60:  # Minimum 60% similarity
             best_score = similarity
             best_match = {
                 'id': product.get('id'),
                 'name': product.get('name'),
-                'similarity': round(similarity, 2)
+                'similarity': round(similarity, 2),
+                'match_type': 'fuzzy'
             }
     
     return best_match
@@ -3793,6 +3812,13 @@ async def import_quote_from_ai_analysis(
         customer_info = analysis_data.get('customer', {})
         project_info = analysis_data.get('project', {})
         items = analysis_data.get('items', [])
+        is_new_customer = analysis_data.get('is_new_customer', True)
+        is_new_project = analysis_data.get('is_new_project', True)
+        employee_id = analysis_data.get('employee_id')
+        
+        print(f"📋 Import request: is_new_customer={is_new_customer}, is_new_project={is_new_project}")
+        print(f"📋 Customer ID provided: {customer_info.get('id')}")
+        print(f"📋 Project ID provided: {project_info.get('id')}")
         
         if not customer_info.get('name'):
             raise HTTPException(
@@ -3833,102 +3859,174 @@ async def import_quote_from_ai_analysis(
         
         # Get or create customer
         customer_name = customer_info.get('name', '').strip()
-        existing_customer = supabase.table("customers").select("id").ilike("name", customer_name).limit(1).execute()
+        customer_id = customer_info.get('id')  # Check if customer ID is provided
         
-        if existing_customer.data:
-            customer_id = existing_customer.data[0]['id']
-        else:
-            # Create new customer
-            customer_code = get_next_available_customer_code()
-            customer_data = {
-                "id": str(uuid.uuid4()),
-                "customer_code": customer_code,
-                "name": customer_name,
-                "type": "individual",
-                "address": customer_info.get('address') or None,
-                "phone": customer_info.get('phone') or None,
-                "email": customer_info.get('email') or None,
-                "status": "active",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
-            }
-            result = supabase.table("customers").insert(customer_data).execute()
-            if result.data:
-                customer_id = result.data[0]['id']
-                created_customers = 1
-            else:
+        if customer_id and not is_new_customer:
+            # Use existing customer (ID provided from frontend)
+            print(f"✅ Using existing customer ID: {customer_id}")
+            # Verify customer exists
+            verify_customer = supabase.table("customers").select("id, name").eq("id", customer_id).limit(1).execute()
+            if not verify_customer.data:
                 raise HTTPException(
                     status_code=400,
-                    detail="Không thể tạo khách hàng"
+                    detail=f"Khách hàng với ID {customer_id} không tồn tại"
                 )
+            print(f"✅ Verified customer: {verify_customer.data[0]['name']}")
+        else:
+            # Search for existing customer by name
+            print(f"🔍 Searching for existing customer: {customer_name}")
+            existing_customer = supabase.table("customers").select("id, name").ilike("name", customer_name).limit(1).execute()
+            
+            if existing_customer.data and not is_new_customer:
+                customer_id = existing_customer.data[0]['id']
+                print(f"✅ Found existing customer: {existing_customer.data[0]['name']}")
+            else:
+                # Create new customer
+                print(f"✨ Creating new customer: {customer_name}")
+                customer_code = get_next_available_customer_code()
+                customer_data = {
+                    "id": str(uuid.uuid4()),
+                    "customer_code": customer_code,
+                    "name": customer_name,
+                    "type": "individual",
+                    "address": customer_info.get('address') or None,
+                    "phone": customer_info.get('phone') or None,
+                    "email": customer_info.get('email') or None,
+                    "status": "active",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                result = supabase.table("customers").insert(customer_data).execute()
+                if result.data:
+                    customer_id = result.data[0]['id']
+                    created_customers = 1
+                    print(f"✅ Created new customer with ID: {customer_id}")
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Không thể tạo khách hàng"
+                    )
         
         # Get or create project
-        existing_project = supabase.table("projects").select("id").eq("customer_id", customer_id).ilike("name", project_name).limit(1).execute()
+        project_id = project_info.get('id')  # Check if project ID is provided
         
-        if existing_project.data:
-            project_id = existing_project.data[0]['id']
-        else:
-            # Create new project
-            project_code = f"PRJ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
-            project_data = {
-                "id": str(uuid.uuid4()),
-                "project_code": project_code,
-                "name": project_name,
-                "customer_id": customer_id,
-                "description": project_address if project_address else None,
-                "start_date": datetime.now().date().isoformat(),
-                "status": "planning",
-                "priority": "medium",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
-            }
-            
-            # If supervisor is provided, try to find employee and assign as manager
-            if project_supervisor:
-                # Try to find employee by name
-                supervisor_employee = supabase.table("employees").select("id").or_(f"first_name.ilike.%{project_supervisor}%,last_name.ilike.%{project_supervisor}%").limit(1).execute()
-                if supervisor_employee.data:
-                    project_data["manager_id"] = supervisor_employee.data[0]['id']
-            
-            result = supabase.table("projects").insert(project_data).execute()
-            if result.data:
-                project_id = result.data[0]['id']
-                created_projects = 1
-            else:
+        if project_id and not is_new_project:
+            # Use existing project (ID provided from frontend)
+            print(f"✅ Using existing project ID: {project_id}")
+            # Verify project exists and belongs to customer
+            verify_project = supabase.table("projects").select("id, name, customer_id").eq("id", project_id).eq("customer_id", customer_id).limit(1).execute()
+            if not verify_project.data:
                 raise HTTPException(
                     status_code=400,
-                    detail="Không thể tạo dự án"
+                    detail=f"Dự án với ID {project_id} không tồn tại hoặc không thuộc khách hàng này"
                 )
+            print(f"✅ Verified project: {verify_project.data[0]['name']}")
+        else:
+            # Search for existing project by name
+            print(f"🔍 Searching for existing project: {project_name}")
+            existing_project = supabase.table("projects").select("id, name").eq("customer_id", customer_id).ilike("name", project_name).limit(1).execute()
+            
+            if existing_project.data and not is_new_project:
+                project_id = existing_project.data[0]['id']
+                print(f"✅ Found existing project: {existing_project.data[0]['name']}")
+            else:
+                # Create new project
+                print(f"✨ Creating new project: {project_name}")
+                project_code = f"PRJ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+                project_data = {
+                    "id": str(uuid.uuid4()),
+                    "project_code": project_code,
+                    "name": project_name,
+                    "customer_id": customer_id,
+                    "description": project_address if project_address else None,
+                    "start_date": datetime.now().date().isoformat(),
+                    "status": "planning",
+                    "priority": "medium",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                # Use employee_id if provided, otherwise try to find supervisor by name
+                if employee_id:
+                    project_data["manager_id"] = employee_id
+                elif project_supervisor:
+                    # Try to find employee by name
+                    supervisor_employee = supabase.table("employees").select("id").or_(f"first_name.ilike.%{project_supervisor}%,last_name.ilike.%{project_supervisor}%,full_name.ilike.%{project_supervisor}%").limit(1).execute()
+                    if supervisor_employee.data:
+                        project_data["manager_id"] = supervisor_employee.data[0]['id']
+                
+                result = supabase.table("projects").insert(project_data).execute()
+                if result.data:
+                    project_id = result.data[0]['id']
+                    created_projects = 1
+                    print(f"✅ Created new project with ID: {project_id}")
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Không thể tạo dự án"
+                    )
         
         # Process items and create products if needed
         quote_items = []
+        matched_products = []  # Track which products were matched
+        new_products = []      # Track which products were created
+        
         for item in items:
             product_name = item.get('hang_muc_thi_cong', '').strip()
             if not product_name:
                 continue
             
-            # Get first line as product name for matching
-            product_name_short = product_name.split('\n')[0] if '\n' in product_name else product_name
+            # Use ten_san_pham if available, otherwise extract from hang_muc_thi_cong
+            product_name_short = item.get('ten_san_pham', '').strip()
+            if not product_name_short:
+                product_name_short = product_name.split('\n')[0] if '\n' in product_name else product_name
+            
+            # Get category name for matching
+            category_name = item.get('loai_san_pham', '').strip()
             
             # Find or create product
             if product_name_short not in product_map:
-                # Try to find matching product
+                # Try to find matching product (use ten_san_pham for better matching)
                 match = find_best_product_match(product_name_short, products)
                 
                 if match:
                     product_id = match['id']
+                    matched_products.append({
+                        'input_name': product_name_short,
+                        'matched_name': match['name'],
+                        'similarity': match.get('similarity'),
+                        'match_type': match.get('match_type')
+                    })
+                    print(f"✅ Matched product: '{product_name_short}' → '{match['name']}' (similarity: {match.get('similarity')}%)")
                 else:
                     # Create new product
                     category_id = None
-                    if categories:
+                    
+                    # Try to find matching category based on loai_san_pham
+                    if category_name:
+                        for cat_name, cat_id in categories.items():
+                            # Fuzzy match category
+                            cat_similarity = calculate_string_similarity(category_name, cat_name)
+                            if cat_similarity >= 60:
+                                category_id = cat_id
+                                print(f"✅ Matched category: '{category_name}' → '{cat_name}' (similarity: {cat_similarity}%)")
+                                break
+                    
+                    # If no match, use first category or None
+                    if not category_id and categories:
                         category_id = list(categories.values())[0]
+                    
+                    # Use mo_ta if available, otherwise full hang_muc_thi_cong
+                    description = item.get('mo_ta', '').strip()
+                    if not description:
+                        description = product_name
                     
                     product_data = {
                         "id": str(uuid.uuid4()),
                         "name": product_name_short,
                         "price": item.get('don_gia', 0),
                         "unit": item.get('dvt', 'cái'),
-                        "description": product_name,  # Full description
+                        "description": description,
                         "category_id": category_id,
                         "is_active": True,
                         "created_at": datetime.utcnow().isoformat(),
@@ -3947,6 +4045,13 @@ async def import_quote_from_ai_analysis(
                     if result.data:
                         product_id = result.data[0]['id']
                         created_products += 1
+                        new_products.append({
+                            'name': product_name_short,
+                            'category': category_name or 'Chưa phân loại',
+                            'price': item.get('don_gia', 0),
+                            'unit': item.get('dvt', 'cái')
+                        })
+                        print(f"✨ Created new product: '{product_name_short}' (price: {item.get('don_gia', 0)}, unit: {item.get('dvt', 'cái')})")
                     else:
                         continue  # Skip this item if product creation failed
                 
@@ -3979,6 +4084,14 @@ async def import_quote_from_ai_analysis(
         # Generate quote number
         quote_number = f"BG{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
         
+        # Prepare notes and terms
+        notes_parts = []
+        if analysis_data.get('notes'):
+            notes_parts.append(analysis_data.get('notes'))
+        if analysis_data.get('terms'):
+            notes_parts.append(analysis_data.get('terms'))
+        notes = '\n\n'.join(notes_parts) if notes_parts else None
+        
         # Create quote
         quote_data = {
             "id": str(uuid.uuid4()),
@@ -3993,6 +4106,7 @@ async def import_quote_from_ai_analysis(
             "total_amount": total_amount,
             "currency": "VND",
             "status": "draft",
+            "notes": notes,
             "created_by": current_user.id,
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
@@ -4028,12 +4142,15 @@ async def import_quote_from_ai_analysis(
         
         return {
             "success": True,
-            "message": f"Import thành công. Đã tạo {created_customers} khách hàng, {created_projects} dự án, {created_quotes} báo giá, {created_products} sản phẩm mới",
+            "message": f"Import thành công. Đã tạo {created_customers} khách hàng, {created_projects} dự án, {created_quotes} báo giá, {created_products} sản phẩm mới. Sử dụng {len(matched_products)} sản phẩm có sẵn.",
             "createdCustomers": created_customers,
             "createdProjects": created_projects,
             "createdQuotes": created_quotes,
             "createdProducts": created_products,
-            "quoteId": quote_id
+            "matchedProducts": len(matched_products),
+            "quoteId": quote_id,
+            "matchedProductDetails": matched_products,
+            "newProductDetails": new_products
         }
         
     except HTTPException:

@@ -91,15 +91,33 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """Get current authenticated user using Supabase token"""
     try:
         token = credentials.credentials
-        print(f"[AUTH] Received token: {token[:20]}..." if token else "[AUTH] No token provided")
+        print(f"[AUTH] Received token: {token[:30]}..." if token and len(token) > 30 else f"[AUTH] Token: {token}")
+        
+        if not token:
+            print("[AUTH] ERROR: No token provided")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No token provided"
+            )
+        
+        # Validate token format (should be JWT with 3 parts)
+        token_parts = token.split('.')
+        if len(token_parts) != 3:
+            print(f"[AUTH] ERROR: Invalid token format (expected 3 parts, got {len(token_parts)})")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token format"
+            )
         
         # Use anon client to verify JWT tokens from frontend
         from services.supabase_client import get_supabase_anon_client
         supabase = get_supabase_anon_client()
         
         try:
+            print("[AUTH] Verifying token with Supabase...")
             # Get the user from Supabase using the JWT token
             user_response = supabase.auth.get_user(token)
+            print(f"[AUTH] Token verified successfully for user: {user_response.user.email if user_response and user_response.user else 'unknown'}")
 
             if not user_response or not hasattr(user_response, 'user') or not user_response.user:
                 raise HTTPException(
@@ -120,9 +138,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         except HTTPException:
             raise
         except Exception as auth_error:
+            error_msg = str(auth_error)
+            print(f"[AUTH] ERROR: Token verification failed: {error_msg}")
+            print(f"[AUTH] Error type: {type(auth_error).__name__}")
+            
+            # Provide more specific error messages
+            if "expired" in error_msg.lower() or "exp" in error_msg.lower():
+                detail = "Token has expired. Please login again."
+            elif "invalid" in error_msg.lower() or "signature" in error_msg.lower():
+                detail = f"Invalid token: {error_msg}"
+            else:
+                detail = f"Token verification failed: {error_msg}"
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Token verification failed: {str(auth_error)}"
+                detail=detail
             )
         
         # Use service client for database operations

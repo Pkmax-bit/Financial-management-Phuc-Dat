@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
-import { Upload, Download, FileSpreadsheet, FileText, X, CheckCircle2, AlertCircle, Loader2, User, Building2, Package, DollarSign, Sparkles } from 'lucide-react'
+import { Upload, Download, FileSpreadsheet, FileText, X, CheckCircle2, AlertCircle, Loader2, User, Building2, Package, DollarSign, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // Lazy import xlsx with retry mechanism
@@ -87,6 +87,8 @@ async function extractTextFromPDF(file: File): Promise<string> {
     if (!response.ok) {
       let errorMessage = 'Lỗi khi trích xuất text từ PDF'
       try {
+        // Clone response to read it multiple times if needed
+        const responseClone = response.clone()
         const error = await response.json()
         errorMessage = error.message || error.error || errorMessage
         console.error('❌ Server error response:', {
@@ -94,9 +96,15 @@ async function extractTextFromPDF(file: File): Promise<string> {
           error: error
         })
       } catch (e) {
+        // If JSON parse fails, response body was already consumed or not JSON
+        try {
         const errorText = await response.text()
         console.error('❌ Server error text:', errorText)
         errorMessage = errorText || errorMessage
+        } catch (textError) {
+          console.error('❌ Could not read response body:', textError)
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        }
       }
       throw new Error(errorMessage)
     }
@@ -127,6 +135,9 @@ interface QuoteItem {
   stt?: number
   ky_hieu?: string
   hang_muc_thi_cong: string
+  ten_san_pham?: string  // Tên sản phẩm chính (dòng đầu)
+  loai_san_pham?: string // Loại/Category (ví dụ: Nhôm Xingfa Việt Nam)
+  mo_ta?: string         // Mô tả chi tiết (phần còn lại)
   dvt: string
   ngang?: number
   cao?: number
@@ -153,6 +164,46 @@ interface AnalyzedQuote {
   total_amount: number
   date?: string
   valid_until?: string
+  notes?: string  // Ghi chú báo giá (phần 3)
+  terms?: string  // Điều khoản, quy trình
+}
+
+interface DebugInfo {
+  documentPreview: {
+    first500Chars: string
+    last200Chars: string
+    totalLength: number
+    lineCount: number
+  }
+  extractedInfo: {
+    customerFound: boolean
+    customerName: string | null
+    addressFound: boolean
+    address: string | null
+    phoneFound: boolean
+    phone: string | null
+    supervisorFound: boolean
+    supervisor: string | null
+    dateFound: boolean
+    date: string | null
+    itemsCount: number
+    itemsPreview: Array<{
+      stt: number | null
+      ten_san_pham: string
+      loai_san_pham: string | null
+      so_luong: number
+      don_gia: number
+      thanh_tien: number
+    }>
+    subtotalFound: boolean
+    subtotal: number
+    vatFound: boolean
+    taxAmount: number
+    totalFound: boolean
+    totalAmount: number
+  }
+  warnings: string[]
+  processingSteps: string[]
 }
 
 export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSuccess?: () => void }) {
@@ -160,9 +211,238 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
   const [analyzing, setAnalyzing] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [analyzedData, setAnalyzedData] = useState<AnalyzedQuote | null>(null)
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
+  const [showDebug, setShowDebug] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  
+  // Dropdown data
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string; phone?: string; email?: string }>>([])
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
+  const [employees, setEmployees] = useState<Array<{ id: string; full_name: string }>>([])
+  const [products, setProducts] = useState<Array<{ id: string; name: string; price: number; unit: string }>>([])
+  
+  // Editable customer and project info
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
+    name: '',
+    address: '',
+    phone: '',
+    email: ''
+  })
+  const [projectInfo, setProjectInfo] = useState<ProjectInfo>({
+    name: '',
+    address: '',
+    supervisor: ''
+  })
+  
+  // Selection states
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('')
+  const [isNewCustomer, setIsNewCustomer] = useState(false)
+  const [isNewProject, setIsNewProject] = useState(false)
+  
+  // Product matching status for each item
+  const [productMatchStatus, setProductMatchStatus] = useState<Array<{
+    index: number
+    exists: boolean
+    matchedProduct?: { id: string; name: string; price: number }
+  }>>([])
+
+  // Load customers, employees, and products on mount
+  React.useEffect(() => {
+    fetchCustomers()
+    fetchEmployees()
+    fetchProducts()
+  }, [])
+  
+  // Load projects when customer is selected
+  React.useEffect(() => {
+    if (selectedCustomerId) {
+      fetchProjects(selectedCustomerId)
+    } else {
+      setProjects([])
+    }
+  }, [selectedCustomerId])
+  
+  // Check product matches when analyzed data changes
+  React.useEffect(() => {
+    if (analyzedData?.items && products.length > 0) {
+      checkProductMatches()
+    }
+  }, [analyzedData, products])
+
+  const fetchCustomers = async () => {
+    try {
+      const { data } = await supabase
+        .from('customers')
+        .select('id, name, phone, email')
+        .eq('status', 'active')
+        .order('name')
+      setCustomers(data || [])
+    } catch (error) {
+      console.error('Error fetching customers:', error)
+    }
+  }
+
+  const fetchProjects = async (customerId: string) => {
+    try {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('customer_id', customerId)
+        .in('status', ['planning', 'active'])
+        .order('name')
+      setProjects(data || [])
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    }
+  }
+
+  const fetchEmployees = async () => {
+    try {
+      const { data } = await supabase
+        .from('employees')
+        .select('id, full_name')
+        .eq('is_active', true)
+        .order('full_name')
+      setEmployees(data || [])
+    } catch (error) {
+      console.error('Error fetching employees:', error)
+    }
+  }
+
+  const fetchProducts = async () => {
+    try {
+      const { data } = await supabase
+        .from('products')
+        .select('id, name, price, unit')
+        .eq('is_active', true)
+      setProducts(data || [])
+    } catch (error) {
+      console.error('Error fetching products:', error)
+    }
+  }
+  
+  // Helper function to normalize Vietnamese text for matching
+  const normalizeText = (text: string): string => {
+    if (!text) return ''
+    return text
+      .toLowerCase()
+      .trim()
+      // Remove common prefixes/suffixes
+      .replace(/^\(anh\)\s*/i, '')
+      .replace(/^\(chị\)\s*/i, '')
+      .replace(/^\(chú\)\s*/i, '')
+      .replace(/^\(cô\)\s*/i, '')
+      .replace(/\s+/g, ' ')
+  }
+
+  // Helper function to calculate similarity between two strings
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    const s1 = normalizeText(str1)
+    const s2 = normalizeText(str2)
+    
+    // Exact match
+    if (s1 === s2) return 1.0
+    
+    // Contains match
+    if (s1.includes(s2) || s2.includes(s1)) return 0.9
+    
+    // Word-based similarity
+    const words1 = s1.split(/\s+/)
+    const words2 = s2.split(/\s+/)
+    const commonWords = words1.filter(w => words2.some(w2 => w2.includes(w) || w.includes(w2)))
+    
+    if (commonWords.length > 0) {
+      return commonWords.length / Math.max(words1.length, words2.length)
+    }
+    
+    return 0
+  }
+
+  // Find matching customer from database
+  const findMatchingCustomer = (customerName: string) => {
+    if (!customerName || customers.length === 0) return null
+    
+    let bestMatch: { customer: any, similarity: number } | null = null
+    
+    for (const customer of customers) {
+      const similarity = calculateSimilarity(customerName, customer.name)
+      
+      // Also check phone number if available
+      if (customerInfo.phone && customer.phone) {
+        const phoneSimilarity = customer.phone.includes(customerInfo.phone) || customerInfo.phone.includes(customer.phone)
+        if (phoneSimilarity) {
+          return { customer, similarity: 1.0 }  // Phone match is very strong
+        }
+      }
+      
+      if (similarity > 0.7 && (!bestMatch || similarity > bestMatch.similarity)) {
+        bestMatch = { customer, similarity }
+      }
+    }
+    
+    return bestMatch
+  }
+
+  // Find matching project from database
+  const findMatchingProject = (projectName: string, projectsList: any[]) => {
+    if (!projectName || projectsList.length === 0) return null
+    
+    let bestMatch: { project: any, similarity: number } | null = null
+    
+    for (const project of projectsList) {
+      const similarity = calculateSimilarity(projectName, project.name)
+      
+      if (similarity > 0.7 && (!bestMatch || similarity > bestMatch.similarity)) {
+        bestMatch = { project, similarity }
+      }
+    }
+    
+    return bestMatch
+  }
+
+  const checkProductMatches = () => {
+    if (!analyzedData?.items) return
+    
+    const matches = analyzedData.items.map((item, index) => {
+      // Use ten_san_pham if available, otherwise extract from hang_muc_thi_cong
+      const itemName = (item.ten_san_pham || item.hang_muc_thi_cong.split('\n')[0]).trim().toLowerCase()
+      
+      // Clean itemName for better matching
+      const cleanedItemName = itemName.replace(/cửa sổ/g, '').replace(/cửa/g, '').trim()
+      
+      // Try exact match first
+      let matchedProduct = products.find(p => {
+        const pName = p.name.toLowerCase()
+        return pName === cleanedItemName || 
+               pName.includes(cleanedItemName) || 
+               cleanedItemName.includes(pName)
+      })
+      
+      // If no exact match, try fuzzy match
+      if (!matchedProduct) {
+        matchedProduct = products.find(p => {
+          const pName = p.name.toLowerCase()
+          // Simple similarity: check if significant words match
+          const itemWords = cleanedItemName.split(/\s+/)
+          const productWords = pName.split(/\s+/)
+          const matchedWords = itemWords.filter(w => productWords.some(pw => pw.includes(w) || w.includes(pw)))
+          return matchedWords.length >= Math.min(2, itemWords.length)
+        })
+      }
+      
+      return {
+        index,
+        exists: !!matchedProduct,
+        matchedProduct
+      }
+    })
+    
+    setProductMatchStatus(matches)
+  }
 
   const handleDownloadTemplate = async () => {
     setDownloading(true)
@@ -218,12 +498,49 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
     console.log('📁 New file selected:', file.name, 'Size:', file.size, 'bytes', 'Type:', file.type)
     console.log('🔄 Clearing previous data...')
 
-    // Check file type
+    // Check for Excel temporary/lock files
+    if (file.name.startsWith('~$') || file.name.startsWith('~')) {
+      setError(
+        `⚠️ File "${file.name}" là file tạm (temporary file) của Excel.\n\n` +
+        `File này được Excel tự động tạo khi bạn đang mở file gốc.\n\n` +
+        `🔧 Cách khắc phục:\n` +
+        `1. Đóng file Excel đang mở\n` +
+        `2. Upload file gốc (không có ký tự ~ hoặc ~$ ở đầu tên file)\n` +
+        `3. File gốc có tên: "${file.name.replace(/^~\$?/, '')}"`
+      )
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return
+    }
+    
+    // Check for suspiciously small files (likely temporary or corrupted)
+    if (file.size < 1000) {
+      setError(
+        `⚠️ File quá nhỏ (${file.size} bytes).\n\n` +
+        `File Excel báo giá thường có kích thước > 10KB.\n\n` +
+        `Vui lòng kiểm tra:\n` +
+        `- File có bị lỗi không?\n` +
+        `- Đóng file Excel trước khi upload\n` +
+        `- Upload đúng file báo giá gốc (không phải file temporary ~$...)`
+      )
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return
+    }
+
+    // Check file type - ONLY Excel for now (PDF has compatibility issues)
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.ms-excel'
     const isPDF = file.name.endsWith('.pdf') || file.type === 'application/pdf'
 
-    if (!isExcel && !isPDF) {
-      setError('Vui lòng chọn file Excel (.xlsx, .xls) hoặc PDF (.pdf)')
+    if (isPDF) {
+      setError('Tính năng PDF đang được cập nhật. Vui lòng sử dụng file Excel (.xlsx, .xls)')
+      return
+    }
+
+    if (!isExcel) {
+      setError('Vui lòng chọn file Excel (.xlsx, .xls)')
       return
     }
 
@@ -252,27 +569,27 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
         
         console.log('📊 Excel workbook loaded, sheets:', wb.SheetNames)
         
-        // Try to find the sheet with most data (not empty)
-        let sheetName = wb.SheetNames[0]
-        let ws = wb.Sheets[sheetName]
-        let maxRows = 0
+        // Find sheet: Ưu tiên "hợp đồng", "BG", "Báo giá", tránh "GIÁ VỐN"
+        let sheetName = wb.SheetNames.find(name => 
+          name.toLowerCase().includes('hợp đồng') || 
+          name.toLowerCase().includes('hop dong')
+        ) || wb.SheetNames.find(name => 
+          name.toLowerCase().includes('bg') ||
+          name.toLowerCase().includes('báo giá') || 
+          name.toLowerCase().includes('bao gia')
+        ) || wb.SheetNames.find(name => 
+          !name.toLowerCase().includes('giá vốn') &&
+          !name.toLowerCase().includes('gia von')
+        ) || wb.SheetNames[0]
         
-        // Check all sheets to find the one with most data
-        for (const name of wb.SheetNames) {
-          const sheet = wb.Sheets[name]
-          const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1')
-          const rows = range.e.r + 1
-          console.log(`📊 Sheet "${name}": ${rows} rows`)
-          if (rows > maxRows) {
-            maxRows = rows
-            sheetName = name
-            ws = sheet
-          }
+        const ws = wb.Sheets[sheetName]
+        console.log(`✅ Đọc sheet: "${sheetName}"`)
+        
+        if (!ws) {
+          throw new Error('Không tìm thấy sheet hợp lệ trong file Excel')
         }
         
-        console.log(`✅ Using sheet: "${sheetName}" with ${maxRows} rows`)
-        
-        // Get sheet range to know exact dimensions
+        // Get sheet range
         const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
         const totalRows = range.e.r + 1
         const totalCols = range.e.c + 1
@@ -466,10 +783,19 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
           const error = await response.json()
           errorDetails = error
           errorMessage = error.message || error.error || error.detail || errorMessage
+          
+          // Save debug info from error response if available
+          if (error.debug) {
+            console.log('🔍 Debug info from error response:', error.debug)
+            setDebugInfo(error.debug)
+            setShowDebug(true)  // Auto-show debug on error
+          }
+          
           console.error('API Error Response:', {
             status: response.status,
             statusText: response.statusText,
-            error: error
+            error: error,
+            hasDebug: !!error.debug
           })
         } catch (e) {
           const errorText = await response.text()
@@ -478,6 +804,12 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
           try {
             errorDetails = JSON.parse(errorText)
             errorMessage = errorDetails.message || errorDetails.error || errorMessage
+            
+            // Try to get debug info from parsed error
+            if (errorDetails.debug) {
+              setDebugInfo(errorDetails.debug)
+              setShowDebug(true)
+            }
           } catch (parseError) {
             // Keep original errorText as errorMessage
           }
@@ -497,10 +829,23 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       console.log('✅ AI Analysis result received:', {
         success: result.success,
         hasAnalysis: !!result.analysis,
+        hasDebug: !!result.debug,
         customer: result.analysis?.customer?.name,
         itemsCount: result.analysis?.items?.length,
         requestId: uniqueId
       })
+      
+      // Save debug info if available
+      if (result.debug) {
+        console.log('🔍 Debug info received:', result.debug)
+        setDebugInfo(result.debug)
+        
+        // Auto show debug if there are warnings
+        if (result.debug.warnings && result.debug.warnings.length > 0) {
+          setShowDebug(true)
+          console.warn('⚠️ Warnings found:', result.debug.warnings)
+        }
+      }
       
       if (!result.success || !result.analysis) {
         throw new Error(result.error || 'Không nhận được dữ liệu phân tích từ AI')
@@ -524,6 +869,125 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       
       // Set new analyzed data
       setAnalyzedData(result.analysis)
+      
+      // Initialize editable customer and project info from analyzed data
+      const customerName = result.analysis.customer?.name || ''
+      const customerAddress = result.analysis.customer?.address || ''
+      const customerPhone = result.analysis.customer?.phone || ''
+      const customerEmail = result.analysis.customer?.email || ''
+      
+      setCustomerInfo({
+        name: customerName,
+        address: customerAddress,
+        phone: customerPhone,
+        email: customerEmail
+      })
+      
+      // 🔍 AUTO-MATCH CUSTOMER FROM DATABASE
+      console.log('🔍 Checking if customer exists in database...')
+      let matchedCustomer = null
+      
+      if (customerName && customers.length > 0) {
+        const match = findMatchingCustomer(customerName)
+        
+        if (match && match.similarity >= 0.8) {
+          matchedCustomer = match.customer
+          console.log(`✅ Found matching customer: "${matchedCustomer.name}" (similarity: ${(match.similarity * 100).toFixed(0)}%)`)
+          
+          // Auto-select the matched customer
+          setSelectedCustomerId(matchedCustomer.id)
+          setIsNewCustomer(false)
+          
+          // Update customer info with data from database
+          setCustomerInfo({
+            name: matchedCustomer.name,
+            address: customerAddress || matchedCustomer.address || '',
+            phone: customerPhone || matchedCustomer.phone || '',
+            email: customerEmail || matchedCustomer.email || ''
+          })
+          
+          // Load projects for this customer
+          console.log('📂 Loading projects for matched customer...')
+          await fetchProjects(matchedCustomer.id)
+          
+        } else if (match) {
+          console.log(`⚠️ Found similar customer: "${match.customer.name}" but similarity too low (${(match.similarity * 100).toFixed(0)}%)`)
+          setIsNewCustomer(true)
+        } else {
+          console.log('❌ No matching customer found in database')
+          setIsNewCustomer(true)
+        }
+      } else if (!customerName) {
+        setIsNewCustomer(true)
+        console.log('⚠️ No customer name found, marking as new customer')
+      } else {
+        setIsNewCustomer(true)
+        console.log('ℹ️ No customers loaded, marking as new customer')
+      }
+      
+      // Initialize project info
+      const projectName = result.analysis.project?.name || ''
+      const projectAddress = result.analysis.project?.address || customerAddress
+      const projectSupervisor = result.analysis.project?.supervisor || ''
+      
+      setProjectInfo({
+        name: projectName || (customerName && customerAddress ? `${customerName} - ${customerAddress}` : customerName),
+        address: projectAddress,
+        supervisor: projectSupervisor
+      })
+      
+      // 🔍 AUTO-MATCH PROJECT IF CUSTOMER MATCHED
+      if (matchedCustomer) {
+        console.log('🔍 Checking if project exists for this customer...')
+        
+        // Wait a bit for projects to load
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Re-fetch projects to ensure we have the latest
+        const { data: projectsData } = await supabase
+          .from('projects')
+          .select('id, name')
+          .eq('customer_id', matchedCustomer.id)
+          .in('status', ['planning', 'active'])
+          .order('name')
+        
+        if (projectsData && projectsData.length > 0) {
+          const projectMatch = findMatchingProject(projectName, projectsData)
+          
+          if (projectMatch && projectMatch.similarity >= 0.8) {
+            console.log(`✅ Found matching project: "${projectMatch.project.name}" (similarity: ${(projectMatch.similarity * 100).toFixed(0)}%)`)
+            
+            // Auto-select the matched project
+            setSelectedProjectId(projectMatch.project.id)
+            setIsNewProject(false)
+            
+            // Update project info
+            setProjectInfo({
+              name: projectMatch.project.name,
+              address: projectAddress,
+              supervisor: projectSupervisor
+            })
+          } else if (projectMatch) {
+            console.log(`⚠️ Found similar project: "${projectMatch.project.name}" but similarity too low (${(projectMatch.similarity * 100).toFixed(0)}%)`)
+            setIsNewProject(true)
+          } else {
+            console.log('❌ No matching project found, will create new project')
+            setIsNewProject(true)
+          }
+        } else {
+          console.log('ℹ️ No projects found for this customer, will create new project')
+          setIsNewProject(true)
+        }
+      } else {
+        // Customer is new, so project must be new too
+        if (!projectName && customerName) {
+          setProjectInfo(prev => ({
+            ...prev,
+            name: customerAddress ? `${customerName} - ${customerAddress}` : customerName
+          }))
+        }
+        setIsNewProject(true)
+      }
       
       // Reset file input to allow selecting the same file again
       if (fileInputRef.current) {
@@ -549,50 +1013,319 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
     setAnalyzedData(null)
     setError(null)
     setSuccess(null)
+    setCustomerInfo({ name: '', address: '', phone: '', email: '' })
+    setProjectInfo({ name: '', address: '', supervisor: '' })
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
     console.log('✅ Data cleared, ready for new upload')
   }
 
+  const getValidToken = async (): Promise<string> => {
+    let token: string | null = localStorage.getItem('access_token')
+    if (!token) {
+      throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại.')
+    }
+    
+    // Validate token format
+    const tokenParts = token.split('.')
+    if (tokenParts.length !== 3) {
+      console.error('❌ Invalid token format')
+      throw new Error('Token không đúng định dạng. Vui lòng đăng nhập lại.')
+    }
+    
+    // Check if token is expired (simple check - decode JWT and check exp)
+    try {
+      const payload = JSON.parse(atob(tokenParts[1]))
+      const exp = payload.exp * 1000 // Convert to milliseconds
+      const now = Date.now()
+      const expiresIn = exp - now
+      
+      console.log('🔑 Token status:', {
+        expiresAt: new Date(exp).toISOString(),
+        expiresInMinutes: Math.floor(expiresIn / 1000 / 60),
+        isExpired: expiresIn < 0
+      })
+      
+      // If token is expired or expires in less than 5 minutes, try to refresh
+      if (expiresIn < 5 * 60 * 1000) {
+        console.log('🔄 Token sắp hết hạn hoặc đã hết hạn, đang refresh...')
+        // Try to refresh token
+        const refreshToken = localStorage.getItem('refresh_token')
+        if (refreshToken) {
+          try {
+            const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+            const response = await fetch(`${backendUrl}/api/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: refreshToken })
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              const newToken = data.access_token
+              if (newToken && typeof newToken === 'string') {
+                localStorage.setItem('access_token', newToken)
+                console.log('✅ Token refreshed successfully')
+                return newToken
+              } else {
+                console.warn('⚠️ Invalid access_token in refresh response')
+              }
+            } else {
+              console.warn('⚠️ Token refresh failed:', response.status, response.statusText)
+            }
+          } catch (refreshError) {
+            console.warn('⚠️ Token refresh error:', refreshError)
+          }
+        } else {
+          console.warn('⚠️ No refresh token available')
+        }
+      }
+      
+      // If token is expired and refresh failed, throw error
+      if (expiresIn < 0) {
+        throw new Error('Token đã hết hạn và không thể refresh. Vui lòng đăng nhập lại.')
+      }
+      
+      // Ensure token is not null
+      if (!token) {
+        throw new Error('Token không tồn tại. Vui lòng đăng nhập lại.')
+      }
+      
+      return token
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('hết hạn')) {
+        throw e
+      }
+      // If can't decode, log warning but return token (let backend verify)
+      console.warn('⚠️ Could not decode token, will let backend verify:', e)
+      
+      // Ensure token is not null before returning
+      if (!token) {
+        throw new Error('Token không hợp lệ. Vui lòng đăng nhập lại.')
+      }
+      
+      return token
+    }
+  }
+
   const handleImport = async () => {
     if (!analyzedData) return
+    
+    // Validate required fields
+    if (!customerInfo.name || !customerInfo.name.trim()) {
+      setError('❌ Vui lòng nhập tên khách hàng')
+      return
+    }
+    
+    if (!projectInfo.name || !projectInfo.name.trim()) {
+      setError('❌ Vui lòng nhập tên dự án')
+      return
+    }
+    
+    // Check if there are any items
+    if (!analyzedData.items || analyzedData.items.length === 0) {
+      setError('❌ Không có hạng mục nào để import. Vui lòng thêm ít nhất 1 hạng mục.')
+      return
+    }
 
     setLoading(true)
     setError(null)
     setSuccess(null)
+    
+    console.log('🚀 Starting import process...')
+    console.log('📋 Customer:', isNewCustomer ? 'NEW' : selectedCustomerId, '-', customerInfo.name)
+    console.log('🏗️ Project:', isNewProject ? 'NEW' : selectedProjectId, '-', projectInfo.name)
+    console.log('📦 Items:', analyzedData.items.length)
 
     try {
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        throw new Error('Chưa đăng nhập')
-      }
+      const token = await getValidToken()
 
-      const response = await fetch('/api/sales/quotes/import-from-analysis', {
+      // Prepare import data with edited customer and project info
+      const importData = {
+        ...analyzedData,
+        customer: {
+          ...analyzedData.customer,
+          ...customerInfo,
+          name: customerInfo.name.trim(),
+          id: isNewCustomer ? undefined : selectedCustomerId  // Include customer ID if using existing
+        },
+        project: {
+          ...analyzedData.project,
+          ...projectInfo,
+          name: projectInfo.name.trim(),
+          id: isNewProject ? undefined : selectedProjectId,  // Include project ID if using existing
+          customer_id: isNewCustomer ? undefined : selectedCustomerId
+        },
+        employee_id: selectedEmployeeId || null,
+        is_new_customer: isNewCustomer,
+        is_new_project: isNewProject
+      }
+      
+      console.log('📤 Sending import request with data:', {
+        customer: importData.customer.name,
+        customerId: importData.customer.id,
+        isNewCustomer,
+        project: importData.project.name,
+        projectId: importData.project.id,
+        isNewProject,
+        itemsCount: importData.items.length,
+        employeeId: importData.employee_id
+      })
+
+      // Try calling backend directly (to avoid Next.js middleman issues)
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const apiUrl = `${backendUrl}/api/sales/quotes/import-from-analysis`
+      
+      // Validate token before sending
+      if (!token || token.length < 50) {
+        throw new Error('Token không hợp lệ. Vui lòng đăng nhập lại.')
+      }
+      
+      // Check token expiration
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        const exp = payload.exp * 1000
+        const now = Date.now()
+        
+        if (exp < now) {
+          throw new Error('Token đã hết hạn. Vui lòng đăng nhập lại.')
+        }
+        
+        console.log('🔑 Token info:', {
+          userId: payload.sub || payload.user_id,
+          exp: new Date(exp).toISOString(),
+          expiresIn: Math.floor((exp - now) / 1000 / 60) + ' minutes'
+        })
+      } catch (e) {
+        console.warn('⚠️ Could not parse token:', e)
+        // Continue anyway, let backend verify
+      }
+      
+      console.log('🎯 Calling backend directly:', apiUrl)
+      console.log('🔑 Token preview:', token.substring(0, 30) + '...' + token.substring(token.length - 10))
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(analyzedData)
+        body: JSON.stringify(importData)
       })
+      
+      console.log('📥 Response status:', response.status, response.statusText)
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Lỗi khi import')
+        let errorData: any = {}
+        let errorMessage = 'Lỗi khi import'
+        let errorDetail = ''
+        
+        try {
+          errorData = await response.json()
+          console.error('❌ Import failed (JSON):', errorData)
+          errorMessage = errorData.error || errorData.detail || errorData.message || errorMessage
+          errorDetail = errorData.detail || errorData.error || ''
+        } catch (e) {
+          // Can't parse JSON, try text
+          try {
+            const errorText = await response.text()
+            console.error('❌ Import failed (text):', errorText)
+            errorMessage = errorText || errorMessage
+            errorDetail = errorText
+          } catch (e2) {
+            console.error('❌ Import failed (unknown):', e2)
+            errorMessage = `HTTP ${response.status}: ${response.statusText}`
+          }
+        }
+        
+        // Handle 401 Unauthorized specifically
+        if (response.status === 401) {
+          console.error('🔐 Authentication failed:', {
+            status: response.status,
+            errorData,
+            tokenPreview: token.substring(0, 30) + '...'
+          })
+          
+          throw new Error(
+            '🔐 Xác thực thất bại (401 Unauthorized)\n\n' +
+            `Chi tiết: ${errorDetail || 'Token không hợp lệ hoặc đã hết hạn'}\n\n` +
+            '📝 Cách khắc phục:\n' +
+            '1. Nhấn F5 để tải lại trang\n' +
+            '2. Đăng xuất và đăng nhập lại\n' +
+            '3. Xóa localStorage và đăng nhập lại:\n' +
+            '   - Mở DevTools (F12)\n' +
+            '   - Console: localStorage.clear()\n' +
+            '   - Refresh và đăng nhập lại\n\n' +
+            'Nếu vẫn gặp lỗi, liên hệ admin để kiểm tra cấu hình Supabase JWT.'
+          )
+        }
+        
+        // Handle other JWT/token errors
+        const lowerError = errorMessage.toLowerCase()
+        if (lowerError.includes('jwt') || lowerError.includes('token') || lowerError.includes('signature') || lowerError.includes('unauthorized')) {
+          throw new Error(
+            '🔐 Lỗi xác thực token\n\n' +
+            `Chi tiết: ${errorMessage}\n\n` +
+            '📝 Cách khắc phục:\n' +
+            '1. Nhấn F5 để tải lại trang\n' +
+            '2. Đăng xuất và đăng nhập lại\n' +
+            '3. Xóa cache trình duyệt (Ctrl+Shift+Delete)\n\n' +
+            'Nếu vẫn gặp lỗi, liên hệ admin để kiểm tra token configuration.'
+          )
+        }
+        
+        // Generic error
+        throw new Error(
+          `❌ Lỗi khi import (HTTP ${response.status})\n\n` +
+          `${errorMessage}\n\n` +
+          (errorDetail ? `Chi tiết: ${errorDetail}\n\n` : '') +
+          'Vui lòng thử lại hoặc liên hệ admin nếu lỗi vẫn tiếp tục.'
+        )
       }
 
       const result = await response.json()
-      setSuccess(`Đã tạo thành công: ${result.createdCustomers} khách hàng, ${result.createdProjects} dự án, ${result.createdQuotes} báo giá, ${result.createdProducts} sản phẩm`)
+      console.log('✅ Import successful:', result)
       
+      // Create detailed success message
+      const successParts = []
+      if (result.createdCustomers > 0) successParts.push(`✨ ${result.createdCustomers} khách hàng mới`)
+      if (result.createdProjects > 0) successParts.push(`🏗️ ${result.createdProjects} dự án mới`)
+      if (result.createdQuotes > 0) successParts.push(`📄 ${result.createdQuotes} báo giá`)
+      if (result.matchedProducts > 0) successParts.push(`✓ ${result.matchedProducts} sản phẩm có sẵn`)
+      if (result.createdProducts > 0) successParts.push(`✨ ${result.createdProducts} sản phẩm mới`)
+      
+      setSuccess(
+        `🎉 Import thành công!\n\n${successParts.join('\n')}\n\n` +
+        `Báo giá ID: ${result.quoteId}`
+      )
+      
+      // Log detailed matching info
+      if (result.matchedProductDetails && result.matchedProductDetails.length > 0) {
+        console.log('✅ Matched products:', result.matchedProductDetails)
+      }
+      if (result.newProductDetails && result.newProductDetails.length > 0) {
+        console.log('✨ New products created:', result.newProductDetails)
+      }
+      
+      // Clear data and redirect after success
       if (onImportSuccess) {
         setTimeout(() => {
+          handleClearData()
           onImportSuccess()
-        }, 2000)
+        }, 3000)
       }
     } catch (error: any) {
-      console.error('Error importing:', error)
-      setError(error.message || 'Lỗi khi import')
+      console.error('❌ Error importing:', error)
+      
+      let errorMessage = error.message || 'Lỗi khi import'
+      
+      // Add helpful hints for common errors
+      if (errorMessage.includes('JWT') || errorMessage.includes('token') || errorMessage.includes('Phiên đăng nhập')) {
+        errorMessage += '\n\n💡 Hướng dẫn: Nhấn Ctrl+F5 để tải lại trang, sau đó đăng nhập lại.'
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -606,10 +1339,10 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
           <div>
             <h2 className="text-2xl font-bold mb-2 flex items-center">
               <Sparkles className="h-6 w-6 mr-2" />
-              Import Báo giá từ Excel/PDF với AI
+              Import Báo giá từ Excel với AI
             </h2>
             <p className="text-blue-100">
-              Upload file Excel (.xlsx, .xls) hoặc PDF (.pdf) và để AI tự động phân tích, trích xuất thông tin khách hàng và sản phẩm
+              Upload file Excel (.xlsx, .xls) và để AI tự động phân tích, trích xuất thông tin khách hàng và sản phẩm
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -644,7 +1377,7 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls,.pdf"
+              accept=".xlsx,.xls"
             onChange={handleFileSelect}
             onClick={(e) => {
               // Reset value to allow selecting the same file again
@@ -676,15 +1409,23 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               <>
                 <div className="flex items-center space-x-4">
                   <FileSpreadsheet className="h-16 w-16 text-gray-400" />
-                  <FileText className="h-16 w-16 text-gray-400" />
                 </div>
-                <div>
+                <div className="text-center">
                   <span className="text-lg font-medium text-gray-700">
-                    Chọn file Excel hoặc PDF để upload
+                    Chọn file Excel để upload
                   </span>
                   <p className="text-sm text-gray-500 mt-1">
-                    Hỗ trợ .xlsx, .xls, .pdf - AI sẽ tự động phân tích và trích xuất thông tin
+                    Hỗ trợ .xlsx, .xls - AI sẽ tự động phân tích và trích xuất thông tin
                   </p>
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-left">
+                    <p className="text-xs font-semibold text-yellow-900 mb-1">⚠️ Lưu ý quan trọng:</p>
+                    <ul className="text-xs text-yellow-800 space-y-1">
+                      <li>• <strong>Đóng file Excel</strong> trước khi upload</li>
+                      <li>• <strong>Không upload file có tên bắt đầu bằng ~$</strong> (đây là file tạm)</li>
+                      <li>• File phải có <strong>kích thước {'>'} 10KB</strong></li>
+                      <li>• Đảm bảo file có <strong>đầy đủ dữ liệu</strong> báo giá</li>
+                    </ul>
+                  </div>
                 </div>
               </>
             )}
@@ -728,111 +1469,631 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
         </div>
       )}
 
+      {/* Debug Info Panel */}
+      {debugInfo && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="w-full flex items-center justify-between text-left font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+          >
+            <div className="flex items-center space-x-2">
+              <span className="text-lg">🔍</span>
+              <span>Thông tin debug - AI đã quét được gì?</span>
+              {debugInfo.warnings.length > 0 && (
+                <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-yellow-100 text-yellow-800 rounded-full">
+                  {debugInfo.warnings.length} cảnh báo
+                </span>
+              )}
+            </div>
+            {showDebug ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+          </button>
+          
+          {showDebug && (
+            <div className="mt-4 space-y-4">
+              {/* Warnings */}
+              {debugInfo.warnings.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <h4 className="font-bold text-yellow-900 mb-2">⚠️ Cảnh báo:</h4>
+                  <ul className="space-y-1">
+                    {debugInfo.warnings.map((warning, index) => (
+                      <li key={index} className="text-sm text-yellow-800">{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {/* Document Preview */}
+              <div className="bg-white border border-gray-200 rounded-lg p-3">
+                <h4 className="font-bold text-gray-900 mb-2">📄 Thông tin file:</h4>
+                <div className="text-sm text-gray-700 space-y-1">
+                  <p><strong>Độ dài:</strong> {debugInfo.documentPreview.totalLength.toLocaleString()} ký tự</p>
+                  <p><strong>Số dòng:</strong> {debugInfo.documentPreview.lineCount.toLocaleString()} dòng</p>
+                </div>
+                <details className="mt-2">
+                  <summary className="text-sm font-medium text-blue-600 cursor-pointer hover:text-blue-800">
+                    Xem preview dữ liệu (500 ký tự đầu)
+                  </summary>
+                  <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-40 overflow-y-auto">
+                    {debugInfo.documentPreview.first500Chars}
+                  </pre>
+                </details>
+              </div>
+              
+              {/* Extracted Info Summary */}
+              <div className="bg-white border border-gray-200 rounded-lg p-3">
+                <h4 className="font-bold text-gray-900 mb-2">📊 Thông tin đã trích xuất:</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex items-center space-x-2">
+                    {debugInfo.extractedInfo.customerFound ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-red-600">✗</span>
+                    )}
+                    <span className={debugInfo.extractedInfo.customerFound ? 'text-gray-900' : 'text-gray-500'}>
+                      Khách hàng: {debugInfo.extractedInfo.customerName || 'Không tìm thấy'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {debugInfo.extractedInfo.addressFound ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-red-600">✗</span>
+                    )}
+                    <span className={debugInfo.extractedInfo.addressFound ? 'text-gray-900' : 'text-gray-500'}>
+                      Địa chỉ: {debugInfo.extractedInfo.address || 'Không tìm thấy'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {debugInfo.extractedInfo.phoneFound ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-red-600">✗</span>
+                    )}
+                    <span className={debugInfo.extractedInfo.phoneFound ? 'text-gray-900' : 'text-gray-500'}>
+                      SĐT: {debugInfo.extractedInfo.phone || 'Không tìm thấy'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {debugInfo.extractedInfo.supervisorFound ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-red-600">✗</span>
+                    )}
+                    <span className={debugInfo.extractedInfo.supervisorFound ? 'text-gray-900' : 'text-gray-500'}>
+                      Giám sát: {debugInfo.extractedInfo.supervisor || 'Không tìm thấy'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {debugInfo.extractedInfo.dateFound ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-red-600">✗</span>
+                    )}
+                    <span className={debugInfo.extractedInfo.dateFound ? 'text-gray-900' : 'text-gray-500'}>
+                      Ngày: {debugInfo.extractedInfo.date || 'Không tìm thấy'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {debugInfo.extractedInfo.itemsCount > 0 ? (
+                      <span className="text-green-600">✓</span>
+                    ) : (
+                      <span className="text-red-600">✗</span>
+                    )}
+                    <span className={debugInfo.extractedInfo.itemsCount > 0 ? 'text-gray-900' : 'text-gray-500'}>
+                      Items: {debugInfo.extractedInfo.itemsCount}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Items Preview */}
+                {debugInfo.extractedInfo.itemsPreview.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="text-sm font-medium text-blue-600 cursor-pointer hover:text-blue-800">
+                      Xem 3 items đầu tiên
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {debugInfo.extractedInfo.itemsPreview.map((item, index) => (
+                        <div key={index} className="p-2 bg-gray-50 rounded text-xs">
+                          <div className="font-semibold text-gray-900">{item.ten_san_pham}</div>
+                          <div className="text-gray-600">
+                            Loại: {item.loai_san_pham || 'N/A'} | 
+                            SL: {item.so_luong} | 
+                            Đơn giá: {item.don_gia.toLocaleString()} | 
+                            Thành tiền: {item.thanh_tien.toLocaleString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                
+                {/* Financial Summary */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Tổng khối lượng:</span>
+                      <span className={`font-semibold ${debugInfo.extractedInfo.subtotalFound ? 'text-gray-900' : 'text-red-600'}`}>
+                        {debugInfo.extractedInfo.subtotal.toLocaleString()} đ
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">VAT:</span>
+                      <span className={`font-semibold ${debugInfo.extractedInfo.vatFound ? 'text-gray-900' : 'text-gray-500'}`}>
+                        {debugInfo.extractedInfo.taxAmount.toLocaleString()} đ
+                      </span>
+                    </div>
+                    <div className="flex justify-between pt-1 border-t border-gray-200">
+                      <span className="text-gray-900 font-bold">Tổng thanh toán:</span>
+                      <span className={`font-bold ${debugInfo.extractedInfo.totalFound ? 'text-blue-600' : 'text-red-600'}`}>
+                        {debugInfo.extractedInfo.totalAmount.toLocaleString()} đ
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Processing Steps */}
+              <details className="bg-white border border-gray-200 rounded-lg p-3">
+                <summary className="font-bold text-gray-900 cursor-pointer hover:text-blue-600">
+                  🔄 Các bước xử lý ({debugInfo.processingSteps.length} bước)
+                </summary>
+                <div className="mt-2 space-y-1 max-h-60 overflow-y-auto">
+                  {debugInfo.processingSteps.map((step, index) => (
+                    <div key={index} className="text-xs text-gray-700 pl-4 border-l-2 border-gray-200">
+                      {step}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Analyzed Data Display */}
       {analyzedData && (
         <div className="space-y-6">
           {/* Customer Information Card */}
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-            <div className="flex items-center space-x-3 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <User className="h-6 w-6 text-blue-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-900">Thông tin khách hàng</h3>
             </div>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isNewCustomer}
+                  onChange={(e) => {
+                    setIsNewCustomer(e.target.checked)
+                    if (e.target.checked) {
+                      setSelectedCustomerId('')
+                    }
+                  }}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Khách hàng mới</span>
+              </label>
+            </div>
+            
+            {!isNewCustomer && selectedCustomerId && (
+              <div className="mb-4 p-3 bg-green-50 border-2 border-green-300 rounded-lg">
+                <p className="text-sm font-bold text-green-900 flex items-center space-x-2">
+                  <CheckCircle2 className="h-5 w-5" />
+                  <span>✅ AI đã tự động tìm thấy khách hàng có sẵn trong hệ thống</span>
+                </p>
+                <p className="text-xs text-green-700 mt-1">
+                  Hệ thống đã so sánh tên "{customerInfo.name}" với danh sách và tìm thấy khách hàng khớp
+                </p>
+              </div>
+            )}
+            
+            {!isNewCustomer && (
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Chọn khách hàng có sẵn {selectedCustomerId && '(đã tự động chọn)'}
+                </label>
+                <select
+                  value={selectedCustomerId}
+                  onChange={(e) => {
+                    const customer = customers.find(c => c.id === e.target.value)
+                    setSelectedCustomerId(e.target.value)
+                    if (customer) {
+                      setCustomerInfo({
+                        name: customer.name,
+                        address: customerInfo.address || '',
+                        phone: customer.phone || customerInfo.phone || '',
+                        email: customer.email || customerInfo.email || ''
+                      })
+                    }
+                    // Load projects for selected customer
+                    if (e.target.value) {
+                      fetchProjects(e.target.value)
+                      setSelectedProjectId('')  // Reset project selection
+                      setIsNewProject(true)
+                    }
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+                >
+                  <option value="">-- Chọn khách hàng --</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} {customer.phone ? `(${customer.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tên khách hàng</label>
-                <div className="text-lg font-semibold text-gray-900">{analyzedData.customer.name}</div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Tên khách hàng <span className="text-red-600 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={customerInfo.name}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-semibold text-gray-900"
+                  placeholder="Nhập tên khách hàng"
+                  required
+                  disabled={!isNewCustomer && selectedCustomerId !== ''}
+                />
               </div>
-              {analyzedData.customer.address && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
-                  <div className="text-gray-900">{analyzedData.customer.address}</div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Địa chỉ</label>
+                <input
+                  type="text"
+                  value={customerInfo.address}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, address: e.target.value })}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+                  placeholder="Nhập địa chỉ khách hàng"
+                />
                 </div>
-              )}
-              {analyzedData.customer.phone && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                  <div className="text-gray-900">{analyzedData.customer.phone}</div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Số điện thoại</label>
+                <input
+                  type="tel"
+                  value={customerInfo.phone}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+                  placeholder="Nhập số điện thoại"
+                />
                 </div>
-              )}
-              {analyzedData.customer.email && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <div className="text-gray-900">{analyzedData.customer.email}</div>
-                </div>
-              )}
+                <label className="block text-sm font-bold text-gray-900 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={customerInfo.email}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, email: e.target.value })}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+                  placeholder="Nhập email"
+                />
+              </div>
             </div>
+            
+            {isNewCustomer && (
+              <div className="mt-3 p-3 bg-blue-50 border-2 border-blue-300 rounded-lg">
+                <p className="text-sm font-bold text-blue-900">
+                  ✨ Khách hàng mới sẽ được tự động tạo khi bạn xác nhận import
+                </p>
+                </div>
+              )}
+            
+            {!customerInfo.name && (
+              <div className="mt-3 p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg">
+                <p className="text-sm font-bold text-yellow-900">
+                  ⚠️ AI không tìm thấy thông tin khách hàng trong file. Vui lòng nhập thủ công.
+                </p>
+            </div>
+            )}
           </div>
 
           {/* Project Information Card */}
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-            <div className="flex items-center space-x-3 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <Building2 className="h-6 w-6 text-purple-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-900">Thông tin dự án</h3>
             </div>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isNewProject}
+                  onChange={(e) => {
+                    setIsNewProject(e.target.checked)
+                    if (e.target.checked) {
+                      setSelectedProjectId('')
+                    }
+                  }}
+                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Dự án mới</span>
+              </label>
+            </div>
+            
+            {!isNewProject && selectedCustomerId && selectedProjectId && (
+              <div className="mb-4 p-3 bg-purple-50 border-2 border-purple-300 rounded-lg">
+                <p className="text-sm font-bold text-purple-900 flex items-center space-x-2">
+                  <CheckCircle2 className="h-5 w-5" />
+                  <span>✅ AI đã tự động tìm thấy dự án có sẵn cho khách hàng này</span>
+                </p>
+                <p className="text-xs text-purple-700 mt-1">
+                  Hệ thống đã so sánh tên "{projectInfo.name}" với danh sách dự án và tìm thấy dự án khớp
+                </p>
+              </div>
+            )}
+            
+            {!isNewProject && selectedCustomerId && (
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Chọn dự án có sẵn {selectedProjectId && '(đã tự động chọn)'}
+                </label>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => {
+                    const project = projects.find(p => p.id === e.target.value)
+                    setSelectedProjectId(e.target.value)
+                    if (project) {
+                      setProjectInfo({
+                        ...projectInfo,
+                        name: project.name
+                      })
+                    }
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 font-medium"
+                >
+                  <option value="">-- Chọn dự án --</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {!isNewProject && !selectedCustomerId && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                <p className="text-sm font-bold text-amber-900">
+                  ⚠️ Vui lòng chọn khách hàng trước để hiển thị danh sách dự án
+                </p>
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tên dự án</label>
-                <div className="text-lg font-semibold text-gray-900">{analyzedData.project.name}</div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Tên dự án <span className="text-red-600 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={projectInfo.name}
+                  onChange={(e) => setProjectInfo({ ...projectInfo, name: e.target.value })}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base font-semibold text-gray-900"
+                  placeholder="Nhập tên dự án"
+                  required
+                  disabled={!isNewProject && selectedProjectId !== ''}
+                />
               </div>
-              {analyzedData.project.address && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ dự án</label>
-                  <div className="text-gray-900">{analyzedData.project.address}</div>
-                </div>
-              )}
-              {analyzedData.project.supervisor && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nhân viên trách nhiệm</label>
-                  <div className="text-gray-900">{analyzedData.project.supervisor}</div>
-                </div>
-              )}
+                <label className="block text-sm font-bold text-gray-900 mb-1">Địa chỉ dự án</label>
+                <input
+                  type="text"
+                  value={projectInfo.address}
+                  onChange={(e) => setProjectInfo({ ...projectInfo, address: e.target.value })}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 font-medium"
+                  placeholder="Nhập địa chỉ dự án"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-gray-900 mb-1">Nhân viên trách nhiệm / Giám sát</label>
+                <select
+                  value={selectedEmployeeId}
+                  onChange={(e) => {
+                    setSelectedEmployeeId(e.target.value)
+                    const employee = employees.find(emp => emp.id === e.target.value)
+                    if (employee) {
+                      setProjectInfo({ ...projectInfo, supervisor: employee.full_name })
+                    }
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-900 font-medium"
+                >
+                  <option value="">-- Chọn nhân viên --</option>
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.full_name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={projectInfo.supervisor}
+                  onChange={(e) => setProjectInfo({ ...projectInfo, supervisor: e.target.value })}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 mt-2 text-gray-900 font-medium"
+                  placeholder="Hoặc nhập tên nhân viên trách nhiệm"
+                />
+              </div>
             </div>
+            
+            {isNewProject && (
+              <div className="mt-3 p-3 bg-purple-50 border-2 border-purple-300 rounded-lg">
+                <p className="text-sm font-bold text-purple-900">
+                  ✨ Dự án mới sẽ được tự động tạo khi bạn xác nhận import
+                </p>
+                </div>
+              )}
+            
+            {!projectInfo.name && (
+              <div className="mt-3 p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg">
+                <p className="text-sm font-bold text-yellow-900">
+                  ⚠️ AI không tìm thấy thông tin dự án trong file. Vui lòng nhập thủ công.
+                </p>
+                </div>
+              )}
           </div>
 
           {/* Quote Items Table */}
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-            <div className="flex items-center space-x-3 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
               <div className="p-2 bg-green-100 rounded-lg">
                 <Package className="h-6 w-6 text-green-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-900">Danh sách hạng mục</h3>
+              </div>
+              <div className="flex items-center space-x-4 text-sm">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span className="text-gray-900 font-semibold">Đã có trong hệ thống</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                  <span className="text-gray-900 font-semibold">Sản phẩm mới</span>
+                </div>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-100">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">STT</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Hạng mục thi công</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">ĐVT</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">SL</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Đơn giá</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Thành tiền</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Trạng thái</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">STT</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Loại SP</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Tên sản phẩm</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Mô tả</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">ĐVT</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase" colSpan={2}>
+                      <div className="text-center">Quy cách</div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Số lượng</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Diện tích (m²)</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Đơn giá</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Thành tiền</th>
+                  </tr>
+                  <tr className="bg-gray-50">
+                    <th colSpan={6}></th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Ngang (m)</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Cao (m)</th>
+                    <th colSpan={4}></th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {analyzedData.items.map((item, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">{item.stt || index + 1}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 max-w-md">
-                        <div className="whitespace-pre-line">{item.hang_muc_thi_cong}</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{item.dvt}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{item.so_luong}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {item.don_gia.toLocaleString('vi-VN')} VNĐ
-                      </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                        {item.thanh_tien.toLocaleString('vi-VN')} VNĐ
-                      </td>
+                  {analyzedData.items.map((item, index) => {
+                    const matchStatus = productMatchStatus.find(m => m.index === index)
+                    const exists = matchStatus?.exists || false
+                    const bgColor = exists ? 'bg-green-50' : 'bg-amber-50'
+                    const borderColor = exists ? 'border-l-4 border-green-500' : 'border-l-4 border-amber-500'
+                    
+                    return (
+                      <tr key={index} className={`hover:bg-gray-100 ${bgColor} ${borderColor}`}>
+                        <td className="px-4 py-3">
+                          {exists ? (
+                            <div className="flex items-center space-x-2">
+                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                              <span className="text-xs font-bold text-green-800">Đã có</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              <AlertCircle className="h-5 w-5 text-amber-600" />
+                              <span className="text-xs font-bold text-amber-800">Tạo mới</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-bold">{item.stt || index + 1}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          {item.loai_san_pham ? (
+                            <div className="font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                              {item.loai_san_pham}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">Chưa phân loại</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          <div className="font-bold text-gray-900">
+                            {item.ten_san_pham || item.hang_muc_thi_cong?.split('\n')[0] || 'Chưa có tên'}
+                          </div>
+                          {matchStatus?.matchedProduct && (
+                            <div className="mt-1 text-xs text-green-700 font-semibold">
+                              ✓ Khớp: {matchStatus.matchedProduct.name}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 max-w-md">
+                          <div className="whitespace-pre-line text-xs leading-relaxed">
+                            {item.mo_ta || item.hang_muc_thi_cong?.split('\n').slice(1).join('\n') || '-'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.dvt || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
+                          {item.ngang != null && item.ngang !== undefined ? (
+                            <span className="font-bold text-blue-700">
+                              {typeof item.ngang === 'number' 
+                                ? item.ngang.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+                                : item.ngang}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
+                          {item.cao != null && item.cao !== undefined ? (
+                            <span className="font-bold text-blue-700">
+                              {typeof item.cao === 'number' 
+                                ? item.cao.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+                                : item.cao}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
+                          <span className="font-bold text-purple-700">
+                            {item.so_luong || 0}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
+                          {item.dien_tich != null && item.dien_tich !== undefined ? (
+                            <span className="font-bold text-green-700">
+                              {typeof item.dien_tich === 'number' 
+                                ? item.dien_tich.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                : item.dien_tich}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-right">
+                          {(item.don_gia || 0).toLocaleString('vi-VN')} VNĐ
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                          {(item.thanh_tien || 0).toLocaleString('vi-VN')} VNĐ
+                        </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
+            
+            {/* Summary of products to be created */}
+            {productMatchStatus.length > 0 && (
+              <div className="mt-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
+                <p className="text-sm font-bold text-amber-900">
+                  📝 Sẽ tự động tạo {productMatchStatus.filter(m => !m.exists).length} sản phẩm mới khi import
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Summary Card */}
@@ -845,52 +2106,198 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tổng tiền</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Tổng tiền</label>
                 <div className="text-2xl font-bold text-gray-900">
-                  {analyzedData.subtotal.toLocaleString('vi-VN')} VNĐ
+                  {(analyzedData.subtotal || 0).toLocaleString('vi-VN')} VNĐ
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">VAT ({analyzedData.tax_rate * 100}%)</label>
-                <div className="text-xl font-semibold text-gray-900">
-                  {analyzedData.tax_amount.toLocaleString('vi-VN')} VNĐ
+                <label className="block text-sm font-bold text-gray-900 mb-1">VAT ({(analyzedData.tax_rate || 0) * 100}%)</label>
+                <div className="text-xl font-bold text-gray-900">
+                  {(analyzedData.tax_amount || 0).toLocaleString('vi-VN')} VNĐ
                 </div>
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tổng thanh toán</label>
-                <div className="text-3xl font-bold text-blue-600">
-                  {analyzedData.total_amount.toLocaleString('vi-VN')} VNĐ
+                <label className="block text-sm font-bold text-gray-900 mb-1">Tổng thanh toán</label>
+                <div className="text-3xl font-extrabold text-blue-700">
+                  {(analyzedData.total_amount || 0).toLocaleString('vi-VN')} VNĐ
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Notes & Terms Card */}
+          {(analyzedData.notes || analyzedData.terms) && (
+            <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-yellow-100 rounded-lg">
+                  <FileText className="h-6 w-6 text-yellow-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">Ghi chú & Điều khoản</h3>
+              </div>
+              
+              <div className="space-y-4">
+                {analyzedData.notes && (
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-2">📝 Ghi chú:</h4>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                        {analyzedData.notes}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {analyzedData.terms && (
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-2">📋 Quy trình & Điều khoản:</h4>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                        {analyzedData.terms}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Import Summary */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-300 rounded-lg p-6 shadow-md">
+            <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center space-x-2">
+              <Sparkles className="h-6 w-6 text-blue-600" />
+              <span>Tổng hợp sẽ được tạo khi import</span>
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Customer */}
+              <div className={`p-4 rounded-lg border-2 ${isNewCustomer ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-300'}`}>
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className={`p-2 rounded-lg ${isNewCustomer ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                    <User className={`h-5 w-5 ${isNewCustomer ? 'text-blue-600' : 'text-gray-600'}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase">Khách hàng</p>
+                    <p className={`text-sm font-bold ${isNewCustomer ? 'text-blue-700' : 'text-gray-700'}`}>
+                      {isNewCustomer ? '✨ Tạo mới' : '✓ Sử dụng có sẵn'}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 font-medium truncate" title={customerInfo.name}>
+                  {customerInfo.name || 'Chưa có tên'}
+                </p>
+              </div>
+              
+              {/* Project */}
+              <div className={`p-4 rounded-lg border-2 ${isNewProject ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-300'}`}>
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className={`p-2 rounded-lg ${isNewProject ? 'bg-purple-100' : 'bg-gray-100'}`}>
+                    <Building2 className={`h-5 w-5 ${isNewProject ? 'text-purple-600' : 'text-gray-600'}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase">Dự án</p>
+                    <p className={`text-sm font-bold ${isNewProject ? 'text-purple-700' : 'text-gray-700'}`}>
+                      {isNewProject ? '✨ Tạo mới' : '✓ Sử dụng có sẵn'}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 font-medium truncate" title={projectInfo.name}>
+                  {projectInfo.name || 'Chưa có tên'}
+                </p>
+              </div>
+              
+              {/* Products */}
+              <div className="p-4 rounded-lg border-2 bg-amber-50 border-amber-300">
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="p-2 rounded-lg bg-amber-100">
+                    <Package className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase">Sản phẩm mới</p>
+                    <p className="text-sm text-amber-700 font-bold">
+                      ✨ {productMatchStatus.filter(m => !m.exists).length} sản phẩm
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 font-medium">
+                  {productMatchStatus.filter(m => m.exists).length} sản phẩm đã có
+                </p>
+              </div>
+              
+              {/* Quote */}
+              <div className="p-4 rounded-lg border-2 bg-green-50 border-green-300">
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="p-2 rounded-lg bg-green-100">
+                    <FileText className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase">Báo giá</p>
+                    <p className="text-sm text-green-700 font-bold">
+                      ✨ 1 báo giá mới
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 font-medium">
+                  {analyzedData.items.length} hạng mục
+                </p>
+              </div>
+            </div>
+            
+            {/* Warning if no items */}
+            {(!analyzedData.items || analyzedData.items.length === 0) && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-300 rounded-lg">
+                <p className="text-sm font-bold text-red-800">
+                  ⚠️ Chưa có hạng mục nào. Vui lòng kiểm tra lại file hoặc thêm hạng mục thủ công.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-3">
-            <button
-              onClick={handleClearData}
-              className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-semibold flex items-center space-x-2"
-            >
-              <X className="h-5 w-5" />
-              <span>Xóa dữ liệu & Upload khác</span>
-            </button>
-            <button
-              onClick={handleImport}
-              disabled={loading}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold flex items-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span>Đang import...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-5 w-5" />
-                  <span>Xác nhận Import</span>
-                </>
-              )}
-            </button>
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
+            <div className="text-sm text-gray-600">
+              <p className="font-semibold">📌 Sẵn sàng import:</p>
+              <p className="text-xs mt-1">
+                {isNewCustomer ? '✨ Khách hàng mới' : '✓ Khách hàng có sẵn'} • 
+                {isNewProject ? ' ✨ Dự án mới' : ' ✓ Dự án có sẵn'} • 
+                {' '}1 báo giá • {analyzedData.items.length} hạng mục
+              </p>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={handleClearData}
+                className="px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-semibold flex items-center space-x-2 transition-colors"
+              >
+                <X className="h-5 w-5" />
+                <span>Hủy & Upload khác</span>
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={loading || !customerInfo.name || !projectInfo.name || !analyzedData.items || analyzedData.items.length === 0}
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold flex items-center space-x-2 shadow-lg transition-all transform hover:scale-105"
+                title={
+                  !customerInfo.name ? 'Vui lòng nhập tên khách hàng' :
+                  !projectInfo.name ? 'Vui lòng nhập tên dự án' :
+                  !analyzedData.items || analyzedData.items.length === 0 ? 'Chưa có hạng mục nào' :
+                  `Import ${isNewCustomer ? 'khách hàng mới' : 'khách hàng có sẵn'}, ${isNewProject ? 'dự án mới' : 'dự án có sẵn'}, 1 báo giá với ${analyzedData.items.length} hạng mục`
+                }
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Đang import...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5" />
+                    <span>
+                      {isNewCustomer && isNewProject ? 'Tạo mới & Import' : 'Xác nhận Import'}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

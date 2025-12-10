@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Server-side PDF extraction using pdf-parse or similar
+// Force Node.js runtime (not edge) for pdf compatibility
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+// Server-side PDF extraction using pdfjs-dist
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -13,52 +17,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('📄 Extracting text from PDF on server...')
+    console.log('📄 Extracting text from PDF on server using pdfjs-dist...')
     console.log('📊 PDF base64 length:', pdfBase64.length)
     console.log('📁 File name:', fileName)
 
     // Convert base64 to buffer
     const pdfBuffer = Buffer.from(pdfBase64, 'base64')
     
-    // Extract text using pdf-parse
+    // Extract text using pdfjs-dist
     let extractedText = ''
     
     try {
-      console.log('📚 Loading pdf-parse library...')
-      
-      // Try to import pdf-parse
-      let pdfParse: any
-      try {
-        const pdfParseModule = await import('pdf-parse')
-        pdfParse = pdfParseModule.default || pdfParseModule
-        console.log('✅ pdf-parse module loaded successfully')
-      } catch (importError: any) {
-        console.error('❌ Failed to import pdf-parse:', importError)
-        return NextResponse.json(
-          { 
-            error: 'PDF library not available',
-            message: 'Không thể tải thư viện xử lý PDF. Vui lòng liên hệ admin.',
-            details: importError?.message || 'Import error'
-          },
-          { status: 500 }
-        )
-      }
-      
-      if (typeof pdfParse !== 'function') {
-        console.error('❌ pdf-parse is not a function:', typeof pdfParse, pdfParse)
-        return NextResponse.json(
-          { 
-            error: 'PDF library error',
-            message: 'Thư viện PDF không hoạt động đúng. Vui lòng thử lại.',
-            details: 'pdf-parse is not a function'
-          },
-          { status: 500 }
-        )
-      }
-      
-      console.log('✅ pdf-parse function obtained, parsing PDF buffer...')
-      console.log('📊 Buffer size:', pdfBuffer.length, 'bytes')
-      console.log('📊 Buffer first 100 bytes:', pdfBuffer.slice(0, 100).toString('hex'))
+      console.log('📚 Loading PDF with pdfjs-dist...')
       
       // Check if buffer looks like a PDF (should start with %PDF)
       const bufferStart = pdfBuffer.slice(0, 4).toString('ascii')
@@ -73,60 +43,76 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      // Parse PDF with timeout
-      console.log('🔄 Starting PDF parsing...')
-      const parsePromise = pdfParse(pdfBuffer)
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('PDF parsing timeout after 30 seconds')), 30000)
-      )
+      console.log('✅ Buffer verified as PDF, parsing...')
+      console.log('📊 Buffer size:', pdfBuffer.length, 'bytes')
       
-      const pdfData = await Promise.race([parsePromise, timeoutPromise]) as any
+      // Use dynamic import for pdfjs-dist to avoid webpack issues
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
       
-      console.log('✅ PDF parsed successfully')
-      extractedText = pdfData?.text || ''
+      // Load PDF document
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(pdfBuffer),
+        useSystemFonts: true,
+      })
+      
+      const pdfDoc = await loadingTask.promise
+      console.log(`✅ PDF loaded: ${pdfDoc.numPages} pages`)
+      
+      // Extract text from all pages
+      const textPromises = []
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        textPromises.push(
+          pdfDoc.getPage(pageNum).then(async (page: any) => {
+            const textContent = await page.getTextContent()
+            const pageText = textContent.items
+              .map((item: any) => item.str)
+              .join(' ')
+            return pageText
+          })
+        )
+      }
+      
+      const pageTexts = await Promise.all(textPromises)
+      extractedText = pageTexts.join('\n\n')
+      
       console.log(`✅ PDF text extracted: ${extractedText.length} characters`)
-      console.log(`📄 PDF info: ${pdfData?.numpages || 'unknown'} pages`)
       
       if (!extractedText || extractedText.trim().length === 0) {
         console.warn('⚠️ No text found in PDF - may be scanned image')
-        console.warn('⚠️ PDF metadata:', {
-          numpages: pdfData?.numpages,
-          info: pdfData?.info,
-          metadata: pdfData?.metadata
-        })
       }
-    } catch (pdfParseError: any) {
-      console.error('❌ pdf-parse error:', pdfParseError)
-      console.error('Error type:', typeof pdfParseError)
+    } catch (pdfError: any) {
+      console.error('❌ pdfjs-dist error:', pdfError)
+      console.error('Error type:', typeof pdfError)
       console.error('Error details:', {
-        message: pdfParseError?.message,
-        stack: pdfParseError?.stack?.substring(0, 500),
-        name: pdfParseError?.name,
-        code: pdfParseError?.code
+        message: pdfError?.message,
+        stack: pdfError?.stack?.substring(0, 500),
+        name: pdfError?.name,
+        code: pdfError?.code
       })
       
       // Check if it's a PDF format error
-      const errorMessage = pdfParseError?.message || String(pdfParseError)
+      const errorMessage = pdfError?.message || String(pdfError)
       if (errorMessage.includes('Invalid PDF') || 
           errorMessage.includes('corrupt') ||
           errorMessage.includes('not a PDF') ||
-          errorMessage.includes('PDF')) {
+          errorMessage.includes('PDF structure') ||
+          errorMessage.includes('password')) {
         return NextResponse.json(
           { 
             error: 'Invalid PDF file',
-            message: 'File PDF không hợp lệ hoặc bị hỏng. Vui lòng kiểm tra lại file.',
+            message: 'File PDF không hợp lệ, bị hỏng, hoặc có mật khẩu. Vui lòng kiểm tra lại file.',
             details: errorMessage
           },
           { status: 400 }
         )
       }
       
-      // If pdf-parse fails, return error with helpful message
+      // If parsing fails, return error with helpful message
       return NextResponse.json(
         { 
           error: 'Failed to extract text from PDF',
           message: 'Không thể trích xuất text từ PDF. File có thể là PDF scan (hình ảnh) hoặc không có text layer. Vui lòng sử dụng PDF có text.',
-          details: errorMessage || 'pdf-parse library error'
+          details: errorMessage || 'PDF parsing error'
         },
         { status: 500 }
       )

@@ -49,6 +49,15 @@ const nextConfig: NextConfig = {
     // Ensure proper module resolution
     config.resolve.fullySpecified = false;
     
+    // Server-side: handle pdfjs-dist and other Node.js modules
+    if (isServer) {
+      // Ensure pdfjs-dist is properly handled
+      // It should be bundled, not externalized
+      if (!config.externals) {
+        config.externals = []
+      }
+    }
+    
     // Client-side fallbacks
     if (!isServer) {
       config.resolve.fallback = {
@@ -56,6 +65,8 @@ const nextConfig: NextConfig = {
         fs: false,
         net: false,
         tls: false,
+        path: false,
+        crypto: false,
       };
     }
     
