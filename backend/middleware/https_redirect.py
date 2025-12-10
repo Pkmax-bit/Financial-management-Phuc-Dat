@@ -27,10 +27,11 @@ class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
             # Build HTTPS URL
             https_url = url.replace(scheme="https")
             
-            # Return 301 Permanent Redirect
+            # Return 308 Permanent Redirect (preserves HTTP method)
+            # 308 keeps POST as POST, unlike 301 which changes to GET
             return RedirectResponse(
                 url=str(https_url),
-                status_code=301
+                status_code=308
             )
         
         # HTTPS request - proceed normally

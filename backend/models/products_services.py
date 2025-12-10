@@ -14,15 +14,16 @@ class ProductServiceType(str, Enum):
 class ProductService(BaseModel):
     """Product/Service model"""
     id: str
-    code: str
+    code: Optional[str] = None
     name: str
     description: Optional[str] = None
-    type: ProductServiceType
-    unit: str = "piece"
-    price: float
+    type: Optional[str] = None  # Changed from ProductServiceType to str to allow None
+    unit: Optional[str] = "piece"
+    price: Optional[float] = 0.0
     cost: Optional[float] = None
-    tax_rate: float = 0.0
+    tax_rate: Optional[float] = 0.0
     category: Optional[str] = None
+    category_id: Optional[str] = None
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
@@ -38,6 +39,7 @@ class ProductServiceCreate(BaseModel):
     cost: Optional[float] = None
     tax_rate: float = 0.0
     category: Optional[str] = None
+    category_id: Optional[str] = None
 
 class ProductServiceUpdate(BaseModel):
     """Product/Service update model"""
@@ -50,4 +52,5 @@ class ProductServiceUpdate(BaseModel):
     cost: Optional[float] = None
     tax_rate: Optional[float] = None
     category: Optional[str] = None
+    category_id: Optional[str] = None
     is_active: Optional[bool] = None

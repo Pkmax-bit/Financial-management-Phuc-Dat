@@ -142,6 +142,55 @@ export default function ProjectTimeline({ projectId, projectName, currentUser }:
     }
   }
 
+  const handleDownloadAllFiles = async () => {
+    try {
+      const totalFiles = timelineEntries.reduce((total, entry) => total + entry.attachments.length, 0)
+      if (totalFiles === 0) {
+        alert('Không có file nào để tải xuống')
+        return
+      }
+
+      // Show loading state
+      const confirmDownload = window.confirm(`Bạn có muốn tải xuống tất cả ${totalFiles} file đính kèm?`)
+      if (!confirmDownload) return
+
+      setLoading(true)
+      
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/timeline/download-all`))
+      
+      if (!response.ok) {
+        throw new Error('Failed to download files')
+      }
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = `${projectName}_timeline_files.zip`
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      }
+      
+      // Create blob and download
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download files')
+      alert('Lỗi khi tải xuống file: ' + (err instanceof Error ? err.message : 'Unknown error'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const uploadFileToAPI = async (file: File): Promise<Attachment> => {
     try {
       // Check file size (max 5MB)
@@ -408,13 +457,25 @@ export default function ProjectTimeline({ projectId, projectName, currentUser }:
           <h3 className="text-xl font-semibold text-gray-900">Timeline dự án</h3>
           <p className="text-gray-600">Theo dõi tiến độ và ghi nhận thời gian dự án {projectName}</p>
         </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Thêm mục timeline
-        </button>
+        <div className="flex items-center gap-2">
+          {timelineEntries.reduce((total, entry) => total + entry.attachments.length, 0) > 0 && (
+            <button
+              onClick={handleDownloadAllFiles}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              title="Tải tất cả file đính kèm"
+            >
+              <Download className="h-4 w-4" />
+              Tải tất cả file
+            </button>
+          )}
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Thêm mục timeline
+          </button>
+        </div>
       </div>
 
       {/* Timeline Stats */}

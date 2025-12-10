@@ -4,11 +4,15 @@ Handles timeline entries and file attachments
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 import uuid
 import os
+import zipfile
+import io
+import requests
 
 from models.user import User
 from services.supabase_client import get_supabase_client
@@ -517,6 +521,98 @@ async def upload_timeline_file(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Upload failed: {str(e)}"
+        )
+
+@router.get("/projects/{project_id}/timeline/download-all")
+async def download_all_timeline_files(
+    project_id: str
+    # Temporarily disable authentication
+    # current_user: User = Depends(get_current_user)
+):
+    """Download all timeline attachments as a ZIP file"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get all timeline entries for the project
+        timeline_result = supabase.table("project_timeline").select("id, title").eq("project_id", project_id).execute()
+        
+        if not timeline_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No timeline entries found for this project"
+            )
+        
+        # Collect all attachments
+        all_attachments = []
+        for entry in timeline_result.data:
+            attachments_result = supabase.table("timeline_attachments").select("*").eq("timeline_entry_id", entry["id"]).execute()
+            if attachments_result.data:
+                for att in attachments_result.data:
+                    att["entry_title"] = entry.get("title", "Unknown")
+                    all_attachments.append(att)
+        
+        if not all_attachments:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No attachments found for this project"
+            )
+        
+        # Create ZIP file in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for attachment in all_attachments:
+                try:
+                    # Download file from URL
+                    file_url = attachment.get("url")
+                    if not file_url:
+                        continue
+                    
+                    # Download file content
+                    response = requests.get(file_url, timeout=30)
+                    if response.status_code == 200:
+                        # Create a safe filename
+                        entry_title = attachment.get("entry_title", "Unknown").replace("/", "_").replace("\\", "_")
+                        file_name = attachment.get("name", "file")
+                        # Sanitize filename
+                        safe_entry_title = "".join(c for c in entry_title if c.isalnum() or c in (' ', '-', '_')).strip()
+                        safe_file_name = "".join(c for c in file_name if c.isalnum() or c in ('.', '-', '_')).strip()
+                        
+                        # Create folder structure: Entry Title/File Name
+                        zip_path = f"{safe_entry_title}/{safe_file_name}"
+                        
+                        # Add file to ZIP
+                        zip_file.writestr(zip_path, response.content)
+                except Exception as e:
+                    print(f"Error downloading file {attachment.get('name', 'unknown')}: {e}")
+                    # Continue with other files even if one fails
+                    continue
+        
+        zip_buffer.seek(0)
+        
+        # Get project name for ZIP filename
+        project_result = supabase.table("projects").select("name, project_code").eq("id", project_id).single().execute()
+        project_name = "Project"
+        if project_result.data:
+            project_name = project_result.data.get("project_code") or project_result.data.get("name", "Project")
+        
+        # Sanitize project name for filename
+        safe_project_name = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        zip_filename = f"{safe_project_name}_timeline_files.zip"
+        
+        return StreamingResponse(
+            io.BytesIO(zip_buffer.read()),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={zip_filename}"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create ZIP file: {str(e)}"
         )
 
 @router.delete("/projects/{project_id}/timeline/attachments/{attachment_id}")

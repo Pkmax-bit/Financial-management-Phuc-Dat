@@ -377,9 +377,10 @@ async def update_customer(
 @router.delete("/{customer_id}")
 async def delete_customer(
     customer_id: str,
+    hard_delete: bool = Query(False, description="Permanently delete customer from database"),
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Delete customer permanently from database (hard delete)"""
+    """Delete customer (soft delete by default, hard delete if hard_delete=true)"""
     try:
         supabase = get_supabase_client()
         
@@ -399,26 +400,43 @@ async def delete_customer(
                 detail="Cannot delete customer with active projects. Please complete or cancel projects first."
             )
         
-        # Check if customer has invoices
-        invoices = supabase.table("invoices").select("id").eq("customer_id", customer_id).limit(1).execute()
-        if invoices.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete customer with existing invoices. Please handle invoices first."
-            )
-        
-        # Hard delete - permanently remove from database
-        result = supabase.table("customers").delete().eq("id", customer_id).execute()
-        
-        # Verify deletion
-        verify = supabase.table("customers").select("id").eq("id", customer_id).execute()
-        if verify.data:
+        if hard_delete:
+            # Hard delete - permanently remove from database
+            # Check for any related records that might prevent deletion
+            invoices = supabase.table("invoices").select("id").eq("customer_id", customer_id).limit(1).execute()
+            quotes = supabase.table("quotes").select("id").eq("customer_id", customer_id).limit(1).execute()
+            projects = supabase.table("projects").select("id").eq("customer_id", customer_id).limit(1).execute()
+            
+            if invoices.data or quotes.data or projects.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot permanently delete customer with existing invoices, quotes, or projects. Please use soft delete instead."
+                )
+            
+            # Permanently delete customer
+            result = supabase.table("customers").delete().eq("id", customer_id).execute()
+            
+            if result.data:
+                return {"message": "Customer permanently deleted successfully"}
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to permanently delete customer"
+                )
+        else:
+            # Soft delete by setting status to inactive
+            result = supabase.table("customers").update({
+                "status": "inactive",
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", customer_id).execute()
+            
+            if result.data:
+                return {"message": "Customer deleted successfully (soft delete)"}
+            
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to delete customer"
             )
-        
-        return {"message": "Customer deleted successfully"}
         
     except HTTPException:
         raise

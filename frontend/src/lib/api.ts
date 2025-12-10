@@ -336,8 +336,9 @@ export const customerApi = {
   },
 
   // Delete customer
-  deleteCustomer: (id: string) => {
-    return apiDelete(`/api/customers/${id}`)
+  deleteCustomer: (id: string, hardDelete: boolean = false) => {
+    const url = `/api/customers/${id}${hardDelete ? '?hard_delete=true' : ''}`
+    return apiDelete(url)
   },
 
   // Get customer statistics
