@@ -230,7 +230,7 @@ app.include_router(expense_objects.router, prefix="/api/expense-objects", tags=[
 app.include_router(expense_snapshots.router, prefix="/api/expense-snapshots", tags=["Expense Snapshots"])
 app.include_router(expense_restore.router, prefix="/api/expense-restore", tags=["Expense Restore"])
 app.include_router(system_feedback.router, tags=["System Feedback"])
-app.include_router(product_import.router, prefix="/api/sales/products", tags=["Product Import"])
+app.include_router(product_import.router, prefix="/api/sales/products/import", tags=["Product Import"])
 app.include_router(material_adjustment_rules.router, prefix="/api/material-adjustment-rules", tags=["Material Adjustment Rules"])
 app.include_router(file_upload.router, tags=["File Upload"])
 app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
