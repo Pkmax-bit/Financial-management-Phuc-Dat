@@ -123,25 +123,40 @@ def _fetch_task_checklists(supabase, task_id: str) -> List[TaskChecklist]:
 def _fetch_task_time_logs(supabase, task_id: str) -> List[TaskTimeLog]:
     logs_result = (
         supabase.table("task_time_logs")
-        .select("""
-            *,
-            users:user_id(id, full_name)
-        """)
+        .select("*")
         .eq("task_id", task_id)
         .order("start_time", desc=False)
         .execute()
     )
 
     enriched_logs = []
-    for log in logs_result.data or []:
-        user = log.get("users")
-        if user:
-            log["user_name"] = user.get("full_name")
-        start_dt = _parse_iso_datetime(log.get("start_time"))
-        end_dt = _parse_iso_datetime(log.get("end_time"))
-        if start_dt:
-            log["duration_minutes"] = _calculate_duration_minutes(start_dt, end_dt)
-        enriched_logs.append(log)
+    if logs_result.data:
+        # Get all unique user_ids from logs
+        user_ids = [log.get("user_id") for log in logs_result.data if log.get("user_id")]
+        user_ids = list(set(user_ids))  # Remove duplicates
+        
+        # Fetch all users at once to avoid N+1 queries
+        user_map = {}
+        if user_ids:
+            try:
+                users_result = supabase.table("users").select("id, full_name").in_("id", user_ids).execute()
+                if users_result.data:
+                    user_map = {user["id"]: user.get("full_name") for user in users_result.data}
+            except Exception:
+                pass  # If users query fails, continue without user names
+        
+        # Enrich logs with user names
+        for log in logs_result.data:
+            user_id = log.get("user_id")
+            if user_id and user_id in user_map:
+                log["user_name"] = user_map[user_id]
+            
+            start_dt = _parse_iso_datetime(log.get("start_time"))
+            end_dt = _parse_iso_datetime(log.get("end_time"))
+            if start_dt:
+                log["duration_minutes"] = _calculate_duration_minutes(start_dt, end_dt)
+            enriched_logs.append(log)
+    
     return enriched_logs
 
 
@@ -188,22 +203,34 @@ def _fetch_task_notes(supabase, task_id: str, current_user_id: Optional[str] = N
     """Fetch task notes with visibility filtering based on user permissions"""
     notes_result = (
         supabase.table("task_notes")
-        .select("""
-            *,
-            users:created_by(id, full_name)
-        """)
+        .select("*")
         .eq("task_id", task_id)
         .order("created_at", desc=True)
         .execute()
     )
     
+    # Get all unique created_by user_ids from notes
+    user_map = {}
+    if notes_result.data:
+        user_ids = [note.get("created_by") for note in notes_result.data if note.get("created_by")]
+        user_ids = list(set(user_ids))  # Remove duplicates
+        
+        # Fetch all users at once to avoid N+1 queries
+        if user_ids:
+            try:
+                users_result = supabase.table("users").select("id, full_name").in_("id", user_ids).execute()
+                if users_result.data:
+                    user_map = {user["id"]: user.get("full_name") for user in users_result.data}
+            except Exception:
+                pass  # If users query fails, continue without user names
+    
     if not current_user_id:
         # If no user context, return all notes (for internal use)
         notes = []
         for note in notes_result.data or []:
-            user = note.get("users")
-            if user:
-                note["created_by_name"] = user.get("full_name")
+            created_by = note.get("created_by")
+            if created_by and created_by in user_map:
+                note["created_by_name"] = user_map[created_by]
             notes.append(note)
         return notes
     
@@ -238,12 +265,11 @@ def _fetch_task_notes(supabase, task_id: str, current_user_id: Optional[str] = N
     # Filter notes based on visibility
     filtered_notes = []
     for note in notes_result.data or []:
-        user = note.get("users")
-        if user:
-            note["created_by_name"] = user.get("full_name")
+        created_by = note.get("created_by")
+        if created_by and created_by in user_map:
+            note["created_by_name"] = user_map[created_by]
         
         visibility = note.get("visibility", "task")
-        created_by = note.get("created_by")
         
         # Private notes: only creator can see
         if visibility == "private":
