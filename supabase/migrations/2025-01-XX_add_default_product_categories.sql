@@ -27,3 +27,4 @@ SELECT COUNT(*) as total_categories FROM product_categories WHERE is_active = tr
 
 
 
+
