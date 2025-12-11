@@ -42,7 +42,8 @@ import {
   Users,
   FileSpreadsheet,
   FileType,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -1153,6 +1154,24 @@ export default function TaskDetailPage() {
                   <MessageSquare className="h-4 w-4 text-blue-600" /> Trao đổi
                 </h3>
                 <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Get or create conversation for this task
+                        const conversation = await apiGet(`/api/chat/tasks/${taskId}/conversation`)
+                        // Open chat page with conversation ID
+                        router.push(`/chat?conversation=${conversation.id}`)
+                      } catch (error) {
+                        console.error('Error opening chat:', error)
+                        alert('Không thể mở chat. Vui lòng thử lại.')
+                      }
+                    }}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-colors bg-blue-500 text-white hover:bg-blue-600"
+                    title="Mở chat nội bộ cho nhiệm vụ này"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Mở Chat
+                  </button>
                   <button onClick={() => setChatFilter(chatFilter === 'all' ? 'pinned' : 'all')} className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${chatFilter === 'pinned' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
                     {chatFilter === 'pinned' ? 'Đang xem ghim' : 'Ghim'}
                   </button>

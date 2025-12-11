@@ -20,7 +20,8 @@ import {
   TestTube,
   Camera,
   Lock,
-  CheckSquare
+  CheckSquare,
+  MessageSquare
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
@@ -92,6 +93,12 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       href: '/notifications',
       icon: Bell,
       description: 'Thông báo hệ thống và cập nhật'
+    },
+    {
+      name: 'Chat nội bộ',
+      href: '/chat',
+      icon: MessageSquare,
+      description: 'Tin nhắn nội bộ giữa nhân viên'
     },
   ]
 
