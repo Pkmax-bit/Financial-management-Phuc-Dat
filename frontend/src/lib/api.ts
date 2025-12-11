@@ -198,6 +198,33 @@ export const employeeApi = {
   // Create sample data
   createSampleEmployees: () => {
     return apiPost('/api/employees/create-sample', {})
+  },
+
+  // Upload avatar for employee
+  uploadAvatar: async (employeeId: string, file: File): Promise<{ url: string }> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      throw new Error('No authentication token')
+    }
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const response = await fetch(`${API_BASE_URL}/api/upload/avatars/employees/${employeeId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: formData
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }))
+      throw new Error(error.detail || 'Failed to upload avatar')
+    }
+
+    return response.json()
   }
 }
 

@@ -89,6 +89,7 @@ class EmployeeUpdate(BaseModel):
     salary: Optional[float] = Field(None, ge=0)
     status: Optional[EmploymentStatus] = None
     manager_id: Optional[str] = None
+    avatar_url: Optional[str] = None
     
     @field_validator('first_name', 'last_name')
     @classmethod

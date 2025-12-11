@@ -24,11 +24,19 @@ class ConversationBase(BaseModel):
     name: Optional[str] = None
     type: ConversationType = ConversationType.DIRECT
     avatar_url: Optional[str] = None
+    background_url: Optional[str] = None
     task_id: Optional[str] = None  # Liên kết với task
+    project_id: Optional[str] = None  # Liên kết với dự án
 
 
 class ConversationCreate(ConversationBase):
     participant_ids: List[str]  # Danh sách user_id tham gia
+
+
+class ConversationUpdate(BaseModel):
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    background_url: Optional[str] = None
 
 
 class Conversation(ConversationBase):
@@ -40,7 +48,6 @@ class Conversation(ConversationBase):
     last_message_preview: Optional[str] = None
     participant_count: Optional[int] = None
     unread_count: Optional[int] = None
-    task_id: Optional[str] = None
 
 
 class ConversationWithParticipants(Conversation):
@@ -69,7 +76,8 @@ class MessageBase(BaseModel):
 
 
 class MessageCreate(MessageBase):
-    conversation_id: str
+    # conversation_id is provided in the URL path, not in the body
+    pass
 
 
 class Message(MessageBase):

@@ -6,7 +6,9 @@ export interface Conversation {
   name?: string
   type: ConversationType
   avatar_url?: string
+  background_url?: string
   task_id?: string
+  project_id?: string
   created_by?: string
   created_at: string
   updated_at: string
@@ -82,5 +84,7 @@ export interface ConversationCreate {
   type?: ConversationType
   avatar_url?: string
   participant_ids: string[]
+  task_id?: string
+  project_id?: string
 }
 

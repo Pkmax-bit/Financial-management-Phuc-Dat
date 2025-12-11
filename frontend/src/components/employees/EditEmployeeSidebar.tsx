@@ -10,7 +10,9 @@ import {
   Building2,
   Briefcase,
   Calendar,
-  DollarSign
+  DollarSign,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react'
 import { employeeApi } from '@/lib/api'
 
@@ -58,6 +60,9 @@ export default function EditEmployeeSidebar({ isOpen, onClose, onSuccess, employ
   const [filteredPositions, setFilteredPositions] = useState<Position[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   // Form data
   const [formData, setFormData] = useState({
@@ -86,6 +91,15 @@ export default function EditEmployeeSidebar({ isOpen, onClose, onSuccess, employ
         salary: employee.salary?.toString() || '',
         status: employee.status || 'active'
       })
+      
+      // Set avatar preview if employee has avatar_url
+      const employeeWithAvatar = employee as Employee & { avatar_url?: string }
+      if (employeeWithAvatar.avatar_url) {
+        setAvatarPreview(employeeWithAvatar.avatar_url)
+      } else {
+        setAvatarPreview(null)
+      }
+      setAvatarFile(null)
       
       fetchDepartments()
       fetchPositions()
@@ -126,6 +140,32 @@ export default function EditEmployeeSidebar({ isOpen, onClose, onSuccess, employ
     }
   }
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Vui lòng chọn file ảnh')
+        return
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Kích thước ảnh không được vượt quá 5MB')
+        return
+      }
+      
+      setAvatarFile(file)
+      
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -162,6 +202,27 @@ export default function EditEmployeeSidebar({ isOpen, onClose, onSuccess, employ
       }
 
       console.log('Updating employee via API with data:', updateData)
+
+      // Upload avatar if provided
+      if (avatarFile) {
+        try {
+          setUploadingAvatar(true)
+          const avatarResult = await employeeApi.uploadAvatar(employee.id, avatarFile)
+          console.log('Avatar uploaded successfully:', avatarResult)
+          
+          // Update employee with avatar_url
+          if (avatarResult.url) {
+            updateData.avatar_url = avatarResult.url
+          }
+        } catch (avatarError: any) {
+          console.error('Error uploading avatar:', avatarError)
+          setError(`Có lỗi khi upload ảnh đại diện: ${avatarError.message}`)
+          setUploadingAvatar(false)
+          return
+        } finally {
+          setUploadingAvatar(false)
+        }
+      }
 
       // Use API to update employee
       const result = await employeeApi.updateEmployee(employee.id, updateData)
@@ -222,6 +283,60 @@ export default function EditEmployeeSidebar({ isOpen, onClose, onSuccess, employ
               <p className="text-sm text-red-800 font-semibold">{error}</p>
             </div>
           )}
+
+          {/* Avatar Upload */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Ảnh đại diện</h3>
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                {avatarPreview ? (
+                  <div className="relative">
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar preview"
+                      className="w-32 h-32 rounded-full object-cover border-4 border-blue-200 shadow-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarFile(null)
+                        // Reset to original avatar if exists
+                        const employeeWithAvatar = employee as Employee & { avatar_url?: string }
+                        setAvatarPreview(employeeWithAvatar.avatar_url || null)
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                      disabled={submitting || uploadingAvatar}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gray-100 border-4 border-gray-300 flex items-center justify-center">
+                    <ImageIcon className="w-12 h-12 text-gray-400" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Chọn ảnh đại diện (tùy chọn)
+                </label>
+                <label className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors">
+                  <Upload className="w-4 h-4 mr-2" />
+                  {avatarFile ? 'Đổi ảnh' : 'Chọn ảnh'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                    disabled={submitting || uploadingAvatar}
+                  />
+                </label>
+                <p className="text-xs text-gray-500 mt-2">
+                  Hỗ trợ: JPG, PNG, GIF. Kích thước tối đa: 5MB
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Basic Information */}
           <div>
@@ -420,10 +535,10 @@ export default function EditEmployeeSidebar({ isOpen, onClose, onSuccess, employ
             <button
               type="submit"
               className="inline-flex items-center px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 border border-transparent rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
-              disabled={submitting}
+              disabled={submitting || uploadingAvatar}
             >
               <Save className="h-4 w-4 mr-2" />
-              {submitting ? 'Đang cập nhật...' : 'Cập nhật nhân viên'}
+              {uploadingAvatar ? 'Đang upload ảnh...' : submitting ? 'Đang cập nhật...' : 'Cập nhật nhân viên'}
             </button>
           </div>
         </form>
