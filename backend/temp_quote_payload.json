@@ -1,0 +1,31 @@
+{
+    "currency": "VND",
+    "customer_id": "de65e209-e840-47cf-a5a3-66cf271c12c4",
+    "description": "",
+    "employee_in_charge_id": "2c52908f-1dc2-4c7f-aa6c-5b1b1980b0a7",
+    "expiry_date": "2026-01-10",
+    "issue_date": "2025-12-11",
+    "items": [
+        {
+            "area": 7.1446,
+            "depth": 2780.0,
+            "description": "Cửa sổ mở quay 3",
+            "length": 2570.0,
+            "name_product": "Cửa sổ mở quay 3",
+            "product_service_id": "346735d9-f598-4e09-b292-81e18ee8503b",
+            "quantity": 1.0,
+            "total_price": 1786150.0,
+            "unit": "cái",
+            "unit_price": 250000.0
+        }
+    ],
+    "project_id": "08fd06ce-01da-42ef-9ec9-b45ea16baf2e",
+    "quote_date": "2025-12-11",
+    "quote_number": "QUO-M-TEST-001",
+    "status": "sent",
+    "subtotal": 1786150.0,
+    "tax_amount": 178615.0,
+    "tax_rate": 10.0,
+    "total_amount": 1964765.0,
+    "valid_until": "2026-01-10"
+}

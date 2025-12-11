@@ -20,7 +20,7 @@ from models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentWithAll
 from models.expense import Expense, ExpenseCreate, ExpenseUpdate
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
-from utils.permissions import require_permission, Permission
+from utils.permissions import require_permission, Permission, PermissionChecker
 from services.supabase_client import get_supabase_client
 from services.journal_service import journal_service
 from services.project_validation_service import ProjectValidationService
@@ -34,6 +34,25 @@ router = APIRouter()
 
 # HELPER FUNCTIONS - Hàm hỗ trợ
 # ============================================================================
+
+def map_quote_from_db(quote_dict: dict) -> dict:
+    """
+    Map quote data from database format to API model format.
+    - expiry_date -> valid_until (for compatibility with Quote model)
+    - quote_date -> issue_date (if issue_date is missing)
+    """
+    if not quote_dict:
+        return quote_dict
+    
+    # Map expiry_date to valid_until (database has expiry_date, model expects valid_until)
+    if "expiry_date" in quote_dict and "valid_until" not in quote_dict:
+        quote_dict["valid_until"] = quote_dict["expiry_date"]
+    
+    # Map quote_date to issue_date if issue_date is missing (for mobile compatibility)
+    if "quote_date" in quote_dict and ("issue_date" not in quote_dict or not quote_dict.get("issue_date")):
+        quote_dict["issue_date"] = quote_dict["quote_date"]
+    
+    return quote_dict
 
 def get_user_accessible_project_ids(supabase, current_user: User) -> List[str]:
     """Get list of project_ids that user has access to via project_team"""
@@ -293,6 +312,9 @@ async def get_quotes(
                 if isinstance(quote.get('issue_date'), datetime):
                     quote['issue_date'] = quote['issue_date'].date()
                 
+                # Map database fields to model fields
+                quote = map_quote_from_db(quote)
+                
                 if isinstance(quote.get('valid_until'), datetime):
                     quote['valid_until'] = quote['valid_until'].date()
                 
@@ -352,6 +374,10 @@ async def get_quote(
             )
         
         quote = result.data[0]
+        
+        # Map database fields to model fields
+        quote = map_quote_from_db(quote)
+        
         project_id = quote.get("project_id")
         
         # Check if user has access to this project
@@ -402,7 +428,7 @@ async def get_quote_items(
 @router.post("/quotes", response_model=Quote)
 async def create_quote(
     quote_data: QuoteCreate,
-    current_user: User = Depends(require_permission(Permission.CREATE_QUOTE))
+    current_user: User = Depends(PermissionChecker(Permission.CREATE_QUOTE))
 ):
     """Create a new quote"""
     try:
@@ -426,6 +452,47 @@ async def create_quote(
         
         # Create quote record
         quote_dict = quote_data.dict()
+        
+        # Remove fields that are not in the quotes table
+        if "items" in quote_dict:
+            del quote_dict["items"]
+        if "terms" in quote_dict:
+            del quote_dict["terms"]
+        if "discount_rate" in quote_dict:
+            del quote_dict["discount_rate"]
+        if "discount_amount" in quote_dict:
+            del quote_dict["discount_amount"]
+        if "product_components" in quote_dict:
+            del quote_dict["product_components"]
+        
+        # Map description to notes (for mobile compatibility)
+        if "description" in quote_dict:
+            if "notes" not in quote_dict or not quote_dict["notes"]:
+                quote_dict["notes"] = quote_dict["description"]
+            del quote_dict["description"]
+        
+        # Map quote_date to issue_date (for mobile compatibility)
+        if "quote_date" in quote_dict and quote_dict["quote_date"]:
+            if "issue_date" not in quote_dict or not quote_dict["issue_date"]:
+                quote_dict["issue_date"] = quote_dict["quote_date"]
+            del quote_dict["quote_date"]
+        
+        # Map valid_until to expiry_date (for mobile compatibility)
+        # Handle both expiry_date and valid_until - database may have both columns
+        # Priority: expiry_date > valid_until (mobile sends both, web sends valid_until)
+        expiry_value = None
+        if "expiry_date" in quote_dict and quote_dict["expiry_date"]:
+            expiry_value = quote_dict["expiry_date"]
+        elif "valid_until" in quote_dict and quote_dict["valid_until"]:
+            expiry_value = quote_dict["valid_until"]
+        
+        # Set both expiry_date and valid_until to ensure compatibility
+        # Database may have both columns, and valid_until might have NOT NULL constraint
+        if expiry_value:
+            quote_dict["expiry_date"] = expiry_value
+            quote_dict["valid_until"] = expiry_value  # Set both to same value for compatibility
+        # If neither exists, this will cause an error which is expected (required field)
+            
         quote_dict["id"] = str(uuid.uuid4())
         quote_dict["tax_amount"] = tax_amount
         quote_dict["total_amount"] = total_amount
@@ -436,10 +503,34 @@ async def create_quote(
         quote_dict["created_at"] = datetime.utcnow().isoformat()
         quote_dict["updated_at"] = datetime.utcnow().isoformat()
         
+        # Helper to convert date to string for JSON serialization
+        if quote_dict.get("issue_date"):
+            if isinstance(quote_dict["issue_date"], str):
+                # Already a string, keep as is
+                pass
+            else:
+                quote_dict["issue_date"] = quote_dict["issue_date"].isoformat()
+        if quote_dict.get("expiry_date"):
+            if isinstance(quote_dict["expiry_date"], str):
+                # Already a string, keep as is
+                pass
+            else:
+                quote_dict["expiry_date"] = quote_dict["expiry_date"].isoformat()
+        # Also ensure valid_until is a string if it exists
+        if quote_dict.get("valid_until"):
+            if isinstance(quote_dict["valid_until"], str):
+                # Already a string, keep as is
+                pass
+            else:
+                quote_dict["valid_until"] = quote_dict["valid_until"].isoformat()
+        
         result = supabase.table("quotes").insert(quote_dict).execute()
         
         if result.data:
             quote = result.data[0]
+            
+            # Map database fields to model fields before returning
+            quote = map_quote_from_db(quote)
             
             # Handle quote items if provided
             if quote_data.items:
@@ -534,7 +625,7 @@ async def delete_quote(
 async def update_quote(
     quote_id: str,
     quote_data: QuoteUpdate,
-    current_user: User = Depends(require_permission(Permission.EDIT_QUOTE))
+    current_user: User = Depends(PermissionChecker(Permission.EDIT_QUOTE))
 ):
     """Update a quote"""
     try:
@@ -568,7 +659,8 @@ async def update_quote(
         result = supabase.table("quotes").update(update_dict).eq("id", quote_id).execute()
         
         if result.data:
-            return Quote(**result.data[0])
+            quote = map_quote_from_db(result.data[0])
+            return Quote(**quote)
         
         raise HTTPException(
             status_code=400,
