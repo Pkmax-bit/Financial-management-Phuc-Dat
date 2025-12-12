@@ -1221,6 +1221,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                   <div ref={messagesEndRef} />
                 </div>
               )}
+              </div>
             </div>
 
               {/* Input Area - Zalo Style */}
