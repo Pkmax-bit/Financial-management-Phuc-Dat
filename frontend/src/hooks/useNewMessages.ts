@@ -61,13 +61,36 @@ export function useNewMessages({ currentUserId, enabled = true }: UseNewMessages
               // Update unread count
               await loadUnreadCount()
               
-              // Show browser notification if permission granted
-              if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('Tin nhắn mới', {
-                  body: newMessage.message_text || 'Có tin nhắn mới',
-                  icon: '/favicon.ico',
-                  tag: `message-${newMessage.id}`,
-                })
+              // Get conversation details for notification
+              try {
+                const convResponse = await apiGet(`/api/chat/conversations/${newMessage.conversation_id}`)
+                const conversation = convResponse
+                const conversationName = conversation?.name || 'Cuộc trò chuyện'
+                const senderName = newMessage.sender_name || 'Người dùng'
+                
+                // Show browser notification if permission granted
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  const notificationTitle = conversation?.type === 'group' 
+                    ? `${senderName} trong ${conversationName}`
+                    : senderName
+                  
+                  new Notification(notificationTitle, {
+                    body: newMessage.message_text || (newMessage.file_url ? 'Đã gửi file' : 'Có tin nhắn mới'),
+                    icon: '/favicon.ico',
+                    tag: `message-${newMessage.id}`,
+                    badge: '/favicon.ico',
+                    requireInteraction: false,
+                  })
+                }
+              } catch (error) {
+                // Fallback notification if can't get conversation details
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  new Notification('Tin nhắn mới', {
+                    body: newMessage.message_text || 'Có tin nhắn mới',
+                    icon: '/favicon.ico',
+                    tag: `message-${newMessage.id}`,
+                  })
+                }
               }
             }
           }

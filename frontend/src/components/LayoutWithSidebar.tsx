@@ -33,8 +33,7 @@ import {
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
 import BackgroundSettings from './BackgroundSettings'
-import WorkflowFloatingButton from './workflow/WorkflowFloatingButton'
-import ChatBubble from './chat/ChatBubble'
+import FloatingActionsButton from './FloatingActionsButton'
 import { useBackground } from '@/contexts/BackgroundContext'
 import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
 import { supabase } from '@/lib/supabase'
@@ -584,11 +583,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           onClose={() => setShowBackgroundSettings(false)}
         />
 
-        {/* Workflow Floating Button */}
-        <WorkflowFloatingButton />
-
-        {/* Chat Bubble - Global chat notification */}
-        {currentUserId && <ChatBubble currentUserId={currentUserId} />}
+        {/* Floating Actions Button - Combined Workflow and Chat */}
+        {currentUserId && <FloatingActionsButton currentUserId={currentUserId} />}
       </div>
     </SidebarContext.Provider>
   )

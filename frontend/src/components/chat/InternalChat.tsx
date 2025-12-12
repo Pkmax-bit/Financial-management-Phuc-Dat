@@ -264,6 +264,28 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     }
   }, [activeTab, employees.length, loadingEmployees, loadEmployees, conversations.length])
 
+  // Subscribe to all new messages to update conversation list order
+  useEffect(() => {
+    if (!currentUserId) return
+
+    const channel = supabase
+      .channel('all-messages')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'internal_messages',
+        filter: `sender_id=neq.${currentUserId}` // Only listen to messages from others
+      }, (payload) => {
+        // Reload conversations to update last_message_at and sort order
+        loadConversations()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUserId, loadConversations])
+
   // Load messages when conversation changes
   useEffect(() => {
     if (selectedConversation) {
@@ -283,6 +305,8 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
           const newMessage = payload.new as any
           // Reload messages to get updated data with sender info
           fetchMessageDetails(selectedConversation.id)
+          // Reload conversations to update last_message_at and sort order
+          loadConversations()
         })
         .subscribe()
 
@@ -290,7 +314,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
         supabase.removeChannel(channel)
       }
     }
-  }, [selectedConversation?.id, loadMessages, markAsRead, fetchMessageDetails])
+  }, [selectedConversation?.id, loadMessages, markAsRead, fetchMessageDetails, loadConversations])
 
   // Auto scroll to bottom when messages change
   useEffect(() => {
@@ -692,14 +716,39 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     )
   }
 
-  const filteredConversations = useMemo(() => conversations.filter(conv => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      conv.name?.toLowerCase().includes(query) ||
-      conv.last_message_preview?.toLowerCase().includes(query)
-    )
-  }), [conversations, searchQuery])
+  const filteredConversations = useMemo(() => {
+    const filtered = conversations.filter(conv => {
+      if (!searchQuery) return true
+      const query = searchQuery.toLowerCase()
+      return (
+        conv.name?.toLowerCase().includes(query) ||
+        conv.last_message_preview?.toLowerCase().includes(query)
+      )
+    })
+    
+    // Sort by last_message_at (newest first), then by updated_at if last_message_at is not available
+    return filtered.sort((a, b) => {
+      // Get timestamp for comparison - prefer last_message_at, fallback to updated_at
+      const getTimestamp = (conv: Conversation) => {
+        if (conv.last_message_at) {
+          return new Date(conv.last_message_at).getTime()
+        }
+        if (conv.updated_at) {
+          return new Date(conv.updated_at).getTime()
+        }
+        if (conv.created_at) {
+          return new Date(conv.created_at).getTime()
+        }
+        return 0
+      }
+      
+      const timeA = getTimestamp(a)
+      const timeB = getTimestamp(b)
+      
+      // Sort descending (newest first)
+      return timeB - timeA
+    })
+  }, [conversations, searchQuery])
 
   const filteredEmployees = useMemo(() => employees.filter(emp => {
     if (!employeeSearchQuery) return true
@@ -795,7 +844,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
           
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-600 z-10" />
             <input
               type="text"
               placeholder={activeTab === 'conversations' ? 'Tìm kiếm...' : 'Tìm nhân viên...'}
@@ -807,7 +856,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                   setEmployeeSearchQuery(e.target.value)
                 }
               }}
-              className="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0068ff] focus:bg-white focus:border-[#0068ff] transition-all"
+              className="w-full pl-9 pr-3 py-1.5 text-sm bg-white border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0068ff] focus:border-[#0068ff] transition-all text-gray-900 placeholder:text-gray-500"
             />
           </div>
         </div>
@@ -1001,9 +1050,9 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       </div>
 
       {/* Chat Area - Right Side */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {selectedConversation ? (
-          <div>
+          <div className="flex flex-col h-full min-h-0">
             {/* Chat Header */}
             <div className="bg-white border-b border-gray-200 px-3 py-2.5">
               <div className="flex items-center justify-between">
@@ -1066,7 +1115,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
             {/* Messages Area */}
             <div 
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-3 bg-[#f0f2f5] relative"
+              className="flex-1 overflow-y-auto p-3 bg-[#f0f2f5] relative min-h-0"
               style={{
                 backgroundImage: selectedConversation.background_url 
                   ? `url(${selectedConversation.background_url})` 
@@ -1305,7 +1354,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
             </div>
 
               {/* Input Area - Zalo Style */}
-            <div className="bg-white border-t border-gray-200 relative">
+            <div className="bg-white border-t border-gray-200 relative flex-shrink-0">
               {/* Scroll to bottom button */}
               {messages.length > 0 && (
                 <button
@@ -1394,7 +1443,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                 </div>
               )}
 
-              <div className="flex items-end gap-2 p-3">
+              <div className="flex items-end gap-2 p-3 flex-shrink-0">
                 <input
                   ref={fileInputRef}
                   type="file"
