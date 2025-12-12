@@ -4157,37 +4157,65 @@ async def import_quote_from_ai_analysis(
         
         # Helper function to find matching expense object
         def find_expense_object(item: dict, expense_objects: list) -> Optional[str]:
-            """Find matching expense object ID for the item"""
+            """Find matching expense object ID for the item using fuzzy matching"""
             if not expense_objects:
                 return None
             
-            ten_san_pham = str(item.get('ten_san_pham', '')).lower()
-            hang_muc = str(item.get('hang_muc_thi_cong', '')).lower()
-            search_text = f"{ten_san_pham} {hang_muc}".lower()
+            ten_san_pham = str(item.get('ten_san_pham', '')).lower().strip()
+            hang_muc = str(item.get('hang_muc_thi_cong', '')).lower().strip()
+            search_text = f"{ten_san_pham} {hang_muc}".strip()
+            
+            if not search_text:
+                return None
             
             best_match = None
             best_score = 0
             
             for exp_obj in expense_objects:
-                exp_name = str(exp_obj.get('name', '')).lower()
-                exp_desc = str(exp_obj.get('description', '')).lower()
+                exp_name = str(exp_obj.get('name', '')).lower().strip()
+                exp_desc = str(exp_obj.get('description', '')).lower().strip() if exp_obj.get('description') else ''
                 
-                # Check if expense object name or description matches item
+                # Skip if expense object name is empty
+                if not exp_name:
+                    continue
+                
+                # 1. Try exact match first (highest priority)
+                if exp_name == ten_san_pham or exp_name == search_text:
+                    print(f"✅ Exact match found: '{search_text[:50]}' → '{exp_name}' (expense_object_id: {exp_obj['id']})")
+                    return exp_obj['id']
+                
+                # 2. Try contains match (high priority)
                 if exp_name in search_text or search_text in exp_name:
-                    score = len(exp_name)  # Longer match = better
+                    score = len(exp_name) * 1.5  # Longer match = better, with higher weight
                     if score > best_score:
                         best_score = score
                         best_match = exp_obj['id']
+                        print(f"📌 Contains match: '{search_text[:50]}' contains '{exp_name}' (score: {score})")
                 
-                # Also check description
-                if exp_desc and (exp_desc in search_text or search_text in exp_desc):
-                    score = len(exp_desc) * 0.8  # Description match is slightly less important
+                # 3. Try fuzzy matching using similarity (medium priority)
+                similarity = calculate_string_similarity(ten_san_pham, exp_name)
+                if similarity >= 70:  # Minimum 70% similarity
+                    score = similarity * 0.8  # Slightly less important than contains
                     if score > best_score:
                         best_score = score
                         best_match = exp_obj['id']
+                        print(f"🔍 Fuzzy match: '{ten_san_pham}' ~ '{exp_name}' (similarity: {similarity}%, score: {score})")
+                
+                # 4. Also check description (lower priority)
+                if exp_desc:
+                    if exp_desc in search_text or search_text in exp_desc:
+                        score = len(exp_desc) * 0.5  # Description match is less important
+                        if score > best_score:
+                            best_score = score
+                            best_match = exp_obj['id']
+                            print(f"📝 Description match: '{search_text[:50]}' matches description '{exp_desc[:30]}' (score: {score})")
             
             if best_match:
-                print(f"✅ Matched expense object: '{search_text[:50]}' → expense_object_id: {best_match}")
+                matched_obj = next((eo for eo in expense_objects if eo['id'] == best_match), None)
+                matched_name = matched_obj.get('name', 'Unknown') if matched_obj else 'Unknown'
+                print(f"✅ Best match found: '{search_text[:50]}' → '{matched_name}' (expense_object_id: {best_match}, score: {best_score:.2f})")
+            else:
+                print(f"❌ No match found for: '{search_text[:50]}'")
             
             return best_match
         
@@ -4331,11 +4359,25 @@ async def import_quote_from_ai_analysis(
                 if not expense_object_id:
                     print(f"⚠️ Expense object not found for '{product_name_short}', creating new one under 'Đối tượng chi phí khác'")
                     
-                    # Find or create "Đối tượng chi phí khác" parent
+                    # Find or create "Đối tượng chi phí khác" or "Khác" parent
                     other_cost_parent = None
+                    other_cost_names = ['đối tượng chi phí khác', 'chi phí khác', 'khác']
+                    
                     for exp_obj in expense_objects:
-                        if exp_obj.get('name', '').lower() in ['đối tượng chi phí khác', 'chi phí khác', 'khác']:
+                        exp_name_lower = str(exp_obj.get('name', '')).lower().strip()
+                        # Check exact match first
+                        if exp_name_lower in other_cost_names:
                             other_cost_parent = exp_obj['id']
+                            print(f"✅ Found existing 'Khác' parent: '{exp_obj.get('name')}' (ID: {other_cost_parent})")
+                            break
+                        # Also try fuzzy match for similar names
+                        for name_variant in other_cost_names:
+                            similarity = calculate_string_similarity(exp_name_lower, name_variant)
+                            if similarity >= 80:  # 80% similarity threshold
+                                other_cost_parent = exp_obj['id']
+                                print(f"✅ Found similar 'Khác' parent: '{exp_obj.get('name')}' (ID: {other_cost_parent}, similarity: {similarity}%)")
+                                break
+                        if other_cost_parent:
                             break
                     
                     # If parent not found, create it

@@ -76,6 +76,80 @@
   overflow-y: scroll !important;
 }
 
+/* Global Slider Styles - Tự động áp dụng cho tất cả range input */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: #e5e7eb;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+input[type="range"]:hover {
+  background: #d1d5db;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+}
+
+/* Sticky Slider Container - Tự động áp dụng cho tất cả slider */
+.sticky-slider-wrapper {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.sticky-slider-wrapper.sticky-active {
+  position: sticky;
+  z-index: 50;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e5e7eb;
+  margin-left: -16px;
+  margin-right: -16px;
+}
+
+/* Đảm bảo slider trong wrapper vẫn hoạt động bình thường */
+.sticky-slider-wrapper input[type="range"] {
+  margin: 0;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

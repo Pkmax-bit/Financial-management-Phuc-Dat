@@ -88,6 +88,33 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
     }
   }
 
+  // Helper function to get last message preview
+  const getLastMessagePreview = async (conversationId: string, convData?: any): Promise<string | undefined> => {
+    // First try from conversation data
+    if (convData?.last_message_preview) {
+      return convData.last_message_preview
+    }
+    
+    // If not available, try to load from messages
+    try {
+      const messagesResponse = await apiGet(`/api/chat/conversations/${conversationId}/messages?limit=1`)
+      const lastMessage = messagesResponse?.messages?.[0]
+      if (lastMessage) {
+        if (lastMessage.message_type === 'image') {
+          return '📷 Đã gửi một ảnh'
+        } else if (lastMessage.message_type === 'file') {
+          return `📎 ${lastMessage.file_name || 'Đã gửi một file'}`
+        } else {
+          return lastMessage.message_text || 'Có tin nhắn mới'
+        }
+      }
+    } catch (error) {
+      console.error('Error loading last message for preview:', error)
+    }
+    
+    return undefined
+  }
+
   // Load conversations and create bubbles
   const loadConversations = useCallback(async () => {
     try {
@@ -100,19 +127,20 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
       
       for (const conv of conversationsList) {
         if (conv.unread_count && conv.unread_count > 0) {
-          // Get conversation details for avatar
-          let avatar: string | null = null
-          let isGroup = false
-          try {
-            const convDetails = await apiGet(`/api/chat/conversations/${conv.id}`)
-            const avatarData = getConversationAvatar(convDetails, conv)
-            avatar = avatarData.avatar
-            isGroup = avatarData.isGroup
-          } catch (error) {
-            console.error('Error loading conversation details:', error)
-            // Fallback: use avatar_url from conversation list
-            isGroup = conv.type === 'group'
-            avatar = isGroup ? (conv.avatar_url || null) : null
+          // Use data from conversation list (backend already provides participants)
+          // No need to make additional API calls
+          const avatarData = getConversationAvatar(conv, conv)
+          const avatar = avatarData.avatar
+          const isGroup = avatarData.isGroup
+          let lastMessagePreview: string | undefined = conv.last_message_preview || undefined
+          
+          // Only fetch last message preview if not available
+          if (!lastMessagePreview) {
+            try {
+              lastMessagePreview = await getLastMessagePreview(conv.id)
+            } catch (error) {
+              console.error('Error loading last message preview:', error)
+            }
           }
 
           newBubbles.push({
@@ -123,7 +151,7 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
             isOpen: false,
             isClosed: false,
             isGroup: isGroup, // Store group flag for rendering
-            lastMessagePreview: conv.last_message_preview || undefined, // Store last message preview
+            lastMessagePreview: lastMessagePreview, // Store last message preview
           })
         }
       }
@@ -136,11 +164,11 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
         newBubbles.forEach(newBubble => {
           const existing = updated.find(b => b.conversationId === newBubble.conversationId)
           if (existing) {
-            // Update unread count and avatar, but keep isClosed state
+            // Update unread count, avatar, and last message preview, but keep isClosed state
             existing.unreadCount = newBubble.unreadCount
             existing.avatar = newBubble.avatar
             existing.conversationName = newBubble.conversationName
-            existing.lastMessagePreview = newBubble.lastMessagePreview
+            existing.lastMessagePreview = newBubble.lastMessagePreview || existing.lastMessagePreview
             // If was closed but has new messages, show it again
             if (existing.isClosed && newBubble.unreadCount > 0) {
               existing.isClosed = false
@@ -169,14 +197,39 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
     return () => clearInterval(interval)
   }, [loadConversations])
 
-  // Update bubbles when new message arrives
+  // Update bubbles when new message arrives - with real-time preview update
   useEffect(() => {
     if (latestMessage) {
+      // Update the specific bubble's last message preview immediately
+      setChatBubbles(prev => prev.map(bubble => {
+        if (bubble.conversationId === latestMessage.conversation_id) {
+          let preview = ''
+          if (latestMessage.message_type === 'image') {
+            preview = '📷 Đã gửi một ảnh'
+          } else if (latestMessage.message_type === 'file') {
+            preview = `📎 ${latestMessage.file_name || 'Đã gửi một file'}`
+          } else {
+            preview = latestMessage.message_text || 'Có tin nhắn mới'
+          }
+          return {
+            ...bubble,
+            lastMessagePreview: preview,
+            unreadCount: (bubble.unreadCount || 0) + 1
+          }
+        }
+        return bubble
+      }))
+      // Then reload conversations to get updated data
       loadConversations()
     }
   }, [latestMessage, loadConversations])
 
   const handleBubbleClick = (conversationId: string) => {
+    // Save selected conversation to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chat_widget_selected_conversation', conversationId)
+    }
+    
     setOpenWidgets(prev => {
       const newSet = new Set(prev)
       // If widget is already open, just bring it to front
@@ -250,8 +303,11 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
       
       // Bubble doesn't exist, load conversation details
       apiGet(`/api/chat/conversations/${conversationId}`)
-        .then(convData => {
+        .then(async (convData) => {
           const { avatar, isGroup } = getConversationAvatar(convData)
+          
+          // Get last message preview using helper function
+          const lastMessagePreview = await getLastMessagePreview(conversationId, convData)
           
           setChatBubbles(prevBubbles => {
             const alreadyExists = prevBubbles.find(b => b.conversationId === conversationId)
@@ -264,7 +320,7 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
                 isOpen: false,
                 isClosed: false,
                 isGroup,
-                lastMessagePreview: convData?.last_message_preview || undefined
+                lastMessagePreview
               }]
             }
             return prevBubbles
@@ -315,7 +371,7 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
       return prev
     })
 
-    // Load conversation details to get avatar (outside setState)
+      // Load conversation details to get avatar and last message (outside setState)
     try {
       const convData = await apiGet(`/api/chat/conversations/${conversationId}`)
       const { avatar, isGroup } = getConversationAvatar(convData)
@@ -334,14 +390,17 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
         }
       }
       
+      // Get last message preview
+      const lastMessagePreview = await getLastMessagePreview(conversationId, convData)
+      
       // Update or create bubble with avatar
       setChatBubbles(prevBubbles => {
         const exists = prevBubbles.find(b => b.conversationId === conversationId)
         if (exists) {
-          // Update existing bubble with avatar if missing
+          // Update existing bubble with avatar and preview if missing
           return prevBubbles.map(b =>
             b.conversationId === conversationId
-              ? { ...b, avatar: b.avatar || avatar, conversationName, isOpen: false, isClosed: false, lastMessagePreview: convData?.last_message_preview || b.lastMessagePreview }
+              ? { ...b, avatar: b.avatar || avatar, conversationName, isOpen: false, isClosed: false, lastMessagePreview: lastMessagePreview || b.lastMessagePreview }
               : b
           )
         }
@@ -366,7 +425,7 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
           isOpen: false,
           isClosed: false,
           isGroup,
-          lastMessagePreview: convData?.last_message_preview || undefined
+          lastMessagePreview
         })
         
         return newBubbles
@@ -426,8 +485,9 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
       
       // Bubble doesn't exist, load conversation details asynchronously
       apiGet(`/api/chat/conversations/${conversationId}`)
-        .then(convData => {
+        .then(async (convData) => {
           const { avatar, isGroup } = getConversationAvatar(convData)
+          const lastMessagePreview = await getLastMessagePreview(conversationId, convData)
           
           setChatBubbles(prevBubbles => {
             const alreadyExists = prevBubbles.find(b => b.conversationId === conversationId)
@@ -440,11 +500,11 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
                 isOpen: true,
                 isClosed: false,
                 isGroup,
-                lastMessagePreview: convData?.last_message_preview || undefined
+                lastMessagePreview
               }]
             }
             return prevBubbles.map(b =>
-              b.conversationId === conversationId ? { ...b, isOpen: true, isClosed: false } : b
+              b.conversationId === conversationId ? { ...b, isOpen: true, isClosed: false, lastMessagePreview: lastMessagePreview || b.lastMessagePreview } : b
             )
           })
         })
@@ -500,7 +560,7 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
 
     setShowNewChatDialog(false)
 
-    // Load conversation details to get avatar
+    // Load conversation details to get avatar and last message
     try {
       const convData = await apiGet(`/api/chat/conversations/${conversationId}`)
       const { avatar, isGroup } = getConversationAvatar(convData)
@@ -519,6 +579,9 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
         }
       }
 
+      // Get last message preview
+      const lastMessagePreview = await getLastMessagePreview(conversationId, convData)
+
       // Check if bubble already exists
       setChatBubbles(prev => {
         const exists = prev.find(b => b.conversationId === conversationId)
@@ -526,7 +589,7 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
           // Bubble exists, just make sure it's visible
           return prev.map(b =>
             b.conversationId === conversationId
-              ? { ...b, isOpen: true, isClosed: false, avatar, conversationName, isGroup, lastMessagePreview: convData?.last_message_preview || b.lastMessagePreview }
+              ? { ...b, isOpen: true, isClosed: false, avatar, conversationName, isGroup, lastMessagePreview: lastMessagePreview || b.lastMessagePreview }
               : b
           )
         }
@@ -554,7 +617,7 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
           isOpen: true,
           isClosed: false,
           isGroup,
-          lastMessagePreview: convData?.last_message_preview || undefined
+          lastMessagePreview
         })
 
         return newBubbles
@@ -666,25 +729,24 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
       })}
 
       {/* Chat Bubbles Container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
         {/* New Chat Button */}
         <button
           onClick={handleNewChatClick}
-          className="bg-green-500 hover:bg-green-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110 group mb-3"
+          className="bg-green-500 hover:bg-green-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110 group"
           aria-label="Chat mới"
           title="Chat mới"
         >
           <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
         </button>
 
-        {/* Chat Bubbles - Show up to 5, stacked on top of each other */}
+        {/* Chat Bubbles - Show up to 5, properly spaced */}
         {visibleBubbles.map((bubble, index) => (
           <div
             key={bubble.conversationId}
             className="relative animate-in slide-in-from-bottom-2 duration-300"
             style={{ 
               animationDelay: `${index * 50}ms`,
-              marginBottom: index < visibleBubbles.length - 1 ? '-12px' : '0',
               zIndex: visibleBubbles.length - index // Newer bubbles on top
             }}
           >
@@ -746,17 +808,28 @@ export default function MultiChatBubbles({ currentUserId }: MultiChatBubblesProp
               </div>
 
               {/* Tooltip */}
-              <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 max-w-xs">
+              <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 max-w-xs shadow-xl">
                 <div className="font-semibold mb-1 whitespace-nowrap">
                   {bubble.conversationName}
                 </div>
-                {bubble.lastMessagePreview && (
-                  <div className="text-xs text-gray-300 mb-1 line-clamp-2 break-words">
+                {bubble.lastMessagePreview ? (
+                  <div className="text-xs text-gray-300 mb-1 break-words whitespace-pre-wrap" style={{ 
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                    maxWidth: '100%',
+                    maxHeight: '120px',
+                    overflowY: 'auto',
+                    display: 'block'
+                  }}>
                     {bubble.lastMessagePreview}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-400 mb-1 italic">
+                    Chưa có tin nhắn
                   </div>
                 )}
                 {bubble.unreadCount > 0 && (
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-400 mt-1">
                     {bubble.unreadCount} tin nhắn mới
                   </div>
                 )}

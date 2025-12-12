@@ -86,11 +86,17 @@ export default function ChatBubble({ currentUserId }: ChatBubbleProps) {
             )}
 
             {/* Tooltip */}
-            <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+            <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-xl max-w-xs">
               {latestMessage ? (
                 <div>
                   <div className="font-semibold mb-1">Tin nhắn mới</div>
-                  <div className="text-xs text-gray-300 truncate max-w-[200px]">
+                  <div className="text-xs text-gray-300 break-words whitespace-pre-wrap" style={{ 
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                    maxWidth: '100%',
+                    maxHeight: '120px',
+                    overflowY: 'auto'
+                  }}>
                     {latestMessage.message_text || 'Có tin nhắn mới'}
                   </div>
                 </div>

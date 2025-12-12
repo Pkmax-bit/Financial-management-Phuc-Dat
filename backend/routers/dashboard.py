@@ -167,23 +167,36 @@ async def get_dashboard_stats(
             reverse=True
         )[:5]
         
-        # Recent Transactions - get from journal entries
+        # Recent Transactions - get from journal entry lines
         recent_transactions = []
         try:
+            # Get recent journal entries first
             recent_entries = supabase.table("journal_entries")\
-                .select("entry_date, description, debit_amount, credit_amount, account_code")\
+                .select("id, entry_date, description")\
                 .order("entry_date", desc=True)\
                 .limit(10)\
                 .execute()
             
             if recent_entries.data:
-                for entry in recent_entries.data:
-                    recent_transactions.append({
-                        "date": entry.get("entry_date"),
-                        "description": entry.get("description"),
-                        "amount": float(entry.get("debit_amount", 0) or 0) + float(entry.get("credit_amount", 0) or 0),
-                        "type": "debit" if entry.get("debit_amount") else "credit"
-                    })
+                entry_ids = [entry["id"] for entry in recent_entries.data]
+                # Get lines for these entries
+                recent_lines = supabase.table("journal_entry_lines")\
+                    .select("entry_id, debit_amount, credit_amount, account_code, description")\
+                    .in_("entry_id", entry_ids)\
+                    .execute()
+                
+                # Create a map of entry_id to entry data
+                entry_map = {entry["id"]: entry for entry in recent_entries.data}
+                
+                for line in recent_lines.data or []:
+                    entry = entry_map.get(line["entry_id"])
+                    if entry:
+                        recent_transactions.append({
+                            "date": entry.get("entry_date"),
+                            "description": line.get("description") or entry.get("description"),
+                            "amount": float(line.get("debit_amount", 0) or 0) + float(line.get("credit_amount", 0) or 0),
+                            "type": "debit" if line.get("debit_amount") else "credit"
+                        })
         except Exception as e:
             print(f"Recent transactions not available: {e}")
         
@@ -198,17 +211,17 @@ async def get_dashboard_stats(
             
             if cash_accounts.data:
                 for account in cash_accounts.data:
-                    # Calculate balance for this account
+                    # Calculate balance for this account from journal_entry_lines
                     account_balance = 0
                     try:
-                        balance_entries = supabase.table("journal_entries")\
+                        balance_lines = supabase.table("journal_entry_lines")\
                             .select("debit_amount, credit_amount")\
                             .eq("account_code", account["account_code"])\
                             .execute()
                         
-                        for entry in balance_entries.data:
-                            account_balance += float(entry.get("debit_amount", 0) or 0)
-                            account_balance -= float(entry.get("credit_amount", 0) or 0)
+                        for line in balance_lines.data or []:
+                            account_balance += float(line.get("debit_amount", 0) or 0)
+                            account_balance -= float(line.get("credit_amount", 0) or 0)
                     except Exception as balance_error:
                         print(f"Could not calculate balance for account {account['account_code']}: {balance_error}")
                     
