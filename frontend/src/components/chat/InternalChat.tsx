@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { 
   MessageSquare, 
@@ -331,6 +331,42 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
   const handleSendMessage = async () => {
     if (!selectedConversation || (!messageText.trim() && selectedFiles.length === 0 && !replyingTo)) return
 
+    const tempMessageId = `temp-${Date.now()}-${Math.random()}`
+    const messageTextToSend = messageText.trim()
+    
+    // Create optimistic message for immediate display
+    const optimisticMessage: Message = {
+      id: tempMessageId,
+      conversation_id: selectedConversation.id,
+      sender_id: currentUserId,
+      sender_name: currentUserName,
+      message_text: messageTextToSend,
+      message_type: 'text',
+      file_url: null,
+      file_name: null,
+      file_size: null,
+      is_deleted: false,
+      is_edited: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      reply_to: replyingTo ? {
+        id: replyingTo.id,
+        sender_id: replyingTo.sender_id,
+        sender_name: replyingTo.sender_name,
+        message_text: replyingTo.message_text
+      } : null,
+      reply_to_id: replyingTo?.id || null
+    }
+
+    // Add optimistic message to state immediately
+    setMessages(prev => [...prev, optimisticMessage])
+    
+    // Clear input immediately for better UX
+    const textToClear = messageTextToSend
+    const replyingToToClear = replyingTo
+    setMessageText('')
+    setReplyingTo(null)
+
     try {
       setSending(true)
       
@@ -338,35 +374,36 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       if (selectedFiles.length > 0) {
         await handleUploadFiles()
         // If there's also text, send it separately
-        if (messageText.trim()) {
+        if (textToClear) {
           const messageData: MessageCreate = {
-            message_text: messageText.trim(),
-            reply_to_id: replyingTo?.id
+            message_text: textToClear,
+            reply_to_id: replyingToToClear?.id
           }
           await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
         }
-        // Clear everything
-        setMessageText('')
-        setReplyingTo(null)
         setSelectedFiles([])
       } else {
         // Send text message only
         const messageData: MessageCreate = {
-          message_text: messageText.trim(),
-          reply_to_id: replyingTo?.id
+          message_text: textToClear,
+          reply_to_id: replyingToToClear?.id
         }
 
         await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
-        
-        setMessageText('')
-        setReplyingTo(null)
       }
       
-      // Reload messages
+      // Reload messages to get the real message from server (replaces optimistic one)
       await loadMessages(selectedConversation.id)
       await loadConversations() // Refresh conversation list to update last message
     } catch (error) {
       console.error('Error sending message:', error)
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessageId))
+      // Restore input on error
+      setMessageText(textToClear)
+      if (replyingToToClear) {
+        setReplyingTo(replyingToToClear)
+      }
       alert('Không thể gửi tin nhắn')
     } finally {
       setSending(false)
@@ -465,6 +502,48 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
   const handleUploadFiles = async () => {
     if (selectedFiles.length === 0 || !selectedConversation) return
 
+    // Create optimistic messages for all files immediately
+    const tempMessageIds: string[] = []
+    const optimisticMessages: Message[] = selectedFiles.map((fileItem, index) => {
+      const file = fileItem.file
+      const tempId = `temp-file-${Date.now()}-${index}-${Math.random()}`
+      tempMessageIds.push(tempId)
+      
+      return {
+        id: tempId,
+        conversation_id: selectedConversation.id,
+        sender_id: currentUserId,
+        sender_name: currentUserName,
+        message_text: file.name,
+        message_type: file.type.startsWith('image/') ? 'image' : 'file',
+        file_url: fileItem.preview || null,
+        file_name: file.name,
+        file_size: file.size,
+        is_deleted: false,
+        is_edited: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        reply_to: replyingTo ? {
+          id: replyingTo.id,
+          sender_id: replyingTo.sender_id,
+          sender_name: replyingTo.sender_name,
+          message_text: replyingTo.message_text
+        } : null,
+        reply_to_id: replyingTo?.id || null
+      }
+    })
+
+    // Add optimistic messages to state immediately
+    setMessages(prev => [...prev, ...optimisticMessages])
+    
+    // Clear file selection immediately for better UX
+    const filesToClear = [...selectedFiles]
+    const replyingToToClear = replyingTo
+    setSelectedFiles([])
+    setReplyingTo(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (imageInputRef.current) imageInputRef.current.value = ''
+
     try {
       setUploadingFile(true)
       
@@ -475,7 +554,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       }
 
       // Upload all files and send messages
-      const uploadPromises = selectedFiles.map(async (fileItem) => {
+      const uploadPromises = filesToClear.map(async (fileItem) => {
         const file = fileItem.file
         // Upload file via API
         const formData = new FormData()
@@ -506,7 +585,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
           file_url: uploadData.url,
           file_name: uploadData.file_name,
           file_size: uploadData.file_size,
-          reply_to_id: replyingTo?.id
+          reply_to_id: replyingToToClear?.id
         }
 
         return apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
@@ -515,17 +594,18 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       // Wait for all uploads to complete
       await Promise.all(uploadPromises)
       
-      // Clear file selection
-      setSelectedFiles([])
-      setReplyingTo(null)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      if (imageInputRef.current) imageInputRef.current.value = ''
-      
-      // Reload messages
+      // Reload messages to get the real messages from server (replaces optimistic ones)
       await loadMessages(selectedConversation.id)
       await loadConversations()
     } catch (error) {
       console.error('Error uploading files:', error)
+      // Remove optimistic messages on error
+      setMessages(prev => prev.filter(msg => !tempMessageIds.includes(msg.id)))
+      // Restore file selection on error
+      setSelectedFiles(filesToClear)
+      if (replyingToToClear) {
+        setReplyingTo(replyingToToClear)
+      }
       alert('Không thể gửi file. Vui lòng thử lại.')
     } finally {
       setUploadingFile(false)
@@ -612,16 +692,16 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     )
   }
 
-  const filteredConversations = conversations.filter(conv => {
+  const filteredConversations = useMemo(() => conversations.filter(conv => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
       conv.name?.toLowerCase().includes(query) ||
       conv.last_message_preview?.toLowerCase().includes(query)
     )
-  })
+  }), [conversations, searchQuery])
 
-  const filteredEmployees = employees.filter(emp => {
+  const filteredEmployees = useMemo(() => employees.filter(emp => {
     if (!employeeSearchQuery) return true
     const query = employeeSearchQuery.toLowerCase()
     const fullName = emp.full_name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
@@ -631,7 +711,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       emp.department_name?.toLowerCase().includes(query) ||
       emp.position_name?.toLowerCase().includes(query)
     )
-  })
+  }), [employees, employeeSearchQuery])
 
   const formatTime = (dateString: string) => {
     try {

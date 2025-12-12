@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, createContext, useContext } from 'react'
+import { useState, createContext, useContext, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   Home,
@@ -34,8 +34,10 @@ import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
 import BackgroundSettings from './BackgroundSettings'
 import WorkflowFloatingButton from './workflow/WorkflowFloatingButton'
+import ChatBubble from './chat/ChatBubble'
 import { useBackground } from '@/contexts/BackgroundContext'
 import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
+import { supabase } from '@/lib/supabase'
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode
@@ -269,6 +271,35 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [forceHideSidebar, setForceHideSidebar] = useState(false)
   const [showBackgroundSettings, setShowBackgroundSettings] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string>('')
+
+  // Get current user ID
+  useEffect(() => {
+    const getCurrentUserId = async () => {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        if (authUser) {
+          setCurrentUserId(authUser.id)
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error)
+      }
+    }
+    getCurrentUserId()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setCurrentUserId(session.user.id)
+      } else {
+        setCurrentUserId('')
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
 
   // Get user role and navigation based on role
   const userRole = (user?.role?.toLowerCase() || 'customer') as UserRole
@@ -555,6 +586,9 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
         {/* Workflow Floating Button */}
         <WorkflowFloatingButton />
+
+        {/* Chat Bubble - Global chat notification */}
+        {currentUserId && <ChatBubble currentUserId={currentUserId} />}
       </div>
     </SidebarContext.Provider>
   )
