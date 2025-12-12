@@ -27,7 +27,8 @@ import {
   Palette,
   Lock,
   CheckSquare,
-  PlayCircle
+  PlayCircle,
+  MessageSquare
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
@@ -290,7 +291,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     Settings,
     HelpCircle,
     CheckSquare,
-    PlayCircle
+    PlayCircle,
+    MessageSquare
   }
 
   const handleNavigation = (href: string) => {

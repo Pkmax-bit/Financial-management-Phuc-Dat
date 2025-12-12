@@ -10,7 +10,9 @@ import {
   Eye,
   EyeOff,
   Building2,
-  Briefcase
+  Briefcase,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { employeeApi } from '@/lib/api'
@@ -42,6 +44,9 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<{ email?: string; role?: string; full_name?: string } | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   // Form data - simplified
   const [formData, setFormData] = useState({
@@ -187,6 +192,26 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
       
       console.log('Employee created successfully via API:', result)
       
+      // Upload avatar if provided
+      if (avatarFile && result.id) {
+        try {
+          setUploadingAvatar(true)
+          const avatarResult = await employeeApi.uploadAvatar(result.id, avatarFile)
+          console.log('Avatar uploaded successfully:', avatarResult)
+          
+          // Update employee with avatar_url
+          if (avatarResult.url) {
+            await employeeApi.updateEmployee(result.id, { avatar_url: avatarResult.url })
+          }
+        } catch (avatarError: any) {
+          console.error('Error uploading avatar:', avatarError)
+          // Don't fail the entire operation if avatar upload fails
+          alert(`Nhân viên đã được tạo thành công nhưng có lỗi khi upload ảnh đại diện: ${avatarError.message}`)
+        } finally {
+          setUploadingAvatar(false)
+        }
+      }
+      
       // Show success message with password info
       alert(`Nhân viên đã được tạo thành công!\n\nThông tin nhân viên:\nMã nhân viên: ${result.employee_code || employeeData.employee_code}\nEmail: ${formData.email}\nMật khẩu mặc định: ${formData.password}\n\nVui lòng thông báo cho nhân viên thay đổi mật khẩu sau lần đăng nhập đầu tiên.`)
       
@@ -236,6 +261,34 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
       user_role: 'employee'
     })
     setError(null)
+    setAvatarFile(null)
+    setAvatarPreview(null)
+  }
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Vui lòng chọn file ảnh')
+        return
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Kích thước ảnh không được vượt quá 5MB')
+        return
+      }
+      
+      setAvatarFile(file)
+      
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
   }
 
   if (!isOpen) return null
@@ -272,6 +325,58 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
               <p className="text-sm text-red-800 font-semibold">{error}</p>
             </div>
           )}
+
+          {/* Avatar Upload */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Ảnh đại diện</h3>
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                {avatarPreview ? (
+                  <div className="relative">
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar preview"
+                      className="w-32 h-32 rounded-full object-cover border-4 border-blue-200 shadow-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarFile(null)
+                        setAvatarPreview(null)
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                      disabled={submitting}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gray-100 border-4 border-gray-300 flex items-center justify-center">
+                    <ImageIcon className="w-12 h-12 text-gray-400" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Chọn ảnh đại diện (tùy chọn)
+                </label>
+                <label className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors">
+                  <Upload className="w-4 h-4 mr-2" />
+                  {avatarFile ? 'Đổi ảnh' : 'Chọn ảnh'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                    disabled={submitting || uploadingAvatar}
+                  />
+                </label>
+                <p className="text-xs text-gray-500 mt-2">
+                  Hỗ trợ: JPG, PNG, GIF. Kích thước tối đa: 5MB
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Basic Information */}
           <div>
@@ -518,10 +623,10 @@ export default function CreateEmployeeModal({ isOpen, onClose, onSuccess }: Crea
             <button
               type="submit"
               className="inline-flex items-center px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 border border-transparent rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
-              disabled={submitting}
+              disabled={submitting || uploadingAvatar}
             >
               <UserPlus className="h-4 w-4 mr-2" />
-              {submitting ? 'Đang tạo...' : 'Tạo nhân viên'}
+              {uploadingAvatar ? 'Đang upload ảnh...' : submitting ? 'Đang tạo...' : 'Tạo nhân viên'}
             </button>
           </div>
         </form>

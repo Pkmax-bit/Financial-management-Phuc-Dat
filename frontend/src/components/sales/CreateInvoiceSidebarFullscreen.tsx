@@ -133,10 +133,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     unit_price: true,
     total_price: true,
     area: true,
-    volume: true,
+    volume: false, // Mặc định ẩn thể tích
     height: true,
     length: true,
-    depth: true,
+    depth: false, // Mặc định ẩn độ sâu
     components_block: true
   })
 
@@ -940,10 +940,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       unit_price: true,
       total_price: true,
       area: true,
-      volume: true,
+      volume: false, // Mặc định ẩn thể tích
       height: true,
       length: true,
-      depth: true,
+      depth: false, // Mặc định ẩn độ sâu
       components_block: true
     })
   }

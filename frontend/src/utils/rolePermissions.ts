@@ -132,6 +132,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'system'
   },
   {
+    name: 'Chat nội bộ',
+    href: '/chat',
+    icon: 'MessageSquare',
+    description: 'Tin nhắn nội bộ giữa nhân viên',
+    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
+    category: 'system'
+  },
+  {
     name: 'Góp ý hệ thống',
     href: '/system/feedback',
     icon: 'HelpCircle',
