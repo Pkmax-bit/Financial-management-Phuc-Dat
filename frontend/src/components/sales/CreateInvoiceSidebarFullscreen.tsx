@@ -1156,6 +1156,31 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         <div
           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text"
           onClick={() => setEditingCell({ index, field })}
+          onFocus={(e) => {
+            // Auto-open edit mode when focused via Tab
+            if (!isEditing) {
+              const targetElement = e.currentTarget
+              setEditingCell({ index, field })
+              // Focus the input after state update
+              setTimeout(() => {
+                // Find the input in the same container (the div will be replaced by input)
+                // Look for input that is a direct child of the parent container
+                const parentContainer = targetElement.parentElement
+                if (parentContainer) {
+                  const input = parentContainer.querySelector('input')
+                  if (input) {
+                    input.focus()
+                    // Set cursor to end
+                    if (input instanceof HTMLInputElement && input.type === 'text') {
+                      const len = input.value.length
+                      input.setSelectionRange(len, len)
+                    }
+                  }
+                }
+              }, 50)
+            }
+          }}
+          tabIndex={0}
           title={display}
         >
           {display || (placeholder || '')}
@@ -1189,11 +1214,45 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
+            e.preventDefault()
             const nv = text.trim() === '' ? null : parseNumber(text)
             onChange(nv)
             setEditingCell(null)
             cursorPositionRef.current = null
             isInitializedRef.current = false
+          } else if (e.key === 'Tab') {
+            // Commit value on Tab and move to next input
+            const nv = text.trim() === '' ? null : parseNumber(text)
+            onChange(nv)
+            // Find next focusable input before closing edit mode
+            const currentInput = e.target as HTMLInputElement
+            const allInputs = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled])'))
+            const currentIndex = allInputs.indexOf(currentInput)
+            const isShiftTab = e.shiftKey
+            setEditingCell(null)
+            cursorPositionRef.current = null
+            isInitializedRef.current = false
+            // Move to next/previous input after a short delay to allow state update
+            setTimeout(() => {
+              if (currentIndex >= 0) {
+                let targetInput: HTMLElement | null = null
+                if (isShiftTab && currentIndex > 0) {
+                  // Shift+Tab: move to previous input
+                  targetInput = allInputs[currentIndex - 1] as HTMLElement
+                } else if (!isShiftTab && currentIndex < allInputs.length - 1) {
+                  // Tab: move to next input
+                  targetInput = allInputs[currentIndex + 1] as HTMLElement
+                }
+                if (targetInput) {
+                  targetInput.focus()
+                  // If it's an EditableNumberCell (parent div with cursor-text class), trigger edit mode
+                  const parentDiv = targetInput.parentElement
+                  if (parentDiv && parentDiv.classList.contains('cursor-text')) {
+                    setTimeout(() => parentDiv.click(), 0)
+                  }
+                }
+              }
+            }, 10)
           } else if (e.key === 'Escape') {
             setEditingCell(null)
             cursorPositionRef.current = null

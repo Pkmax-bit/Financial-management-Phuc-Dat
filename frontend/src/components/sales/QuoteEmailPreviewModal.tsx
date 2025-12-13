@@ -180,7 +180,8 @@ export default function QuoteEmailPreviewModal({
     // Replace unit labels from meters to millimeters
     updated = updated.replace(/NGANG\s*\(m\)/g, 'NGANG (mm)')
     updated = updated.replace(/CAO\s*\(m\)/g, 'CAO (mm)')
-    updated = updated.replace(/KHỐI LƯỢNG\s*\(m\)/g, 'KHỐI LƯỢNG (m²)')
+    updated = updated.replace(/KHỐI LƯỢNG\s*\(m\)/g, 'DIỆN TÍCH (m²)')
+    updated = updated.replace(/KHỐI LƯỢNG\s*\(m²\)/g, 'DIỆN TÍCH (m²)')
 
     // Remove trailing zeros in measurement values (e.g., 2000.00 -> 2000)
     updated = updated.replace(/(\d+)\.(\d+)(?=\s*(mm|m)([^a-zA-Z]|$))/g, (_match, intPart, decimalPart) => {

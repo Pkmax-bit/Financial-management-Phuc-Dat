@@ -2686,7 +2686,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     index,
     field,
     commitOnChange,
-    displayFractionDigits
+    displayFractionDigits,
+    tabIndex
   }: {
     value: number | null
     onChange: (v: number | null) => void
@@ -2698,6 +2699,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     field: string
     commitOnChange?: boolean
     displayFractionDigits?: number
+    tabIndex?: number
   }) => {
     const [text, setText] = useState<string>('')
     const inputRef = useRef<HTMLInputElement>(null)
@@ -2758,6 +2760,31 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         <div
           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text"
           onClick={() => setEditingCell({ index, field })}
+          onFocus={(e) => {
+            // Auto-open edit mode when focused via Tab
+            if (!isEditing) {
+              const targetElement = e.currentTarget
+              setEditingCell({ index, field })
+              // Focus the input after state update
+              setTimeout(() => {
+                // Find the input in the same container (the div will be replaced by input)
+                // Look for input that is a direct child of the parent container
+                const parentContainer = targetElement.parentElement
+                if (parentContainer) {
+                  const input = parentContainer.querySelector('input')
+                  if (input) {
+                    input.focus()
+                    // Set cursor to end
+                    if (input instanceof HTMLInputElement && input.type === 'text') {
+                      const len = input.value.length
+                      input.setSelectionRange(len, len)
+                    }
+                  }
+                }
+              }, 50)
+            }
+          }}
+          tabIndex={tabIndex ?? 0}
           title={display}
         >
           {display || (placeholder || '')}
@@ -2770,6 +2797,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         ref={inputRef}
         type={format === 'number' ? 'number' : 'text'}
         value={text}
+        tabIndex={tabIndex}
         onChange={(e) => {
           const nvRaw = e.target.value
           // Save cursor position before state update
@@ -2791,11 +2819,59 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
+            e.preventDefault()
             const nv = text.trim() === '' ? null : parseNumber(text)
             onChange(nv)
             setEditingCell(null)
             cursorPositionRef.current = null
             isInitializedRef.current = false
+          } else if (e.key === 'Tab') {
+            // Commit value on Tab and move to next input
+            const nv = text.trim() === '' ? null : parseNumber(text)
+            onChange(nv)
+            // Find next focusable input using tabIndex
+            const currentInput = e.target as HTMLInputElement
+            const currentTabIndex = currentInput.tabIndex || 0
+            const isShiftTab = e.shiftKey
+            setEditingCell(null)
+            cursorPositionRef.current = null
+            isInitializedRef.current = false
+            // Move to next/previous input after a short delay to allow state update
+            setTimeout(() => {
+              // Find all focusable elements sorted by tabIndex
+              const allFocusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+                .filter(el => {
+                  const tabIdx = (el as HTMLElement).tabIndex
+                  return tabIdx >= 0
+                })
+                .sort((a, b) => {
+                  const aIdx = (a as HTMLElement).tabIndex
+                  const bIdx = (b as HTMLElement).tabIndex
+                  return aIdx - bIdx
+                }) as HTMLElement[]
+              
+              const currentIndex = allFocusable.findIndex(el => {
+                // Match by tabIndex, or if it's the same element
+                return el.tabIndex === currentTabIndex || el === currentInput
+              })
+              if (currentIndex >= 0) {
+                let targetInput: HTMLElement | null = null
+                if (isShiftTab && currentIndex > 0) {
+                  // Shift+Tab: move to previous input
+                  targetInput = allFocusable[currentIndex - 1]
+                } else if (!isShiftTab && currentIndex < allFocusable.length - 1) {
+                  // Tab: move to next input
+                  targetInput = allFocusable[currentIndex + 1]
+                }
+                if (targetInput) {
+                  targetInput.focus()
+                  // If it's an EditableNumberCell div (has cursor-text class), trigger edit mode
+                  if (targetInput.classList.contains('cursor-text')) {
+                    setTimeout(() => targetInput.click(), 0)
+                  }
+                }
+              }
+            }, 10)
           } else if (e.key === 'Escape') {
             setEditingCell(null)
             cursorPositionRef.current = null
@@ -3260,6 +3336,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                   className="flex-1 border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                                   placeholder="Tên sản phẩm"
                                   title={item.name_product}
+                                  tabIndex={index * 100 + 1}
                                 />
                                 <button
                                   type="button"
@@ -3285,6 +3362,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 }}
                                 className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black cursor-pointer hover:bg-gray-50 transition-colors flex items-center h-[28px] overflow-hidden"
                                 title={item.description || "Click để chỉnh sửa mô tả"}
+                                tabIndex={index * 100 + 2}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    setDescriptionModal({
+                                      isOpen: true,
+                                      index: index,
+                                      description: item.description || '',
+                                      productName: item.name_product || 'Sản phẩm'
+                                    })
+                                  }
+                                }}
                               >
                                 <span className="truncate flex-1 block">
                                   {item.description || <span className="text-gray-400">Mô tả</span>}
@@ -3304,6 +3393,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 index={index}
                                 field={'quantity'}
                                 commitOnChange
+                                tabIndex={index * 100 + 3}
                               />
                             </div>
                           )}
@@ -3316,6 +3406,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 className="w-full border border-gray-300 rounded-md px-1 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="cái"
                                 maxLength={5}
+                                tabIndex={index * 100 + 4}
                               />
                             </div>
                           )}
@@ -3331,6 +3422,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 index={index}
                                 field={'unit_price'}
                                 commitOnChange
+                                tabIndex={index * 100 + 5}
                               />
                             </div>
                           )}
@@ -3356,6 +3448,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                       min="0"
                                       max="100"
                                       step="0.1"
+                                      tabIndex={index * 100 + 6}
                                     />
                                     <span className="text-xs text-gray-500">%</span>
                                     <span className="text-xs text-gray-500">
@@ -3392,6 +3485,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 index={index}
                                 field={'area'}
                                 commitOnChange
+                                tabIndex={index * 100 + 7}
                               />
                             </div>
                           )}
@@ -3422,6 +3516,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 index={index}
                                 field={'height'}
                                 commitOnChange
+                                tabIndex={index * 100 + 8}
                               />
                             </div>
                           )}
@@ -3437,6 +3532,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                 index={index}
                                 field={'length'}
                                 commitOnChange
+                                tabIndex={index * 100 + 9}
                               />
                             </div>
                           )}

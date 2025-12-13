@@ -338,7 +338,7 @@ class EmailService:
                                 <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">MÔ TẢ CHI TIẾT</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">ĐVT</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;" colspan="2">QUY CÁCH</th>
-                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">KHỐI LƯỢNG (m²)</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">DIỆN TÍCH (m²)</th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">ĐƠN GIÁ</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">VAT (%)</th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">THÀNH TIỀN</th>

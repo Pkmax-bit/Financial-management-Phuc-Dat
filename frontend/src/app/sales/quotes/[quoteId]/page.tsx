@@ -202,7 +202,7 @@ export default function QuoteDetailPage() {
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Dài</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Rộng</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Diện tích</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Khối lượng (m²)</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Diện tích (m²)</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase">Đơn giá</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase">Thành tiền</th>
             </tr>
