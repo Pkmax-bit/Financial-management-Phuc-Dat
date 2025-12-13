@@ -223,7 +223,7 @@ class QuoteSendRequest(BaseModel):
     # Raw HTML
     raw_html: Optional[str] = None
 
-@router.get("/quotes", response_model=List[Quote])
+@router.get("/quotes")
 async def get_quotes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -297,6 +297,37 @@ async def get_quotes(
         if not result.data:
             return []
         
+        # Collect all project_ids and customer_ids to fetch related data
+        project_ids = set()
+        customer_ids = set()
+        for quote in result.data:
+            if quote.get('project_id'):
+                project_ids.add(quote.get('project_id'))
+            if quote.get('customer_id'):
+                customer_ids.add(quote.get('customer_id'))
+        
+        # Fetch projects and customers in bulk
+        projects_map = {}
+        customers_map = {}
+        
+        if project_ids:
+            try:
+                projects_result = supabase.table("projects").select("id, name, project_code").in_("id", list(project_ids)).execute()
+                if projects_result.data:
+                    for project in projects_result.data:
+                        projects_map[project.get('id')] = project
+            except Exception as e:
+                print(f"Error fetching projects: {e}")
+        
+        if customer_ids:
+            try:
+                customers_result = supabase.table("customers").select("id, name, email, phone, company").in_("id", list(customer_ids)).execute()
+                if customers_result.data:
+                    for customer in customers_result.data:
+                        customers_map[customer.get('id')] = customer
+            except Exception as e:
+                print(f"Error fetching customers: {e}")
+        
         # Process quotes data to handle None values
         processed_quotes = []
         for quote in result.data:
@@ -318,8 +349,18 @@ async def get_quotes(
                 if isinstance(quote.get('valid_until'), datetime):
                     quote['valid_until'] = quote['valid_until'].date()
                 
-                # Ensure all required fields have values
-                quote_data = {
+                # Get project and customer data from maps
+                project_data = None
+                customer_data = None
+                
+                if quote.get('project_id') and quote.get('project_id') in projects_map:
+                    project_data = projects_map[quote.get('project_id')]
+                
+                if quote.get('customer_id') and quote.get('customer_id') in customers_map:
+                    customer_data = customers_map[quote.get('customer_id')]
+                
+                # Build quote dict directly (don't use Quote model to avoid serialization issues)
+                quote_dict = {
                     'id': quote.get('id', ''),
                     'quote_number': quote.get('quote_number', ''),
                     'customer_id': quote.get('customer_id', ''),
@@ -334,11 +375,38 @@ async def get_quotes(
                     'status': quote.get('status', 'draft'),
                     'notes': quote.get('notes'),
                     'created_by': quote.get('created_by'),
+                    'product_components': quote.get('product_components'),
                     'created_at': quote.get('created_at', datetime.now()),
                     'updated_at': quote.get('updated_at', datetime.now())
                 }
                 
-                processed_quotes.append(Quote(**quote_data))
+                # Add project information if available
+                if project_data:
+                    # Handle both dict and list formats
+                    if isinstance(project_data, list) and len(project_data) > 0:
+                        project_data = project_data[0]
+                    
+                    quote_dict['project'] = {
+                        'id': project_data.get('id'),
+                        'name': project_data.get('name'),
+                        'project_code': project_data.get('project_code')
+                    }
+                
+                # Add customer information if available
+                if customer_data:
+                    # Handle both dict and list formats
+                    if isinstance(customer_data, list) and len(customer_data) > 0:
+                        customer_data = customer_data[0]
+                    
+                    quote_dict['customer'] = {
+                        'id': customer_data.get('id'),
+                        'name': customer_data.get('name'),
+                        'email': customer_data.get('email'),
+                        'phone': customer_data.get('phone'),
+                        'company': customer_data.get('company')
+                    }
+                
+                processed_quotes.append(quote_dict)
             except Exception as quote_error:
                 print(f"Error processing quote {quote.get('id', 'unknown')}: {quote_error}")
                 continue
@@ -377,6 +445,31 @@ async def get_quote(
         
         # Map database fields to model fields
         quote = map_quote_from_db(quote)
+        
+        # Ensure required fields have default values if None
+        if not quote.get("issue_date"):
+            quote["issue_date"] = quote.get("created_at", datetime.now().date())
+        if not quote.get("valid_until"):
+            # Default to 30 days from issue_date
+            issue_date = quote.get("issue_date")
+            if isinstance(issue_date, date):
+                quote["valid_until"] = issue_date + timedelta(days=30)
+            else:
+                quote["valid_until"] = datetime.now().date() + timedelta(days=30)
+        if not quote.get("created_at"):
+            quote["created_at"] = datetime.now()
+        if not quote.get("updated_at"):
+            quote["updated_at"] = quote.get("created_at", datetime.now())
+        
+        # Ensure numeric fields have default values
+        if quote.get("subtotal") is None:
+            quote["subtotal"] = 0.0
+        if quote.get("tax_rate") is None:
+            quote["tax_rate"] = 0.0
+        if quote.get("tax_amount") is None:
+            quote["tax_amount"] = 0.0
+        if quote.get("total_amount") is None:
+            quote["total_amount"] = quote.get("subtotal", 0.0) + quote.get("tax_amount", 0.0)
         
         project_id = quote.get("project_id")
         
