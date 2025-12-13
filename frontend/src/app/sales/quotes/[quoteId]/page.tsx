@@ -201,9 +201,8 @@ export default function QuoteDetailPage() {
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Đơn vị</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Dài</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Rộng</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Sâu</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Diện tích</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Thể tích</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Khối lượng (m²)</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase">Đơn giá</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-700 uppercase">Thành tiền</th>
             </tr>
@@ -219,7 +218,6 @@ export default function QuoteDetailPage() {
                 <td className="px-4 py-2 text-sm text-gray-900">{it.unit || ''}</td>
                 <td className="px-4 py-2 text-sm text-gray-900">{it.length ?? ''}</td>
                 <td className="px-4 py-2 text-sm text-gray-900">{it.height ?? ''}</td>
-                <td className="px-4 py-2 text-sm text-gray-900">{it.depth ?? ''}</td>
                 <td className="px-4 py-2 text-sm text-gray-900">{it.area ?? ''}</td>
                 <td className="px-4 py-2 text-sm text-gray-900">{it.volume ?? ''}</td>
                 <td className="px-4 py-2 text-sm text-right text-gray-900">{formatCurrency(it.unit_price)}</td>

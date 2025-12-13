@@ -179,9 +179,8 @@ export default function QuoteEmailPreviewModal({
 
     // Replace unit labels from meters to millimeters
     updated = updated.replace(/NGANG\s*\(m\)/g, 'NGANG (mm)')
-    updated = updated.replace(/SÂU\s*\(m\)/g, 'SÂU (mm)')
     updated = updated.replace(/CAO\s*\(m\)/g, 'CAO (mm)')
-    updated = updated.replace(/KHỐI LƯỢNG\s*\(m\)/g, 'KHỐI LƯỢNG (mm)')
+    updated = updated.replace(/KHỐI LƯỢNG\s*\(m\)/g, 'KHỐI LƯỢNG (m²)')
 
     // Remove trailing zeros in measurement values (e.g., 2000.00 -> 2000)
     updated = updated.replace(/(\d+)\.(\d+)(?=\s*(mm|m)([^a-zA-Z]|$))/g, (_match, intPart, decimalPart) => {
@@ -437,13 +436,10 @@ export default function QuoteEmailPreviewModal({
         if (customization.company_factory) setCompanyFactory(customization.company_factory)
         if (customization.company_website) setCompanyWebsite(customization.company_website)
         if (customization.company_hotline) setCompanyHotline(customization.company_hotline)
+        
+        // Override default logo only if customization has logo
         if (customization.company_logo_url) setCompanyLogoUrl(customization.company_logo_url)
         if (customization.company_logo_base64) setCompanyLogoBase64(customization.company_logo_base64)
-        
-        // Load default logo if no logo is set
-        if (!customization.company_logo_url && !customization.company_logo_base64) {
-          loadDefaultLogo()
-        }
         
         // Bank info
         if (customization.bank_account_name) setBankAccountName(customization.bank_account_name)
@@ -477,6 +473,8 @@ export default function QuoteEmailPreviewModal({
 
   useEffect(() => {
     if (isOpen && quoteId) {
+      // Always load default logo when modal opens
+      loadDefaultLogo()
       fetchPreview()
       // Reset PDF downloaded state when modal opens
       setPdfDownloaded(false)
@@ -487,7 +485,7 @@ export default function QuoteEmailPreviewModal({
       setProjectName('')
       setProjectId('')
     }
-  }, [isOpen, quoteId, fetchPreview])
+  }, [isOpen, quoteId, fetchPreview, loadDefaultLogo])
 
   const startEmailTour = useCallback(async () => {
     if (!isOpen || typeof window === 'undefined') return

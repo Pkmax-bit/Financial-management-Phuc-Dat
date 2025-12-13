@@ -337,8 +337,8 @@ class EmailService:
                                 <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">HẠNG MỤC</th>
                                 <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;">MÔ TẢ CHI TIẾT</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">ĐVT</th>
-                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;" colspan="3">QUY CÁCH</th>
-                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">KHỐI LƯỢNG (m)</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;" colspan="2">QUY CÁCH</th>
+                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">KHỐI LƯỢNG (m²)</th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">ĐƠN GIÁ</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">VAT (%)</th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;">THÀNH TIỀN</th>
@@ -350,7 +350,6 @@ class EmailService:
                                 <th style="padding: 8px; text-align: left; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">NGANG (mm)</th>
-                                <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">SÂU (mm)</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;">CAO (mm)</th>
                                 <th style="padding: 8px; text-align: center; border: 1px solid #000; font-weight: bold;"></th>
                                 <th style="padding: 8px; text-align: right; border: 1px solid #000; font-weight: bold;"></th>
@@ -452,7 +451,6 @@ class EmailService:
                             </td>
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{item.get('unit', '')}</td>
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{format_dimension(length)}</td>
-                            <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{format_dimension(depth)}</td>
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{format_dimension(height)}</td>
                             <td style=\"padding: 8px; text-align: center; border: 1px solid #000; color:#000000;\">{format_dimension(quantity_display)}</td>
                             <td style=\"padding: 8px; text-align: right; border: 1px solid #000; color:#000000;\">{format_currency(item.get('unit_price', 0))}</td>
