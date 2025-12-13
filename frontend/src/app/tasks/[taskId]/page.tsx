@@ -218,6 +218,10 @@ export default function TaskDetailPage() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [replyingTo, setReplyingTo] = useState<TaskComment | null>(null)  // Comment being replied to
   const [draggedComment, setDraggedComment] = useState<TaskComment | null>(null)  // Comment being dragged
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null)
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
+  const mentionInputRef = useRef<HTMLTextAreaElement | null>(null)
 
   // Resizable layout states
   const [leftColumnWidth, setLeftColumnWidth] = useState(320)
@@ -875,6 +879,22 @@ export default function TaskDetailPage() {
     try {
       setSendingMessage(true)
 
+      // Parse mentions from message
+      const mentionedMemberIds: string[] = []
+      if (trimmedMessage) {
+        const memberMentions = trimmedMessage.match(/@(\w+)/g)
+        if (memberMentions) {
+          const members = getMentionMembers()
+          memberMentions.forEach(mention => {
+            const memberName = mention.substring(1) // Remove @
+            const member = members.find(m => m.name === memberName)
+            if (member) {
+              mentionedMemberIds.push(member.id)
+            }
+          })
+        }
+      }
+
       // Gửi file trước (mỗi file là 1 comment riêng)
       for (const file of pendingFiles) {
         const fileUrl = await uploadChatFile(file)
@@ -890,14 +910,56 @@ export default function TaskDetailPage() {
       }
 
       // Sau đó gửi tin nhắn text (nếu có)
+      let createdComment: any = null
       if (trimmedMessage) {
-        await apiPost(`/api/tasks/${taskId}/comments`, {
+        createdComment = await apiPost(`/api/tasks/${taskId}/comments`, {
           comment: trimmedMessage,
           type: 'text',
           file_url: undefined,
           is_pinned: false,
           parent_id: replyingTo?.id || null
         })
+      }
+
+      // Gửi thông báo cho các nhân viên được mention
+      if (mentionedMemberIds.length > 0 && createdComment) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          const token = session?.access_token
+          
+          if (token) {
+            // Lấy thông tin task và user hiện tại
+            const taskTitle = task?.title || 'Nhiệm vụ'
+            const currentUserName = user?.full_name || 'Người dùng'
+            
+            // Tạo notification cho mỗi member được mention
+            for (const memberId of mentionedMemberIds) {
+              // Tìm user_id từ employee_id
+              const { data: employeeData } = await supabase
+                .from('employees')
+                .select('user_id')
+                .eq('id', memberId)
+                .single()
+              
+              if (employeeData?.user_id) {
+                // Tạo task notification
+                await supabase
+                  .from('task_notifications')
+                  .insert({
+                    task_id: taskId,
+                    user_id: employeeData.user_id,
+                    employee_id: memberId,
+                    notification_type: 'comment_added',
+                    title: 'Bạn được mention trong bình luận',
+                    message: `${currentUserName} đã mention bạn trong nhiệm vụ "${taskTitle}": ${trimmedMessage.substring(0, 100)}${trimmedMessage.length > 100 ? '...' : ''}`
+                  })
+              }
+            }
+          }
+        } catch (notifError) {
+          console.error('Error creating mention notifications:', notifError)
+          // Không throw error để không làm gián đoạn việc gửi message
+        }
       }
 
       setChatMessage('')
@@ -924,6 +986,137 @@ export default function TaskDetailPage() {
 
   const handleCancelReply = () => {
     setReplyingTo(null)
+  }
+
+  // Get members for mention
+  const getMentionMembers = () => {
+    const members: Array<{ id: string; name: string; type: 'member' }> = []
+    
+    if (assignments && assignments.length > 0) {
+      assignments.forEach(assignment => {
+        if (assignment.assigned_to_name) {
+          members.push({
+            id: assignment.assigned_to,
+            name: assignment.assigned_to_name,
+            type: 'member'
+          })
+        }
+      })
+    } else if (groupMembers.length > 0) {
+      groupMembers.forEach(member => {
+        if (member.employee_name) {
+          members.push({
+            id: member.employee_id,
+            name: member.employee_name,
+            type: 'member'
+          })
+        }
+      })
+    } else if (task?.assigned_to_name) {
+      members.push({
+        id: task.assigned_to || '',
+        name: task.assigned_to_name,
+        type: 'member'
+      })
+    }
+    
+    return members
+  }
+
+  // Get checklist items for mention
+  const getMentionChecklistItems = () => {
+    const items: Array<{ id: string; name: string; type: 'checklist' }> = []
+    
+    checklists?.forEach(checklist => {
+      checklist.items?.forEach(item => {
+        // Extract display content (without file URLs)
+        let displayContent = item.content || ''
+        const fileUrlsMatch = displayContent.match(/\[FILE_URLS:\s*([^\]]+)\]/)
+        if (fileUrlsMatch) {
+          displayContent = displayContent.replace(/\[FILE_URLS:[^\]]+\]/g, '').trim()
+          displayContent = displayContent.replace(/^📎 \d+ file\(s\)\s*$/g, '').trim()
+        }
+        
+        if (displayContent) {
+          items.push({
+            id: item.id,
+            name: displayContent.length > 50 ? displayContent.substring(0, 50) + '...' : displayContent,
+            type: 'checklist'
+          })
+        }
+      })
+    })
+    
+    return items
+  }
+
+  // Handle mention input
+  const handleMentionInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    const cursorPos = e.target.selectionStart || 0
+    
+    setChatMessage(value)
+    
+    // Find @ mention
+    const textBeforeCursor = value.substring(0, cursorPos)
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/)
+    
+    if (mentionMatch) {
+      const query = mentionMatch[1]
+      setMentionQuery(query)
+      setMentionPosition({
+        start: cursorPos - query.length - 1,
+        end: cursorPos
+      })
+      setShowMentionDropdown(true)
+    } else {
+      setShowMentionDropdown(false)
+      setMentionQuery('')
+      setMentionPosition(null)
+    }
+  }
+
+  // Insert mention
+  const insertMention = (item: { id: string; name: string; type: 'member' | 'checklist' }) => {
+    if (!mentionPosition) return
+    
+    const beforeMention = chatMessage.substring(0, mentionPosition.start)
+    const afterMention = chatMessage.substring(mentionPosition.end)
+    
+    const mentionText = item.type === 'member' 
+      ? `@${item.name}`
+      : `@[${item.name}](checklist:${item.id})`
+    
+    const newMessage = beforeMention + mentionText + ' ' + afterMention
+    setChatMessage(newMessage)
+    setShowMentionDropdown(false)
+    setMentionQuery('')
+    setMentionPosition(null)
+    
+    // Focus back to textarea
+    setTimeout(() => {
+      mentionInputRef.current?.focus()
+      const newCursorPos = beforeMention.length + mentionText.length + 1
+      mentionInputRef.current?.setSelectionRange(newCursorPos, newCursorPos)
+    }, 0)
+  }
+
+  // Filter mention options
+  const getFilteredMentions = () => {
+    const members = getMentionMembers()
+    const checklistItems = getMentionChecklistItems()
+    
+    const allMentions = [
+      ...members,
+      ...checklistItems
+    ]
+    
+    if (!mentionQuery) return allMentions
+    
+    const query = mentionQuery.toLowerCase()
+    return allMentions.filter(item => 
+      item.name.toLowerCase().includes(query)
+    )
   }
 
   const handleTogglePin = async (comment: TaskComment) => {
@@ -1271,7 +1464,7 @@ export default function TaskDetailPage() {
 
                     <div className="space-y-2">
                       {checklist.items.map(item => (
-                        <div key={item.id} className="group flex items-start gap-3 py-1.5 hover:bg-gray-50 rounded-md px-2 -mx-2 transition-colors">
+                        <div key={item.id} data-checklist-item-id={item.id} className="group flex items-start gap-3 py-1.5 hover:bg-gray-50 rounded-md px-2 -mx-2 transition-colors">
                           <button
                             onClick={() => handleToggleChecklistItem(item)}
                             className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center transition-colors ${item.is_completed ? 'bg-blue-600 border-blue-600' : 'border-gray-300 hover:border-blue-500'}`}
@@ -1831,7 +2024,108 @@ export default function TaskDetailPage() {
                             )}
                             {/* Nội dung text */}
                             {c.comment && (
-                              <p className="whitespace-pre-wrap">{c.comment}</p>
+                              <p className="whitespace-pre-wrap">
+                                {(() => {
+                                  let text = c.comment
+                                  const parts: Array<{ type: 'text' | 'checklist' | 'member'; content: string; name?: string; checklistId?: string }> = []
+                                  
+                                  // Find all checklist mentions: @[name](checklist:id)
+                                  const checklistRegex = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
+                                  let checklistMatch
+                                  let lastIndex = 0
+                                  
+                                  while ((checklistMatch = checklistRegex.exec(text)) !== null) {
+                                    // Add text before mention
+                                    if (checklistMatch.index > lastIndex) {
+                                      const beforeText = text.substring(lastIndex, checklistMatch.index)
+                                      if (beforeText) {
+                                        // Check for member mentions in before text
+                                        const memberParts = beforeText.split(/(@\w+)/g)
+                                        memberParts.forEach((part, partIdx) => {
+                                          if (part && part.startsWith('@') && part.length > 1) {
+                                            const memberName = part.substring(1)
+                                            parts.push({ type: 'member', content: part, name: memberName })
+                                          } else if (part) {
+                                            parts.push({ type: 'text', content: part })
+                                          }
+                                        })
+                                      }
+                                    }
+                                    
+                                    // Add checklist mention with ID
+                                    const [, name, checklistId] = checklistMatch
+                                    parts.push({ type: 'checklist', content: checklistMatch[0], name, checklistId })
+                                    lastIndex = checklistRegex.lastIndex
+                                  }
+                                  
+                                  // Add remaining text
+                                  if (lastIndex < text.length) {
+                                    const remainingText = text.substring(lastIndex)
+                                    if (remainingText) {
+                                      // Check for member mentions in remaining text
+                                      const memberParts = remainingText.split(/(@\w+)/g)
+                                      memberParts.forEach((part) => {
+                                        if (part && part.startsWith('@') && part.length > 1) {
+                                          const memberName = part.substring(1)
+                                          parts.push({ type: 'member', content: part, name: memberName })
+                                        } else if (part) {
+                                          parts.push({ type: 'text', content: part })
+                                        }
+                                      })
+                                    }
+                                  }
+                                  
+                                  // If no mentions found, check for member mentions only
+                                  if (parts.length === 0) {
+                                    const memberParts = text.split(/(@\w+)/g)
+                                    memberParts.forEach((part) => {
+                                      if (part && part.startsWith('@') && part.length > 1) {
+                                        const memberName = part.substring(1)
+                                        parts.push({ type: 'member', content: part, name: memberName })
+                                      } else if (part) {
+                                        parts.push({ type: 'text', content: part })
+                                      }
+                                    })
+                                  }
+                                  
+                                  return parts.map((part, idx) => {
+                                    if (part.type === 'checklist' && part.name && part.checklistId) {
+                                      return (
+                                        <span 
+                                          key={idx} 
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            // Scroll to checklist item
+                                            const checklistItemElement = document.querySelector(`[data-checklist-item-id="${part.checklistId}"]`)
+                                            if (checklistItemElement) {
+                                              checklistItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                              // Highlight briefly
+                                              checklistItemElement.classList.add('ring-2', 'ring-green-500', 'ring-offset-2')
+                                              setTimeout(() => {
+                                                checklistItemElement.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2')
+                                              }, 2000)
+                                            }
+                                          }}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-md font-medium cursor-pointer hover:bg-green-200 transition-colors"
+                                          title="Click để xem việc cần làm"
+                                        >
+                                          <CheckSquare className="h-3 w-3" />
+                                          {part.name}
+                                        </span>
+                                      )
+                                    } else if (part.type === 'member' && part.name) {
+                                      return (
+                                        <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md font-medium">
+                                          <User className="h-3 w-3" />
+                                          {part.name}
+                                        </span>
+                                      )
+                                    } else {
+                                      return <span key={idx}>{part.content}</span>
+                                    }
+                                  })
+                                })()}
+                              </p>
                             )}
                             {/* Reply button - appears on hover */}
                             <button
@@ -1934,22 +2228,72 @@ export default function TaskDetailPage() {
                     }}
                   />
                 </label>
-                <div className="flex-1 bg-gray-100 rounded-xl px-4 py-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white transition-all">
+                <div className="flex-1 bg-gray-100 rounded-xl px-4 py-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white transition-all relative">
                   <textarea
+                    ref={mentionInputRef}
                     value={chatMessage}
-                    onChange={(e) => setChatMessage(e.target.value)}
-                    placeholder={replyingTo ? `Trả lời ${replyingTo.user_name}...` : "Nhập tin nhắn..."}
+                    onChange={handleMentionInput}
+                    placeholder={replyingTo ? `Trả lời ${replyingTo.user_name}...` : "Nhập tin nhắn... (dùng @ để mention)"}
                     className="w-full bg-transparent border-none focus:ring-0 text-sm max-h-24 resize-none p-0 text-black placeholder:text-gray-500"
                     rows={1}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        handleSendMessage()
-                      } else if (e.key === 'Escape' && replyingTo) {
-                        handleCancelReply()
+                      if (showMentionDropdown) {
+                        const filtered = getFilteredMentions()
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          // Could add keyboard navigation here
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          // Could add keyboard navigation here
+                        } else if (e.key === 'Enter' && filtered.length > 0 && !e.shiftKey) {
+                          e.preventDefault()
+                          insertMention(filtered[0])
+                        } else if (e.key === 'Escape') {
+                          setShowMentionDropdown(false)
+                        }
+                      } else {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage()
+                        } else if (e.key === 'Escape' && replyingTo) {
+                          handleCancelReply()
+                        }
                       }
                     }}
                   />
+                  
+                  {/* Mention Dropdown */}
+                  {showMentionDropdown && (
+                    <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                      <div className="p-2 space-y-1">
+                        {getFilteredMentions().length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-gray-500">Không tìm thấy</div>
+                        ) : (
+                          getFilteredMentions().map((item, idx) => (
+                            <button
+                              key={`${item.type}-${item.id}`}
+                              onClick={() => insertMention(item)}
+                              className="w-full text-left px-3 py-2 rounded hover:bg-blue-50 transition-colors flex items-center gap-2"
+                            >
+                              {item.type === 'member' ? (
+                                <>
+                                  <User className="h-4 w-4 text-blue-600" />
+                                  <span className="text-sm text-gray-900">{item.name}</span>
+                                  <span className="text-xs text-gray-500 ml-auto">Thành viên</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckSquare className="h-4 w-4 text-green-600" />
+                                  <span className="text-sm text-gray-900">{item.name}</span>
+                                  <span className="text-xs text-gray-500 ml-auto">Việc cần làm</span>
+                                </>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={handleSendMessage}
