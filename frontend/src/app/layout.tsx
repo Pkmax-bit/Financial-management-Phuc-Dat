@@ -6,6 +6,7 @@ import 'shepherd.js/dist/css/shepherd.css'
 import BackgroundProviderWrapper from '@/components/BackgroundProviderWrapper'
 import QueryProvider from '@/providers/QueryProvider'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
+import StickySliderProvider from '@/components/common/StickySliderProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -24,9 +25,11 @@ export default function RootLayout({
       <body className={inter.className}>
         <ErrorBoundary>
           <QueryProvider>
-            <BackgroundProviderWrapper>
-              {children}
-            </BackgroundProviderWrapper>
+            <StickySliderProvider>
+              <BackgroundProviderWrapper>
+                {children}
+              </BackgroundProviderWrapper>
+            </StickySliderProvider>
           </QueryProvider>
         </ErrorBoundary>
       </body>

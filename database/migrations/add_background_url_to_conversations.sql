@@ -10,3 +10,5 @@ ADD COLUMN IF NOT EXISTS background_url TEXT;
 -- Add comment
 COMMENT ON COLUMN internal_conversations.background_url IS 'URL hình nền của nhóm chat (optional)';
 
+
+

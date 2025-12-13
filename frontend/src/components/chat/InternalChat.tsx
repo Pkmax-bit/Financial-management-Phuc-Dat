@@ -41,6 +41,7 @@ import { Conversation, Message, ConversationWithParticipants, MessageCreate, Con
 import { supabase } from '@/lib/supabase'
 import { formatDistanceToNow } from 'date-fns'
 import { vi } from 'date-fns/locale'
+import MessageBubble from './MessageBubble'
 
 interface InternalChatProps {
   currentUserId: string
@@ -103,23 +104,9 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       const response = await apiGet('/api/chat/conversations')
       const conversationsList = response.conversations || []
       
-      // Load participants for each conversation to display employee names
-      const conversationsWithParticipants = await Promise.all(
-        conversationsList.map(async (conv: Conversation) => {
-          try {
-            const convDetails = await apiGet(`/api/chat/conversations/${conv.id}`)
-            return {
-              ...conv,
-              participants: convDetails.participants || []
-            }
-          } catch (error) {
-            console.error(`Error loading participants for conversation ${conv.id}:`, error)
-            return conv
-          }
-        })
-      )
-      
-      setConversations(conversationsWithParticipants)
+      // Backend already returns participants via _enrich_conversation_with_participants
+      // No need to make additional API calls for each conversation
+      setConversations(conversationsList)
     } catch (error) {
       console.error('Error loading conversations:', error)
     } finally {
@@ -144,15 +131,168 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
+  // Message cache to avoid reloading
+  const messageCacheRef = useRef<Map<string, { messages: Message[], timestamp: number }>>(new Map())
+  const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+  // Load messages - Optimized with parallel loading and caching
   const loadMessages = useCallback(async (conversationId: string) => {
     try {
       setLoading(true)
-      const response = await apiGet(`/api/chat/conversations/${conversationId}/messages`)
-      setMessages(response.messages || [])
+      
+      // Check cache first
+      const cached = messageCacheRef.current.get(conversationId)
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        console.log(`📦 Using cached messages (${cached.messages.length} messages) for conversation ${conversationId}`)
+        setMessages(cached.messages)
+        setLoading(false)
+        // Load in background to update cache
+        loadMessagesInBackground(conversationId)
+        return
+      }
+
+      console.log(`🔄 Loading messages for conversation ${conversationId}...`)
+      
+      // Load first batch immediately (most recent messages)
+      const firstBatch = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=100`)
+      const firstMessages = firstBatch.messages || []
+      
+      console.log(`📥 First batch: ${firstMessages.length} messages, total: ${firstBatch.total || 0}, has_more: ${firstBatch.has_more}`)
+      
+      // Display first batch immediately for fast UI
+      if (firstMessages.length > 0) {
+        setMessages(firstMessages)
+        // Don't set loading to false yet if there are more messages to load
+        if (!firstBatch.has_more || firstMessages.length < 100) {
+          setLoading(false)
+        }
+      } else {
+        // No messages at all
+        setMessages([])
+        setLoading(false)
+        messageCacheRef.current.set(conversationId, {
+          messages: [],
+          timestamp: Date.now()
+        })
+        console.log(`✅ No messages found for conversation ${conversationId}`)
+        return
+      }
+
+      // If there are more messages, load them in parallel batches
+      if (firstBatch.has_more && firstMessages.length === 100) {
+        const totalCount = firstBatch.total || 0
+        const remainingMessages = totalCount - firstMessages.length
+        
+        if (remainingMessages > 0) {
+          // Calculate how many batches we need
+          const batchesNeeded = Math.ceil(remainingMessages / 100)
+          console.log(`📦 Loading ${batchesNeeded} additional batches (${remainingMessages} messages)...`)
+          
+          // Load all remaining batches in parallel (but limit to reasonable number to avoid overwhelming)
+          // Load in chunks of 5 batches at a time
+          const MAX_PARALLEL_BATCHES = 5
+          let allMessages = [...firstMessages]
+          
+          // Load batches in chunks
+          for (let chunkStart = 1; chunkStart <= batchesNeeded; chunkStart += MAX_PARALLEL_BATCHES) {
+            const chunkEnd = Math.min(chunkStart + MAX_PARALLEL_BATCHES - 1, batchesNeeded)
+            const batchPromises: Promise<any>[] = []
+            
+            console.log(`📥 Loading chunk ${chunkStart}-${chunkEnd} of ${batchesNeeded} batches...`)
+            
+            // Create promises for this chunk
+            for (let i = chunkStart; i <= chunkEnd; i++) {
+              const skip = i * 100
+              batchPromises.push(
+                apiGet(`/api/chat/conversations/${conversationId}/messages?skip=${skip}&limit=100`)
+                  .catch(err => {
+                    console.error(`❌ Error loading batch ${i}:`, err)
+                    return { messages: [], has_more: false }
+                  })
+              )
+            }
+            
+            // Wait for this chunk to complete
+            const chunkResults = await Promise.all(batchPromises)
+            
+            // Combine messages from this chunk
+            let chunkMessageCount = 0
+            for (const result of chunkResults) {
+              if (result.messages && result.messages.length > 0) {
+                allMessages = [...allMessages, ...result.messages]
+                chunkMessageCount += result.messages.length
+              }
+            }
+            
+            console.log(`✅ Chunk ${chunkStart}-${chunkEnd} loaded: ${chunkMessageCount} messages (total so far: ${allMessages.length})`)
+            
+            // Update UI progressively as we load more batches
+            if (chunkStart === 1) {
+              // First chunk: update immediately
+              setMessages([...allMessages])
+            } else {
+              // Subsequent chunks: update to show progress
+              setMessages([...allMessages])
+            }
+          }
+          
+          // Sort by created_at (oldest first, newest last)
+          allMessages.sort((a, b) => {
+            const timeA = new Date(a.created_at).getTime()
+            const timeB = new Date(b.created_at).getTime()
+            return timeA - timeB
+          })
+          
+          // Final update with all messages
+          setMessages(allMessages)
+          setLoading(false) // Make sure loading is turned off
+          
+          // Cache the result
+          messageCacheRef.current.set(conversationId, {
+            messages: allMessages,
+            timestamp: Date.now()
+          })
+          
+          console.log(`✅ Loaded all ${allMessages.length} messages (${batchesNeeded} batches) for conversation ${conversationId}`)
+        } else {
+          // Cache first batch if no more messages
+          setLoading(false)
+          messageCacheRef.current.set(conversationId, {
+            messages: firstMessages,
+            timestamp: Date.now()
+          })
+          console.log(`✅ Loaded ${firstMessages.length} messages (no more batches) for conversation ${conversationId}`)
+        }
+      } else {
+        // Cache first batch if no more messages
+        setLoading(false)
+        messageCacheRef.current.set(conversationId, {
+          messages: firstMessages,
+          timestamp: Date.now()
+        })
+        console.log(`✅ Loaded ${firstMessages.length} messages (no more batches) for conversation ${conversationId}`)
+      }
     } catch (error) {
-      console.error('Error loading messages:', error)
-    } finally {
+      console.error('❌ Error loading messages:', error)
+      setMessages([])
       setLoading(false)
+    }
+  }, [])
+
+  // Load messages in background to update cache
+  const loadMessagesInBackground = useCallback(async (conversationId: string) => {
+    try {
+      const response = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=100`)
+      const messages = response.messages || []
+      
+      if (messages.length > 0) {
+        messageCacheRef.current.set(conversationId, {
+          messages,
+          timestamp: Date.now()
+        })
+      }
+    } catch (error) {
+      console.error('Error loading messages in background:', error)
     }
   }, [])
 
@@ -286,11 +426,24 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     }
   }, [currentUserId, loadConversations])
 
-  // Load messages when conversation changes
+  // Load messages when conversation changes - Optimized parallel loading
   useEffect(() => {
     if (selectedConversation) {
-      loadMessages(selectedConversation.id)
-      markAsRead(selectedConversation.id)
+      // Clear old messages first to avoid showing stale data
+      setMessages([])
+      
+      // Load messages and mark as read in parallel for faster response
+      Promise.all([
+        loadMessages(selectedConversation.id),
+        markAsRead(selectedConversation.id)
+      ]).catch(error => {
+        console.error('Error loading conversation data:', error)
+      })
+      
+      // Save selected conversation to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('internal_chat_selected_conversation', selectedConversation.id)
+      }
       
       // Subscribe to real-time messages
       const channel = supabase
@@ -300,15 +453,77 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
           schema: 'public',
           table: 'internal_messages',
           filter: `conversation_id=eq.${selectedConversation.id}`
-        }, (payload) => {
-          // Add new message to list
+        }, async (payload) => {
+          // Immediately add new message to list for instant display
           const newMessage = payload.new as any
-          // Reload messages to get updated data with sender info
-          fetchMessageDetails(selectedConversation.id)
-          // Reload conversations to update last_message_at and sort order
+          if (newMessage) {
+            // Check if message already exists to avoid duplicates
+            setMessages(prev => {
+              const exists = prev.find(m => m.id === newMessage.id)
+              if (exists) {
+                return prev // Message already exists, don't add duplicate
+              }
+              
+              // Add new message to the end (newest messages at the end)
+              // We'll enrich it with sender info below
+              return [...prev, newMessage as Message]
+            })
+            
+            // Enrich message with sender info without reloading all messages
+            try {
+              // Get sender name from users table
+              const { data: userData } = await supabase
+                .from('users')
+                .select('full_name')
+                .eq('id', newMessage.sender_id)
+                .single()
+              
+              if (userData) {
+                setMessages(prev => prev.map(msg => 
+                  msg.id === newMessage.id 
+                    ? { ...msg, sender_name: userData.full_name || 'Unknown' }
+                    : msg
+                ))
+              }
+            } catch (error) {
+              console.error('Error enriching message with sender info:', error)
+            }
+            
+            // Reload conversations to update last_message_at and sort order
+            loadConversations()
+          }
+        })
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'internal_messages',
+          filter: `conversation_id=eq.${selectedConversation.id}`
+        }, (payload) => {
+          // Update message in real-time (for edits/deletes)
+          const updatedMessage = payload.new as any
+          setMessages(prev => prev.map(msg => 
+            msg.id === updatedMessage.id ? { ...msg, ...updatedMessage } : msg
+          ))
+          loadConversations() // Update conversation list
+        })
+        .on('postgres_changes', {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'internal_messages',
+          filter: `conversation_id=eq.${selectedConversation.id}`
+        }, (payload) => {
+          // Remove deleted message
+          const deletedId = payload.old.id
+          setMessages(prev => prev.filter(msg => msg.id !== deletedId))
           loadConversations()
         })
-        .subscribe()
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Real-time subscription active for conversation:', selectedConversation.id)
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ Real-time subscription error for conversation:', selectedConversation.id)
+          }
+        })
 
       return () => {
         supabase.removeChannel(channel)
@@ -338,14 +553,27 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
 
   const handleSelectConversation = async (conversation: Conversation) => {
     try {
-      const response = await apiGet(`/api/chat/conversations/${conversation.id}`)
-      setSelectedConversation(response)
+      // Load conversation details and messages in parallel for faster response
+      const [convResponse] = await Promise.all([
+        apiGet(`/api/chat/conversations/${conversation.id}`),
+        // Preload messages immediately
+        loadMessages(conversation.id).catch(err => {
+          console.error('Error preloading messages:', err)
+        })
+      ])
+      
+      setSelectedConversation(convResponse)
       setReplyingTo(null)
       setEditingMessage(null)
       
+      // Save selected conversation to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('internal_chat_selected_conversation', conversation.id)
+      }
+      
       // Update conversation in list with participants info
       setConversations(prev => prev.map(conv => 
-        conv.id === conversation.id ? { ...conv, ...response } : conv
+        conv.id === conversation.id ? { ...conv, ...convResponse } : conv
       ))
     } catch (error) {
       console.error('Error loading conversation:', error)
@@ -366,20 +594,19 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       sender_name: currentUserName,
       message_text: messageTextToSend,
       message_type: 'text',
-      file_url: null,
-      file_name: null,
-      file_size: null,
+      file_url: undefined,
+      file_name: undefined,
+      file_size: undefined,
       is_deleted: false,
       is_edited: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       reply_to: replyingTo ? {
         id: replyingTo.id,
-        sender_id: replyingTo.sender_id,
-        sender_name: replyingTo.sender_name,
+        sender_name: replyingTo.sender_name || 'Unknown',
         message_text: replyingTo.message_text
-      } : null,
-      reply_to_id: replyingTo?.id || null
+      } : undefined,
+      reply_to_id: replyingTo?.id || undefined
     }
 
     // Add optimistic message to state immediately
@@ -540,7 +767,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
         sender_name: currentUserName,
         message_text: file.name,
         message_type: file.type.startsWith('image/') ? 'image' : 'file',
-        file_url: fileItem.preview || null,
+        file_url: fileItem.preview || undefined,
         file_name: file.name,
         file_size: file.size,
         is_deleted: false,
@@ -549,11 +776,10 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
         updated_at: new Date().toISOString(),
         reply_to: replyingTo ? {
           id: replyingTo.id,
-          sender_id: replyingTo.sender_id,
-          sender_name: replyingTo.sender_name,
+          sender_name: replyingTo.sender_name || 'Unknown',
           message_text: replyingTo.message_text
-        } : null,
-        reply_to_id: replyingTo?.id || null
+        } : undefined,
+        reply_to_id: replyingTo?.id || undefined
       }
     })
 
@@ -1136,6 +1362,11 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                 <div className="text-center text-gray-500 py-8">Chưa có tin nhắn nào</div>
               ) : (
                 <div className="space-y-2">
+                  {messages.length > 0 && (
+                    <div className="text-xs text-gray-400 text-center py-1">
+                      Hiển thị {messages.length} tin nhắn
+                    </div>
+                  )}
                   {messages.map((message, index) => {
                     const isOwn = message.sender_id === currentUserId
                     const isDeleted = message.is_deleted
@@ -1162,188 +1393,27 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                           </div>
                         )}
                         
-                        <div
-                          className={`flex group ${isOwn ? 'justify-end' : 'justify-start'}`}
-                        >
-                        <div className={`flex gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                          {/* Avatar (only for others) */}
-                          {!isOwn && (
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 shadow-sm">
-                              {message.sender_name?.charAt(0) || 'U'}
-                            </div>
-                          )}
-                          
-                          {/* Message Bubble */}
-                          <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
-                            {!isOwn && (
-                              <span className="text-xs text-gray-500 mb-1 px-1 font-medium">
-                                {message.sender_name || 'Unknown'}
-                              </span>
-                            )}
-                            
-                            {/* Reply Preview */}
-                            {message.reply_to && (
-                              <div className={`mb-1.5 px-3 py-1.5 rounded-lg ${
-                                isOwn 
-                                  ? 'bg-white/20 text-white/90 border-l-3 border-white/40 ml-auto' 
-                                  : 'bg-gray-100 text-gray-700 border-l-3 border-[#0068ff] mr-auto'
-                              }`} style={{ maxWidth: '100%' }}>
-                                <div className={`font-semibold text-xs mb-0.5 ${isOwn ? 'text-white/80' : 'text-[#0068ff]'}`}>
-                                  {message.reply_to.sender_name}
-                                </div>
-                                <div className="truncate text-xs">
-                                  {message.reply_to.message_text}
-                                </div>
-                              </div>
-                            )}
-                            
-                            <div
-                              className={`px-3 py-2 rounded-lg border shadow-sm ${
-                                isOwn
-                                  ? 'bg-[#e5f3ff] text-gray-900 rounded-tr-sm border-blue-200'
-                                  : 'bg-white text-gray-800 rounded-tl-sm border-gray-200'
-                              } ${isDeleted ? 'opacity-60 italic' : ''}`}
-                            >
-                              {isDeleted ? (
-                                <span className="text-sm">Tin nhắn đã bị xóa</span>
-                              ) : (
-                                <>
-                                  {/* File/Image Preview */}
-                                  {message.file_url && (
-                                    <div className={`mb-2 ${isOwn ? '' : ''}`}>
-                                      {message.message_type === 'image' ? (
-                                        <div className="relative group">
-                                          <img 
-                                            src={message.file_url} 
-                                            alt={message.file_name || 'Image'}
-                                            className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(message.file_url, '_blank')}
-                                          />
-                                          <button
-                                            onClick={() => handleDownloadFile(message.file_url!, message.file_name || 'image')}
-                                            className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="Tải xuống"
-                                          >
-                                            <Download className="w-4 h-4 text-white" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <div className={`flex items-center gap-2 p-2 rounded-lg border shadow-sm ${
-                                          isOwn ? 'bg-white/30 border-blue-200' : 'bg-gray-100 border-gray-200'
-                                        }`}>
-                                          <FileText className="w-5 h-5 flex-shrink-0 text-gray-600" />
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate text-gray-900">
-                                              {message.file_name || 'File'}
-                                            </p>
-                                            {message.file_size && (
-                                              <p className="text-xs text-gray-500">
-                                                {(message.file_size / 1024).toFixed(1)} KB
-                                              </p>
-                                            )}
-                                          </div>
-                                          <button
-                                            onClick={() => handleDownloadFile(message.file_url!, message.file_name || 'file')}
-                                            className="p-1 rounded transition-colors hover:bg-gray-200"
-                                            title="Tải xuống"
-                                          >
-                                            <Download className="w-4 h-4 text-gray-600" />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  
-                                  {/* Message Text */}
-                                  {message.message_text && (
-                                    <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                                      {message.message_text}
-                                    </p>
-                                  )}
-                                  {message.is_edited && (
-                                    <span className={`text-xs opacity-70 ml-2 ${isOwn ? 'text-white/80' : 'text-gray-500'}`}>(đã chỉnh sửa)</span>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                            
-                            {/* Time and Actions - Zalo Style */}
-                            <div className={`flex items-center gap-2 mt-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                              <span className={`text-xs ${isOwn ? 'text-gray-500' : 'text-gray-400'}`}>
-                                {new Date(message.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                              {/* Reactions - Zalo Style */}
-                              <div className="flex items-center gap-1">
-                                <button className="p-0.5 hover:bg-gray-100 rounded transition-colors opacity-0 group-hover:opacity-100">
-                                  <ThumbsUp className="w-3.5 h-3.5 text-gray-500" />
-                                </button>
-                                <button className="p-0.5 hover:bg-gray-100 rounded transition-colors opacity-0 group-hover:opacity-100">
-                                  <Heart className="w-3.5 h-3.5 text-gray-500" />
-                                </button>
-                              </div>
-                              {!isDeleted && (
-                                <div className={`flex gap-1 items-center opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                                  {isOwn && (
-                                    <>
-                                      <button
-                                        onClick={() => {
-                                          setEditingMessage(message)
-                                          setMessageText(message.message_text)
-                                          setReplyingTo(null)
-                                        }}
-                                        className="p-1.5 rounded transition-colors hover:bg-gray-200 text-gray-900"
-                                        title="Chỉnh sửa"
-                                      >
-                                        <Edit2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteMessage(message.id)}
-                                        className="p-1.5 rounded transition-colors hover:bg-gray-200 text-gray-900"
-                                        title="Xóa"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </>
-                                  )}
-                                  <button
-                                    onClick={() => {
-                                      setReplyingTo(message)
-                                      setEditingMessage(null)
-                                    }}
-                                    className="p-1.5 rounded transition-colors hover:bg-gray-200 text-gray-900"
-                                    title="Trả lời"
-                                  >
-                                    <Reply className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleCopyMessage(message.message_text)}
-                                    className="p-1.5 rounded transition-colors hover:bg-gray-200 text-gray-900"
-                                    title="Sao chép"
-                                  >
-                                    <Copy className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleForwardMessage(message)}
-                                    className="p-1.5 rounded transition-colors hover:bg-gray-200 text-gray-900"
-                                    title="Chuyển tiếp"
-                                  >
-                                    <Forward className="w-3.5 h-3.5" />
-                                  </button>
-                                  {message.file_url && (
-                                    <button
-                                      onClick={() => handleDownloadFile(message.file_url!, message.file_name || 'file')}
-                                      className="p-1.5 rounded transition-colors hover:bg-gray-200 text-gray-900"
-                                      title="Tải xuống"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        <MessageBubble
+                          message={message}
+                          isOwn={isOwn}
+                          currentUserId={currentUserId}
+                          onEdit={(msg) => {
+                            setEditingMessage(msg)
+                            setMessageText(msg.message_text)
+                            setReplyingTo(null)
+                          }}
+                          onDelete={handleDeleteMessage}
+                          onReply={(msg) => {
+                            setReplyingTo(msg)
+                            setEditingMessage(null)
+                          }}
+                          onCopy={handleCopyMessage}
+                          onForward={handleForwardMessage}
+                          onDownload={handleDownloadFile}
+                          showAvatar={!isOwn}
+                          showSenderName={!isOwn}
+                          maxWidth="70%"
+                        />
                     </div>
                     )
                   })}

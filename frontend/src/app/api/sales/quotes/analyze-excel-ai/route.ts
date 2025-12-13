@@ -474,8 +474,11 @@ YÊU CẦU PHÂN TÍCH CHI TIẾT:
        - "CỬA TRƯỢT QUAY 4 CÁNH + MỞ TRONG" → ten_san_pham: "CỬA TRƯỢT QUAY 4 CÁNH"
      * Quy tắc: Lấy TRƯỚC dấu +, hoặc toàn bộ dòng đầu nếu không có +
    
-   - item_type: PHÂN LOẠI ITEM - "product" HOẶC "material_cost"
-     * QUAN TRỌNG: Phân biệt rõ ràng giữa SẢN PHẨM và CHI PHÍ VẬT TƯ
+   - item_type: PHÂN LOẠI ITEM - "product" HOẶC "material_cost" (BẮT BUỘC PHẢI CÓ)
+     * ⚠️ CỰC KỲ QUAN TRỌNG: PHẢI phân biệt rõ ràng giữa SẢN PHẨM và CHI PHÍ VẬT TƯ
+     * Mỗi item PHẢI có item_type để hệ thống biết lưu vào đâu:
+       - item_type: "product" → Lưu vào bảng SẢN PHẨM (products)
+       - item_type: "material_cost" → Lưu vào bảng CHI PHÍ ĐỐI TƯỢNG (expense_objects)
      
      QUY TẮC PHÂN LOẠI:
      
@@ -488,23 +491,27 @@ YÊU CẦU PHÂN TÍCH CHI TIẾT:
           * "Cửa đi 2 cánh mở quay" → item_type: "product"
           * "VÁCH KÍNH VĂN PHÒNG" → item_type: "product"
           * "Lan can kính" → item_type: "product"
+          * "CỬA TRƯỢT QUAY 4 CÁNH" → item_type: "product"
      
      ✅ item_type: "material_cost" (CHI PHÍ VẬT TƯ) - Nếu là:
         - Vật tư, nguyên vật liệu: Nhôm, Kính, Inox, Sắt, Nhựa, Gỗ, Phụ kiện riêng lẻ
         - Chi phí sản xuất: Vật liệu dùng để sản xuất sản phẩm
-        - Có từ khóa: "chi phí", "vật tư", "nguyên vật liệu", "vật liệu", "phụ kiện" (riêng lẻ)
+        - Chi phí dịch vụ: Vận chuyển, lắp đặt, v.v.
+        - Có từ khóa: "chi phí", "vật tư", "nguyên vật liệu", "vật liệu", "phụ kiện" (riêng lẻ, không phải sản phẩm hoàn chỉnh)
         - Ví dụ:
           * "Nhôm Xingfa TDA" (riêng lẻ, không phải sản phẩm hoàn chỉnh) → item_type: "material_cost"
-          * "Kính cường lực 10mm" (riêng lẻ) → item_type: "material_cost"
+          * "Kính cường lực 10mm" (riêng lẻ, chỉ là vật liệu) → item_type: "material_cost"
           * "Phụ kiện Kinlong" (riêng lẻ) → item_type: "material_cost"
           * "Chi phí vận chuyển" → item_type: "material_cost"
           * "Nhôm xưởng" → item_type: "material_cost"
-          * "Kính Thiên Phát" → item_type: "material_cost"
+          * "Kính Thiên Phát" (chỉ là vật liệu) → item_type: "material_cost"
+          * "Vận chuyển lắp đặt" → item_type: "material_cost"
      
-     ⚠️ LƯU Ý:
-        - Nếu item có tên sản phẩm hoàn chỉnh (Cửa, Cửa sổ, Vách kính) → item_type: "product"
-        - Nếu item chỉ là vật liệu/phụ kiện riêng lẻ → item_type: "material_cost"
+     ⚠️ LƯU Ý QUAN TRỌNG:
+        - Nếu item có tên sản phẩm hoàn chỉnh (Cửa, Cửa sổ, Vách kính, Lan can) → item_type: "product"
+        - Nếu item chỉ là vật liệu/phụ kiện riêng lẻ (Nhôm, Kính, Phụ kiện, Chi phí) → item_type: "material_cost"
         - Nếu không rõ → mặc định là "product"
+        - MỖI ITEM PHẢI CÓ item_type, không được để trống hoặc null
    
    - loai_san_pham: Loại/Category sản phẩm - PHÂN LOẠI DỰA VÀO VẬT LIỆU
      * ĐỌC KỸ các dòng mô tả để xác định vật liệu chính

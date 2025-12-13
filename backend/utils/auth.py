@@ -91,7 +91,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """Get current authenticated user using Supabase token"""
     try:
         token = credentials.credentials
-        print(f"[AUTH] Received token: {token[:30]}..." if token and len(token) > 30 else f"[AUTH] Token: {token}")
+        # Only log in debug mode or on errors
+        # print(f"[AUTH] Received token: {token[:30]}..." if token and len(token) > 30 else f"[AUTH] Token: {token}")
         
         if not token:
             print("[AUTH] ERROR: No token provided")
@@ -114,10 +115,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         supabase = get_supabase_anon_client()
         
         try:
-            print("[AUTH] Verifying token with Supabase...")
+            # Only log in debug mode
+            # print("[AUTH] Verifying token with Supabase...")
             # Get the user from Supabase using the JWT token
             user_response = supabase.auth.get_user(token)
-            print(f"[AUTH] Token verified successfully for user: {user_response.user.email if user_response and user_response.user else 'unknown'}")
+            # Only log in debug mode
+            # print(f"[AUTH] Token verified successfully for user: {user_response.user.email if user_response and user_response.user else 'unknown'}")
 
             if not user_response or not hasattr(user_response, 'user') or not user_response.user:
                 raise HTTPException(
@@ -222,7 +225,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             print(f"[AUTH] Role is not string or enum: {type(role_value)}, defaulting to EMPLOYEE")
             user_data["role"] = UserRole.EMPLOYEE
         
-        print(f"[AUTH] User role after conversion: {user_data['role']} (type: {type(user_data['role'])})")
+        # Only log in debug mode
+        # print(f"[AUTH] User role after conversion: {user_data['role']} (type: {type(user_data['role'])})")
         
         return User(**user_data)
         

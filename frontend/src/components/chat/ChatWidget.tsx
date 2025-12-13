@@ -8,9 +8,10 @@ import {
 } from 'lucide-react'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
-import { Conversation, Message, MessageCreate } from '@/types/chat'
+import { Conversation, Message, MessageCreate, ConversationWithParticipants } from '@/types/chat'
 import { formatDistanceToNow } from 'date-fns'
 import { vi } from 'date-fns/locale'
+import MessageBubble from './MessageBubble'
 
 interface ChatWidgetProps {
   currentUserId: string
@@ -26,12 +27,17 @@ interface FileItem {
 }
 
 export default function ChatWidget({ currentUserId, currentUserName, conversationId, onClose, onMinimize }: ChatWidgetProps) {
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [conversations, setConversations] = useState<ConversationWithParticipants[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<ConversationWithParticipants | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [messageText, setMessageText] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingMessages, setLoadingMessages] = useState(false)
   const [sending, setSending] = useState(false)
+  
+  // Message cache to avoid reloading
+  const messageCacheRef = useRef<Map<string, { messages: Message[], timestamp: number }>>(new Map())
+  const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
   const [uploadingFile, setUploadingFile] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
@@ -50,31 +56,21 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
       const response = await apiGet('/api/chat/conversations')
       const conversationsList = response.conversations || []
       
-      // Load participants for each conversation
-      const conversationsWithParticipants = await Promise.all(
-        conversationsList.map(async (conv: Conversation) => {
-          try {
-            const convDetails = await apiGet(`/api/chat/conversations/${conv.id}`)
-            return { ...conv, participants: convDetails.participants || [] }
-          } catch {
-            return conv
-          }
-        })
-      )
-      
-      setConversations(conversationsWithParticipants)
+      // Backend already returns participants via _enrich_conversation_with_participants
+      // No need to make additional API calls for each conversation
+      setConversations(conversationsList as ConversationWithParticipants[])
       
       // Auto-select conversation if provided, otherwise first conversation
-      if (conversationsWithParticipants.length > 0) {
+      if (conversationsList.length > 0) {
         if (conversationId) {
-          const targetConv = conversationsWithParticipants.find(c => c.id === conversationId)
+          const targetConv = conversationsList.find((c: Conversation) => c.id === conversationId) as ConversationWithParticipants | undefined
           if (targetConv) {
             setSelectedConversation(targetConv)
           } else if (!selectedConversation) {
-            setSelectedConversation(conversationsWithParticipants[0])
+            setSelectedConversation(conversationsList[0] as ConversationWithParticipants)
           }
         } else if (!selectedConversation) {
-          setSelectedConversation(conversationsWithParticipants[0])
+          setSelectedConversation(conversationsList[0] as ConversationWithParticipants)
         }
       }
     } catch (error) {
@@ -84,13 +80,170 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
     }
   }, [conversationId])
 
-  // Load messages
+  // Load messages - Optimized with parallel loading and caching
   const loadMessages = useCallback(async (conversationId: string) => {
     try {
-      const response = await apiGet(`/api/chat/conversations/${conversationId}/messages`)
-      setMessages(response.messages || [])
+      setLoadingMessages(true)
+      
+      // Check cache first
+      const cached = messageCacheRef.current.get(conversationId)
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        setMessages(cached.messages)
+        setLoadingMessages(false)
+        // Load in background to update cache
+        loadMessagesInBackground(conversationId)
+        return
+      }
+
+      console.log(`🔄 Loading messages for conversation ${conversationId}...`)
+      
+      // Load first batch immediately (most recent messages)
+      const firstBatch = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=100`)
+      const firstMessages = firstBatch.messages || []
+      
+      console.log(`📥 First batch: ${firstMessages.length} messages, total: ${firstBatch.total || 0}, has_more: ${firstBatch.has_more}`)
+      
+      // Display first batch immediately for fast UI
+      if (firstMessages.length > 0) {
+        console.log(`✅ Setting ${firstMessages.length} messages to state`)
+        console.log('📋 Sample message:', firstMessages[0] ? {
+          id: firstMessages[0].id,
+          text: firstMessages[0].message_text,
+          sender: firstMessages[0].sender_name,
+          type: firstMessages[0].message_type
+        } : 'No messages')
+        setMessages(firstMessages)
+        // Don't set loading to false yet if there are more messages to load
+        if (!firstBatch.has_more || firstMessages.length < 100) {
+          setLoadingMessages(false)
+        }
+      } else {
+        // No messages at all
+        setMessages([])
+        setLoadingMessages(false)
+        messageCacheRef.current.set(conversationId, {
+          messages: [],
+          timestamp: Date.now()
+        })
+        console.log(`✅ No messages found for conversation ${conversationId}`)
+        return
+      }
+
+      // If there are more messages, load them in parallel batches
+      if (firstBatch.has_more && firstMessages.length === 100) {
+        const totalCount = firstBatch.total || 0
+        const remainingMessages = totalCount - firstMessages.length
+        
+        if (remainingMessages > 0) {
+          // Calculate how many batches we need
+          const batchesNeeded = Math.ceil(remainingMessages / 100)
+          
+          // Load all remaining batches in parallel (but limit to reasonable number to avoid overwhelming)
+          // Load in chunks of 5 batches at a time
+          const MAX_PARALLEL_BATCHES = 5
+          let allMessages = [...firstMessages]
+          
+          // Load batches in chunks
+          for (let chunkStart = 1; chunkStart <= batchesNeeded; chunkStart += MAX_PARALLEL_BATCHES) {
+            const chunkEnd = Math.min(chunkStart + MAX_PARALLEL_BATCHES - 1, batchesNeeded)
+            const batchPromises: Promise<any>[] = []
+            
+            // Create promises for this chunk
+            for (let i = chunkStart; i <= chunkEnd; i++) {
+              const skip = i * 100
+              batchPromises.push(
+                apiGet(`/api/chat/conversations/${conversationId}/messages?skip=${skip}&limit=100`)
+                  .catch(err => {
+                    console.error(`Error loading batch ${i}:`, err)
+                    return { messages: [], has_more: false }
+                  })
+              )
+            }
+            
+            // Wait for this chunk to complete
+            const chunkResults = await Promise.all(batchPromises)
+            
+            // Combine messages from this chunk
+            for (const result of chunkResults) {
+              if (result.messages && result.messages.length > 0) {
+                allMessages = [...allMessages, ...result.messages]
+              }
+            }
+            
+            // Update UI progressively as we load more batches
+            if (chunkStart === 1) {
+              // First chunk: update immediately
+              setMessages([...allMessages])
+            }
+          }
+          
+          // Sort by created_at (oldest first, newest last)
+          allMessages.sort((a, b) => {
+            const timeA = new Date(a.created_at).getTime()
+            const timeB = new Date(b.created_at).getTime()
+            return timeA - timeB
+          })
+          
+          // Final update with all messages
+          setMessages(allMessages)
+          setLoadingMessages(false)
+          
+          // Cache the result
+          messageCacheRef.current.set(conversationId, {
+            messages: allMessages,
+            timestamp: Date.now()
+          })
+          
+          console.log(`✅ Loaded all ${allMessages.length} messages (${batchesNeeded} batches) for conversation ${conversationId}`)
+        } else {
+          // No more messages, just cache first batch
+          setLoadingMessages(false)
+          messageCacheRef.current.set(conversationId, {
+            messages: firstMessages,
+            timestamp: Date.now()
+          })
+          console.log(`✅ Loaded ${firstMessages.length} messages (no more) for conversation ${conversationId}`)
+        }
+      } else {
+        // No more messages, just cache first batch
+        setLoadingMessages(false)
+        messageCacheRef.current.set(conversationId, {
+          messages: firstMessages,
+          timestamp: Date.now()
+        })
+        console.log(`✅ Loaded ${firstMessages.length} messages (no more) for conversation ${conversationId}`)
+      }
     } catch (error) {
-      console.error('Error loading messages:', error)
+      console.error('❌ Error loading messages:', error)
+      setMessages([])
+      setLoadingMessages(false)
+    }
+  }, [])
+
+  // Load messages in background to update cache
+  const loadMessagesInBackground = useCallback(async (conversationId: string) => {
+    try {
+      const response = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=100`)
+      const messages = response.messages || []
+      
+      if (messages.length > 0) {
+        messageCacheRef.current.set(conversationId, {
+          messages,
+          timestamp: Date.now()
+        })
+      }
+    } catch (error) {
+      console.error('Error loading messages in background:', error)
+    }
+  }, [])
+
+  // Load saved conversation from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !conversationId) {
+      const savedConversationId = localStorage.getItem('chat_widget_selected_conversation')
+      if (savedConversationId) {
+        // Will be handled by auto-select effect below
+      }
     }
   }, [])
 
@@ -99,23 +252,33 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
     loadConversations()
   }, [loadConversations])
 
-  // Auto-select conversation when conversationId prop changes
+  // Auto-select conversation when conversationId prop changes or from localStorage
   useEffect(() => {
-    if (conversationId) {
+    const targetId = conversationId || (typeof window !== 'undefined' ? localStorage.getItem('chat_widget_selected_conversation') : null)
+    
+    if (targetId) {
       // First check if conversation is already in the list
-      const targetConv = conversations.find(c => c.id === conversationId)
+      const targetConv = conversations.find(c => c.id === targetId)
       if (targetConv && targetConv.id !== selectedConversation?.id) {
-        setSelectedConversation(targetConv)
-      } else if (!targetConv) {
+        setSelectedConversation(targetConv as ConversationWithParticipants)
+        // Save to localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('chat_widget_selected_conversation', targetId)
+        }
+      } else if (!targetConv && conversations.length > 0) {
         // If conversation not in list, load it directly
         const loadConversation = async () => {
           try {
-            const convDetails = await apiGet(`/api/chat/conversations/${conversationId}`)
+            const convDetails = await apiGet(`/api/chat/conversations/${targetId}`)
             if (convDetails) {
               setSelectedConversation(convDetails)
+              // Save to localStorage
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('chat_widget_selected_conversation', targetId)
+              }
               // Also add to conversations list if not already there
               setConversations(prev => {
-                const exists = prev.find(c => c.id === conversationId)
+                const exists = prev.find(c => c.id === targetId)
                 if (!exists) {
                   return [...prev, convDetails]
                 }
@@ -128,16 +291,78 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
         }
         loadConversation()
       }
+    } else if (!targetId && conversations.length > 0 && !selectedConversation) {
+      // If no conversationId and no saved, select first conversation
+      const firstConv = conversations[0]
+      if (firstConv) {
+        setSelectedConversation(firstConv as ConversationWithParticipants)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('chat_widget_selected_conversation', firstConv.id)
+        }
+      }
     }
   }, [conversationId, conversations, selectedConversation])
 
-  // Load messages when conversation changes
+  const markAsRead = useCallback(async (conversationId: string) => {
+    try {
+      await apiPost(`/api/chat/conversations/${conversationId}/read`, {})
+      setConversations(prev => prev.map(conv => 
+        conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
+      ))
+    } catch (error) {
+      console.error('Error marking as read:', error)
+    }
+  }, [])
+
+  // Debug: Log messages state changes
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Messages state:', {
+        count: messages.length,
+        selectedConversation: selectedConversation?.id,
+        loadingMessages: loadingMessages,
+        sampleMessage: messages[0] ? {
+          id: messages[0].id,
+          text: messages[0].message_text?.substring(0, 50),
+          sender: messages[0].sender_name
+        } : null
+      })
+    }
+  }, [messages, selectedConversation, loadingMessages])
+
+  // Load messages when conversation changes - Optimized parallel loading
   useEffect(() => {
     if (selectedConversation) {
-      loadMessages(selectedConversation.id)
-      markAsRead(selectedConversation.id)
+      console.log(`🔄 Conversation selected: ${selectedConversation.id}, loading messages...`)
+      // Clear old messages first to avoid showing stale data
+      setMessages([])
+      
+      // Load messages and mark as read in parallel for faster response
+      Promise.all([
+        loadMessages(selectedConversation.id),
+        markAsRead(selectedConversation.id)
+      ]).catch(error => {
+        console.error('❌ Error loading conversation data:', error)
+        setLoadingMessages(false)
+      })
+    } else {
+      // Clear messages when no conversation selected
+      console.log('🔄 No conversation selected, clearing messages')
+      setMessages([])
+      setLoadingMessages(false)
     }
-  }, [selectedConversation, loadMessages])
+  }, [selectedConversation?.id, loadMessages, markAsRead])
+
+  const fetchMessageDetails = useCallback(async (conversationId: string) => {
+    try {
+      // Reload messages to get updated data with sender info
+      // This ensures we have the latest messages with all metadata
+      await loadMessages(conversationId)
+      await loadConversations()
+    } catch (error) {
+      console.error('Error fetching message details:', error)
+    }
+  }, [loadMessages, loadConversations])
 
   // Subscribe to real-time messages
   useEffect(() => {
@@ -150,35 +375,82 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
         schema: 'public',
         table: 'internal_messages',
         filter: `conversation_id=eq.${selectedConversation.id}`
-      }, (payload) => {
-        fetchMessageDetails(selectedConversation.id)
+      }, async (payload) => {
+        // Immediately add new message to state for instant display
+        const newMessage = payload.new as any
+        if (newMessage) {
+          // Check if message already exists to avoid duplicates
+          setMessages(prev => {
+            const exists = prev.find(m => m.id === newMessage.id)
+            if (exists) {
+              return prev // Message already exists, don't add duplicate
+            }
+            
+            // Add new message to the end (newest messages at the end)
+            // We'll enrich it with sender info below
+            return [...prev, newMessage as Message]
+          })
+          
+          // Enrich message with sender info without reloading all messages
+          try {
+            // Get sender name from users table
+            const { data: userData } = await supabase
+              .from('users')
+              .select('full_name')
+              .eq('id', newMessage.sender_id)
+              .single()
+            
+            if (userData) {
+              setMessages(prev => prev.map(msg => 
+                msg.id === newMessage.id 
+                  ? { ...msg, sender_name: userData.full_name || 'Unknown' }
+                  : msg
+              ))
+            }
+          } catch (error) {
+            console.error('Error enriching message with sender info:', error)
+          }
+          
+          // Update conversations list
+          loadConversations()
+        }
       })
-      .subscribe()
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'internal_messages',
+        filter: `conversation_id=eq.${selectedConversation.id}`
+      }, (payload) => {
+        // Update message in real-time (for edits/deletes)
+        const updatedMessage = payload.new as any
+        setMessages(prev => prev.map(msg => 
+          msg.id === updatedMessage.id ? { ...msg, ...updatedMessage } : msg
+        ))
+        loadConversations() // Update conversation list
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'internal_messages',
+        filter: `conversation_id=eq.${selectedConversation.id}`
+      }, (payload) => {
+        // Remove deleted message
+        const deletedId = payload.old.id
+        setMessages(prev => prev.filter(msg => msg.id !== deletedId))
+        loadConversations()
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Real-time subscription active for conversation:', selectedConversation.id)
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Real-time subscription error for conversation:', selectedConversation.id)
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [selectedConversation])
-
-  const fetchMessageDetails = useCallback(async (conversationId: string) => {
-    try {
-      await loadMessages(conversationId)
-      await loadConversations()
-    } catch (error) {
-      console.error('Error fetching message details:', error)
-    }
-  }, [loadMessages, loadConversations])
-
-  const markAsRead = useCallback(async (conversationId: string) => {
-    try {
-      await apiPost(`/api/chat/conversations/${conversationId}/read`, {})
-      setConversations(prev => prev.map(conv => 
-        conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
-      ))
-    } catch (error) {
-      console.error('Error marking as read:', error)
-    }
-  }, [])
+  }, [selectedConversation, messages, fetchMessageDetails, loadConversations])
 
   // Auto scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -206,20 +478,19 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
         sender_name: currentUserName,
         message_text: messageTextToSend,
         message_type: 'text',
-        file_url: null,
-        file_name: null,
-        file_size: null,
+        file_url: undefined,
+        file_name: undefined,
+        file_size: undefined,
         is_deleted: false,
         is_edited: false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         reply_to: replyingTo ? {
           id: replyingTo.id,
-          sender_id: replyingTo.sender_id,
-          sender_name: replyingTo.sender_name,
+          sender_name: replyingTo.sender_name || 'Unknown',
           message_text: replyingTo.message_text
-        } : null,
-        reply_to_id: replyingTo?.id || null
+        } : undefined,
+        reply_to_id: replyingTo?.id || undefined
       }
 
       setMessages(prev => [...prev, optimisticMessage])
@@ -373,7 +644,7 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
         sender_name: currentUserName,
         message_text: file.name,
         message_type: file.type.startsWith('image/') ? 'image' : 'file',
-        file_url: fileItem.preview || null,
+        file_url: fileItem.preview || undefined,
         file_name: file.name,
         file_size: file.size,
         is_deleted: false,
@@ -382,11 +653,10 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
         updated_at: new Date().toISOString(),
         reply_to: replyingTo ? {
           id: replyingTo.id,
-          sender_id: replyingTo.sender_id,
-          sender_name: replyingTo.sender_name,
+          sender_name: replyingTo.sender_name || 'Unknown',
           message_text: replyingTo.message_text
-        } : null,
-        reply_to_id: replyingTo?.id || null
+        } : undefined,
+        reply_to_id: replyingTo?.id || undefined
       }
     })
 
@@ -577,11 +847,22 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
               <div className="text-center text-gray-500 py-4 text-sm">Chưa có cuộc trò chuyện</div>
             ) : (
               <div className="space-y-1">
-                {conversations.map((conv) => (
-                  <button
+                {conversations.map((conv: ConversationWithParticipants) => {
+                  const selectedId = selectedConversation ? (selectedConversation as ConversationWithParticipants).id : null
+                  const isSelected = selectedId === conv.id
+                  return (
+                    <button
                     key={conv.id}
-                    onClick={() => setSelectedConversation(conv)}
-                    className="w-full text-left p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                    onClick={() => {
+                      setSelectedConversation(conv)
+                      // Save to localStorage
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('chat_widget_selected_conversation', conv.id)
+                      }
+                    }}
+                    className={`w-full text-left p-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                      isSelected ? 'bg-blue-50 border border-blue-200' : ''
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
@@ -601,7 +882,8 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
                       )}
                     </div>
                   </button>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -609,161 +891,54 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
           <>
             {/* Messages */}
             <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-2 bg-gray-50 min-h-0">
-              {messages.length === 0 ? (
+              {loadingMessages ? (
+                <div className="text-center text-gray-500 py-8 text-sm">Đang tải tin nhắn...</div>
+              ) : messages.length === 0 ? (
                 <div className="text-center text-gray-500 py-8 text-sm">Chưa có tin nhắn</div>
               ) : (
                 <div className="space-y-2">
+                  {messages.length > 0 && (
+                    <div className="text-xs text-gray-400 text-center py-1">
+                      Hiển thị {messages.length} tin nhắn
+                    </div>
+                  )}
                   {messages.map((message) => {
                     const isOwn = message.sender_id === currentUserId
-                    const isDeleted = message.is_deleted
+                    
+                    // Debug log
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log('📨 Rendering message:', {
+                        id: message.id,
+                        text: message.message_text,
+                        sender: message.sender_name,
+                        type: message.message_type,
+                        isDeleted: message.is_deleted
+                      })
+                    }
                     
                     return (
-                      <div
+                      <MessageBubble
                         key={message.id}
-                        className={`flex group ${isOwn ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div className={`max-w-[85%] ${isOwn ? 'flex-row-reverse' : 'flex-row'} flex gap-1`}>
-                          <div
-                            className={`px-3 py-2 rounded-lg ${
-                              isOwn
-                                ? 'bg-[#0068ff] text-white rounded-tr-sm'
-                                : 'bg-white text-gray-900 border border-gray-200 rounded-tl-sm'
-                            } ${isDeleted ? 'opacity-60 italic' : ''}`}
-                          >
-                            {!isOwn && (
-                              <div className="text-xs font-semibold mb-1 opacity-80">
-                                {message.sender_name || 'Unknown'}
-                              </div>
-                            )}
-                            
-                            {/* Reply Preview */}
-                            {message.reply_to && (
-                              <div className={`mb-1.5 px-2 py-1 rounded text-xs border-l-2 ${
-                                isOwn 
-                                  ? 'bg-white/20 border-white/40' 
-                                  : 'bg-gray-100 border-[#0068ff]'
-                              }`}>
-                                <div className={`font-semibold ${isOwn ? 'text-white/90' : 'text-[#0068ff]'}`}>
-                                  {message.reply_to.sender_name}
-                                </div>
-                                <div className="truncate">
-                                  {message.reply_to.message_text}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {isDeleted ? (
-                              <span className="text-sm">Tin nhắn đã bị xóa</span>
-                            ) : (
-                              <>
-                                {/* File/Image Preview */}
-                                {message.file_url && (
-                                  <div className="mb-2">
-                                    {message.message_type === 'image' ? (
-                                      <img
-                                        src={message.file_url}
-                                        alt={message.file_name || 'Image'}
-                                        className="max-w-full max-h-40 rounded cursor-pointer hover:opacity-90"
-                                        onClick={() => window.open(message.file_url, '_blank')}
-                                      />
-                                    ) : (
-                                      <div className={`flex items-center gap-2 p-2 rounded ${
-                                        isOwn ? 'bg-white/20' : 'bg-gray-100'
-                                      }`}>
-                                        <FileText className="w-4 h-4 flex-shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                          <div className="text-xs font-medium truncate">
-                                            {message.file_name || 'File'}
-                                          </div>
-                                          {message.file_size && (
-                                            <div className="text-xs opacity-70">
-                                              {(message.file_size / 1024).toFixed(1)} KB
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                                
-                                {/* Message Text */}
-                                {message.message_text && (
-                                  <div className="text-sm whitespace-pre-wrap break-words">
-                                    {message.message_text}
-                                  </div>
-                                )}
-                                
-                                {message.is_edited && (
-                                  <span className={`text-xs ml-1 ${isOwn ? 'text-white/70' : 'text-gray-500'}`}>
-                                    (đã chỉnh sửa)
-                                  </span>
-                                )}
-                              </>
-                            )}
-                            
-                            <div className={`text-xs mt-1 ${isOwn ? 'text-white/70' : 'text-gray-500'}`}>
-                              {formatDistanceToNow(new Date(message.created_at), {
-                                addSuffix: true,
-                                locale: vi
-                              })}
-                            </div>
-                          </div>
-                          
-                          {/* Message Actions */}
-                          {!isDeleted && (
-                            <div className={`flex gap-1 items-center opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                              {isOwn && (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setEditingMessage(message)
-                                      setMessageText(message.message_text)
-                                      setReplyingTo(null)
-                                    }}
-                                    className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                    title="Chỉnh sửa"
-                                  >
-                                    <Edit2 className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteMessage(message.id)}
-                                    className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                    title="Xóa"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setReplyingTo(message)
-                                  setEditingMessage(null)
-                                }}
-                                className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                title="Trả lời"
-                              >
-                                <Reply className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleCopyMessage(message.message_text)}
-                                className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                title="Sao chép"
-                              >
-                                <Copy className="w-3 h-3" />
-                              </button>
-                              {message.file_url && (
-                                <button
-                                  onClick={() => handleDownloadFile(message.file_url!, message.file_name || 'file')}
-                                  className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                  title="Tải xuống"
-                                >
-                                  <Download className="w-3 h-3" />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                        message={message}
+                        isOwn={isOwn}
+                        currentUserId={currentUserId}
+                        onEdit={(msg) => {
+                          setEditingMessage(msg)
+                          setMessageText(msg.message_text)
+                          setReplyingTo(null)
+                        }}
+                        onDelete={handleDeleteMessage}
+                        onReply={(msg) => {
+                          setReplyingTo(msg)
+                          setEditingMessage(null)
+                        }}
+                        onCopy={handleCopyMessage}
+                        onForward={handleForwardMessage}
+                        onDownload={handleDownloadFile}
+                        showAvatar={false}
+                        showSenderName={!isOwn}
+                        maxWidth="85%"
+                      />
                     )
                   })}
                   <div ref={messagesEndRef} />

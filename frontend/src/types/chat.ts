@@ -6,7 +6,6 @@ export interface Conversation {
   name?: string
   type: ConversationType
   avatar_url?: string
-  background_url?: string
   task_id?: string
   project_id?: string
   created_by?: string
@@ -32,6 +31,7 @@ export interface Participant {
 
 export interface ConversationWithParticipants extends Conversation {
   participants: Participant[]
+  background_url?: string | null
 }
 
 export interface Message {
