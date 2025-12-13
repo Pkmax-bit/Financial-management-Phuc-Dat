@@ -162,6 +162,7 @@ interface QuoteItem {
   item_type?: 'product' | 'material_cost'  // Phân loại: sản phẩm hoặc chi phí vật tư
   belongs_to_product_id?: string  // ID sản phẩm mà chi phí này thuộc về (chỉ dùng khi item_type = 'material_cost')
   belongs_to_product_name?: string  // Tên sản phẩm (để hiển thị)
+  expense_object_id?: string  // ID đối tượng chi phí (chỉ dùng khi item_type = 'material_cost')
   ten_san_pham?: string  // Tên sản phẩm chính (dòng đầu)
   loai_san_pham?: string // Loại/Category (ví dụ: Nhôm Xingfa Việt Nam)
   mo_ta?: string         // Mô tả chi tiết (phần còn lại)
@@ -173,6 +174,7 @@ interface QuoteItem {
   don_gia: number
   thanh_tien: number
   has_tax?: boolean      // Có thuế VAT hay không (true = có thuế, false = không có thuế)
+  tax_rate?: number      // Thuế suất cho sản phẩm này (%)
   ghi_chu?: string
 }
 
@@ -245,13 +247,9 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
   const [success, setSuccess] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   
-  // Edit item state
-  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
-  const [editingItem, setEditingItem] = useState<QuoteItem | null>(null)
+  // Edit item state - edit all items at once
+  const [isEditingAll, setIsEditingAll] = useState<boolean>(false)
   
-  // Edit tax rate state
-  const [editingTaxRate, setEditingTaxRate] = useState<boolean>(false)
-  const [tempTaxRate, setTempTaxRate] = useState<number>(0.08)
   
   // AI Model selection
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o')
@@ -375,13 +373,6 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       setProjects([])
     }
   }, [selectedCustomerId])
-  
-  // Sync tempTaxRate when analyzedData changes
-  React.useEffect(() => {
-    if (analyzedData && !editingTaxRate) {
-      setTempTaxRate(analyzedData.tax_rate || 0.08)
-    }
-  }, [analyzedData, editingTaxRate])
   
   // Check product matches when analyzed data changes
   React.useEffect(() => {
@@ -1737,9 +1728,151 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
     try {
       const token = await getValidToken()
 
+      // Load expense_objects to check/create expense objects for material costs
+      console.log('🔍 Loading expense_objects...')
+      const { data: expenseObjects, error: expenseError } = await supabase
+        .from('expense_objects')
+        .select('id, name, level, parent_id')
+        .eq('is_active', true)
+        .in('level', [1, 2, 3])
+      
+      if (expenseError) {
+        console.warn('⚠️ Error loading expense_objects:', expenseError)
+      }
+
+      // Helper function to find or create expense object
+      const findOrCreateExpenseObject = async (itemName: string, itemDescription?: string): Promise<string | null> => {
+        if (!expenseObjects || expenseObjects.length === 0) {
+          console.warn('⚠️ No expense_objects loaded')
+          return null
+        }
+
+        // First, try to find existing expense object by name
+        const existingExpense = expenseObjects.find(
+          (eo: any) => eo.name?.toLowerCase().trim() === itemName.toLowerCase().trim()
+        )
+        
+        if (existingExpense) {
+          console.log(`✅ Found existing expense_object: "${itemName}" (ID: ${existingExpense.id})`)
+          return existingExpense.id
+        }
+
+        // If not found, find or create "Khác" parent
+        const otherCostNames = ['đối tượng chi phí khác', 'chi phí khác', 'khác']
+        let otherCostParent = expenseObjects.find((eo: any) => {
+          const nameLower = eo.name?.toLowerCase().trim() || ''
+          return otherCostNames.some(otherName => nameLower === otherName || nameLower.includes(otherName))
+        })
+
+        // If parent not found, create it
+        if (!otherCostParent) {
+          console.log('📋 Creating parent "Đối tượng chi phí khác"...')
+          const parentId = crypto.randomUUID()
+          const { data: newParent, error: parentError } = await supabase
+            .from('expense_objects')
+            .insert({
+              id: parentId,
+              name: 'Đối tượng chi phí khác',
+              description: 'Các đối tượng chi phí khác không phân loại',
+              level: 1,
+              role: 'other',
+              is_active: true
+            })
+            .select('id')
+            .single()
+          
+          if (parentError || !newParent) {
+            console.error('❌ Error creating parent expense_object:', parentError)
+            return null
+          }
+          
+          otherCostParent = { id: newParent.id, name: 'Đối tượng chi phí khác', level: 1 }
+          console.log(`✅ Created parent expense_object: ${newParent.id}`)
+        }
+
+        // Create new expense object under "Khác"
+        console.log(`📋 Creating expense_object: "${itemName}" under parent "${otherCostParent.name}"`)
+        const expenseId = crypto.randomUUID()
+        const { data: newExpense, error: expenseCreateError } = await supabase
+          .from('expense_objects')
+          .insert({
+            id: expenseId,
+            name: itemName,
+            description: itemDescription || itemName,
+            parent_id: otherCostParent.id,
+            level: 2,
+            role: 'material',
+            is_active: true
+          })
+          .select('id')
+          .single()
+        
+        if (expenseCreateError || !newExpense) {
+          console.error('❌ Error creating expense_object:', expenseCreateError)
+          return null
+        }
+        
+        console.log(`✅ Created expense_object: "${itemName}" (ID: ${newExpense.id})`)
+        return newExpense.id
+      }
+
+      // Process items: find/create expense_objects for material costs and format product_components
+      const processedItems = await Promise.all(
+        analyzedData.items.map(async (item, index) => {
+          let expenseObjectId = item.expense_object_id
+          
+          // If it's a material cost, find or create expense_object
+          if (item.item_type === 'material_cost') {
+            const itemName = item.ten_san_pham || item.loai_san_pham || `Chi phí ${index + 1}`
+            expenseObjectId = await findOrCreateExpenseObject(itemName, item.mo_ta)
+          }
+          
+          return {
+            ...item,
+            expense_object_id: expenseObjectId
+          }
+        })
+      )
+
+      // Group material costs by belongs_to_product_id and format product_components
+      const itemsWithComponents = processedItems.map((item, index) => {
+        if (item.item_type === 'product') {
+          // Find all material costs that belong to this product
+          // belongs_to_product_id is stored as string index in the original items array
+          const materialCosts = processedItems.filter(
+            (costItem, costIndex) => {
+              if (costItem.item_type !== 'material_cost') return false
+              // Check if belongs_to_product_id matches this product's index
+              const belongsToIndex = costItem.belongs_to_product_id 
+                ? parseInt(costItem.belongs_to_product_id) 
+                : -1
+              return belongsToIndex === index
+            }
+          )
+          
+          // Format product_components
+          const productComponents = materialCosts.map((costItem) => ({
+            expense_object_id: costItem.expense_object_id || null,
+            name: costItem.ten_san_pham || costItem.loai_san_pham || null,
+            unit: costItem.dvt || '',
+            unit_price: Number(costItem.don_gia || 0),
+            quantity: Number(costItem.so_luong || 0),
+            total_price: Number(costItem.thanh_tien || 0)
+          }))
+          
+          return {
+            ...item,
+            product_components: productComponents.length > 0 ? productComponents : []
+          }
+        }
+        
+        return item
+      })
+
       // Prepare import data with edited customer and project info
       const importData = {
         ...analyzedData,
+        items: itemsWithComponents,
         customer: {
           ...analyzedData.customer,
           ...customerInfo,
@@ -2753,60 +2886,177 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               </div>
               <h3 className="text-xl font-bold text-gray-900">Danh sách hạng mục</h3>
               </div>
-              <div className="flex items-center space-x-4 text-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-900 font-semibold">Đã có trong hệ thống</span>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-4 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-gray-900 font-semibold">Đã có trong hệ thống</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                    <span className="text-gray-900 font-semibold">Sản phẩm mới</span>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                  <span className="text-gray-900 font-semibold">Sản phẩm mới</span>
-                </div>
+                {isEditingAll ? (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        if (analyzedData) {
+                          // Recalculate totals - calculate tax for each item based on its own tax_rate
+                          const newSubtotal = analyzedData.items.reduce((sum, item) => sum + (item.thanh_tien || 0), 0)
+                          
+                          // Calculate tax for each item
+                          const newTaxAmount = analyzedData.items.reduce((sum, item) => {
+                            if (item.has_tax !== false) {
+                              const itemTaxRate = item.tax_rate !== undefined 
+                                ? item.tax_rate 
+                                : (analyzedData.tax_rate || 0.08)
+                              return sum + (item.thanh_tien || 0) * itemTaxRate
+                            }
+                            return sum
+                          }, 0)
+                          
+                          const newTotalAmount = newSubtotal + newTaxAmount
+                          
+                          setAnalyzedData({
+                            ...analyzedData,
+                            subtotal: newSubtotal,
+                            tax_amount: newTaxAmount,
+                            total_amount: newTotalAmount
+                          })
+                        }
+                        setIsEditingAll(false)
+                      }}
+                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Lưu tất cả
+                    </button>
+                    <button
+                      onClick={() => setIsEditingAll(false)}
+                      className="flex items-center px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm font-medium"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Hủy
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsEditingAll(true)}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Sửa tất cả
+                  </button>
+                )}
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Trạng thái</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">STT</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Loại</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Ký hiệu</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Loại SP</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Tên sản phẩm</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Thuộc sản phẩm</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Mô tả</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">ĐVT</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase" colSpan={2}>
-                      <div className="text-center">Quy cách</div>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Số lượng</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Diện tích (m²)</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Đơn giá</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase">Thành tiền</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase">Có VAT</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase">Thao tác</th>
-                  </tr>
-                  <tr className="bg-gray-50">
-                    <th colSpan={6}></th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Ngang (m)</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Cao (m)</th>
-                    <th colSpan={4}></th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+            <div className="overflow-auto max-h-[60vh]">
+              <div className="bg-white border-2 border-gray-500 rounded-md inline-block min-w-max">
+                <div className="bg-gray-50 px-4 py-3 border-b-2 border-gray-500 sticky top-0 z-10 shadow-sm">
+                  <div className="grid gap-1 text-xs font-medium text-black items-start" style={{
+                    gridTemplateColumns: '100px 50px 100px 100px 120px 220px 140px 220px 60px 70px 70px 80px 90px 130px 130px 80px 90px'
+                  }}>
+                    <div>Trạng thái</div>
+                    <div>STT</div>
+                    <div>Loại</div>
+                    <div>Ký hiệu</div>
+                    <div>Loại SP</div>
+                    <div>Tên sản phẩm</div>
+                    <div>Thuộc sản phẩm</div>
+                    <div>Mô tả</div>
+                    <div className="text-center">ĐVT</div>
+                    <div className="text-center">Ngang (m)</div>
+                    <div className="text-center">Cao (m)</div>
+                    <div className="text-right">Số lượng</div>
+                    <div className="text-right">Diện tích (m²)</div>
+                    <div className="text-right">Đơn giá</div>
+                    <div className="text-right">Thành tiền</div>
+                    <div className="text-center">Có VAT</div>
+                    <div className="text-center">Thuế %</div>
+                  </div>
+                </div>
+
+                <div className="divide-y-2 divide-gray-500">
                   {analyzedData.items.map((item, index) => {
                     const matchStatus = productMatchStatus.find(m => m.index === index)
                     const exists = matchStatus?.exists || false
-                    const bgColor = exists ? 'bg-green-50' : 'bg-amber-50'
                     const borderColor = exists ? 'border-l-4 border-green-500' : 'border-l-4 border-amber-500'
                     
-                    const isEditing = editingItemIndex === index
                     const itemType = item.item_type || 'product'
                     
+                    // Update item directly in analyzedData
+                    const updateItemField = (field: keyof QuoteItem, value: any) => {
+                      if (analyzedData) {
+                        const updatedItems = [...analyzedData.items]
+                        const currentItem = updatedItems[index]
+                        
+                        if (field === 'so_luong' || field === 'don_gia' || field === 'dien_tich') {
+                          const soLuong = field === 'so_luong' ? value : (currentItem.so_luong || 0)
+                          const donGia = field === 'don_gia' ? value : (currentItem.don_gia || 0)
+                          const dienTich = field === 'dien_tich' ? value : (currentItem.dien_tich)
+                          
+                          // Calculate thanh_tien
+                          const thanhTien = dienTich && dienTich > 0
+                            ? donGia * dienTich * soLuong
+                            : donGia * soLuong
+                          
+                          updatedItems[index] = {
+                            ...currentItem,
+                            [field]: value,
+                            thanh_tien: thanhTien
+                          }
+                        } else if (field === 'thanh_tien') {
+                          const soLuong = currentItem.so_luong || 1
+                          const dienTich = currentItem.dien_tich
+                          // Calculate don_gia based on formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
+                          const newDonGia = dienTich && dienTich > 0
+                            ? (soLuong > 0 && dienTich > 0 ? value / (dienTich * soLuong) : 0)
+                            : (soLuong > 0 ? value / soLuong : 0)
+                          updatedItems[index] = {
+                            ...currentItem,
+                            [field]: value,
+                            don_gia: newDonGia
+                          }
+                        } else {
+                          updatedItems[index] = {
+                            ...currentItem,
+                            [field]: value
+                          }
+                        }
+                        
+                        // Recalculate totals after updating item
+                        const newSubtotal = updatedItems.reduce((sum, item) => sum + (item.thanh_tien || 0), 0)
+                        const newTaxAmount = updatedItems.reduce((sum, item) => {
+                          if (item.has_tax !== false) {
+                            const itemTaxRate = item.tax_rate !== undefined 
+                              ? item.tax_rate 
+                              : (analyzedData.tax_rate || 0.08)
+                            return sum + (item.thanh_tien || 0) * itemTaxRate
+                          }
+                          return sum
+                        }, 0)
+                        const newTotalAmount = newSubtotal + newTaxAmount
+                        
+                        setAnalyzedData({
+                          ...analyzedData,
+                          items: updatedItems,
+                          subtotal: newSubtotal,
+                          tax_amount: newTaxAmount,
+                          total_amount: newTotalAmount
+                        })
+                      }
+                    }
+                    
                     return (
-                      <tr key={index} className={`hover:bg-gray-100 ${bgColor} ${borderColor}`}>
-                        <td className="px-4 py-3">
+                      <div
+                        key={index}
+                        className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors px-4 py-3 ${borderColor}`}
+                      >
+                        <div className="grid gap-1 items-start text-xs" style={{
+                          gridTemplateColumns: '100px 50px 100px 100px 120px 220px 140px 220px 60px 70px 70px 80px 90px 130px 130px 80px 90px'
+                        }}>
+                          <div>
                           {exists ? (
                             <div className="flex items-center space-x-2">
                               <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -2818,25 +3068,25 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                               <span className="text-xs font-bold text-amber-800">Tạo mới</span>
                             </div>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-bold">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center">
+                          {isEditingAll ? (
                             <input
                               type="number"
-                              value={editingItem?.stt || index + 1}
-                              onChange={(e) => setEditingItem({ ...editingItem!, stt: parseInt(e.target.value) || index + 1 })}
-                              className="w-16 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              value={item.stt || index + 1}
+                              onChange={(e) => updateItemField('stt', parseInt(e.target.value) || index + 1)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                             />
                           ) : (
-                            item.stt || index + 1
+                            <span className="text-gray-900 font-bold">{item.stt || index + 1}</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center">
+                          {isEditingAll ? (
                             <select
-                              value={editingItem?.item_type || 'product'}
-                              onChange={(e) => setEditingItem({ ...editingItem!, item_type: e.target.value as 'product' | 'material_cost' })}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-semibold"
+                              value={item.item_type || 'product'}
+                              onChange={(e) => updateItemField('item_type', e.target.value as 'product' | 'material_cost')}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                             >
                               <option value="product">Sản phẩm</option>
                               <option value="material_cost">Chi phí vật tư</option>
@@ -2850,27 +3100,27 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                               {itemType === 'material_cost' ? '💰 Chi phí' : '📦 Sản phẩm'}
                             </div>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center">
+                            {isEditingAll ? (
+                              <input
+                                type="text"
+                                value={item.ky_hieu || ''}
+                                onChange={(e) => updateItemField('ky_hieu', e.target.value)}
+                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
+                                placeholder="Ký hiệu"
+                              />
+                            ) : (
+                              item.ky_hieu || <span className="text-gray-400 text-xs">-</span>
+                            )}
+                          </div>
+                          <div className="min-h-[28px] flex items-center">
+                          {isEditingAll ? (
                             <input
                               type="text"
-                              value={editingItem?.ky_hieu || ''}
-                              onChange={(e) => setEditingItem({ ...editingItem!, ky_hieu: e.target.value })}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
-                              placeholder="Ký hiệu"
-                            />
-                          ) : (
-                            item.ky_hieu || <span className="text-gray-400 text-xs">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editingItem?.loai_san_pham || ''}
-                              onChange={(e) => setEditingItem({ ...editingItem!, loai_san_pham: e.target.value })}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                              value={item.loai_san_pham || ''}
+                              onChange={(e) => updateItemField('loai_san_pham', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                               placeholder="Loại sản phẩm"
                             />
                           ) : (
@@ -2882,14 +3132,14 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                             <span className="text-gray-400 text-xs">Chưa phân loại</span>
                             )
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center">
+                          {isEditingAll ? (
                             <input
                               type="text"
-                              value={editingItem?.ten_san_pham || ''}
-                              onChange={(e) => setEditingItem({ ...editingItem!, ten_san_pham: e.target.value })}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-bold"
+                              value={item.ten_san_pham || ''}
+                              onChange={(e) => updateItemField('ten_san_pham', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                               placeholder="Tên sản phẩm"
                             />
                           ) : (
@@ -2908,26 +3158,23 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                               )}
                             </>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          </div>
+                          <div className="min-h-[28px] flex items-center">
                           {itemType === 'material_cost' ? (
-                            isEditing ? (
+                            isEditingAll ? (
                               <select
-                                value={editingItem?.belongs_to_product_id || ''}
+                                value={item.belongs_to_product_id || ''}
                                 onChange={(e) => {
                                   const selectedIndex = parseInt(e.target.value)
                                   const selectedProduct = analyzedData?.items[selectedIndex]
-                                  setEditingItem({ 
-                                    ...editingItem!, 
-                                    belongs_to_product_id: e.target.value,
-                                    belongs_to_product_name: selectedProduct?.ten_san_pham || 
-                                      (selectedProduct?.hang_muc_thi_cong && typeof selectedProduct.hang_muc_thi_cong === 'string'
-                                        ? selectedProduct.hang_muc_thi_cong.split('\n')[0]
-                                        : '') || 
-                                      `Sản phẩm ${selectedIndex + 1}`
-                                  })
+                                  updateItemField('belongs_to_product_id', e.target.value)
+                                  updateItemField('belongs_to_product_name', selectedProduct?.ten_san_pham || 
+                                    (selectedProduct?.hang_muc_thi_cong && typeof selectedProduct.hang_muc_thi_cong === 'string'
+                                      ? selectedProduct.hang_muc_thi_cong.split('\n')[0]
+                                      : '') || 
+                                    `Sản phẩm ${selectedIndex + 1}`)
                                 }}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                               >
                                 <option value="">-- Chọn sản phẩm --</option>
                                 {analyzedData?.items.map((it, idx) => {
@@ -2958,23 +3205,15 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                           ) : (
                             <span className="text-gray-400 text-xs">-</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700 max-w-md">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center">
+                          {isEditingAll ? (
                             <textarea
-                              value={editingItem?.mo_ta || ''}
-                              onChange={(e) => setEditingItem({ ...editingItem!, mo_ta: e.target.value })}
-                              className="px-2 py-1 border border-gray-300 rounded text-xs resize-y"
+                              value={item.mo_ta || ''}
+                              onChange={(e) => updateItemField('mo_ta', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black resize-y focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[28px]"
                               placeholder="Mô tả"
-                              rows={3}
-                              cols={100}
-                              style={{ 
-                                width: '100%',
-                                maxWidth: '400px',
-                                minWidth: '200px',
-                                wordWrap: 'break-word',
-                                overflowWrap: 'break-word'
-                              }}
+                              rows={2}
                             />
                           ) : (
                             (() => {
@@ -2983,42 +3222,42 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                                   ? item.hang_muc_thi_cong.split('\n').slice(1).join('\n')
                                   : '') || 
                                 '-'
-                              const truncatedDescription = fullDescription.length > 30 
-                                ? fullDescription.substring(0, 30) + '...' 
+                              const truncatedDescription = fullDescription.length > 50 
+                                ? fullDescription.substring(0, 50) + '...' 
                                 : fullDescription
                               
                               return (
                                 <div 
-                                  className="text-xs leading-relaxed cursor-help"
-                                  title={fullDescription.length > 30 ? fullDescription : undefined}
+                                  className="text-xs text-gray-900 leading-relaxed cursor-help hover:text-gray-700 transition-colors"
+                                  title={fullDescription !== '-' ? fullDescription : undefined}
                                 >
                                   {truncatedDescription}
-                          </div>
+                                </div>
                               )
                             })()
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-center">
+                          {isEditingAll ? (
                             <input
                               type="text"
-                              value={editingItem?.dvt || ''}
-                              onChange={(e) => setEditingItem({ ...editingItem!, dvt: e.target.value })}
-                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              value={item.dvt || ''}
+                              onChange={(e) => updateItemField('dvt', e.target.value)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                               placeholder="ĐVT"
                             />
                           ) : (
-                            item.dvt || '-'
+                            <span className="text-gray-900 font-semibold">{item.dvt || '-'}</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-center">
+                          {isEditingAll ? (
                             <input
                               type="number"
                               step="0.01"
-                              value={editingItem?.ngang || ''}
-                              onChange={(e) => setEditingItem({ ...editingItem!, ngang: parseFloat(e.target.value) || undefined })}
-                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              value={item.ngang || ''}
+                              onChange={(e) => updateItemField('ngang', parseFloat(e.target.value) || undefined)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                               placeholder="Ngang"
                             />
                           ) : (
@@ -3032,15 +3271,15 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                               <span className="text-gray-400">-</span>
                             )
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-center">
+                          {isEditingAll ? (
                             <input
                               type="number"
                               step="0.01"
-                              value={editingItem?.cao || ''}
-                              onChange={(e) => setEditingItem({ ...editingItem!, cao: parseFloat(e.target.value) || undefined })}
-                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              value={item.cao || ''}
+                              onChange={(e) => updateItemField('cao', parseFloat(e.target.value) || undefined)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                               placeholder="Cao"
                             />
                           ) : (
@@ -3054,48 +3293,30 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                               <span className="text-gray-400">-</span>
                             )
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-end">
+                          {isEditingAll ? (
                             <input
                               type="number"
                               step="0.01"
-                              value={editingItem?.so_luong || 0}
-                              onChange={(e) => {
-                                const newSoLuong = parseFloat(e.target.value) || 0
-                                const donGia = editingItem?.don_gia || 0
-                                const dienTich = editingItem?.dien_tich
-                                // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
-                                const newThanhTien = dienTich && dienTich > 0 
-                                  ? donGia * dienTich * newSoLuong
-                                  : donGia * newSoLuong
-                                setEditingItem({ ...editingItem!, so_luong: newSoLuong, thanh_tien: newThanhTien })
-                              }}
-                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              value={item.so_luong || 0}
+                              onChange={(e) => updateItemField('so_luong', parseFloat(e.target.value) || 0)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                             />
                           ) : (
                             <span className="font-bold text-purple-700">
                               {item.so_luong || 0}
                             </span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-center">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-end">
+                          {isEditingAll ? (
                             <input
                               type="number"
                               step="0.01"
-                              value={editingItem?.dien_tich || ''}
-                              onChange={(e) => {
-                                const newDienTich = parseFloat(e.target.value) || undefined
-                                const donGia = editingItem?.don_gia || 0
-                                const soLuong = editingItem?.so_luong || 0
-                                // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
-                                const newThanhTien = newDienTich && newDienTich > 0
-                                  ? donGia * newDienTich * soLuong
-                                  : donGia * soLuong
-                                setEditingItem({ ...editingItem!, dien_tich: newDienTich, thanh_tien: newThanhTien })
-                              }}
-                              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                              value={item.dien_tich || ''}
+                              onChange={(e) => updateItemField('dien_tich', parseFloat(e.target.value) || undefined)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                               placeholder="Diện tích"
                             />
                           ) : (
@@ -3109,60 +3330,41 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                               <span className="text-gray-400">-</span>
                             )
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-semibold text-right">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-end">
+                          {isEditingAll ? (
                             <input
                               type="number"
                               step="0.01"
-                              value={editingItem?.don_gia || 0}
-                              onChange={(e) => {
-                                const newDonGia = parseFloat(e.target.value) || 0
-                                const soLuong = editingItem?.so_luong || 0
-                                const dienTich = editingItem?.dien_tich
-                                // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
-                                const newThanhTien = dienTich && dienTich > 0
-                                  ? newDonGia * dienTich * soLuong
-                                  : newDonGia * soLuong
-                                setEditingItem({ ...editingItem!, don_gia: newDonGia, thanh_tien: newThanhTien })
-                              }}
-                              className="w-28 px-2 py-1 border border-gray-300 rounded text-xs text-right"
+                              value={item.don_gia || 0}
+                              onChange={(e) => updateItemField('don_gia', parseFloat(e.target.value) || 0)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                             />
                           ) : (
-                            (item.don_gia || 0).toLocaleString('vi-VN') + ' VNĐ'
+                            <span className="text-gray-900 font-semibold">{(item.don_gia || 0).toLocaleString('vi-VN')} VNĐ</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-end">
+                          {isEditingAll ? (
                             <input
                               type="number"
                               step="0.01"
-                              value={editingItem?.thanh_tien || 0}
-                              onChange={(e) => {
-                                const newThanhTien = parseFloat(e.target.value) || 0
-                                // Auto-calculate don_gia if so_luong exists
-                                const soLuong = editingItem?.so_luong || 1
-                                const newDonGia = soLuong > 0 ? newThanhTien / soLuong : 0
-                                setEditingItem({ 
-                                  ...editingItem!, 
-                                  thanh_tien: newThanhTien,
-                                  don_gia: newDonGia
-                                })
-                              }}
-                              className="w-32 px-2 py-1 border border-gray-300 rounded text-xs text-right"
+                              value={item.thanh_tien || 0}
+                              onChange={(e) => updateItemField('thanh_tien', parseFloat(e.target.value) || 0)}
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
                             />
                           ) : (
-                            (item.thanh_tien || 0).toLocaleString('vi-VN') + ' VNĐ'
+                            <span className="text-gray-900 font-bold">{(item.thanh_tien || 0).toLocaleString('vi-VN')} VNĐ</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {isEditing ? (
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-center">
+                          {isEditingAll ? (
                             <input
                               type="checkbox"
-                              checked={editingItem?.has_tax !== false}
-                              onChange={(e) => setEditingItem({ ...editingItem!, has_tax: e.target.checked })}
+                              checked={item.has_tax !== false}
+                              onChange={(e) => updateItemField('has_tax', e.target.checked)}
                               className="w-5 h-5 cursor-pointer"
-                              title={editingItem?.has_tax !== false ? "Có VAT" : "Không VAT"}
+                              title={item.has_tax !== false ? "Có VAT" : "Không VAT"}
                             />
                           ) : (
                             <div className={`px-2 py-1 rounded text-xs font-bold ${
@@ -3173,90 +3375,38 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                               {item.has_tax !== false ? '✓ Có' : '✗ Không'}
                             </div>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {isEditing ? (
-                            <div className="flex items-center justify-center space-x-2">
-                              <button
-                                onClick={() => {
-                                  if (editingItem && analyzedData) {
-                                    // Ensure thanh_tien is calculated correctly
-                                    const soLuong = editingItem.so_luong || 0
-                                    const donGia = editingItem.don_gia || 0
-                                    const dienTich = editingItem.dien_tich
-                                    // Formula: if dien_tich exists: don_gia × dien_tich × so_luong, otherwise: don_gia × so_luong
-                                    const calculatedThanhTien = dienTich && dienTich > 0
-                                      ? donGia * dienTich * soLuong
-                                      : donGia * soLuong
-                                    
-                                    const finalItem = {
-                                      ...editingItem,
-                                      thanh_tien: calculatedThanhTien
-                                    }
-                                    
-                                    const updatedItems = [...analyzedData.items]
-                                    updatedItems[index] = finalItem
-                                    
-                                    // Recalculate totals
-                                    const newSubtotal = updatedItems.reduce((sum, item) => sum + (item.thanh_tien || 0), 0)
-                                    const taxRate = analyzedData.tax_rate || 0.08
-                                    
-                                    // Calculate tax only for items with has_tax = true
-                                    const taxableSubtotal = updatedItems.reduce((sum, item) => {
-                                      if (item.has_tax !== false) {  // Default to true if not specified
-                                        return sum + (item.thanh_tien || 0)
-                                      }
-                                      return sum
-                                    }, 0)
-                                    
-                                    const newTaxAmount = taxableSubtotal * taxRate
-                                    const newTotalAmount = newSubtotal + newTaxAmount
-                                    
-                                    setAnalyzedData({
-                                      ...analyzedData,
-                                      items: updatedItems,
-                                      subtotal: newSubtotal,
-                                      tax_amount: newTaxAmount,
-                                      total_amount: newTotalAmount
-                                    })
-                                    setEditingItemIndex(null)
-                                    setEditingItem(null)
-                                  }
-                                }}
-                                className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-                                title="Lưu"
-                              >
-                                <Save className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingItemIndex(null)
-                                  setEditingItem(null)
-                                }}
-                                className="p-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-                                title="Hủy"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setEditingItemIndex(index)
-                                setEditingItem({ ...item })
+                          </div>
+                          <div className="min-h-[28px] flex items-center justify-center">
+                          {isEditingAll ? (
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              value={item.tax_rate !== undefined ? item.tax_rate * 100 : (item.has_tax !== false ? (analyzedData?.tax_rate || 0.08) * 100 : 0)}
+                              onChange={(e) => {
+                                const taxRatePercent = parseFloat(e.target.value) || 0
+                                updateItemField('tax_rate', taxRatePercent / 100)
                               }}
-                              className="p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                              title="Chỉnh sửa"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-center focus:outline-none focus:ring-1 focus:ring-blue-500 h-[28px]"
+                              placeholder="%"
+                            />
+                          ) : (
+                            <span className="text-gray-900 font-semibold">
+                              {item.tax_rate !== undefined 
+                                ? `${(item.tax_rate * 100).toFixed(1)}%`
+                                : item.has_tax !== false 
+                                  ? `${((analyzedData?.tax_rate || 0.08) * 100).toFixed(1)}%`
+                                  : '0%'}
+                            </span>
                           )}
-                        </td>
-                    </tr>
+                          </div>
+                        </div>
+                      </div>
                     )
                   })}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
             
             {/* Summary of products to be created */}
@@ -3277,111 +3427,32 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               </div>
               <h3 className="text-xl font-bold text-gray-900">Tổng kết</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">Tổng tiền</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Doanh thu</label>
                 <div className="text-2xl font-bold text-gray-900">
                   {(analyzedData.subtotal || 0).toLocaleString('vi-VN')} VNĐ
                 </div>
+                <p className="text-xs text-gray-600 mt-1">Tổng thành tiền các sản phẩm</p>
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1">
-                  VAT
-                  {editingTaxRate ? (
-                    <div className="flex items-center space-x-2 mt-1">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        value={tempTaxRate * 100}
-                        onChange={(e) => {
-                          const newTaxRatePercent = parseFloat(e.target.value) || 0
-                          const newTaxRate = newTaxRatePercent / 100
-                          setTempTaxRate(newTaxRate)
-                          
-                          // Recalculate tax and total
-                          const subtotal = analyzedData.subtotal || 0
-                          const taxableSubtotal = analyzedData.items.reduce((sum, item) => {
-                            if (item.has_tax !== false) {
-                              return sum + (item.thanh_tien || 0)
-                            }
-                            return sum
-                          }, 0)
-                          const newTaxAmount = taxableSubtotal * newTaxRate
-                          const newTotalAmount = subtotal + newTaxAmount
-                          
-                          setAnalyzedData({
-                            ...analyzedData,
-                            tax_rate: newTaxRate,
-                            tax_amount: newTaxAmount,
-                            total_amount: newTotalAmount
-                          })
-                        }}
-                        className="w-20 px-2 py-1 border-2 border-blue-500 rounded text-sm font-bold text-center"
-                        autoFocus
-                      />
-                      <span className="text-sm font-bold">%</span>
-                      <button
-                        onClick={() => setEditingTaxRate(false)}
-                        className="p-1 bg-green-500 text-white rounded hover:bg-green-600"
-                        title="Xong"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTempTaxRate(analyzedData.tax_rate || 0.08)
-                          setEditingTaxRate(false)
-                          // Revert to original
-                          const subtotal = analyzedData.subtotal || 0
-                          const originalTaxRate = analyzedData.tax_rate || 0.08
-                          const taxableSubtotal = analyzedData.items.reduce((sum, item) => {
-                            if (item.has_tax !== false) {
-                              return sum + (item.thanh_tien || 0)
-                            }
-                            return sum
-                          }, 0)
-                          const originalTaxAmount = taxableSubtotal * originalTaxRate
-                          const originalTotalAmount = subtotal + originalTaxAmount
-                          setAnalyzedData({
-                            ...analyzedData,
-                            tax_rate: originalTaxRate,
-                            tax_amount: originalTaxAmount,
-                            total_amount: originalTotalAmount
-                          })
-                        }}
-                        className="p-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-                        title="Hủy"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="ml-2">
-                      ({(analyzedData.tax_rate || 0) * 100}%)
-                      <button
-                        onClick={() => {
-                          setTempTaxRate(analyzedData.tax_rate || 0.08)
-                          setEditingTaxRate(true)
-                        }}
-                        className="ml-2 p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                        title="Chỉnh sửa % thuế"
-                      >
-                        <Edit className="h-4 w-4 inline" />
-                      </button>
-                    </span>
-                  )}
-                </label>
-                <div className="text-xl font-bold text-gray-900">
+                <label className="block text-sm font-bold text-gray-900 mb-1">Thuế</label>
+                <div className="text-2xl font-bold text-blue-600">
                   {(analyzedData.tax_amount || 0).toLocaleString('vi-VN')} VNĐ
                 </div>
+                <p className="text-xs text-gray-600 mt-1">Tổng thuế của tất cả sản phẩm</p>
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-gray-900 mb-1">Tổng thanh toán</label>
-                <div className="text-3xl font-extrabold text-blue-700">
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Tổng doanh thu sau thuế</label>
+                <div className="text-2xl font-bold text-green-600">
                   {(analyzedData.total_amount || 0).toLocaleString('vi-VN')} VNĐ
                 </div>
+                <p className="text-xs text-gray-600 mt-1">Doanh thu + Thuế</p>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-300">
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold">Số lượng sản phẩm:</span> {analyzedData.items.length}
               </div>
             </div>
           </div>

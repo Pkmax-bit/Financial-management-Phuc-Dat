@@ -27,7 +27,8 @@ import {
   Zap,
   RotateCcw,
   Info,
-  BookOpen
+  BookOpen,
+  Brain
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
@@ -179,6 +180,12 @@ export default function DashboardPage() {
       icon: CreditCard,
       color: 'bg-green-500',
       onClick: () => router.push('/sales?tab=invoices')
+    },
+    {
+      title: 'AI Import',
+      icon: Brain,
+      color: 'bg-indigo-500',
+      onClick: () => router.push('/sales/upload-quote')
     },
     {
       title: 'Giới thiệu hệ thống',

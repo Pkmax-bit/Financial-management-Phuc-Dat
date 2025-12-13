@@ -66,7 +66,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('active')
   const [filterLevel, setFilterLevel] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -410,14 +410,26 @@ export default function CustomersPage() {
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.toLowerCase()
     return customers.filter((customer: unknown) => {
-      const c = customer as { name?: string; email?: string; phone?: string }
+      const c = customer as { name?: string; email?: string; phone?: string; status?: string; type?: string }
+      
+      // Filter by status (default: active)
+      if (filterStatus !== 'all' && c.status !== filterStatus) {
+        return false
+      }
+      
+      // Filter by type
+      if (filterType !== 'all' && c.type !== filterType) {
+        return false
+      }
+      
+      // Filter by search term
       const matchesSearch =
         (c.name || '').toLowerCase().includes(term) ||
         (c.email || '').toLowerCase().includes(term) ||
         (c.phone || '').toLowerCase().includes(term)
       return matchesSearch
     })
-  }, [customers, searchTerm])
+  }, [customers, searchTerm, filterStatus, filterType])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -515,7 +527,7 @@ export default function CustomersPage() {
   }
 
   const getCustomerStats = () => {
-    const total = customers.length
+    const total = customers.filter(c => c.status === 'active').length // Chỉ đếm khách hàng đang hoạt động
     const active = customers.filter(c => c.status === 'active').length
     const prospects = customers.filter(c => c.status === 'prospect').length
     const companies = customers.filter(c => c.type === 'company').length

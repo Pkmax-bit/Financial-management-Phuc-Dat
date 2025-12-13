@@ -411,6 +411,44 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     terms: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
   })
 
+  // New customer/project data (when not selecting from existing)
+  const [newCustomer, setNewCustomer] = useState({
+    name: '',
+    type: 'individual' as 'individual' | 'company' | 'government',
+    address: '',
+    city: '',
+    country: 'Vietnam',
+    phone: '',
+    email: '',
+    tax_id: '',
+    credit_limit: 0,
+    payment_terms: 30,
+    notes: ''
+  })
+
+  const [newProject, setNewProject] = useState({
+    name: ''
+  })
+
+  // Auto-generate project name from customer name and address
+  useEffect(() => {
+    if (!formData.customer_id && newCustomer.name && newCustomer.address) {
+      // New customer: use newCustomer data
+      const projectName = `${newCustomer.name} - ${newCustomer.address}`
+      setNewProject(prev => ({ ...prev, name: projectName }))
+    } else if (formData.customer_id) {
+      // Existing customer: use selected customer
+      const selectedCustomer = customers.find(c => c.id === formData.customer_id)
+      if (selectedCustomer && selectedCustomer.address) {
+        const projectName = `${selectedCustomer.name} - ${selectedCustomer.address}`
+        setNewProject(prev => ({ ...prev, name: projectName }))
+      } else if (selectedCustomer) {
+        const projectName = selectedCustomer.name
+        setNewProject(prev => ({ ...prev, name: projectName }))
+      }
+    }
+  }, [newCustomer.name, newCustomer.address, formData.customer_id, customers])
+
   const [items, setItems] = useState<QuoteItem[]>([
     {
       name_product: '',
@@ -956,11 +994,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setLoading(true)
       console.log('🔍 Fetching customers from database...')
 
-      // Use Supabase client directly to get real data
+      // Use Supabase client directly to get real data - only active customers
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .limit(10)
+        .eq('status', 'active')
+        .order('name', { ascending: true })
 
       if (error) {
         console.error('❌ Supabase error:', error)
@@ -2158,11 +2197,164 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       // Use created_by from form selection
       const created_by = formData.created_by || null
 
+      // Helper function to generate customer code
+      const generateCustomerCode = async (): Promise<string> => {
+        try {
+          // Try to get next customer code from API
+          const token = localStorage.getItem('access_token')
+          const response = await fetch('/api/customers/next-customer-code', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            return data.next_customer_code || 'CUS001'
+          }
+        } catch (error) {
+          console.warn('Failed to get customer code from API, generating locally:', error)
+        }
+        
+        // Fallback: generate locally
+        try {
+          const { data: existingCustomers } = await supabase
+            .from('customers')
+            .select('customer_code')
+            .order('customer_code', { ascending: false })
+            .limit(1)
+          
+          if (existingCustomers && existingCustomers.length > 0) {
+            const lastCode = existingCustomers[0].customer_code || 'CUS000'
+            const match = lastCode.match(/CUS(\d+)/)
+            if (match) {
+              const nextNum = parseInt(match[1]) + 1
+              return `CUS${nextNum.toString().padStart(3, '0')}`
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to generate customer code locally:', error)
+        }
+        
+        // Final fallback
+        return 'CUS001'
+      }
+
+      // Create customer if new customer data is provided
+      let customerId = formData.customer_id
+      let newCustomerCreated = false
+      let newCustomerName = ''
+      if (!customerId && newCustomer.name && newCustomer.address) {
+        // Generate customer code first
+        const customerCode = await generateCustomerCode()
+        
+        const { data: newCustomerData, error: customerError } = await supabase
+          .from('customers')
+          .insert({
+            customer_code: customerCode,
+            name: newCustomer.name.trim(),
+            type: newCustomer.type,
+            address: newCustomer.address.trim() || null,
+            city: newCustomer.city.trim() || null,
+            country: newCustomer.country.trim() || 'Vietnam',
+            phone: newCustomer.phone.trim() || null,
+            email: newCustomer.email.trim() || null,
+            tax_id: newCustomer.tax_id.trim() || null,
+            credit_limit: newCustomer.credit_limit || 0,
+            payment_terms: newCustomer.payment_terms || 30,
+            notes: newCustomer.notes.trim() || null,
+            status: 'active'
+          })
+          .select()
+          .single()
+
+        if (customerError) {
+          throw new Error(`Lỗi tạo khách hàng: ${customerError.message}`)
+        }
+
+        customerId = newCustomerData.id
+        newCustomerCreated = true
+        newCustomerName = newCustomerData.name
+        console.log('Created new customer:', newCustomerData)
+        
+        // Refresh customers list to include the new customer
+        await fetchCustomers()
+      }
+
+      // Helper function to generate project code
+      const generateProjectCode = async (): Promise<string> => {
+        try {
+          const { data: existingProjects } = await supabase
+            .from('projects')
+            .select('project_code')
+            .order('created_at', { ascending: false })
+            .limit(1)
+          
+          if (existingProjects && existingProjects.length > 0) {
+            const lastCode = existingProjects[0].project_code || 'PRJ000'
+            const match1 = lastCode.match(/#PRJ(\d+)/)
+            const match2 = lastCode.match(/PRJ(\d+)/)
+            
+            if (match1) {
+              const nextNum = parseInt(match1[1]) + 1
+              return `PRJ${nextNum.toString().padStart(3, '0')}`
+            } else if (match2) {
+              const nextNum = parseInt(match2[1]) + 1
+              return `PRJ${nextNum.toString().padStart(3, '0')}`
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to generate project code:', error)
+        }
+        
+        // Fallback
+        return 'PRJ001'
+      }
+
+      // Create project if new project data is provided OR if customer exists but project is new
+      let projectId = formData.project_id
+      let newProjectCreated = false
+      let newProjectName = ''
+      if (!projectId && newProject.name && customerId) {
+        // Use project name from form (already auto-generated)
+        const projectName = newProject.name.trim() || (newCustomer.name || 'Dự án mới')
+        newProjectName = projectName
+
+        // Generate project code
+        const projectCode = await generateProjectCode()
+
+        const { data: newProjectData, error: projectError } = await supabase
+          .from('projects')
+          .insert({
+            project_code: projectCode,
+            name: projectName,
+            customer_id: customerId,
+            status: 'planning',
+            priority: 'medium',
+            start_date: new Date().toISOString().split('T')[0] // Add start_date (required field)
+          })
+          .select()
+          .single()
+
+        if (projectError) {
+          throw new Error(`Lỗi tạo dự án: ${projectError.message}`)
+        }
+
+        projectId = newProjectData.id
+        newProjectCreated = true
+        console.log('Created new project:', newProjectData)
+        
+        // Refresh projects list to include the new project
+        if (customerId) {
+          await fetchProjectsByCustomer(customerId)
+        }
+      }
+
       // Create or update quote directly in Supabase
       const quoteData = {
         quote_number: formData.quote_number,
-        customer_id: formData.customer_id || null,
-        project_id: formData.project_id || null,
+        customer_id: customerId || null,
+        project_id: projectId || null,
         issue_date: formData.issue_date || null,
         valid_until: formData.valid_until,
         subtotal: formData.subtotal,
@@ -2300,6 +2492,21 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         // Components are already saved in product_components JSONB column, no need to insert separately
       }
 
+      // Build success message with created customer/project info
+      let successDetails = []
+      if (newCustomerCreated) {
+        successDetails.push(`✅ Đã tạo khách hàng mới: <strong>${newCustomerName}</strong>`)
+      }
+      if (newProjectCreated) {
+        successDetails.push(`✅ Đã tạo dự án mới: <strong>${newProjectName}</strong>`)
+      }
+      
+      const detailsHtml = successDetails.length > 0 
+        ? `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); font-size: 13px; line-height: 1.6;">
+            ${successDetails.join('<br>')}
+          </div>`
+        : ''
+
       // Show success notification
       const successMessage = document.createElement('div')
       successMessage.innerHTML = `
@@ -2314,8 +2521,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           z-index: 10000;
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           animation: slideIn 0.3s ease-out;
+          max-width: 400px;
         ">
-          ✅ Báo giá đã được ${quoteId ? 'cập nhật' : 'tạo'} thành công!
+          <div style="font-size: 15px; font-weight: 600; margin-bottom: ${successDetails.length > 0 ? '8px' : '0'};">
+            ✅ Báo giá đã được ${quoteId ? 'cập nhật' : 'tạo'} thành công!
+          </div>
+          ${detailsHtml}
         </div>
         <style>
           @keyframes slideIn {
@@ -2326,12 +2537,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       `
       document.body.appendChild(successMessage)
 
-      // Auto remove success message after 5 seconds
+      // Auto remove success message after 7 seconds (longer if there are details)
       setTimeout(() => {
         if (document.body.contains(successMessage)) {
           document.body.removeChild(successMessage)
         }
-      }, 5000)
+      }, successDetails.length > 0 ? 7000 : 5000)
 
       onSuccess()
       onClose()
@@ -2352,8 +2563,8 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       if (!formData.quote_number.trim()) {
         throw new Error('Vui lòng nhập số báo giá')
       }
-      if (!formData.customer_id) {
-        throw new Error('Vui lòng chọn khách hàng')
+      if (!formData.customer_id && (!newCustomer.name || !newCustomer.address)) {
+        throw new Error('Vui lòng chọn khách hàng hoặc nhập thông tin khách hàng mới')
       }
       if (!formData.valid_until) {
         throw new Error('Vui lòng chọn ngày hết hạn')
@@ -2402,6 +2613,20 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       notes: '',
       terms: 'Báo giá có hiệu lực trong 30 ngày kể từ ngày phát hành.'
     })
+    setNewCustomer({ 
+      name: '', 
+      type: 'individual',
+      address: '', 
+      city: '',
+      country: 'Vietnam',
+      phone: '', 
+      email: '',
+      tax_id: '',
+      credit_limit: 0,
+      payment_terms: 30,
+      notes: ''
+    })
+    setNewProject({ name: '' })
     setItems([{
       name_product: '',
       description: '',
@@ -2490,8 +2715,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         setTimeout(() => {
           if (inputRef.current) {
             inputRef.current.focus()
-            const len = initialValue.length
-            inputRef.current.setSelectionRange(len, len)
+            // Only set selection range for text inputs, not number inputs
+            if (inputRef.current.type === 'text') {
+              const len = initialValue.length
+              inputRef.current.setSelectionRange(len, len)
+            }
           }
         }, 0)
       } else if (!isEditing) {
@@ -2508,7 +2736,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         setTimeout(() => {
           if (inputRef.current) {
             inputRef.current.focus()
-            inputRef.current.setSelectionRange(pos, pos)
+            // Only set selection range for text inputs, not number inputs
+            if (inputRef.current.type === 'text') {
+              inputRef.current.setSelectionRange(pos, pos)
+            }
             cursorPositionRef.current = null
           }
         }, 0)
@@ -2639,45 +2870,214 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                       <span className="text-sm text-black">Đang tải...</span>
                     </div>
                   ) : (
-                    <select
-                      value={formData.customer_id}
-                      onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">Chọn khách hàng</option>
-                      {customers.map((customer) => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.name} {customer.email ? `(${customer.email})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        value={formData.customer_id}
+                        onChange={(e) => {
+                          setFormData({ ...formData, customer_id: e.target.value })
+                          if (e.target.value) {
+                            // Reset new customer when selecting existing
+                            setNewCustomer({ 
+                              name: '', 
+                              type: 'individual',
+                              address: '', 
+                              city: '',
+                              country: 'Vietnam',
+                              phone: '', 
+                              email: '',
+                              tax_id: '',
+                              credit_limit: 0,
+                              payment_terms: 30,
+                              notes: ''
+                            })
+                          }
+                        }}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500 mb-2"
+                        required
+                      >
+                        <option value="">Chọn khách hàng hoặc nhập mới</option>
+                        {customers.map((customer) => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name} {customer.email ? `(${customer.email})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {!formData.customer_id && (
+                        <div className="mt-2 space-y-3 p-4 border border-gray-300 rounded-md bg-gray-50 max-h-96 overflow-y-auto">
+                          <div className="text-xs font-semibold text-gray-800 mb-2">Thông tin cơ bản</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Loại khách hàng</label>
+                              <select
+                                value={newCustomer.type}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, type: e.target.value as 'individual' | 'company' | 'government' })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="individual">Cá nhân</option>
+                                <option value="company">Công ty</option>
+                                <option value="government">Cơ quan nhà nước</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Tên khách hàng *</label>
+                              <input
+                                type="text"
+                                value={newCustomer.name}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Nhập tên khách hàng"
+                                required={!formData.customer_id}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Địa chỉ *</label>
+                            <input
+                              type="text"
+                              value={newCustomer.address}
+                              onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Nhập địa chỉ"
+                              required={!formData.customer_id}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Thành phố</label>
+                              <input
+                                type="text"
+                                value={newCustomer.city}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Thành phố"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Quốc gia</label>
+                              <input
+                                type="text"
+                                value={newCustomer.country}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, country: e.target.value })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Quốc gia"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Số điện thoại</label>
+                              <input
+                                type="text"
+                                value={newCustomer.phone}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="SĐT"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                              <input
+                                type="email"
+                                value={newCustomer.email}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Email"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Mã số thuế</label>
+                            <input
+                              type="text"
+                              value={newCustomer.tax_id}
+                              onChange={(e) => setNewCustomer({ ...newCustomer, tax_id: e.target.value })}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Mã số thuế"
+                            />
+                          </div>
+                          <div className="text-xs font-semibold text-gray-800 mb-2 mt-3">Thông tin tài chính</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Hạn mức tín dụng (VND)</label>
+                              <input
+                                type="number"
+                                value={newCustomer.credit_limit}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, credit_limit: Number(e.target.value) || 0 })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="0"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Điều khoản thanh toán (ngày)</label>
+                              <input
+                                type="number"
+                                value={newCustomer.payment_terms}
+                                onChange={(e) => setNewCustomer({ ...newCustomer, payment_terms: Number(e.target.value) || 30 })}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="30"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Ghi chú</label>
+                            <textarea
+                              value={newCustomer.notes}
+                              onChange={(e) => setNewCustomer({ ...newCustomer, notes: e.target.value })}
+                              rows={2}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Ghi chú"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-black mb-1">Dự án</label>
-                  {!formData.customer_id ? (
-                    <div className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                      <span className="text-sm text-black">Chọn khách hàng trước</span>
-                    </div>
-                  ) : loadingProjects ? (
+                  {loadingProjects && formData.customer_id ? (
                     <div className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
                       <span className="text-sm text-black">Đang tải dự án...</span>
                     </div>
                   ) : (
-                    <select
-                      value={formData.project_id}
-                      onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">Chọn dự án (tùy chọn)</option>
-                      {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.project_code} - {project.name}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      {formData.customer_id && (
+                        <select
+                          value={formData.project_id}
+                          onChange={(e) => {
+                            setFormData({ ...formData, project_id: e.target.value })
+                            if (e.target.value) {
+                              // Reset new project when selecting existing
+                              setNewProject({ name: '' })
+                            }
+                          }}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500 mb-2"
+                        >
+                          <option value="">Chọn dự án hoặc nhập mới</option>
+                          {projects.map((project) => (
+                            <option key={project.id} value={project.id}>
+                              {project.project_code} - {project.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {(!formData.project_id || !formData.customer_id) && (
+                        <div className="mt-2 space-y-2 p-3 border border-gray-300 rounded-md bg-gray-50">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Tên dự án *</label>
+                            <input
+                              type="text"
+                              value={newProject.name}
+                              onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Tự động tạo từ khách hàng - địa chỉ"
+                              required={!formData.project_id}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

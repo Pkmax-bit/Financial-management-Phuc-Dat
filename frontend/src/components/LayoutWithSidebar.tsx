@@ -367,7 +367,7 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
         {/* Sidebar */}
         <aside className={`fixed top-0 left-0 bottom-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ${shouldShowSidebar ? 'translate-x-0' : '-translate-x-full'
-          } lg:translate-x-0 lg:static lg:top-0 lg:h-screen lg:shrink-0 ${!sidebarOpen && 'lg:hidden'
+          } lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:self-start ${!sidebarOpen && 'lg:hidden'
           } ${isCollapsed ? 'w-16' : 'w-64'} flex flex-col`}>
           {/* Logo & Toggle Button */}
           <div className={`flex items-center h-16 border-b border-gray-200 ${isCollapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>

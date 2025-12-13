@@ -194,12 +194,19 @@ export default function TaskDetailPage() {
 
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [checklistItemsDraft, setChecklistItemsDraft] = useState<Record<string, string>>({})
+  const [checklistItemFiles, setChecklistItemFiles] = useState<Record<string, File[]>>({})
+  const [checklistItemPreviews, setChecklistItemPreviews] = useState<Record<string, string[]>>({})
+  const [uploadingChecklistItem, setUploadingChecklistItem] = useState<string | null>(null)
   const [checklistError, setChecklistError] = useState<string | null>(null)
   const [newNote, setNewNote] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteContent, setEditingNoteContent] = useState('')
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null)
   const [editingChecklistItemContent, setEditingChecklistItemContent] = useState('')
+  const [editingChecklistItemFiles, setEditingChecklistItemFiles] = useState<File[]>([])
+  const [editingChecklistItemFileUrls, setEditingChecklistItemFileUrls] = useState<string[]>([])
+  const [editingChecklistItemPreviews, setEditingChecklistItemPreviews] = useState<string[]>([])
+  const [uploadingEditChecklistItem, setUploadingEditChecklistItem] = useState(false)
   const [groupMembers, setGroupMembers] = useState<Array<{ employee_id: string; employee_name?: string; employee_email?: string }>>([])
 
   const [chatMessage, setChatMessage] = useState('')
@@ -208,6 +215,7 @@ export default function TaskDetailPage() {
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [replyingTo, setReplyingTo] = useState<TaskComment | null>(null)  // Comment being replied to
   const [draggedComment, setDraggedComment] = useState<TaskComment | null>(null)  // Comment being dragged
 
@@ -548,10 +556,61 @@ export default function TaskDetailPage() {
 
   const handleAddChecklistItem = async (checklistId: string) => {
     const content = checklistItemsDraft[checklistId]?.trim()
-    if (!content) return
+    const files = checklistItemFiles[checklistId] || []
+    if (!content && files.length === 0) return
+    
+    setUploadingChecklistItem(checklistId)
     try {
-      const newItem = await apiPost(`/api/tasks/checklists/${checklistId}/items`, { content })
+      let fileUrls: string[] = []
+      
+      // Upload files if any
+      if (files.length > 0) {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
+        }
+
+        for (const file of files) {
+          const formData = new FormData()
+          formData.append('file', file)
+
+          const response = await fetch(`/api/tasks/${taskId}/attachments`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+            throw new Error(errorData.detail || errorData.message || 'Không thể upload file')
+          }
+
+          const data = await response.json()
+          fileUrls.push(data.file_url || data.url)
+        }
+      }
+
+      // Create checklist item with file URLs appended to content
+      // Format: "content_text [FILE_URLS: url1 url2 ...]"
+      let itemContent = content || ''
+      if (fileUrls.length > 0) {
+        const fileUrlsText = fileUrls.join(' ')
+        itemContent = itemContent 
+          ? `${itemContent} [FILE_URLS: ${fileUrlsText}]`
+          : `📎 ${fileUrls.length} file(s) [FILE_URLS: ${fileUrlsText}]`
+      }
+      const payload: any = { content: itemContent }
+
+      const newItem = await apiPost(`/api/tasks/checklists/${checklistId}/items`, payload)
+      
+      // Clear draft and files
       setChecklistItemsDraft(prev => ({ ...prev, [checklistId]: '' }))
+      setChecklistItemFiles(prev => ({ ...prev, [checklistId]: [] }))
+      setChecklistItemPreviews(prev => ({ ...prev, [checklistId]: [] }))
+      
       setTaskData(prev => {
         if (!prev) return prev
         const updatedChecklists = prev.checklists.map(checklist => {
@@ -567,24 +626,101 @@ export default function TaskDetailPage() {
       })
     } catch (err) {
       alert(getErrorMessage(err, 'Không thể thêm mục checklist'))
+    } finally {
+      setUploadingChecklistItem(null)
     }
   }
 
   const startEditChecklistItem = (item: TaskChecklistItem) => {
     setEditingChecklistItemId(item.id)
-    setEditingChecklistItemContent(item.content)
+    
+    // Parse content and file URLs
+    let displayContent = item.content || ''
+    const fileUrls: string[] = []
+    
+    // Extract file URLs from [FILE_URLS: ...] pattern
+    const fileUrlsMatch = displayContent.match(/\[FILE_URLS:\s*([^\]]+)\]/)
+    if (fileUrlsMatch) {
+      const urls = fileUrlsMatch[1].trim().split(/\s+/)
+      fileUrls.push(...urls)
+      // Remove the [FILE_URLS: ...] pattern from display content
+      displayContent = displayContent.replace(/\[FILE_URLS:[^\]]+\]/g, '').trim()
+      // Remove "📎 X file(s)" if it's the only content
+      displayContent = displayContent.replace(/^📎 \d+ file\(s\)\s*$/g, '').trim()
+    }
+    
+    setEditingChecklistItemContent(displayContent)
+    setEditingChecklistItemFileUrls(fileUrls)
+    setEditingChecklistItemFiles([])
+    setEditingChecklistItemPreviews([])
   }
 
   const handleSaveChecklistItem = async () => {
-    if (!editingChecklistItemId || !editingChecklistItemContent.trim()) {
+    if (!editingChecklistItemId) {
       setEditingChecklistItemId(null)
       setEditingChecklistItemContent('')
+      setEditingChecklistItemFiles([])
+      setEditingChecklistItemFileUrls([])
+      setEditingChecklistItemPreviews([])
       return
     }
+    
+    const content = editingChecklistItemContent.trim()
+    const files = editingChecklistItemFiles
+    const existingFileUrls = editingChecklistItemFileUrls
+    
+    if (!content && files.length === 0 && existingFileUrls.length === 0) {
+      alert('Vui lòng nhập nội dung hoặc thêm file')
+      return
+    }
+    
+    setUploadingEditChecklistItem(true)
     try {
+      let allFileUrls = [...existingFileUrls]
+      
+      // Upload new files if any
+      if (files.length > 0) {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
+        }
+
+        for (const file of files) {
+          const formData = new FormData()
+          formData.append('file', file)
+
+          const response = await fetch(`/api/tasks/${taskId}/attachments`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+            throw new Error(errorData.detail || errorData.message || 'Không thể upload file')
+          }
+
+          const data = await response.json()
+          allFileUrls.push(data.file_url || data.url)
+        }
+      }
+
+      // Create content with file URLs
+      let itemContent = content || ''
+      if (allFileUrls.length > 0) {
+        const fileUrlsText = allFileUrls.join(' ')
+        itemContent = itemContent 
+          ? `${itemContent} [FILE_URLS: ${fileUrlsText}]`
+          : `📎 ${allFileUrls.length} file(s) [FILE_URLS: ${fileUrlsText}]`
+      }
+      
       const updatedItem = await apiPut(`/api/tasks/checklist-items/${editingChecklistItemId}`, {
-        content: editingChecklistItemContent.trim()
+        content: itemContent
       })
+      
       setTaskData(prev => {
         if (!prev) return prev
         const updatedChecklists = prev.checklists.map(checklist => {
@@ -595,10 +731,16 @@ export default function TaskDetailPage() {
         })
         return { ...prev, checklists: updatedChecklists }
       })
+      
       setEditingChecklistItemId(null)
       setEditingChecklistItemContent('')
+      setEditingChecklistItemFiles([])
+      setEditingChecklistItemFileUrls([])
+      setEditingChecklistItemPreviews([])
     } catch (err) {
       alert(getErrorMessage(err, 'Không thể cập nhật việc cần làm'))
+    } finally {
+      setUploadingEditChecklistItem(false)
     }
   }
 
@@ -687,6 +829,43 @@ export default function TaskDetailPage() {
       return data.file_url || data.url
     } finally {
       setUploadingFile(false)
+    }
+  }
+
+  const handleUploadAttachments = async (files: File[]) => {
+    if (!files || files.length === 0) return
+    setUploadingAttachment(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) {
+        throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
+      }
+
+      for (const file of files) {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch(`/api/tasks/${taskId}/attachments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+          throw new Error(errorData.detail || errorData.message || 'Không thể upload file')
+        }
+      }
+
+      // Reload task details to show new attachments
+      await loadTaskDetails()
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không thể upload file'))
+    } finally {
+      setUploadingAttachment(false)
     }
   }
 
@@ -968,18 +1147,57 @@ export default function TaskDetailPage() {
             <div className="pt-4 border-t border-gray-200">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tài liệu</h3>
-                <button className="text-xs text-blue-600 hover:underline">Thêm</button>
+                <label className="text-xs text-blue-600 hover:underline cursor-pointer">
+                  {uploadingAttachment ? 'Đang tải...' : 'Thêm'}
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || [])
+                      if (files.length > 0) {
+                        await handleUploadAttachments(files)
+                      }
+                      // Reset input để có thể chọn lại cùng file
+                      e.target.value = ''
+                    }}
+                    disabled={uploadingAttachment}
+                  />
+                </label>
               </div>
               <div className="space-y-2">
                 {attachments?.map(file => {
                   const FileIcon = getFileIcon(file.file_type || '')
                   const displayName = getDisplayFileName(file)
+                  const isImage = file.file_type?.startsWith('image/')
                   return (
-                    <a key={file.id} href={file.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors group">
-                      <FileIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                      <span className="text-sm text-gray-700 truncate flex-1" title={displayName}>{displayName}</span>
-                      <Download className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 flex-shrink-0" />
-                    </a>
+                    <div key={file.id} className="group relative">
+                      <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                        {isImage ? (
+                          <img src={file.file_url} alt={displayName} className="h-10 w-10 object-cover rounded flex-shrink-0" />
+                        ) : (
+                          <FileIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                        )}
+                        <span className="text-sm text-gray-700 truncate flex-1" title={displayName}>{displayName}</span>
+                        <Download className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 flex-shrink-0" />
+                      </a>
+                      <button
+                        onClick={async () => {
+                          if (confirm('Bạn có chắc muốn xóa file này?')) {
+                            try {
+                              await apiDelete(`/api/tasks/attachments/${file.id}`)
+                              loadTaskDetails()
+                            } catch (err) {
+                              alert(getErrorMessage(err, 'Không thể xóa file'))
+                            }
+                          }
+                        }}
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-all"
+                        title="Xóa file"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   )
                 })}
                 {attachments?.length === 0 && <p className="text-xs text-gray-400 italic">Chưa có tài liệu</p>}
@@ -1061,33 +1279,227 @@ export default function TaskDetailPage() {
                             {item.is_completed && <Check className="h-3 w-3 text-white" />}
                           </button>
                           {editingChecklistItemId === item.id ? (
-                            <div className="flex flex-1 items-center gap-2">
-                              <input
-                                type="text"
-                                value={editingChecklistItemContent}
-                                onChange={(e) => setEditingChecklistItemContent(e.target.value)}
-                                className="flex-1 text-sm bg-white border border-blue-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                              />
-                              <button
-                                onClick={handleSaveChecklistItem}
-                                className="text-xs font-semibold text-blue-600 hover:underline"
-                              >
-                                Lưu
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingChecklistItemId(null)
-                                  setEditingChecklistItemContent('')
-                                }}
-                                className="text-xs text-gray-500 hover:underline"
-                              >
-                                Hủy
-                              </button>
+                            <div className="flex-1 space-y-2">
+                              {/* Preview existing files */}
+                              {editingChecklistItemFileUrls.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {editingChecklistItemFileUrls.map((url, idx) => {
+                                    const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i) || url.includes('image') || url.includes('storage')
+                                    return (
+                                      <div key={idx} className="relative group/file">
+                                        {isImage ? (
+                                          <img src={url} alt={`File ${idx + 1}`} className="h-16 w-16 object-cover rounded border border-gray-200" />
+                                        ) : (
+                                          <div className="h-16 w-16 rounded border border-gray-200 bg-gray-50 flex items-center justify-center">
+                                            <Paperclip className="h-6 w-6 text-gray-400" />
+                                          </div>
+                                        )}
+                                        <button
+                                          onClick={() => {
+                                            const newUrls = [...editingChecklistItemFileUrls]
+                                            newUrls.splice(idx, 1)
+                                            setEditingChecklistItemFileUrls(newUrls)
+                                          }}
+                                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                                          title="Xóa file"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              
+                              {/* Preview new files */}
+                              {editingChecklistItemPreviews.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {editingChecklistItemPreviews.map((preview, idx) => {
+                                    const file = editingChecklistItemFiles[idx]
+                                    const isImage = file?.type.startsWith('image/')
+                                    return (
+                                      <div key={idx} className="relative inline-block">
+                                        {isImage ? (
+                                          <img src={preview} alt={file.name} className="h-16 w-16 object-cover rounded border border-gray-200" />
+                                        ) : (
+                                          <div className="h-16 w-16 rounded border border-gray-200 bg-gray-50 flex items-center justify-center">
+                                            <Paperclip className="h-6 w-6 text-gray-400" />
+                                          </div>
+                                        )}
+                                        <button
+                                          onClick={() => {
+                                            const newFiles = [...editingChecklistItemFiles]
+                                            const newPreviews = [...editingChecklistItemPreviews]
+                                            newFiles.splice(idx, 1)
+                                            newPreviews.splice(idx, 1)
+                                            setEditingChecklistItemFiles(newFiles)
+                                            setEditingChecklistItemPreviews(newPreviews)
+                                          }}
+                                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                        {!isImage && (
+                                          <p className="text-[10px] text-gray-600 mt-1 truncate max-w-[64px]" title={file?.name}>
+                                            {file?.name}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-2">
+                                <label className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer" title="Thêm file/hình">
+                                  <Paperclip className="h-4 w-4" />
+                                  <input
+                                    type="file"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const files = Array.from(e.target.files || [])
+                                      if (files.length > 0) {
+                                        const newFiles = [...editingChecklistItemFiles, ...files]
+                                        setEditingChecklistItemFiles(newFiles)
+                                        
+                                        // Create previews for images
+                                        files.forEach(file => {
+                                          if (file.type.startsWith('image/')) {
+                                            const reader = new FileReader()
+                                            reader.onload = (e) => {
+                                              const result = e.target?.result as string
+                                              setEditingChecklistItemPreviews(prev => [...prev, result])
+                                            }
+                                            reader.readAsDataURL(file)
+                                          } else {
+                                            setEditingChecklistItemPreviews(prev => [...prev, ''])
+                                          }
+                                        })
+                                      }
+                                      e.target.value = ''
+                                    }}
+                                  />
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editingChecklistItemContent}
+                                  onChange={(e) => setEditingChecklistItemContent(e.target.value)}
+                                  className="flex-1 text-sm bg-white border border-blue-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                                  placeholder="Nhập nội dung..."
+                                />
+                                <button
+                                  onClick={handleSaveChecklistItem}
+                                  disabled={uploadingEditChecklistItem}
+                                  className="text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50"
+                                >
+                                  {uploadingEditChecklistItem ? 'Đang lưu...' : 'Lưu'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingChecklistItemId(null)
+                                    setEditingChecklistItemContent('')
+                                    setEditingChecklistItemFiles([])
+                                    setEditingChecklistItemFileUrls([])
+                                    setEditingChecklistItemPreviews([])
+                                  }}
+                                  className="text-xs text-gray-500 hover:underline"
+                                >
+                                  Hủy
+                                </button>
+                              </div>
                             </div>
                           ) : (
-                            <span className={`text-sm flex-1 leading-snug ${item.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                              {item.content}
-                            </span>
+                            <div className="flex-1 space-y-2">
+                              {(() => {
+                                // Parse file URLs from content
+                                const fileUrls: string[] = []
+                                let displayContent = item.content || ''
+                                
+                                // Debug: log original content
+                                if (item.content && item.content.includes('FILE_URLS')) {
+                                  console.log('Parsing checklist item content:', item.content)
+                                }
+                                
+                                // Extract file URLs from [FILE_URLS: ...] pattern
+                                const fileUrlsMatch = displayContent.match(/\[FILE_URLS:\s*([^\]]+)\]/)
+                                if (fileUrlsMatch) {
+                                  const urlsText = fileUrlsMatch[1].trim()
+                                  // Split by space, but handle URLs that might have spaces in query params
+                                  const urls = urlsText.split(/\s+/).filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')))
+                                  fileUrls.push(...urls)
+                                  console.log('Extracted file URLs:', fileUrls)
+                                  
+                                  // Remove the [FILE_URLS: ...] pattern from display content
+                                  displayContent = displayContent.replace(/\[FILE_URLS:[^\]]+\]/g, '').trim()
+                                  // Remove "📎 X file(s)" if it's the only content
+                                  displayContent = displayContent.replace(/^📎 \d+ file\(s\)\s*$/g, '').trim()
+                                }
+                                
+                                return (
+                                  <>
+                                    {/* Content text */}
+                                    {displayContent && (
+                                      <span className={`text-sm leading-snug block ${item.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                                        {displayContent}
+                                      </span>
+                                    )}
+                                    
+                                    {/* Display files/images */}
+                                    {fileUrls.length > 0 && (
+                                      <div className="flex flex-wrap gap-2 mt-1">
+                                        {fileUrls.map((url, idx) => {
+                                          const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i) || url.includes('image') || url.includes('storage')
+                                          return (
+                                            <div key={idx} className="relative group/file">
+                                              {isImage ? (
+                                                <a
+                                                  href={url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="block"
+                                                >
+                                                  <img
+                                                    src={url}
+                                                    alt={`Attachment ${idx + 1}`}
+                                                    className="h-20 w-20 object-cover rounded border border-gray-200 hover:border-blue-400 transition-colors cursor-pointer"
+                                                    onError={(e) => {
+                                                      // Fallback to file icon if image fails to load
+                                                      const target = e.currentTarget
+                                                      target.style.display = 'none'
+                                                      const parent = target.parentElement
+                                                      if (parent) {
+                                                        const fallback = document.createElement('div')
+                                                        fallback.className = 'h-20 w-20 rounded border border-gray-200 bg-gray-50 flex items-center justify-center'
+                                                        fallback.innerHTML = '<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>'
+                                                        parent.appendChild(fallback)
+                                                      }
+                                                    }}
+                                                  />
+                                                </a>
+                                              ) : (
+                                                <a
+                                                  href={url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-blue-300 transition-colors"
+                                                >
+                                                  <Paperclip className="h-4 w-4 text-gray-600" />
+                                                  <span className="text-xs text-gray-700 font-medium">File {idx + 1}</span>
+                                                  <Download className="h-3 w-3 text-gray-400" />
+                                                </a>
+                                              )}
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                  </>
+                                )
+                              })()}
+                            </div>
                           )}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
@@ -1105,25 +1517,113 @@ export default function TaskDetailPage() {
                       ))}
 
                       {/* Add Item Input */}
-                      <div className="flex items-center gap-3 px-2 py-1.5 mt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleAddChecklistItem(checklist.id)}
-                          className="p-1 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                          title="Thêm việc cần làm"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                        <input
-                          type="text"
-                          placeholder="Thêm việc cần làm..."
-                          className="flex-1 text-sm bg-transparent border-none focus:ring-0 text-black placeholder:text-gray-500"
-                          value={checklistItemsDraft[checklist.id] || ''}
-                          onChange={(e) => setChecklistItemsDraft(prev => ({ ...prev, [checklist.id]: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleAddChecklistItem(checklist.id)
-                          }}
-                        />
+                      <div className="px-2 py-1.5 mt-1 space-y-2">
+                        {/* Preview files */}
+                        {(checklistItemPreviews[checklist.id] || []).length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {checklistItemPreviews[checklist.id].map((preview, idx) => {
+                              const file = checklistItemFiles[checklist.id]?.[idx]
+                              const isImage = file?.type.startsWith('image/')
+                              return (
+                                <div key={idx} className="relative inline-block">
+                                  {isImage ? (
+                                    <img src={preview} alt={file.name} className="h-16 w-16 object-cover rounded border border-gray-200" />
+                                  ) : (
+                                    <div className="h-16 w-16 rounded border border-gray-200 bg-gray-50 flex items-center justify-center">
+                                      <Paperclip className="h-6 w-6 text-gray-400" />
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      const newFiles = [...(checklistItemFiles[checklist.id] || [])]
+                                      const newPreviews = [...(checklistItemPreviews[checklist.id] || [])]
+                                      newFiles.splice(idx, 1)
+                                      newPreviews.splice(idx, 1)
+                                      setChecklistItemFiles(prev => ({ ...prev, [checklist.id]: newFiles }))
+                                      setChecklistItemPreviews(prev => ({ ...prev, [checklist.id]: newPreviews }))
+                                    }}
+                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                  {!isImage && (
+                                    <p className="text-[10px] text-gray-600 mt-1 truncate max-w-[64px]" title={file?.name}>
+                                      {file?.name}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <label className="p-1 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer" title="Thêm file/hình">
+                            <Paperclip className="h-4 w-4" />
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || [])
+                                if (files.length > 0) {
+                                  const newFiles = [...(checklistItemFiles[checklist.id] || []), ...files]
+                                  setChecklistItemFiles(prev => ({ ...prev, [checklist.id]: newFiles }))
+                                  
+                                  // Create previews for images
+                                  const newPreviews = [...(checklistItemPreviews[checklist.id] || [])]
+                                  files.forEach(file => {
+                                    if (file.type.startsWith('image/')) {
+                                      const reader = new FileReader()
+                                      reader.onload = (e) => {
+                                        const result = e.target?.result as string
+                                        setChecklistItemPreviews(prev => {
+                                          const current = prev[checklist.id] || []
+                                          return { ...prev, [checklist.id]: [...current, result] }
+                                        })
+                                      }
+                                      reader.readAsDataURL(file)
+                                    } else {
+                                      newPreviews.push('')
+                                    }
+                                  })
+                                  if (files.some(f => !f.type.startsWith('image/'))) {
+                                    setChecklistItemPreviews(prev => {
+                                      const current = prev[checklist.id] || []
+                                      return { ...prev, [checklist.id]: [...current, ...files.filter(f => !f.type.startsWith('image/')).map(() => '')] }
+                                    })
+                                  }
+                                }
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleAddChecklistItem(checklist.id)}
+                            disabled={uploadingChecklistItem === checklist.id}
+                            className="p-1 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                            title="Thêm việc cần làm"
+                          >
+                            {uploadingChecklistItem === checklist.id ? (
+                              <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Plus className="h-4 w-4" />
+                            )}
+                          </button>
+                          <input
+                            type="text"
+                            placeholder="Thêm việc cần làm..."
+                            className="flex-1 text-sm bg-transparent border-none focus:ring-0 text-black placeholder:text-gray-500"
+                            value={checklistItemsDraft[checklist.id] || ''}
+                            onChange={(e) => setChecklistItemsDraft(prev => ({ ...prev, [checklist.id]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                handleAddChecklistItem(checklist.id)
+                              }
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

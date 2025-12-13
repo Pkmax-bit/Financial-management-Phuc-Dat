@@ -273,26 +273,50 @@ BƯỚC 3: ĐỌC TỪNG DÒNG TRONG BẢNG (TỪ SAU HEADER ĐẾN TRƯỚC "T�
 - Với MỖI dòng sau header:
   1. KIỂM TRA: Dòng này có phải item không?
      ❌ BỎ QUA nếu là: "HẠNG MỤC NHÔM...", "VI TRỆ:", header phụ, dòng trống
-     ✅ LẤY nếu có ĐỦ: STT + số lượng + đơn giá + thành tiền
-     ⚠️ Nếu dòng thiếu 1 trong 4 thông tin trên → KHÔNG phải item, BỎ QUA
+     ✅ LẤY nếu có ĐỦ: số lượng + đơn giá + thành tiền (STT có thể trống cho chi phí sub-item)
+     ⚠️ QUAN TRỌNG: CHI PHÍ VẬT TƯ (Nhôm, Kính, Vận chuyển, Phụ kiện, Chi phí uốn vòm, v.v.) CŨNG LÀ ITEM
+     ⚠️ Chi phí vật tư có thể có STT trống (null) nhưng VẪN PHẢI có đầy đủ: số lượng + đơn giá + thành tiền
+     - Nếu dòng có "Chi phí", "Nhôm", "Kính", "Phụ kiện" (riêng lẻ) + có số lượng + đơn giá → LÀ ITEM
+     - Nếu dòng thiếu số lượng HOẶC đơn giá HOẶC thành tiền → KHÔNG phải item, BỎ QUA
   
-  2. NẾU LÀ ITEM, TRÍCH XUẤT:
-     - STT (cột 1)
-     - Ký hiệu (cột 2) - text màu đỏ
-     - Hạng mục thi công (cột 3) - TOÀN BỘ text
-     - ĐVT (cột 4)
-     - Ngang, Cao (cột 5)
-     - Số lượng (cột 6)
-     - Diện tích (cột 7)
-     - Đơn giá (cột 8) - CHỈ số, bỏ dấu phẩy/chấm
-     - Thành tiền (cột 9) - CHỈ số, bỏ dấu phẩy/chấm
+  2. NẾU LÀ ITEM, TRÍCH XUẤT TẤT CẢ THÔNG TIN:
+     - STT (cột 1) - Có thể null nếu là chi phí sub-item (tự động gán số thứ tự tiếp theo nếu null)
+       * Nếu STT trống nhưng có số lượng + đơn giá → vẫn là item, gán stt: null hoặc số tiếp theo
+     - Ký hiệu (cột 2) - text màu đỏ (có thể null nếu không có)
+     - Hạng mục thi công (cột 3) - TOÀN BỘ text, BẮT BUỘC
+     - ĐVT (cột 4) - BẮT BUỘC (m², kg, xe, cái, md, v.v.)
+     - Ngang, Cao (cột 5) - có thể null (chi phí thường không có)
+     - Số lượng (cột 6) - BẮT BUỘC, PHẢI đọc số > 0, KHÔNG được để 0 hoặc null
+     - Diện tích (cột 7) - có thể null (chi phí thường không có)
+     - Đơn giá (cột 8) - BẮT BUỘC, CHỈ số, bỏ dấu phẩy/chấm, PHẢI > 0, KHÔNG được để 0 hoặc null
+     - Thành tiền (cột 9) - BẮT BUỘC, CHỈ số, bỏ dấu phẩy/chấm, PHẢI > 0
+     
+     ⚠️ CỰC KỲ QUAN TRỌNG - CHI PHÍ VẬT TƯ:
+     - Chi phí vật tư (Nhôm, Kính, Vận chuyển, Phụ kiện, Chi phí uốn vòm) CŨNG NẰM TRONG CÙNG BẢNG với sản phẩm
+     - Chi phí vật tư CÓ THỂ có STT trống (null) nhưng VẪN PHẢI có đầy đủ: số lượng + đơn giá + thành tiền
+     - PHẢI đọc ĐẦY ĐỦ số lượng và đơn giá cho chi phí - KHÔNG được bỏ qua!
+     - Ví dụ chi phí trong bảng:
+       * STT: 10, Hạng mục: "Nhôm xưởng", ĐVT: "kg", Số lượng: 50, Đơn giá: 150000, Thành tiền: 7500000
+       * STT: null (trống), Hạng mục: "Chi phí uốn vòm", ĐVT: "md", Số lượng: 1, Đơn giá: 300000, Thành tiền: 1230000
+       * STT: 11, Hạng mục: "Vận chuyển lắp đặt", ĐVT: "xe", Số lượng: 1, Đơn giá: 500000, Thành tiền: 500000
+       * STT: 12, Hạng mục: "Kính Thiên Phát", ĐVT: "m2", Số lượng: 20, Đơn giá: 200000, Thành tiền: 4000000
   
   3. PHÂN TÍCH HẠNG MỤC (từ cột "Hạng mục thi công"):
      a. Lấy DÒNG ĐẦU TIÊN → ten_san_pham
         - Nếu có dấu "+", chỉ lấy phần TRƯỚC dấu "+"
         - Ví dụ: "CỬA SỔ MỞ 1 CÁNH + 1 FIX" → "CỬA SỔ MỞ 1 CÁNH"
+        - ⚠️ QUAN TRỌNG: KHÔNG được thêm icon/emoji vào ten_san_pham
+          * ❌ SAI: "📦 Phụ kiện cửa kính"
+          * ✅ ĐÚNG: "Phụ kiện cửa kính"
+          * ❌ SAI: "💰 Chi phí vận chuyển"
+          * ✅ ĐÚNG: "Chi phí vận chuyển"
      
-     b. Đọc TẤT CẢ các dòng → xác định loai_san_pham
+     b. XÁC ĐỊNH item_type (BẮT BUỘC):
+        - Nếu là sản phẩm hoàn chỉnh (Cửa, Cửa sổ, Vách kính, Lan can) → item_type: "product"
+        - Nếu là vật tư/chi phí (Nhôm, Kính, Phụ kiện, Vận chuyển) → item_type: "material_cost"
+        - ⚠️ QUAN TRỌNG: Chi phí vật tư CŨNG PHẢI có item_type: "material_cost"
+     
+     c. Đọc TẤT CẢ các dòng → xác định loai_san_pham
         - Tìm "Nhôm" + "Xingfa" + ("Việt Nam" HOẶC "TDA" HOẶC "Tiến Đạt")
           → "Nhôm Xingfa Việt Nam"
         - Tìm "Nhôm" + "Xingfa" + ("Trung Quốc" HOẶC "GuangDong")
@@ -305,10 +329,30 @@ BƯỚC 3: ĐỌC TỪNG DÒNG TRONG BẢNG (TỪ SAU HEADER ĐẾN TRƯỚC "T�
           → "Phụ kiện"
         - Có "vận chuyển" hoặc "lắp đặt"
           → "Dịch vụ"
+        - ⚠️ QUAN TRỌNG: KHÔNG được thêm icon/emoji vào loai_san_pham
+          * ❌ SAI: "📦 Phụ kiện"
+          * ✅ ĐÚNG: "Phụ kiện"
+          * ❌ SAI: "💰 Dịch vụ"
+          * ✅ ĐÚNG: "Dịch vụ"
      
-     c. Lấy các dòng SAU dòng đầu → mo_ta
+     d. Lấy các dòng SAU dòng đầu → mo_ta
         - Bao gồm: vật liệu, kích thước, màu sắc, phụ kiện
         - Nối các dòng bằng \\n
+        - ⚠️ QUAN TRỌNG: KHÔNG được thêm icon/emoji vào mo_ta
+          * Chỉ lấy text thuần túy từ file Excel, KHÔNG thêm icon/emoji
+  
+  4. ⚠️ CỰC KỲ QUAN TRỌNG - ĐỌC SỐ LƯỢNG VÀ ĐƠN GIÁ CHO CHI PHÍ:
+     - Chi phí vật tư (item_type: "material_cost") CŨNG NẰM TRONG CÙNG BẢNG với sản phẩm
+     - Chi phí vật tư CŨNG CÓ các cột: STT, Hạng mục, ĐVT, Số lượng, Đơn giá, Thành tiền
+     - PHẢI đọc ĐẦY ĐỦ số lượng (so_luong) và đơn giá (don_gia) cho chi phí
+     - KHÔNG được bỏ qua chi phí chỉ vì tên khác với sản phẩm
+     - Ví dụ trong bảng Excel:
+       * Dòng có STT: 10, Hạng mục: "Nhôm xưởng", ĐVT: "kg", Số lượng: 50, Đơn giá: 150,000, Thành tiền: 7,500,000
+         → PHẢI đọc: item_type: "material_cost", so_luong: 50, don_gia: 150000, thanh_tien: 7500000
+       * Dòng có STT: 11, Hạng mục: "Vận chuyển lắp đặt", ĐVT: "xe", Số lượng: 1, Đơn giá: 500,000, Thành tiền: 500,000
+         → PHẢI đọc: item_type: "material_cost", so_luong: 1, don_gia: 500000, thanh_tien: 500000
+       * Dòng có STT: 12, Hạng mục: "Kính Thiên Phát", ĐVT: "m2", Số lượng: 20, Đơn giá: 200,000, Thành tiền: 4,000,000
+         → PHẢI đọc: item_type: "material_cost", so_luong: 20, don_gia: 200000, thanh_tien: 4000000
 
 BƯỚC 4: TÌM CÁC DÒNG TỔNG
 - Tìm dòng có "TỔNG KHỐI LƯỢNG" hoặc "TỔNG CỘNG" → subtotal
@@ -486,32 +530,54 @@ YÊU CẦU PHÂN TÍCH CHI TIẾT:
         - Sản phẩm hoàn chỉnh: Cửa, Cửa sổ, Cửa đi, Vách kính, Lan can, v.v.
         - Có thể bán trực tiếp cho khách hàng
         - Có đầy đủ thông tin: tên sản phẩm, kích thước, vật liệu, phụ kiện
+        - ⚠️ KHÔNG phải "Phụ kiện" riêng lẻ - "Phụ kiện" riêng lẻ là material_cost
         - Ví dụ:
           * "CỬA SỔ MỞ 1 CÁNH" → item_type: "product"
           * "Cửa đi 2 cánh mở quay" → item_type: "product"
           * "VÁCH KÍNH VĂN PHÒNG" → item_type: "product"
           * "Lan can kính" → item_type: "product"
           * "CỬA TRƯỢT QUAY 4 CÁNH" → item_type: "product"
+          * ❌ "Phụ kiện cửa kính mở BLS VVP" → item_type: "material_cost" (KHÔNG phải "product")
      
      ✅ item_type: "material_cost" (CHI PHÍ VẬT TƯ) - Nếu là:
         - Vật tư, nguyên vật liệu: Nhôm, Kính, Inox, Sắt, Nhựa, Gỗ, Phụ kiện riêng lẻ
         - Chi phí sản xuất: Vật liệu dùng để sản xuất sản phẩm
         - Chi phí dịch vụ: Vận chuyển, lắp đặt, v.v.
         - Có từ khóa: "chi phí", "vật tư", "nguyên vật liệu", "vật liệu", "phụ kiện" (riêng lẻ, không phải sản phẩm hoàn chỉnh)
+        - ⚠️ QUAN TRỌNG: "Phụ kiện" riêng lẻ (không phải sản phẩm hoàn chỉnh) → item_type: "material_cost"
+          * "Phụ kiện cửa kính mở BLS VVP" → item_type: "material_cost" (KHÔNG phải "product")
+          * "Phụ kiện Kinlong" → item_type: "material_cost"
+          * "Phụ kiện VVP inox" → item_type: "material_cost"
         - Ví dụ:
           * "Nhôm Xingfa TDA" (riêng lẻ, không phải sản phẩm hoàn chỉnh) → item_type: "material_cost"
           * "Kính cường lực 10mm" (riêng lẻ, chỉ là vật liệu) → item_type: "material_cost"
           * "Phụ kiện Kinlong" (riêng lẻ) → item_type: "material_cost"
+          * "Phụ kiện cửa kính mở BLS VVP inox trắng" (riêng lẻ, chỉ là phụ kiện) → item_type: "material_cost"
           * "Chi phí vận chuyển" → item_type: "material_cost"
           * "Nhôm xưởng" → item_type: "material_cost"
           * "Kính Thiên Phát" (chỉ là vật liệu) → item_type: "material_cost"
           * "Vận chuyển lắp đặt" → item_type: "material_cost"
+        
+        ⚠️ CỰC KỲ QUAN TRỌNG - CHI PHÍ VẬT TƯ CŨNG PHẢI CÓ ĐẦY ĐỦ THÔNG TIN:
+        - PHẢI đọc SỐ LƯỢNG (so_luong) từ cột "Số lượng" - KHÔNG được để 0 hoặc null
+        - PHẢI đọc ĐƠN GIÁ (don_gia) từ cột "Đơn giá" - KHÔNG được để 0 hoặc null
+        - PHẢI tính THÀNH TIỀN (thanh_tien) = don_gia × so_luong (hoặc don_gia × dien_tich × so_luong nếu có diện tích)
+        - ⚠️ NẾU SỐ LƯỢNG HOẶC ĐƠN GIÁ = 0 → PHẢI đọc lại từ bảng Excel, KHÔNG được để 0
+        - Ví dụ chi phí vật tư:
+          * "Nhôm xưởng" - Số lượng: 50 kg, Đơn giá: 150,000 VNĐ/kg → so_luong: 50, don_gia: 150000, thanh_tien: 7500000
+          * "Vận chuyển lắp đặt" - Số lượng: 1 xe, Đơn giá: 500,000 VNĐ/xe → so_luong: 1, don_gia: 500000, thanh_tien: 500000
+          * "Phụ kiện cửa kính mở BLS VVP" - Số lượng: 1 bộ, Đơn giá: 200,000 VNĐ/bộ → so_luong: 1, don_gia: 200000, thanh_tien: 200000
      
-     ⚠️ LƯU Ý QUAN TRỌNG:
+     ⚠️ LƯU Ý QUAN TRỌNG - PHÂN BIỆT SẢN PHẨM VÀ CHI PHÍ:
         - Nếu item có tên sản phẩm hoàn chỉnh (Cửa, Cửa sổ, Vách kính, Lan can) → item_type: "product"
         - Nếu item chỉ là vật liệu/phụ kiện riêng lẻ (Nhôm, Kính, Phụ kiện, Chi phí) → item_type: "material_cost"
+        - ⚠️ QUAN TRỌNG: "Phụ kiện" riêng lẻ (không phải sản phẩm hoàn chỉnh) → item_type: "material_cost"
+          * "Phụ kiện cửa kính mở BLS VVP inox trắng" → item_type: "material_cost" (KHÔNG phải "product")
+          * "Phụ kiện Kinlong" → item_type: "material_cost"
+          * "Phụ kiện VVP" → item_type: "material_cost"
         - Nếu không rõ → mặc định là "product"
         - MỖI ITEM PHẢI CÓ item_type, không được để trống hoặc null
+        - ⚠️ NẾU item_type = "material_cost" MÀ so_luong = 0 HOẶC don_gia = 0 → PHẢI đọc lại từ bảng Excel!
    
    - loai_san_pham: Loại/Category sản phẩm - PHÂN LOẠI DỰA VÀO VẬT LIỆU
      * ĐỌC KỸ các dòng mô tả để xác định vật liệu chính
@@ -563,14 +629,28 @@ YÊU CẦU PHÂN TÍCH CHI TIẾT:
    - ĐVT: Đơn vị tính từ cột "ĐVT" (m², m2, bộ, xe, cái, md, v.v.)
    - Ngang (m): Chiều ngang từ cột "Ngang" hoặc "Ngang (m)" trong phần "Quy cách"
    - Cao (m): Chiều cao từ cột "Cao" hoặc "Cao (m)" trong phần "Quy cách"
-   - Số lượng: Từ cột "Số lượng", "SL", "Số lượng"
-   - Diện tích (m²): Từ cột "Diện tích", "Diện tích (m²)", "Diện tích (m2)"
-   - Đơn giá: Từ cột "Đơn giá", "Đơn giá (VNĐ/ĐVT)", "Đơn giá (VNĐ·ĐVT)" - loại bỏ dấu phẩy, chấm, CHỈ lấy số
-   - Thành tiền: Từ cột "Thành tiền", "Thành tiền (VNĐ)" - loại bỏ dấu phẩy, chấm, CHỈ lấy số. 
+   - Số lượng (so_luong): Từ cột "Số lượng", "SL", "Số lượng"
+     * ⚠️ BẮT BUỘC: PHẢI đọc số lượng cho TẤT CẢ items (cả sản phẩm VÀ chi phí vật tư)
+     * PHẢI là số > 0, KHÔNG được để 0, null, hoặc bỏ qua
+     * Ví dụ: 1, 2, 50, 100, 1.5, 2.5
+   
+   - Diện tích (dien_tich): Từ cột "Diện tích", "Diện tích (m²)", "Diện tích (m2)"
+     * Có thể null nếu không có (thường chi phí vật tư không có diện tích)
+   
+   - Đơn giá (don_gia): Từ cột "Đơn giá", "Đơn giá (VNĐ/ĐVT)", "Đơn giá (VNĐ·ĐVT)"
+     * ⚠️ BẮT BUỘC: PHẢI đọc đơn giá cho TẤT CẢ items (cả sản phẩm VÀ chi phí vật tư)
+     * Loại bỏ dấu phẩy, chấm, CHỈ lấy số
+     * PHẢI là số > 0, KHÔNG được để 0, null, hoặc bỏ qua
+     * Ví dụ: "1,500,000" → 1500000, "850.000" → 850000, "500000" → 500000
+   
+   - Thành tiền (thanh_tien): Từ cột "Thành tiền", "Thành tiền (VNĐ)"
+     * Loại bỏ dấu phẩy, chấm, CHỈ lấy số
+     * ⚠️ BẮT BUỘC: PHẢI đọc thành tiền cho TẤT CẢ items (cả sản phẩm VÀ chi phí vật tư)
      * QUAN TRỌNG - CÔNG THỨC TÍNH THÀNH TIỀN:
        - Nếu có Diện tích: Thành tiền = Đơn giá × Diện tích × Số lượng
        - Nếu không có Diện tích: Thành tiền = Đơn giá × Số lượng
      * Nếu không có trong file, tính theo công thức trên
+     * ⚠️ LƯU Ý: Chi phí vật tư thường KHÔNG có diện tích → Thành tiền = Đơn giá × Số lượng
    - has_tax: Có thuế VAT hay không (boolean)
      * QUAN TRỌNG: Phân biệt các item có thuế và không có thuế
      * has_tax: true (CÓ THUẾ) - Nếu:
@@ -657,10 +737,24 @@ YÊU CẦU PHÂN TÍCH CHI TIẾT:
    ❌ Các dòng chỉ có text mô tả chung
 
 4. CHỈ LẤY làm items khi:
-   ✅ Có STT (số thứ tự)
-   ✅ Có số lượng (so_luong > 0)
-   ✅ Có đơn giá (don_gia > 0)
-   ✅ Có đủ thông tin: tên, ĐVT, số lượng, đơn giá, thành tiền
+   ✅ Có số lượng (so_luong > 0) - BẮT BUỘC, ÁP DỤNG CHO CẢ SẢN PHẨM VÀ CHI PHÍ VẬT TƯ
+   ✅ Có đơn giá (don_gia > 0) - BẮT BUỘC, ÁP DỤNG CHO CẢ SẢN PHẨM VÀ CHI PHÍ VẬT TƯ
+   ✅ Có thành tiền (thanh_tien > 0) - BẮT BUỘC, ÁP DỤNG CHO CẢ SẢN PHẨM VÀ CHI PHÍ VẬT TƯ
+   ✅ Có đủ thông tin: tên (ten_san_pham), ĐVT, số lượng, đơn giá, thành tiền
+   ⚠️ STT có thể null nếu là chi phí sub-item (nhưng vẫn phải có số lượng, đơn giá, thành tiền)
+   
+   ⚠️ CỰC KỲ QUAN TRỌNG - CHI PHÍ VẬT TƯ:
+   - CHI PHÍ VẬT TƯ (material_cost) CŨNG NẰM TRONG CÙNG BẢNG với sản phẩm
+   - CHI PHÍ VẬT TƯ CÓ THỂ có STT trống (null) nhưng VẪN PHẢI có đầy đủ: số lượng, đơn giá, thành tiền
+   - KHÔNG được bỏ qua chi phí vật tư chỉ vì STT trống hoặc tên khác với sản phẩm
+   - PHẢI đọc ĐẦY ĐỦ số lượng, đơn giá, thành tiền cho chi phí - KHÔNG được để 0 hoặc null
+   - Ví dụ chi phí trong bảng Excel:
+     * Dòng có STT: 10, Hạng mục: "Nhôm xưởng", ĐVT: "kg", Số lượng: 50, Đơn giá: 150000, Thành tiền: 7500000
+       → PHẢI đọc: stt: 10, so_luong: 50, don_gia: 150000, thanh_tien: 7500000, item_type: "material_cost"
+     * Dòng có STT: trống (null), Hạng mục: "Chi phí uốn vòm", ĐVT: "md", Số lượng: 1, Đơn giá: 300000, Thành tiền: 1230000
+       → PHẢI đọc: stt: null, so_luong: 1, don_gia: 300000, thanh_tien: 1230000, item_type: "material_cost"
+     * Dòng có STT: 11, Hạng mục: "Vận chuyển lắp đặt", ĐVT: "xe", Số lượng: 1, Đơn giá: 500000, Thành tiền: 500000
+       → PHẢI đọc: stt: 11, so_luong: 1, don_gia: 500000, thanh_tien: 500000, item_type: "material_cost"
 
 5. Tên khách hàng PHẢI tìm trong dữ liệu - KHÔNG đoán
 6. Địa chỉ PHẢI tìm trong dữ liệu - KHÔNG đoán
@@ -778,6 +872,18 @@ BỎ QUA (KHÔNG phải items):
 - "VI TRỆ: LẦU 1+2" → section header
 - Các dòng không có giá hoặc số lượng
 
+⚠️ QUAN TRỌNG - CHI PHÍ VẬT TƯ CŨNG LÀ ITEMS:
+- Chi phí vật tư (Nhôm, Kính, Vận chuyển, Phụ kiện) CŨNG NẰM TRONG CÙNG BẢNG với sản phẩm
+- Chi phí vật tư CŨNG CÓ STT, SỐ LƯỢNG, ĐƠN GIÁ, THÀNH TIỀN như sản phẩm
+- PHẢI đọc ĐẦY ĐỦ số lượng, đơn giá, thành tiền cho chi phí
+- Ví dụ trong bảng Excel:
+  * STT: 10 | Hạng mục: "Nhôm xưởng\\nNhôm Xingfa TDA hệ 55" | ĐVT: "kg" | Số lượng: 50 | Đơn giá: 150,000 | Thành tiền: 7,500,000
+    → PHẢI đọc: item_type: "material_cost", so_luong: 50, don_gia: 150000, thanh_tien: 7500000
+  * STT: 11 | Hạng mục: "Vận chuyển lắp đặt (Không VAT)" | ĐVT: "xe" | Số lượng: 1 | Đơn giá: 500,000 | Thành tiền: 500,000
+    → PHẢI đọc: item_type: "material_cost", so_luong: 1, don_gia: 500000, thanh_tien: 500000, has_tax: false
+  * STT: 12 | Hạng mục: "Kính Thiên Phát\\nKính trắng 10mm" | ĐVT: "m2" | Số lượng: 20 | Đơn giá: 200,000 | Thành tiền: 4,000,000
+    → PHẢI đọc: item_type: "material_cost", so_luong: 20, don_gia: 200000, thanh_tien: 4000000
+
 LƯU Ý QUAN TRỌNG:
 - Tên khách hàng GIỮ NGUYÊN prefix (Anh), (Chị), (Chú) nếu có trong file
 - Địa chỉ có thể là: quận/huyện đơn thuần HOẶC "Công trình [tên quận]"
@@ -805,7 +911,7 @@ Trả về JSON với format CHÍNH XÁC:
   },
   "items": [
     {
-      "stt": number hoặc null,
+      "stt": number hoặc null (có thể null nếu là chi phí sub-item),
       "ky_hieu": "string hoặc null",
       "hang_muc_thi_cong": "string (toàn bộ mô tả gốc)",
       "item_type": "string (BẮT BUỘC: 'product' hoặc 'material_cost')",
@@ -904,6 +1010,42 @@ VÍ DỤ JSON ĐÚNG (CHI TIẾT):
     {
       "stt": 4,
       "ky_hieu": null,
+      "hang_muc_thi_cong": "Phụ kiện cửa kính mở BLS VVP inox trắng\\n1 bản lề sàn\\n1 kẹp kính L\\n1 kẹp kính trên\\n1 kẹp kính dưới\\n1 khóa âm sàn\\n1 tay nắm H600",
+      "item_type": "material_cost",
+      "ten_san_pham": "Phụ kiện cửa kính mở BLS VVP inox trắng",
+      "loai_san_pham": "Phụ kiện",
+      "mo_ta": "1 bản lề sàn\\n1 kẹp kính L\\n1 kẹp kính trên\\n1 kẹp kính dưới\\n1 khóa âm sàn\\n1 tay nắm H600",
+      "dvt": "bộ",
+      "ngang": null,
+      "cao": null,
+      "so_luong": 1,
+      "dien_tich": null,
+      "don_gia": 200000,
+      "thanh_tien": 200000,
+      "has_tax": true,
+      "ghi_chu": null
+    },
+    {
+      "stt": null,
+      "ky_hieu": null,
+      "hang_muc_thi_cong": "Chi phí uốn vòm",
+      "item_type": "material_cost",
+      "ten_san_pham": "Chi phí uốn vòm",
+      "loai_san_pham": "Dịch vụ",
+      "mo_ta": null,
+      "dvt": "md",
+      "ngang": 4.1,
+      "cao": null,
+      "so_luong": 1,
+      "dien_tich": null,
+      "don_gia": 300000,
+      "thanh_tien": 1230000,
+      "has_tax": true,
+      "ghi_chu": null
+    },
+    {
+      "stt": 5,
+      "ky_hieu": null,
       "hang_muc_thi_cong": "Vận chuyển lắp đặt (Không VAT)",
       "item_type": "material_cost",
       "ten_san_pham": "Vận chuyển lắp đặt",
@@ -970,12 +1112,39 @@ Không bao gồm \`\`\`json hoặc \`\`\` trong response. Chỉ trả về JSON 
 - Không được có trailing comma trước ] hoặc }
 - Tất cả string values phải được bao quanh bởi dấu ngoặc kép ""
 
+⚠️ QUAN TRỌNG - KHÔNG CHÈN ICON/EMOJI VÀO DỮ LIỆU:
+- KHÔNG được thêm bất kỳ icon, emoji, hoặc ký tự đặc biệt nào vào các trường dữ liệu
+- Các trường như ten_san_pham, loai_san_pham, mo_ta, ky_hieu, dvt PHẢI là text thuần túy
+- ❌ SAI: "ten_san_pham": "📦 Phụ kiện cửa kính"
+- ✅ ĐÚNG: "ten_san_pham": "Phụ kiện cửa kính"
+- ❌ SAI: "loai_san_pham": "💰 Chi phí"
+- ✅ ĐÚNG: "loai_san_pham": "Chi phí"
+- ❌ SAI: "ten_san_pham": "CỬA SỔ MỞ 1 CÁNH 🚪"
+- ✅ ĐÚNG: "ten_san_pham": "CỬA SỔ MỞ 1 CÁNH"
+- Chỉ lấy text thuần túy từ file Excel, KHÔNG thêm icon/emoji vào bất kỳ trường nào
+
+⚠️ VALIDATION BẮT BUỘC CHO CHI PHÍ VẬT TƯ:
+- NẾU item_type = "material_cost" THÌ:
+  * stt CÓ THỂ null (nếu là chi phí sub-item có STT trống trong bảng)
+  * so_luong PHẢI > 0 (KHÔNG được để 0 hoặc null)
+  * don_gia PHẢI > 0 (KHÔNG được để 0 hoặc null)
+  * thanh_tien PHẢI > 0 (KHÔNG được để 0 hoặc null)
+  * NẾU so_luong = 0 HOẶC don_gia = 0 → PHẢI đọc lại từ bảng Excel, KHÔNG được để 0!
+- NẾU "Phụ kiện" → item_type PHẢI là "material_cost" (KHÔNG phải "product")
+- NẾU "Chi phí uốn vòm", "Chi phí vận chuyển", "Chi phí lắp đặt" → item_type: "material_cost"
+- NẾU "Phụ kiện cửa kính mở BLS VVP" → item_type: "material_cost", PHẢI đọc đầy đủ so_luong và don_gia
+- ⚠️ QUAN TRỌNG: Chi phí có STT trống VẪN PHẢI được đọc nếu có đầy đủ số lượng, đơn giá, thành tiền
+
 QUAN TRỌNG: Trước khi trả về, hãy kiểm tra JSON bằng cách:
 1. Đếm số dấu { và } phải bằng nhau
 2. Đếm số dấu [ và ] phải bằng nhau
 3. Tất cả string values phải được escape đúng cách
 4. Không có trailing comma
-5. Tất cả keys đều có dấu : sau đó`
+5. Tất cả keys đều có dấu : sau đó
+6. ⚠️ KIỂM TRA: Tất cả items có item_type = "material_cost" PHẢI có so_luong > 0 và don_gia > 0
+7. ⚠️ KIỂM TRA: KHÔNG có icon/emoji trong bất kỳ trường dữ liệu nào (ten_san_pham, loai_san_pham, mo_ta, ky_hieu, dvt, ghi_chu, customer.name, project.name, v.v.)
+   - Tất cả dữ liệu PHẢI là text thuần túy, KHÔNG có icon/emoji
+   - Nếu thấy icon/emoji trong dữ liệu → PHẢI loại bỏ trước khi trả về`
 
     // Call OpenAI API
     console.log('🔵 Calling OpenAI API...')

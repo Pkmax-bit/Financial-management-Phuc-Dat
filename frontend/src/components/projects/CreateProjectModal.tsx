@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Calendar, DollarSign, Users, Target, Clock, AlertCircle, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { projectApi, customerApi, employeeApi } from '@/lib/api'
+import { projectApi, customerApi, employeeApi, apiPost, apiGet } from '@/lib/api'
 import ProjectSuccessModal from '../ProjectSuccessModal'
 
 interface Customer {
@@ -45,6 +45,9 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [taskGroups, setTaskGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [loadingTaskGroups, setLoadingTaskGroups] = useState(false)
+  const [selectedTaskGroupId, setSelectedTaskGroupId] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -55,9 +58,48 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     if (isOpen) {
       fetchCustomers()
       fetchEmployees()
+      fetchTaskGroups()
       generateProjectCode()
     }
   }, [isOpen])
+
+  const fetchTaskGroups = async () => {
+    try {
+      setLoadingTaskGroups(true)
+      const groups = await apiGet('/api/tasks/groups')
+      setTaskGroups(groups || [])
+      
+      // Tìm nhóm "Dự án cửa" và set làm mặc định
+      const duAnCuaGroup = groups.find((g: any) => 
+        g.name && (g.name.toLowerCase().includes('dự án cửa') || g.name.toLowerCase().includes('du an cua'))
+      )
+      if (duAnCuaGroup) {
+        setSelectedTaskGroupId(duAnCuaGroup.id)
+      } else {
+        // Nếu không tìm thấy, tạo nhóm "Dự án cửa"
+        await createDefaultTaskGroup()
+      }
+    } catch (error) {
+      console.error('Error fetching task groups:', error)
+    } finally {
+      setLoadingTaskGroups(false)
+    }
+  }
+
+  const createDefaultTaskGroup = async () => {
+    try {
+      const newGroup = await apiPost('/api/tasks/groups', {
+        name: 'Dự án cửa',
+        description: 'Nhóm nhiệm vụ cho các dự án cửa',
+        is_active: true
+      })
+      
+      setTaskGroups(prev => [...prev, newGroup])
+      setSelectedTaskGroupId(newGroup.id)
+    } catch (error) {
+      console.error('Error creating default task group:', error)
+    }
+  }
 
   const generateProjectCode = async () => {
     try {
@@ -183,9 +225,10 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       console.log('Submitting project data:', submitData)
 
       // Try API first, fallback to Supabase
+      let createdProjectData: any = null
       try {
         console.log('Trying API first...')
-        await projectApi.createProject(submitData)
+        createdProjectData = await projectApi.createProject(submitData)
         console.log('API success')
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
@@ -200,7 +243,31 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
           throw new Error(`Database error: ${error.message}`)
         }
         
+        createdProjectData = data?.[0]
         console.log('Supabase success:', data)
+      }
+
+      // Tạo task trong nhóm "Dự án cửa" sau khi tạo project thành công
+      if (createdProjectData && selectedTaskGroupId) {
+        try {
+          const taskData = {
+            title: formData.name,
+            description: formData.description || `Nhiệm vụ cho dự án ${formData.name}`,
+            status: 'todo',
+            priority: formData.priority,
+            group_id: selectedTaskGroupId,
+            project_id: createdProjectData.id,
+            assigned_to: formData.manager_id || null,
+            start_date: formData.start_date ? new Date(formData.start_date).toISOString() : null,
+            due_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
+          }
+
+          await apiPost('/api/tasks', taskData)
+          console.log('Task created successfully for project')
+        } catch (taskError) {
+          console.error('Error creating task:', taskError)
+          // Không throw error để không làm gián đoạn việc tạo project
+        }
       }
 
       // Show success notification
@@ -237,6 +304,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         billing_type: 'fixed',
         hourly_rate: ''
       })
+      // Không reset selectedTaskGroupId để giữ mặc định "Dự án cửa"
       
       // Don't auto-close modal, let success modal handle it
     } catch (error) {
@@ -558,6 +626,31 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </div>
             </div>
           )}
+
+          <div>
+            <label className="block text-sm font-medium text-black mb-2">
+              Nhóm nhiệm vụ *
+            </label>
+            <div className="relative">
+              <select
+                value={selectedTaskGroupId}
+                onChange={(e) => setSelectedTaskGroupId(e.target.value)}
+                required
+                disabled={loadingTaskGroups}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">{loadingTaskGroups ? 'Đang tải...' : 'Chọn nhóm'}</option>
+                {taskGroups.map(group => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Nhiệm vụ sẽ được tạo tự động trong nhóm này khi tạo dự án
+            </p>
+          </div>
 
           <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
             <button
