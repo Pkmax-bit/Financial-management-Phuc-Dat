@@ -31,6 +31,7 @@ class Quote(BaseModel):
     notes: Optional[str] = None
     created_by: Optional[str] = None
     product_components: Optional[List[dict]] = None
+    quote_items: Optional[List[dict]] = None  # Chi tiết sản phẩm của báo giá
     created_at: datetime
     updated_at: datetime
 
