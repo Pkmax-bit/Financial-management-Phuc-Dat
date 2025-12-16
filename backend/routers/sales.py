@@ -857,8 +857,9 @@ async def approve_quote(
                     last_name = employee.get("last_name", "")
                     employee_name = f"{first_name} {last_name}".strip() or "Nhân viên"
                     
-                    # Create notification for the employee who created the quote
-                    await notification_service.create_quote_approved_notification(
+                    # Create notification for the employee who created the quote (Background)
+                    background_tasks.add_task(
+                        notification_service.create_quote_approved_notification,
                         quote, 
                         employee_user_id,
                         employee_name
@@ -890,6 +891,16 @@ async def approve_quote(
                 invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
                 due_date = (datetime.now() + timedelta(days=30)).date() # Default 30 days
                 
+                # Resolve approver's Employee ID from User ID
+                # The invoices.created_by FK references employees table, not users table
+                approver_employee_id = None
+                try:
+                    emp_res = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
+                    if emp_res.data:
+                        approver_employee_id = emp_res.data[0]["id"]
+                except Exception:
+                    pass # Keep None if not found
+
                 invoice_id = str(uuid.uuid4())
                 invoice_data = {
                     "id": invoice_id,
@@ -911,7 +922,7 @@ async def approve_quote(
                     "notes": f"Hóa đơn được tạo tự động từ báo giá {quote.get('quote_number', 'N/A')}",
                     "terms_and_conditions": quote.get("terms_and_conditions"),
                     "payment_terms": None, # Default to None as we don't have input for this
-                    "created_by": current_user.id, # Approved by
+                    "created_by": approver_employee_id, # Use Employee ID, not User ID
                     "employee_in_charge_id": quote.get("employee_in_charge_id") or quote.get("created_by"),
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat()
@@ -974,8 +985,9 @@ async def approve_quote(
                     manager_user_id = manager.get("id")
                     manager_name = manager.get("full_name") or "Quản lý"
                     
-                    # Create notification for managers
-                    await notification_service.create_quote_approved_manager_notification(
+                    # Create notification for managers (Background)
+                    background_tasks.add_task(
+                        notification_service.create_quote_approved_manager_notification,
                         quote,
                         manager_user_id,
                         manager_name,
