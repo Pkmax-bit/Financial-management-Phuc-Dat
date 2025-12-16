@@ -817,18 +817,134 @@ async def mark_notification_as_read(
             detail=f"Failed to mark notification as read: {str(e)}"
         )
 
+# Helper function to create invoice from approved quote (runs in background)
+async def create_invoice_from_quote(quote_id: str, quote: dict, approver_user_id: str):
+    """Create invoice from approved quote - runs in background to avoid timeout"""
+    try:
+        supabase = get_supabase_client()
+        
+        # 1. Prepare Invoice Data
+        invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        due_date = (datetime.now() + timedelta(days=30)).date() # Default 30 days
+        
+        # Resolve approver's Employee ID from User ID
+        approver_employee_id = None
+        try:
+            emp_res = supabase.table("employees").select("id").eq("user_id", approver_user_id).execute()
+            if emp_res.data:
+                approver_employee_id = emp_res.data[0]["id"]
+        except Exception:
+            pass # Keep None if not found
+
+        invoice_id = str(uuid.uuid4())
+        invoice_data = {
+            "id": invoice_id,
+            "invoice_number": invoice_number,
+            "customer_id": quote.get("customer_id"),
+            "project_id": quote.get("project_id"),
+            "quote_id": quote_id,
+            "issue_date": datetime.now().date().isoformat(),
+            "due_date": due_date.isoformat(),
+            "subtotal": quote.get("subtotal", 0),
+            "tax_rate": quote.get("tax_rate", 0),
+            "tax_amount": quote.get("tax_amount", 0),
+            "total_amount": quote.get("total_amount", 0),
+            "currency": quote.get("currency", "VND"),
+            "status": "draft", # Start as draft
+            "payment_status": "pending",
+            "paid_amount": 0.0,
+            "items": [], 
+            "notes": f"Hóa đơn được tạo tự động từ báo giá {quote.get('quote_number', 'N/A')}",
+            "terms_and_conditions": quote.get("terms_and_conditions"),
+            "payment_terms": None,
+            "created_by": approver_employee_id,
+            "employee_in_charge_id": quote.get("employee_in_charge_id") or quote.get("created_by"),
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+        # 2. Insert Invoice
+        inv_result = supabase.table("invoices").insert(invoice_data).execute()
+        
+        if inv_result.data:
+            # 3. Create Invoice Items from Quote Items
+            raw_items_res = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+            if raw_items_res.data:
+                invoice_items = []
+                for q_item in raw_items_res.data:
+                    # Safely handle product_components
+                    product_components = q_item.get("product_components")
+                    if not product_components or not isinstance(product_components, list):
+                        product_components = []
+
+                    inv_item = {
+                        "id": str(uuid.uuid4()),
+                        "invoice_id": invoice_id,
+                        "product_service_id": q_item.get("product_service_id"),
+                        "description": q_item.get("description", ""),
+                        "quantity": q_item.get("quantity", 0),
+                        "unit_price": q_item.get("unit_price", 0),
+                        "total_price": q_item.get("total_price", 0),
+                        "name_product": q_item.get("name_product"),
+                        "unit": q_item.get("unit"),
+                        "discount_rate": q_item.get("discount_rate", 0.0),
+                        "area": q_item.get("area"),
+                        "volume": q_item.get("volume"),
+                        "height": q_item.get("height"),
+                        "length": q_item.get("length"),
+                        "depth": q_item.get("depth"),
+                        "product_components": product_components,
+                        "created_at": datetime.utcnow().isoformat()
+                    }
+                    invoice_items.append(inv_item)
+                
+                if invoice_items:
+                    supabase.table("invoice_items").insert(invoice_items).execute()
+            
+            print(f"✅ Auto-created invoice {invoice_number} for approved quote {quote_id}")
+            return True
+        else:
+            print(f"❌ Failed to auto-create invoice: No data returned from insert")
+            return False
+
+    except Exception as inv_error:
+        print(f"❌ Failed to auto-create invoice: {inv_error}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+# Helper function to send email notification (runs in background)
+async def send_quote_approved_email_background(quote_id: str, quote: dict, employee_email: str, employee_name: str):
+    """Send quote approved email notification - runs in background"""
+    try:
+        quote_items = await quote_service.get_quote_items_with_categories(quote_id)
+        await email_service.send_quote_approved_notification_email(
+            quote,
+            employee_email,
+            employee_name,
+            quote_items
+        )
+        print(f"Quote approved notification email sent to employee {employee_name}")
+    except Exception as email_error:
+        print(f"Failed to send quote approved notification email: {email_error}")
+
 @router.post("/quotes/{quote_id}/approve")
 async def approve_quote(
     quote_id: str,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user)
 ):
-    """Approve quote and create notification for manager"""
+    """Approve quote and create notification for manager - optimized to avoid timeout"""
     try:
         supabase = get_supabase_client()
         
-        # Get quote details
-        quote_result = supabase.table("quotes").select("*").eq("id", quote_id).execute()
+        # Get quote details with relations in one query
+        quote_result = supabase.table("quotes").select("""
+            *,
+            customers!quotes_customer_id_fkey(id, name, email, phone, company),
+            projects!quotes_project_id_fkey(id, name, project_code)
+        """).eq("id", quote_id).execute()
+        
         if not quote_result.data:
             raise HTTPException(status_code=404, detail="Quote not found")
         
@@ -842,13 +958,21 @@ async def approve_quote(
         
         result = supabase.table("quotes").update(update_data).eq("id", quote_id).execute()
         
-        if result.data:
-            # Get the employee who created the quote
-            created_by = quote.get("created_by")
-            employee_name = "Nhân viên" # Default name
-            
-            if created_by:
-                # Get employee details
+        if not result.data:
+            raise HTTPException(status_code=400, detail="Failed to approve quote")
+        
+        # Update quote object with new status for background tasks
+        quote["status"] = "approved"
+        
+        # Get employee and manager info in parallel (optimized)
+        created_by = quote.get("created_by")
+        employee_name = "Nhân viên"
+        employee_user_id = None
+        employee_email = None
+        
+        # Get employee details if exists
+        if created_by:
+            try:
                 employee_result = supabase.table("employees").select("user_id, first_name, last_name, email").eq("id", created_by).execute()
                 if employee_result.data:
                     employee = employee_result.data[0]
@@ -856,129 +980,42 @@ async def approve_quote(
                     first_name = employee.get("first_name", "")
                     last_name = employee.get("last_name", "")
                     employee_name = f"{first_name} {last_name}".strip() or "Nhân viên"
+                    employee_email = employee.get("email")
                     
                     # Create notification for the employee who created the quote (Background)
-                    background_tasks.add_task(
-                        notification_service.create_quote_approved_notification,
-                        quote, 
-                        employee_user_id,
-                        employee_name
-                    )
+                    if employee_user_id:
+                        background_tasks.add_task(
+                            notification_service.create_quote_approved_notification,
+                            quote, 
+                            employee_user_id,
+                            employee_name
+                        )
                     
                     # Send email notification to employee in background
-                    try:
-                        # Get quote items with categories using optimized service
-                        quote_items = await quote_service.get_quote_items_with_categories(quote_id)
-                        
-                        # Send email to employee
+                    if employee_email:
                         background_tasks.add_task(
-                            email_service.send_quote_approved_notification_email,
+                            send_quote_approved_email_background,
+                            quote_id,
                             quote,
-                            employee.get("email", ""),
-                            employee_name,
-                            quote_items
+                            employee_email,
+                            employee_name
                         )
                         print(f"Quote approved notification email queued for employee {employee_name}")
-                    except Exception as email_error:
-                        print(f"Failed to queue quote approved notification email: {email_error}")
-                        # Don't fail the approval if email fails
-            
-            # --- AUTO CREATE INVOICE LOGIC ---
-            invoice_created = None
-            invoice_creation_error = None
-            try:
-                # 1. Prepare Invoice Data
-                invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-                due_date = (datetime.now() + timedelta(days=30)).date() # Default 30 days
-                
-                # Resolve approver's Employee ID from User ID
-                # The invoices.created_by FK references employees table, not users table
-                approver_employee_id = None
-                try:
-                    emp_res = supabase.table("employees").select("id").eq("user_id", current_user.id).execute()
-                    if emp_res.data:
-                        approver_employee_id = emp_res.data[0]["id"]
-                except Exception:
-                    pass # Keep None if not found
-
-                invoice_id = str(uuid.uuid4())
-                invoice_data = {
-                    "id": invoice_id,
-                    "invoice_number": invoice_number,
-                    "customer_id": quote.get("customer_id"),
-                    "project_id": quote.get("project_id"),
-                    "quote_id": quote_id,
-                    "issue_date": datetime.now().date().isoformat(),
-                    "due_date": due_date.isoformat(),
-                    "subtotal": quote.get("subtotal", 0),
-                    "tax_rate": quote.get("tax_rate", 0),
-                    "tax_amount": quote.get("tax_amount", 0),
-                    "total_amount": quote.get("total_amount", 0),
-                    "currency": quote.get("currency", "VND"),
-                    "status": "draft", # Start as draft
-                    "payment_status": "pending",
-                    "paid_amount": 0.0,
-                    "items": [], 
-                    "notes": f"Hóa đơn được tạo tự động từ báo giá {quote.get('quote_number', 'N/A')}",
-                    "terms_and_conditions": quote.get("terms_and_conditions"),
-                    "payment_terms": None, # Default to None as we don't have input for this
-                    "created_by": approver_employee_id, # Use Employee ID, not User ID
-                    "employee_in_charge_id": quote.get("employee_in_charge_id") or quote.get("created_by"),
-                    "created_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat()
-                }
-
-                # 2. Insert Invoice
-                inv_result = supabase.table("invoices").insert(invoice_data).execute()
-                
-                if inv_result.data:
-                    invoice_created = inv_result.data[0]
-                    
-                    # 3. Create Invoice Items from Quote Items
-                    # Re-fetch raw quote items to ensure we have all fields for copying
-                    raw_items_res = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
-                    if raw_items_res.data:
-                        invoice_items = []
-                        for q_item in raw_items_res.data:
-                            # Safely handle product_components
-                            product_components = q_item.get("product_components")
-                            if not product_components or not isinstance(product_components, list):
-                                product_components = []
-
-                            # Copy structure from convert_quote_to_invoice
-                            inv_item = {
-                                "id": str(uuid.uuid4()),
-                                "invoice_id": invoice_id,
-                                "product_service_id": q_item.get("product_service_id"),
-                                "description": q_item.get("description", ""),
-                                "quantity": q_item.get("quantity", 0),
-                                "unit_price": q_item.get("unit_price", 0),
-                                "total_price": q_item.get("total_price", 0),
-                                "name_product": q_item.get("name_product"),
-                                "unit": q_item.get("unit"),
-                                "discount_rate": q_item.get("discount_rate", 0.0),
-                                "area": q_item.get("area"),
-                                "volume": q_item.get("volume"),
-                                "height": q_item.get("height"),
-                                "length": q_item.get("length"),
-                                "depth": q_item.get("depth"),
-                                "product_components": product_components,
-                                "created_at": datetime.utcnow().isoformat()
-                            }
-                            invoice_items.append(inv_item)
-                        
-                        if invoice_items:
-                            supabase.table("invoice_items").insert(invoice_items).execute()
-                    
-                    print(f"✅ Auto-created invoice {invoice_number} for approved quote {quote_id}")
-
-            except Exception as inv_error:
-                print(f"❌ Failed to auto-create invoice: {inv_error}")
-                invoice_creation_error = str(inv_error)
-            
-            # ---------------------------------
-
-            # Get all admins to notify them (treating admins as managers)
+            except Exception as emp_error:
+                print(f"Failed to get employee details: {emp_error}")
+                # Continue without employee details
+        
+        # Create invoice in background (heavy operation)
+        background_tasks.add_task(
+            create_invoice_from_quote,
+            quote_id,
+            quote,
+            current_user.id
+        )
+        print(f"Invoice creation queued for approved quote {quote_id}")
+        
+        # Get all admins to notify them (treating admins as managers) - in background
+        try:
             managers_result = supabase.table("users").select("id, full_name").eq("role", "admin").execute()
             if managers_result.data:
                 for manager in managers_result.data:
@@ -993,30 +1030,27 @@ async def approve_quote(
                         manager_name,
                         employee_name
                     )
-            
-            # Re-fetch the full quote with relations to return to frontend
-            # This ensures the UI doesn't lose customer/project details after update
-            fresh_quote_result = supabase.table("quotes").select("""
-                *,
-                customers!quotes_customer_id_fkey(id, name, email, phone, company),
-                projects!quotes_project_id_fkey(id, name, project_code)
-            """).eq("id", quote_id).execute()
-            
-            final_quote = fresh_quote_result.data[0] if fresh_quote_result.data else result.data[0]
-
-            return {
-                "message": "Quote approved and invoice created successfully" if invoice_created else f"Quote approved but invoice creation failed: {invoice_creation_error}",
-                "quote": final_quote,
-                "invoice": invoice_created,
-                "invoice_error": invoice_creation_error,
-                "notifications_sent": True
-            }
+        except Exception as manager_error:
+            print(f"Failed to notify managers: {manager_error}")
+            # Continue without manager notifications
         
-        raise HTTPException(status_code=400, detail="Failed to approve quote")
+        # Return immediately with updated quote (invoice will be created in background)
+        final_quote = quote_result.data[0]
+        final_quote["status"] = "approved"
+        final_quote["updated_at"] = update_data["updated_at"]
+
+        return {
+            "message": "Quote approved successfully. Invoice is being created in the background.",
+            "quote": final_quote,
+            "invoice": None,  # Will be created in background
+            "notifications_sent": True
+        }
         
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Failed to approve quote: {str(e)}"

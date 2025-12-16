@@ -122,8 +122,6 @@ export default function QuoteDetailPage() {
 
   // Check if should open preview modal
   useEffect(() => {
-    // Guard in case searchParams is not yet available
-    if (!searchParams) return
     const action = searchParams.get('action')
     if (action === 'preview' && quote && !showPreviewModal) {
       setShowPreviewModal(true)

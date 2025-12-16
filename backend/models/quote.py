@@ -13,8 +13,6 @@ class QuoteStatus(str, Enum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     EXPIRED = "expired"
-    APPROVED = "approved"
-    CLOSED = "closed"
 
 class Quote(BaseModel):
     """Quote model"""
@@ -33,7 +31,6 @@ class Quote(BaseModel):
     notes: Optional[str] = None
     created_by: Optional[str] = None
     product_components: Optional[List[dict]] = None
-    quote_items: Optional[List[dict]] = None  # Chi tiết sản phẩm của báo giá
     created_at: datetime
     updated_at: datetime
 
