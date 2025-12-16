@@ -882,6 +882,7 @@ async def approve_quote(
             
             # --- AUTO CREATE INVOICE LOGIC ---
             invoice_created = None
+            invoice_creation_error = None
             try:
                 # 1. Prepare Invoice Data
                 invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
@@ -954,7 +955,7 @@ async def approve_quote(
 
             except Exception as inv_error:
                 print(f"❌ Failed to auto-create invoice: {inv_error}")
-                # We do NOT rollback quote approval, just log the error
+                invoice_creation_error = str(inv_error)
             
             # ---------------------------------
 
@@ -974,9 +975,10 @@ async def approve_quote(
                     )
             
             return {
-                "message": "Quote approved and invoice created successfully" if invoice_created else "Quote approved successfully (Invoice creation failed)",
+                "message": "Quote approved and invoice created successfully" if invoice_created else f"Quote approved but invoice creation failed: {invoice_creation_error}",
                 "quote": result.data[0],
                 "invoice": invoice_created,
+                "invoice_error": invoice_creation_error,
                 "notifications_sent": True
             }
         
