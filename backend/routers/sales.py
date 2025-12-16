@@ -419,12 +419,12 @@ async def get_quotes(
             detail=f"Failed to fetch quotes: {str(e)}"
         )
 
-@router.get("/quotes/{quote_id}", response_model=Quote)
+@router.get("/quotes/{quote_id}")
 async def get_quote(
     quote_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific quote by ID. Only accessible if user is in project_team for that project, except for admin and accountant."""
+    """Get a specific quote by ID with full details including items, customer, and project. Only accessible if user is in project_team for that project, except for admin and accountant."""
     try:
         supabase = get_supabase_client()
         
@@ -484,9 +484,19 @@ async def get_quote(
         quote_items_with_products = await quote_service.get_quote_items_with_categories(quote_id)
         
         # Replace quote_items in the response with enriched items
+        # Use 'items' key for Android compatibility (some apps expect 'items' instead of 'quote_items')
         quote["quote_items"] = quote_items_with_products
+        quote["items"] = quote_items_with_products  # Also include as 'items' for compatibility
         
-        return Quote(**quote)
+        # Ensure customers and projects are properly formatted (handle None cases)
+        if quote.get("customers") is None:
+            quote["customers"] = None
+        if quote.get("projects") is None:
+            quote["projects"] = None
+        
+        # Return the full quote dict with all fields (customers, projects, items)
+        # This ensures Android app receives all necessary data
+        return quote
         
     except HTTPException:
         raise
