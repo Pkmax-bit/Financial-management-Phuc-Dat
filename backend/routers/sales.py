@@ -820,6 +820,7 @@ async def mark_notification_as_read(
 @router.post("/quotes/{quote_id}/approve")
 async def approve_quote(
     quote_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user)
 ):
     """Approve quote and create notification for manager"""
@@ -863,21 +864,22 @@ async def approve_quote(
                         employee_name
                     )
                     
-                    # Send email notification to employee
+                    # Send email notification to employee in background
                     try:
                         # Get quote items with categories using optimized service
                         quote_items = await quote_service.get_quote_items_with_categories(quote_id)
                         
                         # Send email to employee
-                        await email_service.send_quote_approved_notification_email(
+                        background_tasks.add_task(
+                            email_service.send_quote_approved_notification_email,
                             quote,
                             employee.get("email", ""),
                             employee_name,
                             quote_items
                         )
-                        print(f"Quote approved notification email sent to employee {employee_name}")
+                        print(f"Quote approved notification email queued for employee {employee_name}")
                     except Exception as email_error:
-                        print(f"Failed to send quote approved notification email: {email_error}")
+                        print(f"Failed to queue quote approved notification email: {email_error}")
                         # Don't fail the approval if email fails
             
             # --- AUTO CREATE INVOICE LOGIC ---
@@ -908,6 +910,7 @@ async def approve_quote(
                     "items": [], 
                     "notes": f"Hóa đơn được tạo tự động từ báo giá {quote.get('quote_number', 'N/A')}",
                     "terms_and_conditions": quote.get("terms_and_conditions"),
+                    "payment_terms": None, # Default to None as we don't have input for this
                     "created_by": current_user.id, # Approved by
                     "employee_in_charge_id": quote.get("employee_in_charge_id") or quote.get("created_by"),
                     "created_at": datetime.utcnow().isoformat(),
@@ -926,6 +929,11 @@ async def approve_quote(
                     if raw_items_res.data:
                         invoice_items = []
                         for q_item in raw_items_res.data:
+                            # Safely handle product_components
+                            product_components = q_item.get("product_components")
+                            if not product_components or not isinstance(product_components, list):
+                                product_components = []
+
                             # Copy structure from convert_quote_to_invoice
                             inv_item = {
                                 "id": str(uuid.uuid4()),
@@ -943,7 +951,7 @@ async def approve_quote(
                                 "height": q_item.get("height"),
                                 "length": q_item.get("length"),
                                 "depth": q_item.get("depth"),
-                                "product_components": q_item.get("product_components") or [],
+                                "product_components": product_components,
                                 "created_at": datetime.utcnow().isoformat()
                             }
                             invoice_items.append(inv_item)
@@ -974,9 +982,19 @@ async def approve_quote(
                         employee_name
                     )
             
+            # Re-fetch the full quote with relations to return to frontend
+            # This ensures the UI doesn't lose customer/project details after update
+            fresh_quote_result = supabase.table("quotes").select("""
+                *,
+                customers!quotes_customer_id_fkey(id, name, email, phone, company),
+                projects!quotes_project_id_fkey(id, name, project_code)
+            """).eq("id", quote_id).execute()
+            
+            final_quote = fresh_quote_result.data[0] if fresh_quote_result.data else result.data[0]
+
             return {
                 "message": "Quote approved and invoice created successfully" if invoice_created else f"Quote approved but invoice creation failed: {invoice_creation_error}",
-                "quote": result.data[0],
+                "quote": final_quote,
                 "invoice": invoice_created,
                 "invoice_error": invoice_creation_error,
                 "notifications_sent": True
