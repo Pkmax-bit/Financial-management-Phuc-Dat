@@ -646,6 +646,73 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       alert('Lỗi khi thêm sản phẩm: ' + (error as Error).message)
     }
   }
+
+  // Helper: recalculate totals from items list
+  const recalculateTotalsFromItems = (items: QuoteItem[], defaultTaxRate: number) => {
+    const newSubtotal = items.reduce((sum, item) => sum + (item.thanh_tien || 0), 0)
+    const newTaxAmount = items.reduce((sum, item) => {
+      if (item.has_tax !== false) {
+        const itemTaxRate = item.tax_rate !== undefined
+          ? item.tax_rate
+          : defaultTaxRate
+        return sum + (item.thanh_tien || 0) * itemTaxRate
+      }
+      return sum
+    }, 0)
+    const newTotalAmount = newSubtotal + newTaxAmount
+    return { newSubtotal, newTaxAmount, newTotalAmount }
+  }
+
+  // Add a free / manual product row
+  const addFreeProductItem = () => {
+    if (!analyzedData) return
+
+    const newItems = [...analyzedData.items]
+    const maxStt = Math.max(...newItems.map(item => item.stt || 0), 0)
+    const baseTaxRate = analyzedData.tax_rate || 0.08
+
+    const newItem: QuoteItem = {
+      stt: maxStt + 1,
+      item_type: 'product',
+      ten_san_pham: 'Sản phẩm tự do',
+      loai_san_pham: 'Sản phẩm tự do',
+      mo_ta: '',
+      dvt: 'cái',
+      so_luong: 1,
+      dien_tich: undefined,
+      don_gia: 0,
+      thanh_tien: 0,
+      has_tax: true,
+      tax_rate: baseTaxRate
+    }
+
+    newItems.push(newItem)
+    const { newSubtotal, newTaxAmount, newTotalAmount } = recalculateTotalsFromItems(newItems, baseTaxRate)
+
+    setAnalyzedData({
+      ...analyzedData,
+      items: newItems,
+      subtotal: newSubtotal,
+      tax_amount: newTaxAmount,
+      total_amount: newTotalAmount
+    })
+  }
+
+  // Delete a product/material row from analyzed items
+  const deleteItemAtIndex = (index: number) => {
+    if (!analyzedData) return
+    const newItems = analyzedData.items.filter((_, i) => i !== index)
+    const baseTaxRate = analyzedData.tax_rate || 0.08
+    const { newSubtotal, newTaxAmount, newTotalAmount } = recalculateTotalsFromItems(newItems, baseTaxRate)
+
+    setAnalyzedData({
+      ...analyzedData,
+      items: newItems,
+      subtotal: newSubtotal,
+      tax_amount: newTaxAmount,
+      total_amount: newTotalAmount
+    })
+  }
   
   // Helper function to normalize Vietnamese text for matching
   const normalizeText = (text: string): string => {
@@ -3121,6 +3188,13 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                       + Sản phẩm
                     </button>
                     <button
+                      onClick={addFreeProductItem}
+                      className="flex items-center px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Thêm SP tự do
+                    </button>
+                    <button
                       onClick={() => setIsEditingAll(true)}
                       className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
                     >
@@ -3135,8 +3209,9 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
               <div className="bg-white border-2 border-gray-500 rounded-md inline-block min-w-max">
                 <div className="bg-gray-50 px-4 py-3 border-b-2 border-gray-500 sticky top-0 z-10 shadow-sm">
                   <div className="grid gap-1 text-xs font-medium text-black items-start" style={{
-                    gridTemplateColumns: '100px 50px 100px 100px 120px 220px 140px 220px 60px 70px 70px 80px 90px 130px 130px 80px 90px'
+                    gridTemplateColumns: '80px 100px 50px 100px 100px 120px 220px 140px 220px 60px 70px 70px 80px 90px 130px 130px 80px 90px'
                   }}>
+                    <div className="text-center">Xóa</div>
                     <div>Trạng thái</div>
                     <div>STT</div>
                     <div>Loại</div>
@@ -3234,8 +3309,18 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                         className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors px-4 py-3 ${borderColor}`}
                       >
                         <div className="grid gap-1 items-start text-xs" style={{
-                          gridTemplateColumns: '100px 50px 100px 100px 120px 220px 140px 220px 60px 70px 70px 80px 90px 130px 130px 80px 90px'
+                          gridTemplateColumns: '80px 100px 50px 100px 100px 120px 220px 140px 220px 60px 70px 70px 80px 90px 130px 130px 80px 90px'
                         }}>
+                          <div className="min-h-[28px] flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => deleteItemAtIndex(index)}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 text-red-600 border border-red-300"
+                              title="Xóa dòng này"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
                           <div>
                           {exists ? (
                             <div className="flex items-center space-x-2">

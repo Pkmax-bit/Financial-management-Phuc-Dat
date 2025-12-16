@@ -65,6 +65,8 @@ interface QuoteItem {
   // UI-only flags to avoid overwriting manual inputs
   area_is_manual?: boolean
   volume_is_manual?: boolean
+  // UI-only flag: when true, total_price was set manually and should not auto-sync unit_price
+  total_is_manual?: boolean
 // values sourced strictly from product components (hiện tại lấy từ actual_material_components của sản phẩm)
   component_unit?: string
   component_unit_price?: number
@@ -1780,14 +1782,20 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
     updatedItems[index] = { ...updatedItems[index], [field]: value }
 
-    // Mark manual overrides for area/volume
+    // Mark manual overrides for area/volume/total
     if (field === 'area') {
       updatedItems[index].area_is_manual = value != null
     } else if (field === 'volume') {
       updatedItems[index].volume_is_manual = value != null
+    } else if (field === 'total_price') {
+      // User is directly editing thành tiền: đánh dấu là manual,
+      // không tự động thay đổi đơn giá, chỉ dùng value này để tính tổng & thuế.
+      updatedItems[index].total_is_manual = value != null
     }
 
-    // Recalculate total_price for this item
+    // Recalculate total_price cho item khi thay đổi các trường nguồn
+    // - Đổi quantity / unit_price / area → cập nhật lại total_price theo công thức
+    // - Đổi total_price trực tiếp: KHÔNG đụng tới unit_price (đã xử lý phía trên)
     if (field === 'quantity' || field === 'unit_price' || field === 'area') {
       updatedItems[index].total_price = computeItemTotal(updatedItems[index])
     }
@@ -3495,9 +3503,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center justify-between w-full">
                                 <div className="flex flex-col items-end gap-1">
-                                  <span className="text-xs font-semibold text-gray-900">
-                                    {formatCurrency(item.total_price)}
-                                  </span>
+                                  <EditableNumberCell
+                                    value={item.total_price}
+                                    onChange={(v) => updateItem(index, 'total_price', Number(v || 0))}
+                                    format="currency"
+                                    step={1000}
+                                    min={0}
+                                    placeholder="0 ₫"
+                                    index={index}
+                                    field={'total_price'}
+                                    commitOnChange
+                                    tabIndex={index * 100 + 6}
+                                  />
                                   <div className="flex items-center gap-1">
                                     <span className="text-xs text-gray-500">+ Thuế:</span>
                                     <input
@@ -3513,7 +3530,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                                       min="0"
                                       max="100"
                                       step="0.1"
-                                      tabIndex={index * 100 + 6}
+                                      tabIndex={index * 100 + 16}
                                     />
                                     <span className="text-xs text-gray-500">%</span>
                                     <span className="text-xs text-gray-500">
