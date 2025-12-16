@@ -1,0 +1,99 @@
+{
+  "timestamp": "2025-12-14T23:04:36.304736",
+  "total": 13,
+  "passed": 13,
+  "failed": 0,
+  "results": [
+    {
+      "name": "Health Check",
+      "passed": true,
+      "error": null,
+      "duration": 0.002823352813720703,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.1.2: Đăng nhập (Admin)",
+      "passed": true,
+      "error": null,
+      "duration": 1.0000171661376953,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.1.3: Đăng nhập sai thông tin",
+      "passed": true,
+      "error": null,
+      "duration": 0.08345818519592285,
+      "status_code": null
+    },
+    {
+      "name": "TC 1.1.5: Lấy thông tin user",
+      "passed": true,
+      "error": null,
+      "duration": 0.4909336566925049,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.1.6: Cập nhật thông tin user",
+      "passed": true,
+      "error": null,
+      "duration": 0.625154972076416,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.2.1: Tạo khách hàng",
+      "passed": true,
+      "error": null,
+      "duration": 0.8697891235351562,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.2.2: Danh sách khách hàng",
+      "passed": true,
+      "error": null,
+      "duration": 1.4170794486999512,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.2.6: Tìm kiếm khách hàng",
+      "passed": true,
+      "error": null,
+      "duration": 0.6882109642028809,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.2.7: Lọc khách hàng",
+      "passed": true,
+      "error": null,
+      "duration": 0.7431399822235107,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.3.2: Danh sách nhân viên",
+      "passed": true,
+      "error": null,
+      "duration": 0.6165857315063477,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.4.1: Dashboard",
+      "passed": true,
+      "error": null,
+      "duration": 2.897446870803833,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.5.1: Phân quyền",
+      "passed": true,
+      "error": null,
+      "duration": 1.400482416152954,
+      "status_code": 200
+    },
+    {
+      "name": "TC 1.1.4: Đăng xuất",
+      "passed": true,
+      "error": null,
+      "duration": 0.5181865692138672,
+      "status_code": 200
+    }
+  ]
+}

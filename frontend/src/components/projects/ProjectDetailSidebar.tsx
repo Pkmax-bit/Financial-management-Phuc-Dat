@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Edit, Trash2, Calendar, DollarSign, Users, Target, Clock, TrendingUp, BarChart3, FileText, Activity, AlertCircle, CheckCircle, Pause } from 'lucide-react'
+import { X, Edit, Trash2, Calendar, DollarSign, Users, Target, Clock, TrendingUp, BarChart3, FileText, Activity, AlertCircle, CheckCircle, Pause, CheckSquare } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi } from '@/lib/api'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import ProjectTeam from './ProjectTeam'
 import ProjectTimeline from './ProjectTimeline'
+import ProjectTasksTab from './ProjectTasksTab'
 
 interface Project {
   id: string
@@ -69,7 +70,7 @@ const priorityConfig = {
 }
 
 export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit, onDelete }: ProjectDetailSidebarProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'tasks'>('overview')
   const [financialData, setFinancialData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<any>(null)
@@ -237,7 +238,8 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
               {[
                 { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
                 { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
-                { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' }
+                { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
+                { id: 'tasks', label: 'Nhiệm vụ', icon: CheckSquare, color: 'green' }
               ].map((tab) => {
                 const Icon = tab.icon
                 const isActive = activeTab === tab.id
@@ -471,6 +473,11 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
                 <div className="bg-white rounded-lg border border-gray-200 p-4">
                   <ProjectTeam projectId={project.id} projectName={project.name} currentUser={user} />
                 </div>
+              )}
+
+              {/* Tasks Tab */}
+              {activeTab === 'tasks' && project && (
+                <ProjectTasksTab projectId={project.id} projectName={project.name} />
               )}
 
               {/* Đã ẩn tab Hóa đơn & Chi phí khỏi sidebar chi tiết dự án */}

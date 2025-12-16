@@ -1,0 +1,120 @@
+{
+  "timestamp": "2025-12-14T23:40:43.091818",
+  "total": 16,
+  "passed": 12,
+  "failed": 4,
+  "results": [
+    {
+      "name": "TC 3.1.1: Tạo chi phí thường",
+      "passed": false,
+      "error": "Status 500: {\"detail\":\"Failed to create expense: 'ExpenseCreate' object has no attribute 'expense_code'\"}",
+      "duration": 1.283071517944336,
+      "status_code": null
+    },
+    {
+      "name": "TC 3.1.2: Danh sách chi phí",
+      "passed": true,
+      "error": null,
+      "duration": 0.5928239822387695,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.1.8: Danh sách đối tượng chi phí",
+      "passed": true,
+      "error": null,
+      "duration": 0.6231276988983154,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.2.1: Báo cáo dự án chi tiết",
+      "passed": false,
+      "error": "Status 500: Internal Server Error",
+      "duration": 2.1382498741149902,
+      "status_code": null
+    },
+    {
+      "name": "TC 3.2.3: Báo cáo P&L",
+      "passed": true,
+      "error": null,
+      "duration": 0.789724588394165,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.2.4: Bảng cân đối kế toán",
+      "passed": false,
+      "error": "Status 500: {\"detail\":\"Failed to generate Balance Sheet: {'message': 'column journal_entries.debit_amount does not exist', 'code': '42703', 'hint': None, 'details': None}\"}",
+      "duration": 0.7200140953063965,
+      "status_code": null
+    },
+    {
+      "name": "TC 3.2.5: Báo cáo lưu chuyển tiền tệ",
+      "passed": true,
+      "error": null,
+      "duration": 7.2861168384552,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.2.6: Doanh thu theo khách hàng",
+      "passed": true,
+      "error": null,
+      "duration": 1.0591788291931152,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.2.7: Chi phí theo nhà cung cấp",
+      "passed": true,
+      "error": null,
+      "duration": 1.003478765487671,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.2.8: Sổ cái tổng hợp",
+      "passed": true,
+      "error": null,
+      "duration": 0.6399827003479004,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.3.1: Timeline dự án",
+      "passed": true,
+      "error": null,
+      "duration": 0.08975005149841309,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.4.1: Tạo nhiệm vụ",
+      "passed": true,
+      "error": null,
+      "duration": 0.5938451290130615,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.4.2: Danh sách nhiệm vụ",
+      "passed": true,
+      "error": null,
+      "duration": 3.2403879165649414,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.6.1: Danh sách thông báo",
+      "passed": false,
+      "error": "Status 404: {\"detail\":\"Not Found\"}",
+      "duration": 0.005521059036254883,
+      "status_code": null
+    },
+    {
+      "name": "TC 3.8.1: Danh mục sản phẩm",
+      "passed": true,
+      "error": null,
+      "duration": 0.5920250415802002,
+      "status_code": 200
+    },
+    {
+      "name": "TC 3.8.2: Danh sách sản phẩm",
+      "passed": true,
+      "error": null,
+      "duration": 0.6028673648834229,
+      "status_code": 200
+    }
+  ]
+}

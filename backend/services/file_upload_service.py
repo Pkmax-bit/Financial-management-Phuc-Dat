@@ -6,6 +6,7 @@ Centralized service for handling file/image uploads to Supabase Storage
 import uuid
 import os
 import re
+import unicodedata
 from typing import Optional, List, Dict, Any
 from fastapi import UploadFile, HTTPException, status
 from datetime import datetime
@@ -154,8 +155,26 @@ class FileUploadService:
             else:
                 base_name = original_name
                 file_ext = ''
-            # Sanitize base name
-            base_name = base_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+            # Sanitize base name for Supabase Storage
+            # Supabase Storage doesn't accept Unicode characters (Vietnamese) and spaces in keys
+            # Convert Vietnamese to ASCII (remove diacritics) and replace spaces with underscores
+            if custom_filename:
+                # Normalize Unicode: convert Vietnamese characters to ASCII (remove diacritics)
+                normalized_name = unicodedata.normalize('NFD', base_name)
+                # Remove diacritical marks (combining characters)
+                ascii_name = ''.join(c for c in normalized_name if unicodedata.category(c) != 'Mn')
+                # Handle special Vietnamese characters: đ -> d, Đ -> D
+                ascii_name = ascii_name.replace('đ', 'd').replace('Đ', 'D')
+                
+                # Replace spaces with underscores and remove invalid characters: / \ : * ? " < > | %
+                # Also remove % which can cause issues in URLs
+                base_name = ascii_name.replace(' ', '_')
+                base_name = re.sub(r'[<>:"/\\|?*%]', '_', base_name)
+                # Remove multiple consecutive underscores
+                base_name = re.sub(r'_+', '_', base_name).strip('_')
+            else:
+                # For auto-generated names, replace spaces and slashes
+                base_name = base_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
 
             # Nếu generate_unique_name=True thì vẫn ưu tiên UUID để tránh trùng tuyệt đối
             if generate_unique_name and not custom_filename:
@@ -184,8 +203,13 @@ class FileUploadService:
                                 "upsert": "false"
                             }
                         )
-                        if hasattr(upload_result, 'error') and upload_result.error:
+                        # Check for errors - handle both dict and object responses
+                        if isinstance(upload_result, dict):
+                            if upload_result.get('error'):
+                                raise Exception(str(upload_result.get('error')))
+                        elif hasattr(upload_result, 'error') and upload_result.error:
                             raise Exception(str(upload_result.error))
+                        # If no error, consider it successful
                     except Exception as e1:
                         logger.warning(f"Upload with content-type failed (attempt {attempt}, name={candidate_filename}): {e1}")
                         
@@ -198,7 +222,11 @@ class FileUploadService:
                                     "upsert": "false"
                                 }
                             )
-                            if hasattr(upload_result, 'error') and upload_result.error:
+                            # Check for errors - handle both dict and object responses
+                            if isinstance(upload_result, dict):
+                                if upload_result.get('error'):
+                                    raise Exception(str(upload_result.get('error')))
+                            elif hasattr(upload_result, 'error') and upload_result.error:
                                 raise Exception(str(upload_result.error))
                             logger.info(f"Uploaded {file.content_type} without content-type option as workaround")
                         except Exception as e2:
@@ -228,7 +256,11 @@ class FileUploadService:
                                             "upsert": "false"
                                         }
                                     )
-                                    if hasattr(upload_result, 'error') and upload_result.error:
+                                    # Check for errors - handle both dict and object responses
+                                    if isinstance(upload_result, dict):
+                                        if upload_result.get('error'):
+                                            raise Exception(str(upload_result.get('error')))
+                                    elif hasattr(upload_result, 'error') and upload_result.error:
                                         raise Exception(str(upload_result.error))
                                     logger.info(f"Uploaded {file.content_type} with generic content-type (application/octet-stream) as workaround")
                                 except Exception as e3:

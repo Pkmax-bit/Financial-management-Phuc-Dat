@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
-import { Upload, Download, FileSpreadsheet, FileText, X, CheckCircle2, AlertCircle, Loader2, User, Building2, Package, DollarSign, Sparkles, ChevronDown, ChevronUp, Edit, Save } from 'lucide-react'
+import { Upload, Download, FileSpreadsheet, FileText, X, CheckCircle2, AlertCircle, Loader2, User, Building2, Package, DollarSign, Sparkles, ChevronDown, ChevronUp, ChevronRight, Edit, Save, Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // Lazy import xlsx with retry mechanism
@@ -273,6 +273,13 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
   }>>([])
   const [products, setProducts] = useState<Array<{ id: string; name: string; price: number; unit: string }>>([])
   
+  // Product selection modal state
+  const [showProductModal, setShowProductModal] = useState(false)
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
+  const [productSearch, setProductSearch] = useState('')
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [loadingProducts, setLoadingProducts] = useState(false)
+  
   // Editable customer and project info
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     name: '',
@@ -466,13 +473,177 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
 
   const fetchProducts = async () => {
     try {
+      setLoadingProducts(true)
       const { data } = await supabase
         .from('products')
-        .select('id, name, price, unit')
+        .select(`
+          id, 
+          name, 
+          description, 
+          unit, 
+          price, 
+          category_id,
+          area,
+          volume,
+          height,
+          length,
+          depth,
+          product_categories(name)
+        `)
         .eq('is_active', true)
-      setProducts(data || [])
+        .order('name')
+      
+      const transformedProducts = (data || []).map((product: any) => ({
+        id: product.id,
+        name: product.name,
+        description: product.description || '',
+        unit: product.unit || '',
+        unit_price: product.price || 0,
+        category: product.product_categories?.name || 'Khác',
+        category_id: product.category_id || null,
+        area: product.area !== undefined ? product.area : null,
+        volume: product.volume !== undefined ? product.volume : null,
+        height: product.height !== undefined ? product.height : null,
+        length: product.length !== undefined ? product.length : null,
+        depth: product.depth !== undefined ? product.depth : null
+      }))
+      
+      setProducts(transformedProducts)
     } catch (error) {
       console.error('Error fetching products:', error)
+      setProducts([])
+    } finally {
+      setLoadingProducts(false)
+    }
+  }
+  
+  // Filter products based on search
+  const filteredProducts = products.filter(product => {
+    if (!productSearch.trim()) return true
+    const searchLower = productSearch.toLowerCase()
+    return (
+      product.name.toLowerCase().includes(searchLower) ||
+      (product.description && product.description.toLowerCase().includes(searchLower)) ||
+      (product.category && product.category.toLowerCase().includes(searchLower))
+    )
+  })
+  
+  // Toggle category expansion
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(category)) {
+        newSet.delete(category)
+      } else {
+        newSet.add(category)
+      }
+      return newSet
+    })
+  }
+  
+  // Add selected products to analyzedData.items
+  const addProductsToItems = async () => {
+    if (!analyzedData || selectedProductIds.length === 0) return
+    
+    try {
+      // Load full products with components
+      const { data: prods } = await supabase
+        .from('products')
+        .select('id, name, description, unit, price, category_id, area, volume, height, length, depth, actual_material_components, product_components')
+        .in('id', selectedProductIds)
+      
+      const byId: Record<string, any> = {}
+      prods?.forEach((pr: any) => { byId[pr.id] = pr })
+      
+      // Collect all expense_object_ids to batch fetch names
+      const allComponents = (prods || []).flatMap((pr: any) => {
+        const actualComps = Array.isArray(pr.actual_material_components) ? pr.actual_material_components : []
+        const plannedComps = Array.isArray(pr.product_components) ? pr.product_components : []
+        const comps = actualComps.length > 0 ? actualComps : plannedComps
+        return comps
+      })
+      const ids = Array.from(new Set(allComponents.map((c: any) => String(c.expense_object_id)).filter(Boolean)))
+      let nameMap: Record<string, string> = {}
+      if (ids.length > 0) {
+        const { data: exp } = await supabase
+          .from('expense_objects')
+          .select('id, name')
+          .in('id', ids)
+        exp?.forEach((e: any) => { nameMap[e.id] = e.name })
+      }
+      
+      const newItems = [...analyzedData.items]
+      const maxStt = Math.max(...newItems.map(item => item.stt || 0), 0)
+      
+      selectedProductIds.forEach((productId, idx) => {
+        const pr = byId[productId]
+        if (!pr) return
+        
+        const actualComps = Array.isArray(pr.actual_material_components) ? pr.actual_material_components : []
+        const plannedComps = Array.isArray(pr.product_components) ? pr.product_components : []
+        const comps = actualComps.length > 0 ? actualComps : plannedComps
+        
+        const components = comps.map((c: any) => ({
+          expense_object_id: c.expense_object_id,
+          name: nameMap[c.expense_object_id] || c.name || '',
+          unit: c.unit || '',
+          unit_price: Number(c.unit_price || 0),
+          quantity: Number(c.quantity || 0),
+          total_price: Number(c.total_price || 0)
+        }))
+        
+        const newItem: QuoteItem = {
+          stt: maxStt + idx + 1,
+          item_type: 'product',
+          ten_san_pham: pr.name,
+          loai_san_pham: pr.category_id ? 'Sản phẩm' : undefined,
+          mo_ta: pr.description || '',
+          dvt: pr.unit || 'cái',
+          so_luong: 1,
+          dien_tich: pr.area || undefined,
+          don_gia: pr.price || 0,
+          thanh_tien: (pr.area && pr.area > 0) ? (pr.price || 0) * pr.area : (pr.price || 0),
+          has_tax: true,
+          tax_rate: analyzedData.tax_rate || 0.08,
+          ngang: pr.length ? pr.length / 1000 : undefined, // Convert mm to m
+          cao: pr.height ? pr.height / 1000 : undefined, // Convert mm to m
+          expense_object_id: undefined,
+          components: components.length > 0 ? components : undefined
+        }
+        
+        newItems.push(newItem)
+      })
+      
+      // Recalculate totals
+      const newSubtotal = newItems.reduce((sum, item) => sum + (item.thanh_tien || 0), 0)
+      const newTaxAmount = newItems.reduce((sum, item) => {
+        if (item.has_tax !== false) {
+          const itemTaxRate = item.tax_rate !== undefined 
+            ? item.tax_rate 
+            : (analyzedData.tax_rate || 0.08)
+          return sum + (item.thanh_tien || 0) * itemTaxRate
+        }
+        return sum
+      }, 0)
+      const newTotalAmount = newSubtotal + newTaxAmount
+      
+      setAnalyzedData({
+        ...analyzedData,
+        items: newItems,
+        subtotal: newSubtotal,
+        tax_amount: newTaxAmount,
+        total_amount: newTotalAmount
+      })
+      
+      // Refresh product match status
+      checkProductMatches()
+      
+      // Close modal and reset
+      setSelectedProductIds([])
+      setShowProductModal(false)
+    } catch (error) {
+      console.error('Error adding products:', error)
+      alert('Lỗi khi thêm sản phẩm: ' + (error as Error).message)
     }
   }
   
@@ -2941,13 +3112,22 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setIsEditingAll(true)}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Sửa tất cả
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setShowProductModal(true)}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                    >
+                      <Package className="h-4 w-4 mr-2" />
+                      + Sản phẩm
+                    </button>
+                    <button
+                      onClick={() => setIsEditingAll(true)}
+                      className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Sửa tất cả
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -3628,6 +3808,177 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
                 </>
               )}
             </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product Selection Modal */}
+      {showProductModal && (
+        <div className="fixed inset-0 z-60 bg-black bg-opacity-50 flex items-end justify-center">
+          <div className="bg-white rounded-t-lg shadow-xl w-full max-w-5xl mx-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
+              <h3 className="text-lg font-semibold text-gray-700">Chọn sản phẩm</h3>
+              <button
+                onClick={() => {
+                  setSelectedProductIds([])
+                  setShowProductModal(false)
+                }}
+                className="p-2 hover:bg-gray-200 rounded-md text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Tìm kiếm sản phẩm theo tên, mô tả hoặc loại..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-black font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-gray-50">
+              {loadingProducts ? (
+                <div className="text-center py-8">
+                  <span className="text-gray-500">Đang tải sản phẩm...</span>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="text-center py-8">
+                  <span className="text-gray-500">
+                    {productSearch ? 'Không có sản phẩm phù hợp' : 'Không có sản phẩm nào'}
+                  </span>
+                </div>
+              ) : (
+                <div className="p-4">
+                  {(() => {
+                    // Group filtered products by category
+                    const groupedProducts = filteredProducts.reduce((acc, product) => {
+                      const category = product.category || 'Khác'
+                      if (!acc[category]) {
+                        acc[category] = []
+                      }
+                      acc[category].push(product)
+                      return acc
+                    }, {} as Record<string, typeof products>)
+
+                    return Object.entries(groupedProducts).map(([category, categoryProducts]) => {
+                      const isExpanded = expandedCategories.has(category)
+
+                      return (
+                        <div key={category} className="mb-4">
+                          <div
+                            className="text-sm font-semibold text-gray-600 mb-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm cursor-pointer hover:bg-gray-50 transition-colors flex items-center justify-between"
+                            onClick={() => toggleCategory(category)}
+                          >
+                            <div className="flex items-center">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-gray-500 mr-2" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-500 mr-2" />
+                              )}
+                              <span>📁 {category}</span>
+                              <span className="ml-2 text-xs text-gray-500">({categoryProducts.length} sản phẩm)</span>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="space-y-2">
+                              {categoryProducts.map((product) => (
+                                <label
+                                  key={product.id}
+                                  className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-3"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProductIds.includes(product.id)}
+                                    onChange={(e) => {
+                                      setSelectedProductIds(prev => e.target.checked ? [...prev, product.id] : prev.filter(id => id !== product.id))
+                                    }}
+                                    className="h-4 w-4"
+                                  />
+                                  <div className="grid grid-cols-6 gap-3 items-center w-full">
+                                    <div className="col-span-2">
+                                      <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
+                                      <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
+                                        {category}
+                                      </div>
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Đơn vị:</span><br />
+                                        {product.unit || 'Chưa có'}
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1">
+                                      {product.unit_price ? (
+                                        <span className="text-sm font-bold text-green-600">
+                                          <span className="font-medium">Đơn giá:</span><br />
+                                          {product.unit_price.toLocaleString('vi-VN')} ₫
+                                        </span>
+                                      ) : (
+                                        <span className="text-sm text-gray-400">
+                                          <span className="font-medium">Đơn giá:</span><br />
+                                          Chưa có
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Kích thước:</span><br />
+                                        <div className="text-xs space-y-1">
+                                          {product.area && <div>📐 Diện tích: {product.area} m²</div>}
+                                          {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
+                                          {product.height && <div>📏 Cao: {product.height} mm</div>}
+                                          {product.length && <div>📏 Dài: {product.length} mm</div>}
+                                          {product.depth && <div>📏 Sâu: {product.depth} mm</div>}
+                                          {!product.area && !product.volume && !product.height && !product.length && !product.depth &&
+                                            <div className="text-gray-400">Chưa có kích thước</div>
+                                          }
+                                        </div>
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
+                                        <span className="font-medium">Mô tả:</span><br />
+                                        {product.description || 'Không có mô tả'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t bg-white flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setSelectedProductIds([])
+                  setShowProductModal(false)
+                }}
+                className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={addProductsToItems}
+                disabled={selectedProductIds.length === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Thêm {selectedProductIds.length > 0 ? `${selectedProductIds.length} ` : ''}sản phẩm đã chọn
+              </button>
             </div>
           </div>
         </div>

@@ -7,9 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Edit, DollarSign, Clock, Users, TrendingUp, Calendar, Target } from 'lucide-react';
+import { ArrowLeft, Edit, DollarSign, Clock, Users, TrendingUp, Calendar, Target, CheckSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { getApiEndpoint } from '@/lib/apiUrl'
+import ProjectTasksTab from '@/components/projects/ProjectTasksTab'
 
 interface Project {
   id: string;
@@ -178,9 +179,10 @@ export default function ProjectDetailPage() {
 
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
+          <TabsTrigger value="overview">Tổng quan</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="team">Đội ngũ</TabsTrigger>
+          <TabsTrigger value="tasks">Nhiệm vụ</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -299,6 +301,17 @@ export default function ProjectDetailPage() {
 
         
 
+        <TabsContent value="timeline" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Timeline</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-black">Timeline information will be displayed here</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="team" className="space-y-6">
           <Card>
             <CardHeader>
@@ -310,15 +323,8 @@ export default function ProjectDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="timeline" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Timeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-black">Timeline information will be displayed here</p>
-            </CardContent>
-          </Card>
+        <TabsContent value="tasks" className="space-y-6">
+          <ProjectTasksTab projectId={projectId} projectName={project?.name} />
         </TabsContent>
       </Tabs>
     </div>

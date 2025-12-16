@@ -429,6 +429,9 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [newProject, setNewProject] = useState({
     name: ''
   })
+  const [taskGroups, setTaskGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [loadingTaskGroups, setLoadingTaskGroups] = useState(false)
+  const [selectedTaskGroupId, setSelectedTaskGroupId] = useState<string>('')
 
   // Auto-generate project name from customer name and address
   useEffect(() => {
@@ -538,6 +541,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       fetchCustomers()
       fetchProducts()
       fetchEmployees()
+      fetchTaskGroups()
       if (quoteId) {
         loadQuoteData()
       } else {
@@ -1102,6 +1106,26 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       setProducts([])
     } finally {
       setLoadingProducts(false)
+    }
+  }
+
+  const fetchTaskGroups = async () => {
+    try {
+      setLoadingTaskGroups(true)
+      const groups = await apiGet('/api/tasks/groups')
+      setTaskGroups(groups || [])
+      
+      // Tìm nhóm "Dự án cửa" và set làm mặc định
+      const duAnCuaGroup = groups.find((g: any) => 
+        g.name && (g.name.toLowerCase().includes('dự án cửa') || g.name.toLowerCase().includes('du an cua'))
+      )
+      if (duAnCuaGroup) {
+        setSelectedTaskGroupId(duAnCuaGroup.id)
+      }
+    } catch (error) {
+      console.error('Error fetching task groups:', error)
+    } finally {
+      setLoadingTaskGroups(false)
     }
   }
 
@@ -2344,6 +2368,27 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
         newProjectCreated = true
         console.log('Created new project:', newProjectData)
         
+        // Tạo task trong nhóm nhiệm vụ sau khi tạo project thành công
+        if (selectedTaskGroupId) {
+          try {
+            const taskData = {
+              title: projectName,
+              description: `Nhiệm vụ cho dự án ${projectName}`,
+              status: 'todo',
+              priority: 'medium',
+              group_id: selectedTaskGroupId,
+              project_id: newProjectData.id,
+              start_date: new Date().toISOString().split('T')[0]
+            }
+
+            await apiPost('/api/tasks', taskData)
+            console.log('Task created successfully for project')
+          } catch (taskError) {
+            console.error('Error creating task:', taskError)
+            // Không throw error để không làm gián đoạn việc tạo project
+          }
+        }
+        
         // Refresh projects list to include the new project
         if (customerId) {
           await fetchProjectsByCustomer(customerId)
@@ -3150,6 +3195,26 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                               placeholder="Tự động tạo từ khách hàng - địa chỉ"
                               required={!formData.project_id}
                             />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Nhóm nhiệm vụ *</label>
+                            <select
+                              value={selectedTaskGroupId}
+                              onChange={(e) => setSelectedTaskGroupId(e.target.value)}
+                              disabled={loadingTaskGroups}
+                              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                              required={!formData.project_id}
+                            >
+                              <option value="">{loadingTaskGroups ? 'Đang tải...' : 'Chọn nhóm'}</option>
+                              {taskGroups.map(group => (
+                                <option key={group.id} value={group.id}>
+                                  {group.name}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Nhiệm vụ sẽ được tạo tự động trong nhóm này khi tạo dự án
+                            </p>
                           </div>
                         </div>
                       )}

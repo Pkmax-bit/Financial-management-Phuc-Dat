@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import uuid
 import re
 import logging
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -704,7 +705,8 @@ async def get_tasks(
     status: Optional[str] = Query(None, description="Filter by status"),
     group_id: Optional[str] = Query(None, description="Filter by group"),
     assigned_to: Optional[str] = Query(None, description="Filter by assigned employee"),
-    priority: Optional[str] = Query(None, description="Filter by priority")
+    priority: Optional[str] = Query(None, description="Filter by priority"),
+    project_id: Optional[str] = Query(None, description="Filter by project")
 ):
     """Get all tasks with filters"""
     try:
@@ -729,6 +731,8 @@ async def get_tasks(
             query = query.eq("assigned_to", assigned_to)
         if priority:
             query = query.eq("priority", priority)
+        if project_id:
+            query = query.eq("project_id", project_id)
         
         result = query.order("created_at", desc=True).execute()
         
@@ -763,6 +767,10 @@ async def get_tasks(
 
             assignment_count = supabase.table("task_assignments").select("id", count="exact").eq("task_id", task["id"]).execute()
             task["assignee_count"] = assignment_count.count if hasattr(assignment_count, 'count') else 0
+            
+            # Get checklists with items
+            checklists = _fetch_task_checklists(supabase, task["id"])
+            task["checklists"] = checklists
             
             tasks.append(task)
         
@@ -883,6 +891,47 @@ async def create_task(
     """Create a new task"""
     try:
         supabase = get_supabase_client()
+
+        # ===== Permission check: only project owners/managers can create tasks =====
+        # Admin / accountant can always create
+        user_role = (current_user.role or "").lower()
+        if user_role not in ["admin", "accountant"]:
+            if not task_data.project_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="project_id is required to create task"
+                )
+            # Check project_team role
+            team_result = (
+                supabase.table("project_team")
+                .select("role")
+                .eq("project_id", task_data.project_id)
+                .eq("status", "active")
+                .eq("user_id", current_user.id)
+                .limit(1)
+                .execute()
+            )
+            if not team_result.data:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bạn không có quyền tạo nhiệm vụ trong dự án này"
+                )
+            team_role = (team_result.data[0].get("role") or "").lower()
+            # Allowed roles: owner/manager/lead (tùy tên vai trò thực tế)
+            allowed_roles = [
+                "owner",
+                "manager",
+                "lead",
+                "project manager",
+                "quản lý dự án",
+                "người phụ trách",
+                "người tạo"
+            ]
+            if team_role not in allowed_roles:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Chỉ người phụ trách/owner mới được tạo nhiệm vụ"
+                )
         
         task_record = {
             "title": task_data.title,
@@ -966,6 +1015,52 @@ async def create_task(
         if participants:
             supabase.table("task_participants").insert(participants).execute()
         
+        # Auto-add all project team members as participants for this task
+        try:
+            if task_data.project_id:
+                team_result = (
+                    supabase.table("project_team")
+                    .select("user_id, role, status")
+                    .eq("project_id", task_data.project_id)
+                    .eq("status", "active")
+                    .execute()
+                )
+                team_members = team_result.data or []
+
+                def map_role(team_role: str) -> str:
+                    role_lower = (team_role or "").lower()
+                    if role_lower in ["owner", "manager", "lead", "project manager", "quản lý dự án", "người phụ trách", "người tạo"]:
+                        return "responsible"
+                    return "participant"
+
+                # existing participants to avoid duplicates
+                existing_participants = supabase.table("task_participants").select("employee_id").eq("task_id", task["id"]).execute()
+                existing_ids = {p.get("employee_id") for p in (existing_participants.data or []) if p.get("employee_id")}
+
+                to_add = []
+                for member in team_members:
+                    user_id = member.get("user_id")
+                    if not user_id:
+                        continue
+                    emp_result = supabase.table("employees").select("id").eq("user_id", user_id).limit(1).execute()
+                    if not emp_result.data:
+                        continue
+                    employee_id = emp_result.data[0].get("id")
+                    if not employee_id or employee_id in existing_ids:
+                        continue
+                    existing_ids.add(employee_id)
+                    to_add.append({
+                        "task_id": task["id"],
+                        "employee_id": employee_id,
+                        "role": map_role(member.get("role")),
+                        "added_by": current_user.id
+                    })
+
+                if to_add:
+                    supabase.table("task_participants").insert(to_add).execute()
+        except Exception as auto_add_err:
+            print(f"Warning: failed to auto add project team to task participants: {auto_add_err}")
+
         return task
     except HTTPException:
         raise
@@ -2298,13 +2393,31 @@ async def upload_task_attachment(
         
         # Get original filename
         original_filename = file.filename or "untitled"
-        # Sanitize original filename (remove special characters but keep extension)
+        # Sanitize original filename for Supabase Storage
+        # Supabase Storage doesn't accept Unicode characters (Vietnamese) and spaces in keys
+        # Convert Vietnamese to ASCII (remove diacritics) and replace spaces with underscores
         name_part = original_filename.rsplit('.', 1)[0] if '.' in original_filename else original_filename
         ext_part = '.' + original_filename.rsplit('.', 1)[1] if '.' in original_filename else ''
-        sanitized_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name_part)
         
-        # Create storage filename: {original_name}_{task_id}.{ext} (simplified, group_id is in path)
-        storage_filename = f"{sanitized_name}_{task_id}{ext_part}"
+        # Normalize Unicode: convert Vietnamese characters to ASCII (remove diacritics)
+        # Example: "Chú Chuyển Tân BÌnh" -> "Chu Chuyen Tan BInh"
+        normalized_name = unicodedata.normalize('NFD', name_part)
+        # Remove diacritical marks (combining characters)
+        ascii_name = ''.join(c for c in normalized_name if unicodedata.category(c) != 'Mn')
+        # Handle special Vietnamese characters: đ -> d, Đ -> D
+        ascii_name = ascii_name.replace('đ', 'd').replace('Đ', 'D')
+        
+        # Replace spaces with underscores and remove invalid file name characters
+        # Also remove % which can cause issues in URLs
+        sanitized_name = ascii_name.replace(' ', '_')
+        sanitized_name = re.sub(r'[<>:"/\\|?*%]', '_', sanitized_name)
+        # Remove multiple consecutive underscores
+        sanitized_name = re.sub(r'_+', '_', sanitized_name).strip('_')
+        
+        # Create storage filename: keep original name (sanitized to ASCII) without adding task_id
+        # File uniqueness is handled by folder structure (Groups/{group_id}/Tasks/{task_id})
+        # and file_upload_service will add (2), (3), etc. if duplicate names exist
+        storage_filename = f"{sanitized_name}{ext_part}"
         
         # Create folder path: Groups/{group_id}/Tasks/{task_id} or Tasks/{task_id} if no group
         if task_group_id:
@@ -2325,7 +2438,7 @@ async def upload_task_attachment(
         attachment_data = {
             "id": str(uuid.uuid4()),
             "task_id": task_id,
-            "file_name": storage_filename,  # Storage filename with task_id and group_id
+            "file_name": storage_filename,  # Storage filename (sanitized original name, kept in task folder)
             "original_file_name": original_filename,  # Original filename for display
             "file_url": file_result["url"],
             "file_type": file_result["content_type"],
@@ -2338,7 +2451,7 @@ async def upload_task_attachment(
         
         return {
             "id": attachment_data["id"],
-            "file_name": storage_filename,  # Storage filename
+            "file_name": storage_filename,  # Storage filename (sanitized original name)
             "original_file_name": original_filename,  # Original filename for display
             "file_url": file_result["url"],
             "file_type": file_result["content_type"],

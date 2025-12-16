@@ -1,0 +1,7 @@
+# Requirements for browser testing Phase 1
+playwright>=1.40.0
+
+
+
+
+

@@ -37,6 +37,9 @@ interface ProjectTeamDialogProps {
 }
 
 const ROLES = [
+  'Người phụ trách',
+  'Người tạo',
+  'Thành viên dự án',
   'Giám sát',
   'Lắp đặt',
   'Vận chuyển',

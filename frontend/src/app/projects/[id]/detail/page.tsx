@@ -20,7 +20,8 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Pause
+  Pause,
+  CheckSquare
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
@@ -29,6 +30,7 @@ import ProjectTimeline from '@/components/projects/ProjectTimeline'
 // Đã ẩn tab Hóa đơn & Chi phí trên giao diện chi tiết dự án
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 import { getApiEndpoint } from '@/lib/apiUrl'
+import ProjectTasksTab from '@/components/projects/ProjectTasksTab'
 
 interface Project {
   id: string
@@ -107,7 +109,7 @@ export default function ProjectDetailPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents' | 'tasks'>('overview')
   const [showEditSidebar, setShowEditSidebar] = useState(false)
 
   useEffect(() => {
@@ -369,6 +371,7 @@ export default function ProjectDetailPage() {
                 { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
                 { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
                 { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
+                { id: 'tasks', label: 'Nhiệm vụ', icon: CheckSquare, color: 'green' },
                 { id: 'documents', label: 'Tài liệu', icon: FileText, color: 'gray' }
               ].map((tab) => {
                 const Icon = tab.icon
@@ -630,6 +633,11 @@ export default function ProjectDetailPage() {
                 <ProjectTeam projectId={projectId} projectName={project.name} currentUser={user || undefined} />
               </div>
             </div>
+          )}
+
+          {/* Tasks Tab */}
+          {activeTab === 'tasks' && (
+            <ProjectTasksTab projectId={projectId} projectName={project?.name} />
           )}
 
           {/* Documents Tab */}

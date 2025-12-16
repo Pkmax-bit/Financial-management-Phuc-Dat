@@ -38,6 +38,7 @@ class TeamMemberCreate(BaseModel):
     status: str = "active"
     skills: List[str] = []
     avatar: Optional[str] = None
+    user_id: Optional[str] = None
 
 class TeamMemberUpdate(BaseModel):
     name: Optional[str] = None
@@ -87,7 +88,7 @@ async def add_team_member(
     # Temporarily disable authentication
     # current_user: User = Depends(get_current_user)
 ):
-    """Add a new team member to a project"""
+    """Add a new team member to a project and automatically add them to all project tasks"""
     try:
         supabase = get_supabase_client()
         
@@ -113,7 +114,52 @@ async def add_team_member(
                 detail="Failed to create team member"
             )
         
-        return {"message": "Team member added successfully", "member": result.data[0]}
+        created_member = result.data[0]
+        
+        # Get employee_id from user_id if available
+        employee_id = None
+        if created_member.get("user_id"):
+            employee_result = supabase.table("employees").select("id").eq("user_id", created_member["user_id"]).limit(1).execute()
+            if employee_result.data:
+                employee_id = employee_result.data[0]["id"]
+        
+        # If we have employee_id, add them to all tasks in this project
+        if employee_id:
+            try:
+                # Get all tasks for this project
+                tasks_result = supabase.table("tasks").select("id").eq("project_id", project_id).is_("deleted_at", "null").execute()
+                
+                if tasks_result.data:
+                    # Get current user_id for added_by (use the team member's user_id if available, otherwise use a system user)
+                    added_by = created_member.get("user_id")
+                    if not added_by:
+                        # Try to get from employees table
+                        emp_user_result = supabase.table("employees").select("user_id").eq("id", employee_id).limit(1).execute()
+                        if emp_user_result.data and emp_user_result.data[0].get("user_id"):
+                            added_by = emp_user_result.data[0]["user_id"]
+                    
+                    # Prepare participants to add
+                    participants_to_add = []
+                    for task in tasks_result.data:
+                        # Check if participant already exists
+                        existing_participant = supabase.table("task_participants").select("id").eq("task_id", task["id"]).eq("employee_id", employee_id).limit(1).execute()
+                        
+                        if not existing_participant.data:
+                            participants_to_add.append({
+                                "task_id": task["id"],
+                                "employee_id": employee_id,
+                                "role": "participant",
+                                "added_by": added_by
+                            })
+                    
+                    # Insert participants in batch
+                    if participants_to_add:
+                        supabase.table("task_participants").insert(participants_to_add).execute()
+            except Exception as task_error:
+                # Log error but don't fail the team member creation
+                print(f"Warning: Failed to add team member to tasks: {str(task_error)}")
+        
+        return {"message": "Team member added successfully", "member": created_member}
         
     except HTTPException:
         raise
@@ -184,9 +230,31 @@ async def delete_team_member(
                 detail="Team member not found"
             )
         
+        member = existing_result.data[0]
+
+        # If member has user_id -> find employee_id
+        employee_id = None
+        user_id = member.get("user_id")
+        if user_id:
+            emp_result = supabase.table("employees").select("id").eq("user_id", user_id).limit(1).execute()
+            if emp_result.data:
+                employee_id = emp_result.data[0].get("id")
+
         # Delete team member
         result = supabase.table("project_team").delete().eq("id", member_id).execute()
         
+        # Also remove from task participants if employee_id is known
+        if employee_id:
+            try:
+                # Get all task ids of this project
+                tasks_result = supabase.table("tasks").select("id").eq("project_id", project_id).is_("deleted_at", "null").execute()
+                task_ids = [t["id"] for t in (tasks_result.data or []) if t.get("id")]
+                if task_ids:
+                    supabase.table("task_participants").delete().in_("task_id", task_ids).eq("employee_id", employee_id).execute()
+            except Exception as rm_err:
+                # Log but do not fail delete
+                print(f"Warning: failed to remove participant when deleting team member: {rm_err}")
+
         return {"message": "Team member deleted successfully"}
         
     except HTTPException:

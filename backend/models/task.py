@@ -106,6 +106,7 @@ class Task(BaseModel):
     comment_count: Optional[int] = 0
     attachment_count: Optional[int] = 0
     parent_id: Optional[str] = None
+    checklists: Optional[List[TaskChecklist]] = []
 
 class TaskCreate(BaseModel):
     """Task creation model"""
