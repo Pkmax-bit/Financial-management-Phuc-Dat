@@ -13,6 +13,8 @@ class QuoteStatus(str, Enum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     EXPIRED = "expired"
+    APPROVED = "approved"
+    CLOSED = "closed"
 
 class Quote(BaseModel):
     """Quote model"""

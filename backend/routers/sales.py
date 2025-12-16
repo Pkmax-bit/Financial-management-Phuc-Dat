@@ -844,6 +844,8 @@ async def approve_quote(
         if result.data:
             # Get the employee who created the quote
             created_by = quote.get("created_by")
+            employee_name = "Nhân viên" # Default name
+            
             if created_by:
                 # Get employee details
                 employee_result = supabase.table("employees").select("user_id, first_name, last_name, email").eq("id", created_by).execute()
@@ -878,26 +880,103 @@ async def approve_quote(
                         print(f"Failed to send quote approved notification email: {email_error}")
                         # Don't fail the approval if email fails
             
-            # Get all managers to notify them
-            managers_result = supabase.table("employees").select("user_id, first_name, last_name").eq("user_role", "manager").execute()
+            # --- AUTO CREATE INVOICE LOGIC ---
+            invoice_created = None
+            try:
+                # 1. Prepare Invoice Data
+                invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+                due_date = (datetime.now() + timedelta(days=30)).date() # Default 30 days
+                
+                invoice_id = str(uuid.uuid4())
+                invoice_data = {
+                    "id": invoice_id,
+                    "invoice_number": invoice_number,
+                    "customer_id": quote.get("customer_id"),
+                    "project_id": quote.get("project_id"),
+                    "quote_id": quote_id,
+                    "issue_date": datetime.now().date().isoformat(),
+                    "due_date": due_date.isoformat(),
+                    "subtotal": quote.get("subtotal", 0),
+                    "tax_rate": quote.get("tax_rate", 0),
+                    "tax_amount": quote.get("tax_amount", 0),
+                    "total_amount": quote.get("total_amount", 0),
+                    "currency": quote.get("currency", "VND"),
+                    "status": "draft", # Start as draft
+                    "payment_status": "pending",
+                    "paid_amount": 0.0,
+                    "items": [], 
+                    "notes": f"Hóa đơn được tạo tự động từ báo giá {quote.get('quote_number', 'N/A')}",
+                    "terms_and_conditions": quote.get("terms_and_conditions"),
+                    "created_by": current_user.id, # Approved by
+                    "employee_in_charge_id": quote.get("employee_in_charge_id") or quote.get("created_by"),
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+
+                # 2. Insert Invoice
+                inv_result = supabase.table("invoices").insert(invoice_data).execute()
+                
+                if inv_result.data:
+                    invoice_created = inv_result.data[0]
+                    
+                    # 3. Create Invoice Items from Quote Items
+                    # Re-fetch raw quote items to ensure we have all fields for copying
+                    raw_items_res = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
+                    if raw_items_res.data:
+                        invoice_items = []
+                        for q_item in raw_items_res.data:
+                            # Copy structure from convert_quote_to_invoice
+                            inv_item = {
+                                "id": str(uuid.uuid4()),
+                                "invoice_id": invoice_id,
+                                "product_service_id": q_item.get("product_service_id"),
+                                "description": q_item.get("description", ""),
+                                "quantity": q_item.get("quantity", 0),
+                                "unit_price": q_item.get("unit_price", 0),
+                                "total_price": q_item.get("total_price", 0),
+                                "name_product": q_item.get("name_product"),
+                                "unit": q_item.get("unit"),
+                                "discount_rate": q_item.get("discount_rate", 0.0),
+                                "area": q_item.get("area"),
+                                "volume": q_item.get("volume"),
+                                "height": q_item.get("height"),
+                                "length": q_item.get("length"),
+                                "depth": q_item.get("depth"),
+                                "product_components": q_item.get("product_components") or [],
+                                "created_at": datetime.utcnow().isoformat()
+                            }
+                            invoice_items.append(inv_item)
+                        
+                        if invoice_items:
+                            supabase.table("invoice_items").insert(invoice_items).execute()
+                    
+                    print(f"✅ Auto-created invoice {invoice_number} for approved quote {quote_id}")
+
+            except Exception as inv_error:
+                print(f"❌ Failed to auto-create invoice: {inv_error}")
+                # We do NOT rollback quote approval, just log the error
+            
+            # ---------------------------------
+
+            # Get all admins to notify them (treating admins as managers)
+            managers_result = supabase.table("users").select("id, full_name").eq("role", "admin").execute()
             if managers_result.data:
                 for manager in managers_result.data:
-                    manager_user_id = manager.get("user_id")
-                    first_name = manager.get("first_name", "")
-                    last_name = manager.get("last_name", "")
-                    manager_name = f"{first_name} {last_name}".strip() or "Quản lý"
+                    manager_user_id = manager.get("id")
+                    manager_name = manager.get("full_name") or "Quản lý"
                     
                     # Create notification for managers
                     await notification_service.create_quote_approved_manager_notification(
                         quote,
                         manager_user_id,
                         manager_name,
-                        employee_name if employee_result.data else "Nhân viên"
+                        employee_name
                     )
             
             return {
-                "message": "Quote approved successfully",
+                "message": "Quote approved and invoice created successfully" if invoice_created else "Quote approved successfully (Invoice creation failed)",
                 "quote": result.data[0],
+                "invoice": invoice_created,
                 "notifications_sent": True
             }
         
