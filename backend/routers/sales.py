@@ -828,7 +828,7 @@ async def mark_notification_as_read(
         )
 
 # Helper function to create invoice from approved quote (runs in background)
-async def create_invoice_from_quote(quote_id: str, quote: dict, approver_user_id: str):
+def create_invoice_from_quote(quote_id: str, quote: dict, approver_user_id: str):
     """Create invoice from approved quote - runs in background to avoid timeout"""
     try:
         supabase = get_supabase_client()
@@ -924,17 +924,24 @@ async def create_invoice_from_quote(quote_id: str, quote: dict, approver_user_id
         return False
 
 # Helper function to send email notification (runs in background)
-async def send_quote_approved_email_background(quote_id: str, quote: dict, employee_email: str, employee_name: str):
+def send_quote_approved_email_background(quote_id: str, quote: dict, employee_email: str, employee_name: str):
     """Send quote approved email notification - runs in background"""
+    import asyncio
     try:
-        quote_items = await quote_service.get_quote_items_with_categories(quote_id)
-        await email_service.send_quote_approved_notification_email(
-            quote,
-            employee_email,
-            employee_name,
-            quote_items
-        )
-        print(f"Quote approved notification email sent to employee {employee_name}")
+        # Run async functions in a new event loop for background task
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            quote_items = loop.run_until_complete(quote_service.get_quote_items_with_categories(quote_id))
+            loop.run_until_complete(email_service.send_quote_approved_notification_email(
+                quote,
+                employee_email,
+                employee_name,
+                quote_items
+            ))
+            print(f"Quote approved notification email sent to employee {employee_name}")
+        finally:
+            loop.close()
     except Exception as email_error:
         print(f"Failed to send quote approved notification email: {email_error}")
 
