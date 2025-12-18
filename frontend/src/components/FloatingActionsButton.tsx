@@ -1,7 +1,6 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import MultiChatBubbles from './chat/MultiChatBubbles'
 
 interface FloatingActionsButtonProps {
   currentUserId: string
@@ -14,11 +13,7 @@ export default function FloatingActionsButton({ currentUserId }: FloatingActions
     return null
   }
 
-  return (
-    <>
-      {/* Multi Chat Bubbles - Always visible */}
-      <MultiChatBubbles currentUserId={currentUserId} />
-    </>
-  )
+  // MultiChatBubbles component has been removed
+  return null
 }
 

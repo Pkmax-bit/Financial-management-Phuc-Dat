@@ -17,28 +17,38 @@ from contextlib import asynccontextmanager
 load_dotenv()
 
 # Background task for cleanup
+# DISABLED on free tier to save memory - enable only on paid plans
 async def periodic_cleanup():
     """Periodically cleanup old deleted tasks and groups"""
+    # Skip cleanup on free tier to prevent memory issues
+    if os.getenv("ENVIRONMENT") == "production" and os.getenv("RENDER_PLAN") == "free":
+        return  # Disable on free tier
+    
     from services.task_cleanup_service import task_cleanup_service
     while True:
         try:
-            await asyncio.sleep(3600)  # Run every hour
+            await asyncio.sleep(7200)  # Run every 2 hours instead of 1 hour
             await task_cleanup_service.cleanup_old_deleted_items()
         except Exception as e:
             print(f"Cleanup error: {str(e)}")
+            # Continue even if cleanup fails
+            await asyncio.sleep(3600)  # Wait before retry
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
-    # Startup: Start background cleanup task
-    cleanup_task = asyncio.create_task(periodic_cleanup())
+    # Startup: Start background cleanup task (only if not free tier)
+    cleanup_task = None
+    if os.getenv("ENVIRONMENT") != "production" or os.getenv("RENDER_PLAN") != "free":
+        cleanup_task = asyncio.create_task(periodic_cleanup())
     yield
     # Shutdown: Cancel cleanup task
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -106,6 +116,10 @@ app.add_middleware(RequestSigningMiddleware, environment=ENVIRONMENT)
 # Request ID Middleware (add after CORS, will execute before CORS)
 from middleware.request_id import RequestIDMiddleware
 app.add_middleware(RequestIDMiddleware)
+
+# Error Handler Middleware (catch all exceptions to prevent crashes)
+from middleware.error_handler import ErrorHandlerMiddleware
+app.add_middleware(ErrorHandlerMiddleware)
 
 # Rate Limiting Middleware (import and add after CORS, will execute before CORS)
 from middleware.rate_limit import rate_limiter, get_rate_limit_config
