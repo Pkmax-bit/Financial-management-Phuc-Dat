@@ -44,6 +44,8 @@ interface InvoiceItem {
   height?: number | null
   length?: number | null
   depth?: number | null
+  // UI-only flag: when true, total_price was set manually and should not auto-sync unit_price
+  total_is_manual?: boolean
   components?: Array<{
     expense_object_id: string
     name?: string
@@ -976,7 +978,16 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     updatedItems[index] = { ...updatedItems[index], [field]: value }
     const curr = updatedItems[index]
     
-    // Recalculate total_price cho dòng sản phẩm
+    // Mark manual overrides for total_price
+    if (field === 'total_price') {
+      // User is directly editing thành tiền: đánh dấu là manual,
+      // không tự động thay đổi đơn giá, chỉ dùng value này để tính tổng & thuế.
+      updatedItems[index].total_is_manual = value != null
+    }
+    
+    // Recalculate total_price cho dòng sản phẩm khi thay đổi các trường nguồn
+    // - Đổi quantity / unit_price / area → cập nhật lại total_price theo công thức
+    // - Đổi total_price trực tiếp: KHÔNG đụng tới unit_price (đã xử lý phía trên)
     if (field === 'quantity' || field === 'unit_price' || field === 'area') {
       updatedItems[index].total_price = computeItemTotal(updatedItems[index])
     }
@@ -1152,9 +1163,15 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           : (displayFractionDigits != null
             ? new Intl.NumberFormat('vi-VN', { minimumFractionDigits: displayFractionDigits, maximumFractionDigits: displayFractionDigits }).format(value)
             : formatNumber(value)))
+      
+      // Truncate display to 15 characters for total_price and unit_price fields
+      const truncatedDisplay = (field === 'total_price' || field === 'unit_price') && display.length > 15 
+        ? display.substring(0, 15) + '...' 
+        : display
+      
       return (
         <div
-          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text"
+          className={`w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text ${(field === 'total_price' || field === 'unit_price') ? 'max-w-[15ch] truncate' : ''}`}
           onClick={() => setEditingCell({ index, field })}
           onFocus={(e) => {
             // Auto-open edit mode when focused via Tab
@@ -1183,7 +1200,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           tabIndex={0}
           title={display}
         >
-          {display || (placeholder || '')}
+          {truncatedDisplay || (placeholder || '')}
         </div>
       )
     }
@@ -1866,7 +1883,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                           </div>
                         )}
                         {visibleColumns.unit_price && (
-                          <div>
+                          <div className="max-w-[15ch]">
                             <EditableNumberCell
                               value={item.unit_price}
                               onChange={(v) => updateItem(index, 'unit_price', Number(v || 0))}
@@ -1882,9 +1899,20 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                         )}
                         {visibleColumns.total_price && (
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-black">
-                              {formatCurrency(item.total_price)}
-                            </span>
+                            <div className="flex-1">
+                              <EditableNumberCell
+                                value={item.total_price}
+                                onChange={(v) => updateItem(index, 'total_price', Number(v || 0))}
+                                format="currency"
+                                step={1000}
+                                min={0}
+                                placeholder="0 ₫"
+                                index={index}
+                                field={'total_price'}
+                                commitOnChange
+                                tabIndex={index * 100 + 6}
+                              />
+                            </div>
                             {items.length > 1 && (
                               <button
                                 onClick={() => removeItem(index)}
