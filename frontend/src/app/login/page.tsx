@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft, Calculator, QrCode } from 'lucide-react'
@@ -92,16 +92,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showQRCode, setShowQRCode] = useState(true) // Show QR code by default on login page
+  const [showQRCode, setShowQRCode] = useState(false) // Don't show QR code by default
   const [qrData, setQrData] = useState<{ session_id: string; qr_code: string; expires_at: string } | null>(null)
   const [qrError, setQrError] = useState('')
   const [qrStatus, setQrStatus] = useState<'pending' | 'verified' | 'expired'>('pending')
   const router = useRouter()
-
-  // Generate QR code on mount for anonymous login
-  useEffect(() => {
-    generateAnonymousQRCode()
-  }, [])
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -147,6 +143,12 @@ export default function LoginPage() {
           })
 
           if (response.ok) {
+            // Stop any QR polling if running
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
+            
             const result = await response.json()
             console.log('Backend auth success:', result)
             
@@ -155,9 +157,15 @@ export default function LoginPage() {
               localStorage.setItem('access_token', result.access_token)
               localStorage.setItem('user', JSON.stringify(result.user))
               
-              // Generate QR code for mobile login
-              await generateQRCode()
-              // Don't redirect immediately, show QR code first
+              // Set Supabase session
+              await supabase.auth.setSession({
+                access_token: result.access_token,
+                refresh_token: result.refresh_token || '',
+              })
+              
+              // Redirect to dashboard immediately
+              router.push('/dashboard')
+              router.refresh()
             }
           } else {
             console.log('Backend API error:', response.status, response.statusText)
@@ -170,11 +178,23 @@ export default function LoginPage() {
           setError('Login failed. Please check your credentials.')
         }
       } else if (data.user) {
+        // Stop any QR polling if running
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        
         // Supabase auth successful
         console.log('Supabase auth success:', data)
-        // Generate QR code for mobile login
-        await generateQRCode()
-        // Don't redirect immediately, show QR code first
+        
+        // Store token
+        if (data.session?.access_token) {
+          localStorage.setItem('access_token', data.session.access_token)
+        }
+        
+        // Redirect to dashboard immediately
+        router.push('/dashboard')
+        router.refresh()
       }
     } catch (err) {
       console.log('General error:', err)
@@ -270,37 +290,53 @@ export default function LoginPage() {
     }
   }
 
+  // Cleanup polling on unmount or when login succeeds
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [])
+
   // Poll QR status
   const startPollingQRStatus = (sessionId: string) => {
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+    
     const interval = setInterval(async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        let token = session?.access_token || localStorage.getItem('access_token') || ''
-        
+        // QR status endpoint doesn't require authentication for anonymous QR
         const response = await fetch(getApiEndpoint(`/api/auth/qr/status/${sessionId}`), {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
         })
 
         if (response.ok) {
           const data = await response.json()
-          if (data.status === 'verified' || data.status === 'completed') {
+          if (data.status === 'completed' && data.access_token) {
+            // QR login completed successfully
             setQrStatus('verified')
-            clearInterval(interval)
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
             
             // Get access token from response
-            if (data.access_token) {
-              localStorage.setItem('access_token', data.access_token)
-              // Also try to set Supabase session
-              try {
-                await supabase.auth.setSession({
-                  access_token: data.access_token,
-                  refresh_token: '', // QR login doesn't provide refresh token
-                })
-              } catch (sessionError) {
-                console.warn('Could not set Supabase session:', sessionError)
-              }
+            localStorage.setItem('access_token', data.access_token)
+            // Also try to set Supabase session
+            try {
+              await supabase.auth.setSession({
+                access_token: data.access_token,
+                refresh_token: '', // QR login doesn't provide refresh token
+              })
+            } catch (sessionError) {
+              console.warn('Could not set Supabase session:', sessionError)
             }
             
             // Redirect to dashboard after successful QR login
@@ -308,9 +344,16 @@ export default function LoginPage() {
               router.push('/dashboard')
               router.refresh()
             }, 1000)
+          } else if (data.status === 'verified') {
+            // QR has been scanned but not completed yet
+            setQrStatus('verified')
+            // Continue polling until completed
           } else if (data.status === 'expired') {
             setQrStatus('expired')
-            clearInterval(interval)
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
           }
         }
       } catch (err) {
@@ -467,6 +510,19 @@ export default function LoginPage() {
             >
               Quên mật khẩu?
             </Link>
+            
+            {/* QR Login Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowQRCode(true)
+                generateAnonymousQRCode()
+              }}
+              className="w-full flex justify-center items-center py-2 px-4 border-2 border-blue-500 text-sm font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <QrCode className="h-4 w-4 mr-2" />
+              Đăng nhập bằng QR Code
+            </button>
           </div>
 
           <div className="text-center">
@@ -545,17 +601,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            <div className="text-center mt-4">
-              <button
-                onClick={() => {
-                  setShowQRCode(false)
-                  router.push('/dashboard')
-                }}
-                className="text-sm text-blue-600 hover:text-blue-700 underline"
-              >
-                Bỏ qua và vào Dashboard
-              </button>
-            </div>
           </div>
         )}
 

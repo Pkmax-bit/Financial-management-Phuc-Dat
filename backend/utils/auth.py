@@ -238,6 +238,69 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             detail=f"Authentication failed: {str(e)}"
         )
 
+async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[User]:
+    """Get current authenticated user if token is provided, otherwise return None"""
+    if not credentials:
+        return None
+    
+    try:
+        token = credentials.credentials
+        if not token:
+            return None
+        
+        # Validate token format
+        token_parts = token.split('.')
+        if len(token_parts) != 3:
+            return None
+        
+        # Use anon client to verify JWT tokens
+        from services.supabase_client import get_supabase_anon_client
+        supabase = get_supabase_anon_client()
+        
+        try:
+            user_response = supabase.auth.get_user(token)
+            if not user_response or not hasattr(user_response, 'user') or not user_response.user:
+                return None
+            
+            user_id = user_response.user.id
+            email = user_response.user.email
+            
+            if not user_id or not email:
+                return None
+            
+        except Exception:
+            return None
+        
+        # Use service client for database operations
+        supabase = get_supabase_client()
+        
+        # Get user profile from our users table
+        result = supabase.table("users").select("*").eq("id", user_id).execute()
+        
+        if not result.data:
+            return None
+        
+        user_data = result.data[0]
+        
+        # Check if user is active
+        if not user_data.get("is_active", True):
+            return None
+        
+        # Ensure role is converted to UserRole enum
+        role_value = user_data.get("role")
+        if isinstance(role_value, str):
+            try:
+                user_data["role"] = UserRole(role_value.lower())
+            except ValueError:
+                user_data["role"] = UserRole.EMPLOYEE
+        elif not isinstance(role_value, UserRole):
+            user_data["role"] = UserRole.EMPLOYEE
+        
+        return User(**user_data)
+        
+    except Exception:
+        return None
+
 async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     """Get current active user"""
     if not current_user.is_active:

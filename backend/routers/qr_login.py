@@ -14,7 +14,7 @@ import secrets
 from config import settings
 from services.supabase_client import get_supabase_client
 from models.user import User
-from utils.auth import get_current_user, security
+from utils.auth import get_current_user, get_current_user_optional, security
 
 router = APIRouter()
 
@@ -276,7 +276,7 @@ async def verify_qr_code(request: QRVerifyRequest):
 @router.post("/qr/complete", response_model=QRVerifyResponse)
 async def complete_qr_login(
     request: QRVerifyRequest,
-    current_user: Optional[User] = Depends(security)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Complete QR login and get access token
@@ -366,6 +366,18 @@ async def complete_qr_login(
         import jwt
         from datetime import timedelta
         
+        # Get user email - handle both dict and object
+        if isinstance(user, dict):
+            user_email = user.get("email")
+        else:
+            user_email = getattr(user, 'email', None)
+        
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User email not found"
+            )
+        
         # Create a token that Supabase will accept
         # Using the same format as Supabase auth tokens
         # Get Supabase URL from settings or use default
@@ -374,8 +386,8 @@ async def complete_qr_login(
             supabase_url = f"https://{supabase_url}"
         
         payload = {
-            "sub": session["user_id"],
-            "email": session["user_email"],
+            "sub": user_id_to_use,
+            "email": user_email,
             "role": "authenticated",
             "aud": "authenticated",
             "exp": int((datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp()),
@@ -387,7 +399,7 @@ async def complete_qr_login(
         token = jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
         
         # Update session status to completed
-        update_qr_session(request.session_id, "completed", token, user_id_to_use, user.get("email") or session.get("user_email"))
+        update_qr_session(request.session_id, "completed", token, user_id_to_use, user_email)
         
         # Update last login
         supabase.table("users").update({
