@@ -46,8 +46,30 @@ export async function POST(request: NextRequest) {
       console.log('✅ Buffer verified as PDF, parsing...')
       console.log('📊 Buffer size:', pdfBuffer.length, 'bytes')
       
-      // Use dynamic import for pdfjs-dist to avoid webpack issues
-      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      // Use dynamic require for pdfjs-dist in Node.js environment (server-side only)
+      // This avoids webpack bundling issues at build time
+      // The module will be loaded at runtime only
+      const requireFunc = typeof require !== 'undefined' ? require : (() => {
+        throw new Error('require is not available')
+      })
+      
+      let pdfjsLib
+      try {
+        // Try legacy path first
+        pdfjsLib = requireFunc('pdfjs-dist/legacy/build/pdf.js')
+      } catch (requireError: any) {
+        // If legacy path fails, try standard path
+        try {
+          pdfjsLib = requireFunc('pdfjs-dist/build/pdf.js')
+        } catch (e2: any) {
+          // Last resort: try main entry point
+          try {
+            pdfjsLib = requireFunc('pdfjs-dist')
+          } catch (e3: any) {
+            throw new Error(`pdfjs-dist is not available. Please ensure it is installed: npm install pdfjs-dist. Error: ${requireError?.message || e2?.message || e3?.message}`)
+          }
+        }
+      }
       
       // Load PDF document
       const loadingTask = pdfjsLib.getDocument({

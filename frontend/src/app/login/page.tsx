@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft, Calculator } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft, Calculator, QrCode } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getApiEndpoint } from '@/lib/apiUrl'
+import { QRCodeSVG } from 'qrcode.react'
 
 // Test accounts with different roles - Updated with real accounts
 const testAccounts = [
@@ -91,7 +92,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showQRCode, setShowQRCode] = useState(true) // Show QR code by default on login page
+  const [qrData, setQrData] = useState<{ session_id: string; qr_code: string; expires_at: string } | null>(null)
+  const [qrError, setQrError] = useState('')
+  const [qrStatus, setQrStatus] = useState<'pending' | 'verified' | 'expired'>('pending')
   const router = useRouter()
+
+  // Generate QR code on mount for anonymous login
+  useEffect(() => {
+    generateAnonymousQRCode()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -145,8 +155,9 @@ export default function LoginPage() {
               localStorage.setItem('access_token', result.access_token)
               localStorage.setItem('user', JSON.stringify(result.user))
               
-              // Redirect to dashboard
-              router.push('/dashboard')
+              // Generate QR code for mobile login
+              await generateQRCode()
+              // Don't redirect immediately, show QR code first
             }
           } else {
             console.log('Backend API error:', response.status, response.statusText)
@@ -161,7 +172,9 @@ export default function LoginPage() {
       } else if (data.user) {
         // Supabase auth successful
         console.log('Supabase auth success:', data)
-        router.push('/dashboard')
+        // Generate QR code for mobile login
+        await generateQRCode()
+        // Don't redirect immediately, show QR code first
       }
     } catch (err) {
       console.log('General error:', err)
@@ -186,6 +199,134 @@ export default function LoginPage() {
     setError('')
   }
 
+  // Generate anonymous QR code for mobile to scan and login web
+  const generateAnonymousQRCode = async () => {
+    try {
+      setQrError('')
+      setQrStatus('pending')
+      
+      const response = await fetch(getApiEndpoint('/api/auth/qr/generate-anonymous'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setQrData(data)
+        setShowQRCode(true)
+        startPollingQRStatus(data.session_id)
+      } else {
+        const errorData = await response.json()
+        setQrError(errorData.detail || 'Không thể tạo QR code')
+      }
+    } catch (err: any) {
+      console.error('Error generating QR code:', err)
+      setQrError('Lỗi tạo QR code: ' + err.message)
+    }
+  }
+
+  // Generate QR code for mobile login (after web user logs in)
+  const generateQRCode = async () => {
+    try {
+      setQrError('')
+      setQrStatus('pending')
+      
+      // First, try to get a session token
+      const { data: { session } } = await supabase.auth.getSession()
+      let token = session?.access_token
+      
+      // If no session, try localStorage
+      if (!token) {
+        token = localStorage.getItem('access_token') || ''
+      }
+      
+      if (!token) {
+        setQrError('Vui lòng đăng nhập trước để tạo QR code')
+        return
+      }
+
+      const response = await fetch(getApiEndpoint('/api/auth/qr/generate'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setQrData(data)
+        setShowQRCode(true)
+        startPollingQRStatus(data.session_id)
+      } else {
+        const errorData = await response.json()
+        setQrError(errorData.detail || 'Không thể tạo QR code')
+      }
+    } catch (err: any) {
+      console.error('Error generating QR code:', err)
+      setQrError('Lỗi tạo QR code: ' + err.message)
+    }
+  }
+
+  // Poll QR status
+  const startPollingQRStatus = (sessionId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        let token = session?.access_token || localStorage.getItem('access_token') || ''
+        
+        const response = await fetch(getApiEndpoint(`/api/auth/qr/status/${sessionId}`), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.status === 'verified' || data.status === 'completed') {
+            setQrStatus('verified')
+            clearInterval(interval)
+            
+            // Get access token from response
+            if (data.access_token) {
+              localStorage.setItem('access_token', data.access_token)
+              // Also try to set Supabase session
+              try {
+                await supabase.auth.setSession({
+                  access_token: data.access_token,
+                  refresh_token: '', // QR login doesn't provide refresh token
+                })
+              } catch (sessionError) {
+                console.warn('Could not set Supabase session:', sessionError)
+              }
+            }
+            
+            // Redirect to dashboard after successful QR login
+            setTimeout(() => {
+              router.push('/dashboard')
+              router.refresh()
+            }, 1000)
+          } else if (data.status === 'expired') {
+            setQrStatus('expired')
+            clearInterval(interval)
+          }
+        }
+      } catch (err) {
+        console.error('Error polling QR status:', err)
+      }
+    }, 2000) // Poll every 2 seconds
+
+    // Clear interval after 5 minutes
+    setTimeout(() => {
+      clearInterval(interval)
+      if (qrStatus === 'pending') {
+        setQrStatus('expired')
+      }
+    }, 5 * 60 * 1000)
+  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -208,7 +349,6 @@ export default function LoginPage() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Đăng nhập vào tài khoản
           </h2>
-          
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -336,6 +476,89 @@ export default function LoginPage() {
           </div>
         </form>
 
+        {/* QR Code Section for Mobile Login */}
+        {showQRCode && qrData && (
+          <div className="mt-8 bg-white rounded-lg shadow-lg p-6 border-2 border-blue-200">
+            <div className="text-center mb-4">
+              <QrCode className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+              <h3 className="text-lg font-semibold text-gray-900">
+                Đăng nhập bằng QR Code
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Mở app Android, vào màn hình đăng nhập, nhấn nút "Đăng nhập bằng QR" và quét mã QR này
+              </p>
+            </div>
+            
+            <div className="flex justify-center mb-4">
+              <div className="bg-white p-4 rounded-lg border-2 border-blue-300">
+                <QRCodeSVG
+                  value={qrData.qr_code}
+                  size={200}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+            </div>
+
+            {qrStatus === 'pending' && (
+              <div className="text-center">
+                <p className="text-sm text-blue-600 mb-2">
+                  ⏳ Đang chờ quét mã QR...
+                </p>
+                <p className="text-xs text-gray-500">
+                  Mã QR có hiệu lực trong <strong>5 phút</strong>
+                </p>
+              </div>
+            )}
+
+            {qrStatus === 'verified' && (
+              <div className="text-center">
+                <p className="text-sm text-green-600 mb-2">
+                  ✅ Đã quét thành công! Đang chuyển hướng...
+                </p>
+              </div>
+            )}
+
+            {qrStatus === 'expired' && (
+              <div className="text-center">
+                <p className="text-sm text-red-600 mb-2">
+                  ⏰ Mã QR đã hết hạn
+                </p>
+                <button
+                  onClick={generateQRCode}
+                  className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                >
+                  Tạo mã QR mới
+                </button>
+              </div>
+            )}
+
+            {qrError && (
+              <div className="text-center">
+                <p className="text-sm text-red-600 mb-2">{qrError}</p>
+                <button
+                  onClick={generateQRCode}
+                  className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                >
+                  Thử lại
+                </button>
+              </div>
+            )}
+
+            <div className="text-center mt-4">
+              <button
+                onClick={() => {
+                  setShowQRCode(false)
+                  router.push('/dashboard')
+                }}
+                className="text-sm text-blue-600 hover:text-blue-700 underline"
+              >
+                Bỏ qua và vào Dashboard
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Test Accounts Section */}
         <div className="mt-8">
           <h3 className="text-lg font-medium text-gray-900 mb-4 text-center">
@@ -421,6 +644,7 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
     </div>
   )
 }

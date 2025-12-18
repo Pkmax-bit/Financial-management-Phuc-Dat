@@ -28,12 +28,15 @@ import {
   Lock,
   CheckSquare,
   PlayCircle,
-  MessageSquare
+  MessageSquare,
+  Smartphone
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
 import BackgroundSettings from './BackgroundSettings'
 import FloatingActionsButton from './FloatingActionsButton'
+import QRLoginModal from './QRLoginModal'
+import { QRScannerModal } from './QRScannerModal'
 import { useBackground } from '@/contexts/BackgroundContext'
 import { getNavigationByCategory, getRoleDisplayName, getRoleColor, getCategoryDisplayName, type UserRole } from '@/utils/rolePermissions'
 import { supabase } from '@/lib/supabase'
@@ -270,15 +273,28 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [forceHideSidebar, setForceHideSidebar] = useState(false)
   const [showBackgroundSettings, setShowBackgroundSettings] = useState(false)
+  const [showQRLogin, setShowQRLogin] = useState(false)
+  const [showQRScanner, setShowQRScanner] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('')
+  const [accessToken, setAccessToken] = useState<string>('')
 
-  // Get current user ID
+  // Get current user ID and access token
   useEffect(() => {
     const getCurrentUserId = async () => {
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser()
+        const { data: { user: authUser }, data: { session } } = await supabase.auth.getUser()
         if (authUser) {
           setCurrentUserId(authUser.id)
+          // Get access token from session
+          if (session?.access_token) {
+            setAccessToken(session.access_token)
+          } else {
+            // Fallback: try to get from localStorage
+            const storedToken = localStorage.getItem('access_token')
+            if (storedToken) {
+              setAccessToken(storedToken)
+            }
+          }
         }
       } catch (error) {
         console.error('Error getting current user:', error)
@@ -290,8 +306,12 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         setCurrentUserId(session.user.id)
+        if (session.access_token) {
+          setAccessToken(session.access_token)
+        }
       } else {
         setCurrentUserId('')
+        setAccessToken('')
       }
     })
 
@@ -454,21 +474,21 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                 </div>
               ))}
 
-              {/* Settings - Background */}
-              <div className="mt-4 mb-2">
+              {/* Settings */}
+              <div className="mt-4 mb-2 space-y-1">
                 {!isCollapsed && (
                   <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Cài đặt
                   </div>
                 )}
                 <button
-                  onClick={() => setShowBackgroundSettings(true)}
+                  onClick={() => router.push('/settings')}
                   className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-1.5'} text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50`}
-                  title={isCollapsed ? 'Cài đặt nền' : undefined}
+                  title={isCollapsed ? 'Cài đặt' : undefined}
                 >
-                  <Palette className={`${isCollapsed ? 'h-5 w-5' : 'mr-3 h-4 w-4'} flex-shrink-0 text-gray-400`} />
+                  <Settings className={`${isCollapsed ? 'h-5 w-5' : 'mr-3 h-4 w-4'} flex-shrink-0 text-gray-400`} />
                   {!isCollapsed && (
-                    <span className="truncate">Nền</span>
+                    <span className="truncate">Cài đặt</span>
                   )}
                 </button>
               </div>
@@ -581,6 +601,21 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         <BackgroundSettings
           isOpen={showBackgroundSettings}
           onClose={() => setShowBackgroundSettings(false)}
+        />
+
+        {/* QR Login Modal (Web → Mobile) */}
+        {accessToken && (
+          <QRLoginModal
+            isOpen={showQRLogin}
+            onClose={() => setShowQRLogin(false)}
+            accessToken={accessToken}
+          />
+        )}
+
+        {/* QR Scanner Modal (Mobile → Web) */}
+        <QRScannerModal
+          isOpen={showQRScanner}
+          onClose={() => setShowQRScanner(false)}
         />
 
         {/* Floating Actions Button - Combined Workflow and Chat */}
