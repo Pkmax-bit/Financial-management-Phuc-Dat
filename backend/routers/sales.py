@@ -930,6 +930,7 @@ async def create_invoice_from_quote(quote_id: str, quote: dict, approver_user_id
                         "total_price": q_item.get("total_price", 0),
                         "name_product": q_item.get("name_product"),
                         "unit": q_item.get("unit"),
+                        "tax_rate": q_item.get("tax_rate", quote.get("tax_rate", 10.0)),  # Copy tax_rate from quote_item or use quote default
                         "discount_rate": q_item.get("discount_rate", 0.0),
                         "area": q_item.get("area"),
                         "volume": q_item.get("volume"),
@@ -2172,6 +2173,7 @@ async def convert_quote_to_invoice(
                 "total_price": item.get("total_price", 0),
                 "name_product": item.get("name_product"),
                 "unit": item.get("unit"),
+                "tax_rate": item.get("tax_rate", quote.get("tax_rate", 10.0)),  # Copy tax_rate from quote_item or use quote default
                 "discount_rate": item.get("discount_rate", 0.0),
                 "area": item.get("area"),
                 "volume": item.get("volume"),

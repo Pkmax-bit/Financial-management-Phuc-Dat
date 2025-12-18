@@ -18,7 +18,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react'
-import { apiPost } from '@/lib/api'
+import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ColumnVisibilityDialog from './ColumnVisibilityDialog'
 import { useSidebar } from '@/components/LayoutWithSidebar'
@@ -30,6 +30,13 @@ interface Customer {
   phone?: string
 }
 
+interface Employee {
+  id: string
+  name: string
+  email?: string
+  user_id?: string
+}
+
 interface InvoiceItem {
   id?: string
   product_service_id?: string
@@ -39,11 +46,17 @@ interface InvoiceItem {
   unit: string
   unit_price: number
   total_price: number
+  tax_rate?: number  // Tax rate for this specific item (defaults to form tax_rate)
   area?: number | null
+  baseline_area?: number | null
   volume?: number | null
+  baseline_volume?: number | null
   height?: number | null
   length?: number | null
   depth?: number | null
+  // UI-only flags to avoid overwriting manual inputs
+  area_is_manual?: boolean
+  volume_is_manual?: boolean
   // UI-only flag: when true, total_price was set manually and should not auto-sync unit_price
   total_is_manual?: boolean
   components?: Array<{
@@ -97,9 +110,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
@@ -111,12 +126,23 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const [pendingProductClick, setPendingProductClick] = useState<Product | null>(null)
   const [showColumnDialog, setShowColumnDialog] = useState(false)
   const [editingCell, setEditingCell] = useState<{ index: number; field: string } | null>(null)
+  const [autoCalcDimensions, setAutoCalcDimensions] = useState(true)
+  // Always-on auto adjustment
+  const autoAdjustEnabled = true
   const [descriptionModal, setDescriptionModal] = useState<{ isOpen: boolean; index: number; description: string; productName: string }>({ 
     isOpen: false, 
     index: -1, 
     description: '', 
     productName: '' 
   })
+
+  // Preloaded adjustment rules for instant access
+  const adjustmentRulesMap = useRef<Map<string, any[]>>(new Map())
+  const [rulesLoaded, setRulesLoaded] = useState(false)
+  // Debounce timers for auto adjustment per item+dimension
+  const adjustmentTimersRef = useRef<Map<string, any>>(new Map())
+  const [showRulesDialog, setShowRulesDialog] = useState(false)
+  const [manualAdjusting, setManualAdjusting] = useState(false)
   
   // Tour state
   const INVOICE_FORM_TOUR_STORAGE_KEY = 'invoice-form-tour-status-v1'
@@ -164,21 +190,70 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     created_by: ''
   })
 
+  // New customer/project data (when not selecting from existing)
+  const [newCustomer, setNewCustomer] = useState({
+    name: '',
+    type: 'individual' as 'individual' | 'company' | 'government',
+    address: '',
+    city: '',
+    country: 'Vietnam',
+    phone: '',
+    email: '',
+    tax_id: '',
+    credit_limit: 0,
+    payment_terms: 30,
+    notes: ''
+  })
+
+  const [newProject, setNewProject] = useState({
+    name: ''
+  })
+  const [taskGroups, setTaskGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [loadingTaskGroups, setLoadingTaskGroups] = useState(false)
+  const [selectedTaskGroupId, setSelectedTaskGroupId] = useState<string>('')
+
+  // Auto-generate project name from customer name and address
+  useEffect(() => {
+    if (!formData.customer_id && newCustomer.name && newCustomer.address) {
+      // New customer: use newCustomer data
+      const projectName = `${newCustomer.name} - ${newCustomer.address}`
+      setNewProject(prev => ({ ...prev, name: projectName }))
+    } else if (formData.customer_id) {
+      // Existing customer: use selected customer
+      const selectedCustomer = customers.find(c => c.id === formData.customer_id)
+      if (selectedCustomer && selectedCustomer.address) {
+        const projectName = `${selectedCustomer.name} - ${selectedCustomer.address}`
+        setNewProject(prev => ({ ...prev, name: projectName }))
+      } else if (selectedCustomer) {
+        const projectName = selectedCustomer.name
+        setNewProject(prev => ({ ...prev, name: projectName }))
+      }
+    }
+  }, [newCustomer.name, newCustomer.address, formData.customer_id, customers])
+
   const [items, setItems] = useState<InvoiceItem[]>([
-    { 
-      name_product: '', 
-      description: '', 
-      quantity: 1, 
-      unit: '', 
-      unit_price: 0, 
+    {
+      name_product: '',
+      description: '',
+      quantity: 1,
+      unit: '',
+      unit_price: 0,
       total_price: 0,
+      tax_rate: 10,  // Default tax rate for new items
       area: null,
+      baseline_area: null,
       volume: null,
+      baseline_volume: null,
       height: null,
       length: null,
-      depth: null
+      depth: null,
+      area_is_manual: false,
+      volume_is_manual: false
     }
   ])
+  // Keep latest items snapshot for post-update reads
+  const itemsRef = useRef<InvoiceItem[]>([])
+  useEffect(() => { itemsRef.current = items }, [items])
 
   // Filter products based on search
   const filteredProducts = products.filter(product => {
@@ -282,21 +357,49 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     if (isOpen) {
       fetchCustomers()
       fetchProducts()
+      fetchEmployees()
+      fetchTaskGroups()
       if (invoiceId) {
         loadInvoiceData()
       } else {
         generateInvoiceNumber()
       }
+      // Preload all active adjustment rules once when opening
+      ; (async () => {
+        try {
+          adjustmentRulesMap.current.clear()
+          const { data: allRules } = await supabase
+            .from('material_adjustment_rules')
+            .select('*')
+            .eq('is_active', true)
+          const list = Array.isArray(allRules) ? allRules : []
+          for (const r of list) {
+            const key = `${r.expense_object_id}_${r.dimension_type}`
+            const arr = adjustmentRulesMap.current.get(key) || []
+            arr.push(r)
+            adjustmentRulesMap.current.set(key, arr)
+          }
+          setRulesLoaded(true)
+        } catch (_) {
+          setRulesLoaded(true)
+        }
+      })()
     } else {
       // Reset when closing sidebar
       setSelectedItemIndex(null)
       resetForm()
+      // Clear preloaded rules when closing
+      adjustmentRulesMap.current.clear()
+      setRulesLoaded(false)
+      // Clear any pending adjustment timers
+      adjustmentTimersRef.current.forEach((t) => clearTimeout(t))
+      adjustmentTimersRef.current.clear()
     }
   }, [isOpen, invoiceId])
 
   useEffect(() => {
     calculateSubtotal()
-  }, [items, formData.tax_rate, formData.discount_amount])
+  }, [items, formData.discount_amount])
 
   const startInvoiceTour = useCallback(async () => {
     if (!isOpen || typeof window === 'undefined') return
@@ -719,6 +822,76 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     }
   }
 
+  const fetchTaskGroups = async () => {
+    try {
+      setLoadingTaskGroups(true)
+      const groups = await apiGet('/api/tasks/groups')
+      setTaskGroups(groups || [])
+      
+      // Tìm nhóm "Dự án cửa" và set làm mặc định
+      const duAnCuaGroup = groups.find((g: any) => 
+        g.name && (g.name.toLowerCase().includes('dự án cửa') || g.name.toLowerCase().includes('du an cua'))
+      )
+      if (duAnCuaGroup) {
+        setSelectedTaskGroupId(duAnCuaGroup.id)
+      }
+    } catch (error) {
+      console.error('Error fetching task groups:', error)
+    } finally {
+      setLoadingTaskGroups(false)
+    }
+  }
+
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmployees(true)
+      console.log('🔍 Fetching employees from database...')
+
+      // Use Supabase client directly to get employees with user info
+      const { data, error } = await supabase
+        .from('employees')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          user_id,
+          users!employees_user_id_fkey(full_name)
+        `)
+        .eq('status', 'active')
+        .order('first_name')
+        .limit(50)
+
+      if (error) {
+        console.error('❌ Supabase error fetching employees:', error)
+        throw error
+      }
+
+      if (data && data.length > 0) {
+        const transformedEmployees = data.map((emp: any) => {
+          const usersRel = emp.users
+          const userFullName = Array.isArray(usersRel) ? usersRel[0]?.full_name : usersRel?.full_name
+          return {
+            id: emp.id,
+            name: userFullName || `${emp.first_name} ${emp.last_name}`.trim(),
+            email: emp.email,
+            user_id: emp.user_id
+          }
+        })
+        setEmployees(transformedEmployees)
+        console.log('🔍 Employees data:', transformedEmployees)
+      } else {
+        console.log('🔍 No employees found')
+        setEmployees([])
+      }
+    } catch (error) {
+      console.error('❌ Error fetching employees:', error)
+      setEmployees([])
+    } finally {
+      setLoadingEmployees(false)
+    }
+  }
+
   const generateInvoiceNumber = () => {
     const now = new Date()
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
@@ -788,11 +961,16 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               unit: item.unit || '',
               unit_price: Number(item.unit_price) || 0,
               total_price: Number(item.total_price) || 0,
+              tax_rate: item.tax_rate != null ? Number(item.tax_rate) : (invoice.tax_rate != null ? Number(invoice.tax_rate) : 10),  // Load tax_rate from item or use invoice default
               area: item.area != null ? Number(item.area) : null,
+              baseline_area: item.area != null ? Number(item.area) : null, // Use current area as baseline
               volume: item.volume != null ? Number(item.volume) : null,
+              baseline_volume: item.volume != null ? Number(item.volume) : null, // Use current volume as baseline
               height: item.height != null ? Number(item.height) : null,
               length: item.length != null ? Number(item.length) : null,
               depth: item.depth != null ? Number(item.depth) : null,
+              area_is_manual: false,
+              volume_is_manual: false,
               // Load components from product_components JSONB column if exists
               components: Array.isArray(item.product_components) && item.product_components.length > 0
                 ? item.product_components.map((comp: any) => ({
@@ -801,7 +979,8 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                     unit: comp.unit || '',
                     unit_price: Number(comp.unit_price || 0),
                     quantity: Number(comp.quantity || 0),
-                    total_price: Number(comp.total_price || 0)
+                    total_price: Number(comp.total_price || 0),
+                    baseline_quantity: comp.quantity != null ? Number(comp.quantity) : 0 // Store baseline for quantity adjustments
                   }))
                 : []
             }
@@ -827,6 +1006,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             unit: '', 
             unit_price: 0, 
             total_price: 0,
+            tax_rate: invoice.tax_rate ?? 10,  // Use invoice tax_rate as default
             area: null,
             volume: null,
             height: null,
@@ -899,13 +1079,18 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
   const calculateSubtotal = () => {
     const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
-    const tax_amount = subtotal * (formData.tax_rate / 100)
-    const total_amount = subtotal + tax_amount - formData.discount_amount
+    // Calculate total tax from all items (each item has its own tax_rate)
+    const total_tax = items.reduce((sum, item) => {
+      const itemTaxRate = item.tax_rate ?? formData.tax_rate ?? 10
+      return sum + (item.total_price * (itemTaxRate / 100))
+    }, 0)
+    // Total amount = subtotal + total tax from all items - discount
+    const total_amount = subtotal + total_tax - formData.discount_amount
     
     setFormData(prev => ({ 
       ...prev, 
       subtotal, 
-      tax_amount, 
+      tax_amount: total_tax,  // Store total tax for reference
       total_amount 
     }))
   }
@@ -918,6 +1103,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       unit: '', 
       unit_price: 0, 
       total_price: 0,
+      tax_rate: formData.tax_rate ?? 10,  // Use form tax_rate as default for new items
       area: null,
       volume: null,
       height: null,
@@ -970,76 +1156,317 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     return unitPrice * quantity
   }
 
-  const updateItem = (index: number, field: keyof InvoiceItem, value: string | number | null) => {
+  // Check if a rule is applicable based on change direction and threshold
+  const checkRuleApplicable = (
+    rule: any,
+    changeDirection: 'increase' | 'decrease',
+    changePercentage: number,
+    changeAbsolute: number
+  ): boolean => {
+    const isInverseRule = rule.change_direction === 'decrease' && Number(rule.adjustment_value || 0) < 0
+
+    if (isInverseRule) {
+      if (changeDirection !== 'increase') {
+        return false
+      }
+    } else {
+      if (rule.change_direction !== 'both' && rule.change_direction !== changeDirection) {
+        return false
+      }
+    }
+
+    if (rule.change_type === 'percentage') {
+      return Math.abs(changePercentage) >= Math.abs(rule.change_value)
+    } else if (rule.change_type === 'absolute') {
+      return Math.abs(changeAbsolute) >= Math.abs(rule.change_value)
+    }
+    return false
+  }
+
+  // Apply rule for increase direction
+  const applyIncreaseRule = (adjustedQuantity: number, rule: any): number => {
+    const adjustmentValue = Number(rule.adjustment_value || 0)
+    if (rule.adjustment_type === 'percentage') {
+      const adjustmentFactor = 1 + (adjustmentValue / 100)
+      return adjustedQuantity * adjustmentFactor
+    } else if (rule.adjustment_type === 'absolute') {
+      return adjustedQuantity + adjustmentValue
+    }
+    return adjustedQuantity
+  }
+
+  // Apply rule for decrease direction
+  const applyDecreaseRule = (adjustedQuantity: number, rule: any): number => {
+    const adjustmentValue = Number(rule.adjustment_value || 0)
+    if (rule.adjustment_type === 'percentage') {
+      const adjustmentFactor = 1 + (adjustmentValue / 100)
+      return adjustedQuantity * adjustmentFactor
+    } else if (rule.adjustment_type === 'absolute') {
+      return adjustedQuantity + adjustmentValue
+    }
+    return adjustedQuantity
+  }
+
+  // Apply rule for both directions
+  const applyBothRule = (adjustedQuantity: number, rule: any, changeDirection: 'increase' | 'decrease'): number => {
+    const adjustmentValue = Number(rule.adjustment_value || 0)
+    if (rule.adjustment_type === 'percentage') {
+      const adjustmentFactor = 1 + (adjustmentValue / 100)
+      return adjustedQuantity * adjustmentFactor
+    } else if (rule.adjustment_type === 'absolute') {
+      return adjustedQuantity + adjustmentValue
+    }
+    return adjustedQuantity
+  }
+
+  // Apply adjustment based on rule type
+  const applyRuleAdjustment = (adjustedQuantity: number, rule: any, changeDirection: 'increase' | 'decrease'): number => {
+    const isInverseRule = rule.change_direction === 'decrease' && Number(rule.adjustment_value || 0) < 0
+    if (rule.change_direction === 'increase') {
+      return applyIncreaseRule(adjustedQuantity, rule)
+    } else if (rule.change_direction === 'decrease' && !isInverseRule) {
+      return applyDecreaseRule(adjustedQuantity, rule)
+    } else if (rule.change_direction === 'both') {
+      return applyBothRule(adjustedQuantity, rule, changeDirection)
+    } else if (isInverseRule) {
+      return applyDecreaseRule(adjustedQuantity, rule)
+    }
+    return adjustedQuantity
+  }
+
+  // Helper function to apply material adjustment rules
+  const applyMaterialAdjustmentRules = async (
+    itemIndex: number,
+    dimensionType: 'area' | 'volume' | 'height' | 'length' | 'depth' | 'quantity',
+    oldValue: number | null,
+    newValue: number | null
+  ) => {
+    if (oldValue === null || newValue === null || oldValue === newValue) return
+    const item = itemsRef.current[itemIndex]
+    const components = Array.isArray(item.components) ? item.components : []
+    if (components.length === 0) return
+
+    try {
+      const adjustedComponents = await Promise.all(
+        components.map(async (component: any) => {
+          const expenseObjectId = component.expense_object_id
+          if (!expenseObjectId) return component
+          try {
+            const rules = adjustmentRulesMap.current.get(`${expenseObjectId}_${dimensionType}`) || []
+            if (rules.length === 0) return component
+            const changePercentage = oldValue > 0 ? ((newValue - oldValue) / oldValue) * 100 : 0
+            const changeAbsolute = newValue - oldValue
+            const changeDirection = changeAbsolute > 0 ? 'increase' : 'decrease'
+            const prodCatId = (item as any).product_category_id || null
+            const applicableRules = rules.filter((rule: any) => {
+              const allowedCats = Array.isArray(rule.allowed_category_ids) ? rule.allowed_category_ids : null
+              if (allowedCats && allowedCats.length > 0) {
+                if (!prodCatId || !allowedCats.includes(prodCatId)) return false
+              }
+              return checkRuleApplicable(rule, changeDirection, changePercentage, changeAbsolute)
+            })
+            if (applicableRules.length === 0) return component
+            const currentProductQuantity = Number(item.quantity || 1)
+            const baselineQuantityPerUnit = component.baseline_quantity != null
+              ? Number(component.baseline_quantity)
+              : (component.quantity != null && currentProductQuantity > 0
+                ? Number(component.quantity) / currentProductQuantity
+                : 0)
+            let adjustedQuantity = baselineQuantityPerUnit * currentProductQuantity
+            for (const rule of applicableRules) {
+              adjustedQuantity = applyRuleAdjustment(adjustedQuantity, rule, changeDirection)
+            }
+            adjustedQuantity = Math.max(0, adjustedQuantity)
+            return {
+              ...component,
+              quantity: adjustedQuantity,
+              total_price: adjustedQuantity * Number(component.unit_price || 0)
+            }
+          } catch (err) {
+            console.error('[Adjust] Error applying rules for component', err)
+            return component
+          }
+        })
+      )
+      setItems(prev => {
+        const updated = [...prev]
+        updated[itemIndex] = {
+          ...updated[itemIndex],
+          components: adjustedComponents
+        }
+        updated[itemIndex].total_price = computeItemTotal(updated[itemIndex])
+        return updated
+      })
+    } catch (error) {
+      console.error('[Adjust] Error in applyMaterialAdjustmentRules', error)
+    }
+  }
+
+  const updateItem = async (index: number, field: keyof InvoiceItem, value: string | number | null) => {
     const updatedItems = [...items]
     const oldItem = { ...updatedItems[index] }
     const oldQuantity = oldItem.quantity
+    const oldArea = oldItem.area
+    const oldVolume = oldItem.volume
+    const oldHeight = oldItem.height
+    const oldLength = oldItem.length
+    const oldDepth = oldItem.depth
     
     updatedItems[index] = { ...updatedItems[index], [field]: value }
     const curr = updatedItems[index]
     
+    // Convert dimensions from mm to meters for calculations
+    const lengthMm = curr.length != null ? Number(curr.length) : null
+    const heightMm = curr.height != null ? Number(curr.height) : null
+    const depthMm = curr.depth != null ? Number(curr.depth) : null
+    
+    let autoAreaChanged = false
+    let autoVolumeChanged = false
+    
     // Mark manual overrides for total_price
     if (field === 'total_price') {
-      // User is directly editing thành tiền: đánh dấu là manual,
-      // không tự động thay đổi đơn giá, chỉ dùng value này để tính tổng & thuế.
       updatedItems[index].total_is_manual = value != null
     }
     
     // Recalculate total_price cho dòng sản phẩm khi thay đổi các trường nguồn
-    // - Đổi quantity / unit_price / area → cập nhật lại total_price theo công thức
-    // - Đổi total_price trực tiếp: KHÔNG đụng tới unit_price (đã xử lý phía trên)
     if (field === 'quantity' || field === 'unit_price' || field === 'area') {
       updatedItems[index].total_price = computeItemTotal(updatedItems[index])
+      updatedItems[index].total_is_manual = false
     }
     
     // When quantity changes, adjust components quantity proportionally
-    // Công thức: Khi số lượng sản phẩm tăng thì số lượng vật tư tăng theo tỷ lệ
-    // Ví dụ: Sản phẩm A số lượng 1, vật tư số lượng 1
-    // Khi tăng sản phẩm A lên 2 → số lượng vật tư = 1 × 2 = 2
     if (field === 'quantity') {
       const newQuantity = Number(value || 0)
       const oldQty = Number(oldQuantity || 1)
       
-      // Adjust components quantity proportionally to product quantity
       if (oldQty > 0 && newQuantity > 0 && curr.components && Array.isArray(curr.components) && curr.components.length > 0) {
-        // Tính số lượng vật tư cho 1 đơn vị sản phẩm (base quantity per unit)
-        // Công thức: baseQuantity = currentQuantity / oldProductQuantity
-        // Sau đó: newComponentQuantity = baseQuantity × newProductQuantity
         const updatedComponents = curr.components.map((component: any) => {
           const currentComponentQuantity = Number(component.quantity || 0)
-          
-          // Tính số lượng vật tư cho 1 đơn vị sản phẩm
           const baseComponentQuantityPerUnit = currentComponentQuantity / oldQty
-          
-          // Tính số lượng vật tư mới = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm mới
           const newComponentQuantity = baseComponentQuantityPerUnit * newQuantity
           const adjustedUnitPrice = Number(component.unit_price || 0)
           
-          console.log('[Quantity] Adjusting component quantity (Invoice)', {
-            expenseObjectId: component.expense_object_id,
-            name: component.name,
-            oldProductQuantity: oldQty,
-            newProductQuantity: newQuantity,
-            oldComponentQuantity: currentComponentQuantity,
-            baseComponentQuantityPerUnit,
-            newComponentQuantity
-          })
-          
           return {
             ...component,
-            // Cập nhật số lượng mới = số lượng vật tư cho 1 đơn vị × số lượng sản phẩm mới
             quantity: Math.max(0, newComponentQuantity),
-            // Cập nhật thành tiền
             total_price: Math.max(0, newComponentQuantity) * adjustedUnitPrice
           }
         })
         
-        // Cập nhật components với số lượng mới
         curr.components = updatedComponents
+      }
+    }
+
+    if (autoCalcDimensions) {
+      // When user edits kích thước, ưu tiên tự tính lại: bỏ cờ manual
+      if (field === 'length' || field === 'height') {
+        curr.area_is_manual = false
+      }
+      if (field === 'height') {
+        curr.volume_is_manual = false
+      }
+
+      // Recompute area when length/height changes and area is not manual
+      if ((field === 'length' || field === 'height') && !curr.area_is_manual) {
+        if (lengthMm != null && heightMm != null) {
+          const quantity = Number(curr.quantity || 1)
+          const baselineAreaPerUnit = (lengthMm * heightMm) / 1_000_000
+          const computedArea = baselineAreaPerUnit * quantity
+          const rounded = Math.round(computedArea * 100) / 100
+          if (curr.area == null || Math.abs(Number(curr.area) - rounded) > 0.01) {
+            curr.area = rounded
+            autoAreaChanged = true
+            if (curr.baseline_area == null) {
+              curr.baseline_area = Math.round(baselineAreaPerUnit * 100) / 100
+            }
+            updatedItems[index].total_price = computeItemTotal(updatedItems[index])
+          }
+        } else {
+          if (curr.area != null) {
+            curr.area = null
+            autoAreaChanged = true
+            updatedItems[index].total_price = computeItemTotal(updatedItems[index])
+          }
+        }
+      }
+
+      // Recompute volume when any of area/height/length/depth changes and volume is not manual
+      if ((field === 'height' || field === 'length' || field === 'depth' || field === 'area') && !curr.volume_is_manual) {
+        const quantity = Number(curr.quantity || 1)
+        let computedVolume: number | null = null
+        let baselineVolumePerUnit: number | null = null
+
+        if (lengthMm != null && heightMm != null && depthMm != null) {
+          baselineVolumePerUnit = (lengthMm * heightMm * depthMm) / 1_000_000_000
+          computedVolume = baselineVolumePerUnit * quantity
+        } else if (curr.area != null && heightMm != null) {
+          const baselineAreaPerUnit = curr.baseline_area ?? Math.round((curr.area / quantity) * 100) / 100
+          baselineVolumePerUnit = baselineAreaPerUnit * (heightMm / 1000)
+          computedVolume = baselineVolumePerUnit * quantity
+        }
+
+        if (computedVolume != null && isFinite(computedVolume)) {
+          const roundedV = Math.round(computedVolume * 1e9) / 1e9
+          if (curr.volume == null || Math.abs(Number(curr.volume) - roundedV) > 1e-12) {
+            curr.volume = roundedV
+            autoVolumeChanged = true
+            if (curr.baseline_volume == null && baselineVolumePerUnit != null) {
+              curr.baseline_volume = baselineVolumePerUnit
+            }
+          }
+        } else {
+          if (curr.volume != null) {
+            curr.volume = null
+            autoVolumeChanged = true
+          }
+        }
       }
     }
     
     setItems(updatedItems)
+
+    // Apply material adjustment rules when dimensions or quantity change (if enabled)
+    const newValue = value !== null ? Number(value) : null
+    const isEditingSameField = !!editingCell && editingCell.index === index && editingCell.field === field
+    if (autoAdjustEnabled && !isEditingSameField && newValue !== null && oldItem.components && oldItem.components.length > 0) {
+      if (field === 'area' && oldArea !== newValue) {
+        const baselineArea = Number((curr as any).baseline_area ?? 0)
+        const currArea = newValue
+        if (baselineArea > 0) {
+          await applyMaterialAdjustmentRules(index, 'area', baselineArea, currArea)
+        }
+      } else if (field === 'volume' && oldVolume !== null && oldVolume !== undefined && oldVolume !== newValue) {
+        const baselineVolume = Number((curr as any).baseline_volume ?? 0)
+        const currVolume = newValue
+        if (baselineVolume > 0) {
+          await applyMaterialAdjustmentRules(index, 'volume', baselineVolume, currVolume)
+        }
+      } else if (field === 'height' && oldHeight !== null && oldHeight !== undefined && oldHeight !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'height', oldHeight, newValue)
+      } else if (field === 'length' && oldLength !== null && oldLength !== undefined && oldLength !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'length', oldLength, newValue)
+      } else if (field === 'depth' && oldDepth !== null && oldDepth !== undefined && oldDepth !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'depth', oldDepth, newValue)
+      } else if (field === 'quantity' && oldQuantity !== null && oldQuantity !== undefined && oldQuantity !== newValue) {
+        await applyMaterialAdjustmentRules(index, 'quantity', oldQuantity, newValue)
+      }
+
+      // Also trigger rules if auto-calculated area/volume changed due to dimension edits
+      if (autoCalcDimensions && autoAdjustEnabled && autoAreaChanged && curr.area != null && oldArea !== curr.area) {
+        const baselineArea = Number((curr as any).baseline_area ?? 0)
+        const currArea = Number(curr.area)
+        if (baselineArea > 0) {
+          await applyMaterialAdjustmentRules(index, 'area', baselineArea, currArea)
+        }
+      }
+      if (autoCalcDimensions && autoAdjustEnabled && autoVolumeChanged && curr.volume != null && oldVolume !== curr.volume) {
+        const baselineVolume = Number((curr as any).baseline_volume ?? 0)
+        const currVolume = Number(curr.volume)
+        if (baselineVolume > 0) {
+          await applyMaterialAdjustmentRules(index, 'volume', baselineVolume, currVolume)
+        }
+      }
+    }
   }
 
   // Editable components (vật tư) fields per invoice item – giống giao diện Báo giá
@@ -1310,6 +1737,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         total_price: areaVal != null && isFinite(areaVal) && areaVal > 0
           ? unitPrice * areaVal
           : (base.quantity || 1) * unitPrice,
+        tax_rate: base.tax_rate ?? formData.tax_rate ?? 10,  // Keep existing tax_rate or use form default
         area: product.area ?? null,
         volume: product.volume ?? null,
         height: product.height ?? null,
@@ -1419,6 +1847,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             unit: item.unit,
             unit_price: item.unit_price,
             total_price: item.total_price,
+            tax_rate: item.tax_rate ?? formData.tax_rate ?? 10,  // Include tax_rate for each item
             area: item.area ?? null,
             volume: item.volume ?? null,
             height: item.height ?? null,
@@ -1456,6 +1885,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             unit: item.unit,
             unit_price: item.unit_price,
             total_price: item.total_price,
+            tax_rate: item.tax_rate ?? formData.tax_rate ?? 10,  // Save tax_rate for each item
             area: item.area,
             volume: item.volume,
             height: item.height,
@@ -1552,6 +1982,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       unit: '', 
       unit_price: 0, 
       total_price: 0,
+      tax_rate: formData.tax_rate ?? 10,  // Use form tax_rate as default
       area: null,
       volume: null,
       height: null,
@@ -1898,29 +2329,53 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                           </div>
                         )}
                         {visibleColumns.total_price && (
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <EditableNumberCell
-                                value={item.total_price}
-                                onChange={(v) => updateItem(index, 'total_price', Number(v || 0))}
-                                format="currency"
-                                step={1000}
-                                min={0}
-                                placeholder="0 ₫"
-                                index={index}
-                                field={'total_price'}
-                                commitOnChange
-                                tabIndex={index * 100 + 6}
-                              />
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex flex-col items-end gap-1 max-w-[15ch]">
+                                <EditableNumberCell
+                                  value={item.total_price}
+                                  onChange={(v) => updateItem(index, 'total_price', Number(v || 0))}
+                                  format="currency"
+                                  step={1000}
+                                  min={0}
+                                  placeholder="0 ₫"
+                                  index={index}
+                                  field={'total_price'}
+                                  commitOnChange
+                                  tabIndex={index * 100 + 6}
+                                />
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-gray-500">+ Thuế:</span>
+                                  <input
+                                    type="number"
+                                    value={item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 10)}
+                                    onChange={(e) => {
+                                      const newTaxRate = parseFloat(e.target.value) || 0
+                                      const updatedItems = [...items]
+                                      updatedItems[index] = { ...updatedItems[index], tax_rate: newTaxRate }
+                                      setItems(updatedItems)
+                                    }}
+                                    className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs text-center text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    tabIndex={index * 100 + 16}
+                                  />
+                                  <span className="text-xs text-gray-500">%</span>
+                                  <span className="text-xs text-gray-500">
+                                    = {formatCurrency(item.total_price * ((item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 10)) / 100))}
+                                  </span>
+                                </div>
+                              </div>
+                              {items.length > 1 && (
+                                <button
+                                  onClick={() => removeItem(index)}
+                                  className="p-1 text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
-                            {items.length > 1 && (
-                              <button
-                                onClick={() => removeItem(index)}
-                                className="p-1 text-red-600 hover:text-red-800"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
                           </div>
                         )}
                         {visibleColumns.area && (
@@ -2119,29 +2574,16 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               <h2 className="text-lg font-medium text-black mb-4">Tổng kết</h2>
               <div className="bg-gray-50 p-4 rounded-md">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-black mb-1">Thuế suất (%)</label>
-                      <input
-                        type="number"
-                        value={formData.tax_rate}
-                        onChange={(e) => setFormData({ ...formData, tax_rate: Number(e.target.value) })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        min="0"
-                        max="100"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-black mb-1">Giảm giá</label>
-                      <input
-                        type="number"
-                        value={formData.discount_amount}
-                        onChange={(e) => setFormData({ ...formData, discount_amount: Number(e.target.value) })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        min="0"
-                        step="1000"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-black mb-1">Giảm giá</label>
+                    <input
+                      type="number"
+                      value={formData.discount_amount}
+                      onChange={(e) => setFormData({ ...formData, discount_amount: Number(e.target.value) })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      min="0"
+                      step="1000"
+                    />
                   </div>
                   <div className="flex items-end">
                     <div className="w-full" data-tour-id="invoice-form-totals">
@@ -2150,16 +2592,15 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                         <span className="text-sm font-medium text-black">{formatCurrency(formData.subtotal)}</span>
                       </div>
                       <div className="flex justify-between items-center py-2 border-b border-gray-300">
-                        <span className="text-sm font-medium text-black">Thuế ({formData.tax_rate}%):</span>
-                        <span className="text-sm font-medium text-black">{formatCurrency(formData.tax_amount)}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-gray-300">
                         <span className="text-sm font-medium text-black">Giảm giá:</span>
                         <span className="text-sm font-medium text-black">{formatCurrency(formData.discount_amount)}</span>
                       </div>
                       <div className="flex justify-between items-center py-2">
                         <span className="text-base font-semibold text-black">Tổng cộng:</span>
                         <span className="text-base font-semibold text-black">{formatCurrency(formData.total_amount)}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        * Thuế đã được tính và cộng vào tổng cộng
                       </div>
                     </div>
                   </div>

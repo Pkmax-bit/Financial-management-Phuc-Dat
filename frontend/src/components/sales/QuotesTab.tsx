@@ -860,6 +860,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             unit: item.unit || '',
             unit_price: Number(item.unit_price || 0),
             total_price: Number(item.total_price || 0),
+            tax_rate: item.tax_rate != null ? Number(item.tax_rate) : (quote.tax_rate != null ? Number(quote.tax_rate) : 10),  // Copy tax_rate from quote_item (including 0) or use quote default
             area: item.area != null ? Number(item.area) : null,
             volume: item.volume != null ? Number(item.volume) : null,
             height: item.height != null ? Number(item.height) : null,
