@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useParams } from 'next/navigation'
 import { 
   CheckCircle, 
   XCircle, 
@@ -53,21 +54,15 @@ interface QuoteItem {
   total_price: number
 }
 
-interface ApproveQuotePageProps {
-  params: {
-    quoteId: string
-  }
-}
-
-export default function ApproveQuotePage({ params }: ApproveQuotePageProps) {
+export default function ApproveQuotePage() {
+  const params = useParams()
+  const quoteId = params?.quoteId as string
   const [quote, setQuote] = useState<Quote | null>(null)
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(true)
   const [approving, setApproving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-
-  const { quoteId } = params
 
   useEffect(() => {
     fetchQuoteDetails()

@@ -64,8 +64,43 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback
 
-// Get file icon based on file type
-const getFileIcon = (fileType: string) => {
+// Get file icon path from icon folder based on file type or filename
+const getFileIconPath = (fileType: string, fileName?: string): string | null => {
+  const type = fileType?.toLowerCase() || ''
+  const name = fileName?.toLowerCase() || ''
+
+  // PDF
+  if (type === 'application/pdf' || name.endsWith('.pdf')) {
+    return '/icon/pdf.png'
+  }
+
+  // Excel files
+  if (type.includes('spreadsheet') || 
+      type === 'application/vnd.ms-excel' ||
+      type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      name.match(/\.(xls|xlsx|xlsm)(\?|$)/i)) {
+    return '/icon/Excel.png'
+  }
+
+  // Word files
+  if (type.includes('word') || 
+      type === 'application/msword' ||
+      type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      name.match(/\.(doc|docx)(\?|$)/i)) {
+    return '/icon/doc.png'
+  }
+
+  // Images - return null to use ImageIcon component
+  if (type.startsWith('image/') || name.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i)) {
+    return null
+  }
+
+  // Default - return null to use File icon component
+  return null
+}
+
+// Get file icon component (fallback when no icon path available)
+const getFileIconComponent = (fileType: string) => {
   if (!fileType) return FileText
 
   const type = fileType.toLowerCase()
@@ -73,23 +108,6 @@ const getFileIcon = (fileType: string) => {
   // Images
   if (type.startsWith('image/')) {
     return ImageIcon
-  }
-
-  // PDF
-  if (type === 'application/pdf') {
-    return FileText
-  }
-
-  // Excel files
-  if (type.includes('spreadsheet') || type === 'application/vnd.ms-excel' ||
-    type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-    return FileSpreadsheet
-  }
-
-  // Word files
-  if (type.includes('word') || type === 'application/msword' ||
-    type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    return FileType
   }
 
   // Text files
@@ -1360,16 +1378,19 @@ export default function TaskDetailPage() {
               </div>
               <div className="space-y-2">
                 {attachments?.map(file => {
-                  const FileIcon = getFileIcon(file.file_type || '')
                   const displayName = getDisplayFileName(file)
                   const isImage = file.file_type?.startsWith('image/')
+                  const iconPath = getFileIconPath(file.file_type || '', displayName)
+                  const FileIconComponent = iconPath ? null : getFileIconComponent(file.file_type || '')
                   return (
                     <div key={file.id} className="group relative">
                       <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors">
                         {isImage ? (
                           <img src={file.file_url} alt={displayName} className="h-10 w-10 object-cover rounded flex-shrink-0" />
+                        ) : iconPath ? (
+                          <img src={iconPath} alt={displayName} className="h-10 w-10 object-contain rounded flex-shrink-0" />
                         ) : (
-                          <FileIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <FileIconComponent className="h-4 w-4 text-blue-500 flex-shrink-0" />
                         )}
                         <span className="text-sm text-gray-700 truncate flex-1" title={displayName}>{displayName}</span>
                         <Download className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 flex-shrink-0" />
@@ -1642,7 +1663,10 @@ export default function TaskDetailPage() {
                                     {fileUrls.length > 0 && (
                                       <div className="flex flex-wrap gap-2 mt-1">
                                         {fileUrls.map((url, idx) => {
-                                          const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i) || url.includes('image') || url.includes('storage')
+                                          const fileName = url.split('/').pop()?.split('?')[0] || ''
+                                          const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i) || url.includes('image') || url.includes('storage')
+                                          const iconPath = !isImage ? getFileIconPath('', fileName) : null
+                                          const FileIconComponent = !isImage && !iconPath ? getFileIconComponent('') : null
                                           return (
                                             <div key={idx} className="relative group/file">
                                               {isImage ? (
@@ -1679,8 +1703,16 @@ export default function TaskDetailPage() {
                                                   onClick={(e) => e.stopPropagation()}
                                                   className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-blue-300 transition-colors"
                                                 >
-                                                  <Paperclip className="h-4 w-4 text-gray-600" />
-                                                  <span className="text-xs text-gray-700 font-medium">File {idx + 1}</span>
+                                                  {iconPath ? (
+                                                    <img src={iconPath} alt={fileName} className="h-5 w-5 object-contain" />
+                                                  ) : FileIconComponent ? (
+                                                    <FileIconComponent className="h-4 w-4 text-gray-600" />
+                                                  ) : (
+                                                    <Paperclip className="h-4 w-4 text-gray-600" />
+                                                  )}
+                                                  <span className="text-xs text-gray-700 font-medium truncate max-w-[100px]" title={fileName}>
+                                                    {fileName || `File ${idx + 1}`}
+                                                  </span>
                                                   <Download className="h-3 w-3 text-gray-400" />
                                                 </a>
                                               )}
@@ -1717,13 +1749,21 @@ export default function TaskDetailPage() {
                             {checklistItemPreviews[checklist.id].map((preview, idx) => {
                               const file = checklistItemFiles[checklist.id]?.[idx]
                               const isImage = file?.type.startsWith('image/')
+                              const iconPath = !isImage && file ? getFileIconPath(file.type || '', file.name) : null
+                              const FileIconComponent = !isImage && !iconPath ? getFileIconComponent(file?.type || '') : null
                               return (
                                 <div key={idx} className="relative inline-block">
                                   {isImage ? (
                                     <img src={preview} alt={file.name} className="h-16 w-16 object-cover rounded border border-gray-200" />
                                   ) : (
                                     <div className="h-16 w-16 rounded border border-gray-200 bg-gray-50 flex items-center justify-center">
-                                      <Paperclip className="h-6 w-6 text-gray-400" />
+                                      {iconPath ? (
+                                        <img src={iconPath} alt={file.name} className="h-10 w-10 object-contain" />
+                                      ) : FileIconComponent ? (
+                                        <FileIconComponent className="h-6 w-6 text-gray-400" />
+                                      ) : (
+                                        <Paperclip className="h-6 w-6 text-gray-400" />
+                                      )}
                                     </div>
                                   )}
                                   <button

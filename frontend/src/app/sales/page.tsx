@@ -739,7 +739,8 @@ function SalesPageWithParams() {
     if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments', 'all-sales'].includes(tab)) {
       setActiveTab(tab)
     }
-  }, [searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.toString()])
 
   return <SalesPageContent activeTab={activeTab} setActiveTab={setActiveTab} />
 }

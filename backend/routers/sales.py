@@ -655,6 +655,22 @@ async def create_quote(
             if created_by:
                 await notification_service.create_quote_notification(quote, created_by)
             
+            # Notify all admin users about the new quote
+            try:
+                # Get creator name for notification
+                creator_name = None
+                if created_by:
+                    employee_info = supabase.table("employees").select("full_name, first_name, last_name").eq("id", created_by).execute()
+                    if employee_info.data:
+                        emp = employee_info.data[0]
+                        creator_name = emp.get("full_name") or f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                
+                # Notify all admins
+                await notification_service.notify_admins_quote_created(quote, creator_name)
+            except Exception as e:
+                # Don't fail quote creation if notification fails
+                print(f"Error notifying admins about quote creation: {e}")
+            
             return Quote(**quote)
         
         raise HTTPException(
