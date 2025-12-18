@@ -46,6 +46,7 @@ interface Task {
   attachment_count?: number
   assignee_count?: number
   checklists?: TaskChecklist[]
+  parent_id?: string | null
   created_at: string
 }
 
@@ -95,6 +96,21 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const [quickTaskDescription, setQuickTaskDescription] = useState('')
   const [quickCreating, setQuickCreating] = useState(false)
   const [quickParentTaskId, setQuickParentTaskId] = useState<string | null>(null)
+  const [quickTaskFiles, setQuickTaskFiles] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  
+  // Checklist creation states
+  const [showCreateChecklist, setShowCreateChecklist] = useState(false)
+  const [newChecklistTitle, setNewChecklistTitle] = useState('')
+  const [creatingChecklist, setCreatingChecklist] = useState(false)
+  const [targetTaskId, setTargetTaskId] = useState<string | null>(null)
+  
+  // Checklist item creation states
+  const [showCreateChecklistItem, setShowCreateChecklistItem] = useState<string | null>(null)
+  const [checklistItemContent, setChecklistItemContent] = useState('')
+  const [checklistItemFiles, setChecklistItemFiles] = useState<File[]>([])
+  const [creatingChecklistItem, setCreatingChecklistItem] = useState<string | null>(null)
+  const checklistItemFileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     fetchUser()
@@ -487,6 +503,131 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
     setShowQuickCreate(true)
   }
 
+  const openCreateChecklist = (taskId: string) => {
+    setTargetTaskId(taskId)
+    setShowCreateChecklist(true)
+  }
+
+  const handleCreateChecklist = async () => {
+    if (!newChecklistTitle.trim() || !targetTaskId) {
+      alert('Vui lòng nhập tên việc cần làm')
+      return
+    }
+    try {
+      setCreatingChecklist(true)
+      const created = await apiPost(`/api/tasks/${targetTaskId}/checklists`, {
+        title: newChecklistTitle.trim()
+      })
+      if (created) {
+        // Update tasks state to include new checklist
+        setTasks(prev => prev.map(task => {
+          if (task.id === targetTaskId) {
+            return {
+              ...task,
+              checklists: [...(task.checklists || []), {
+                ...created,
+                items: []
+              }]
+            }
+          }
+          return task
+        }))
+      }
+      setNewChecklistTitle('')
+      setShowCreateChecklist(false)
+      setTargetTaskId(null)
+    } catch (err: any) {
+      console.error('Failed to create checklist:', err)
+      alert(err?.message || 'Không thể tạo việc cần làm')
+    } finally {
+      setCreatingChecklist(false)
+    }
+  }
+
+  const handleCreateChecklistItem = async (checklistId: string, taskId: string) => {
+    if (!checklistItemContent.trim() && checklistItemFiles.length === 0) {
+      alert('Vui lòng nhập nội dung hoặc chọn file')
+      return
+    }
+    try {
+      setCreatingChecklistItem(checklistId)
+      let fileUrls: string[] = []
+      
+      // Upload files if any
+      if (checklistItemFiles.length > 0) {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) {
+          throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
+        }
+
+        for (const file of checklistItemFiles) {
+          const formData = new FormData()
+          formData.append('file', file)
+
+          const response = await fetch(`/api/tasks/${taskId}/attachments`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+            throw new Error(errorData.detail || errorData.message || 'Không thể upload file')
+          }
+
+          const data = await response.json()
+          fileUrls.push(data.file_url || data.url)
+        }
+      }
+
+      // Create checklist item with file URLs appended to content
+      let itemContent = checklistItemContent.trim() || ''
+      if (fileUrls.length > 0) {
+        const fileUrlsText = fileUrls.join(' ')
+        itemContent = itemContent 
+          ? `${itemContent} [FILE_URLS: ${fileUrlsText}]`
+          : `📎 ${fileUrls.length} file(s) [FILE_URLS: ${fileUrlsText}]`
+      }
+
+      const newItem = await apiPost(`/api/tasks/checklists/${checklistId}/items`, {
+        content: itemContent
+      })
+      
+      // Update tasks state
+      setTasks(prev => prev.map(task => {
+        if (task.id === taskId) {
+          return {
+            ...task,
+            checklists: task.checklists?.map(checklist => {
+              if (checklist.id !== checklistId) return checklist
+              const updatedItems = [...(checklist.items || []), newItem]
+              return {
+                ...checklist,
+                items: updatedItems
+              }
+            }) || []
+          }
+        }
+        return task
+      }))
+
+      setChecklistItemContent('')
+      setChecklistItemFiles([])
+      setShowCreateChecklistItem(null)
+      if (checklistItemFileInputRef.current) {
+        checklistItemFileInputRef.current.value = ''
+      }
+    } catch (err: any) {
+      console.error('Failed to create checklist item:', err)
+      alert(err?.message || 'Không thể tạo việc cần làm nhỏ')
+    } finally {
+      setCreatingChecklistItem(null)
+    }
+  }
+
   const handleQuickCreateTask = async () => {
     if (!quickTaskTitle.trim()) {
       alert('Vui lòng nhập tiêu đề nhiệm vụ')
@@ -508,12 +649,50 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
       const created = await apiPost('/api/tasks', payload)
       if (created) {
         setTasks(prev => [created, ...prev])
+        
+        // Upload files if any
+        if (quickTaskFiles.length > 0 && created.id) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
+            if (!token) {
+              throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
+            }
+
+            await Promise.all(quickTaskFiles.map(async (file) => {
+              const formData = new FormData()
+              formData.append('file', file)
+
+              const response = await fetch(`/api/tasks/${created.id}/attachments`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                },
+                body: formData
+              })
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+                throw new Error(errorData.detail || errorData.message || 'Không thể upload file')
+              }
+
+              return await response.json()
+            }))
+          } catch (uploadError) {
+            console.error('File upload error:', uploadError)
+            alert(`Đã tạo nhiệm vụ nhưng không thể upload một số tài liệu: ${uploadError instanceof Error ? uploadError.message : 'Lỗi không xác định'}`)
+          }
+        }
       }
 
       setQuickTaskTitle('')
       setQuickTaskDescription('')
+      setQuickTaskFiles([])
       setQuickParentTaskId(null)
       setShowQuickCreate(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     } catch (err: any) {
       console.error('Failed to create task from project view', err)
       alert(err?.message || 'Không thể tạo nhiệm vụ')
@@ -728,7 +907,11 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
     )
   }
 
+  // Filter tasks: only show top-level tasks (no parent_id) and group subtasks with their parents
   const filteredTasks = tasks.filter(task => {
+    // Only show top-level tasks (no parent_id)
+    if (task.parent_id) return false
+    // Apply status filter
     if (statusFilter === 'all') return true
     return task.status === statusFilter
   })
@@ -768,7 +951,12 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                openQuickCreate()
+                // Create checklist for first task if available
+                if (filteredTasks.length > 0) {
+                  openCreateChecklist(filteredTasks[0].id)
+                } else {
+                  alert('Chưa có nhiệm vụ nào. Vui lòng tạo nhiệm vụ trước.')
+                }
               }}
               className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
             >
@@ -837,7 +1025,11 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                     setShowQuickCreate(false)
                     setQuickTaskTitle('')
                     setQuickTaskDescription('')
+                    setQuickTaskFiles([])
                     setQuickParentTaskId(null)
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = ''
+                    }
                   }}
                   className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full"
                 >
@@ -863,6 +1055,54 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Đính kèm file (tùy chọn)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || [])
+                        setQuickTaskFiles(prev => [...prev, ...files])
+                      }}
+                      className="hidden"
+                      id="quick-task-file-input"
+                    />
+                    <label
+                      htmlFor="quick-task-file-input"
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer text-gray-700"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                      <span>Chọn file</span>
+                    </label>
+                    {quickTaskFiles.length > 0 && (
+                      <div className="flex-1 flex items-center gap-2 flex-wrap">
+                        {quickTaskFiles.map((file, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs"
+                          >
+                            <File className="h-3 w-3" />
+                            <span className="max-w-[150px] truncate">{file.name}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setQuickTaskFiles(prev => prev.filter((_, i) => i !== idx))
+                              }}
+                              className="ml-1 text-blue-700 hover:text-blue-900"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
@@ -870,7 +1110,11 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                       setShowQuickCreate(false)
                       setQuickTaskTitle('')
                       setQuickTaskDescription('')
+                      setQuickTaskFiles([])
                       setQuickParentTaskId(null)
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = ''
+                      }
                     }}
                     className="px 3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
                   >
@@ -899,6 +1143,20 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
             </div>
           )}
 
+          {/* Add Task Button - Floating */}
+          {!showQuickCreate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openQuickCreate()
+              }}
+              className="flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 transition-all duration-200 p-4 hover:shadow-xl"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="font-medium">Tạo nhiệm vụ mới</span>
+            </button>
+          )}
+
           {filteredTasks.map((task) => {
             const statusInfo = statusConfig[task.status]
             const priorityInfo = priorityConfig[task.priority]
@@ -921,7 +1179,110 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityInfo.color}`}>
                         {priorityInfo.label}
                       </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openCreateChecklist(task.id)
+                        }}
+                        className="ml-auto flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                        title="Tạo nhiệm vụ lớn"
+                      >
+                        <Plus className="h-3 w-3" />
+                        <span>Tạo nhiệm vụ lớn</span>
+                      </button>
                     </div>
+                    
+                    {/* Create Checklist Form - Inside Task Card */}
+                    {showCreateChecklist && targetTaskId === task.id && (
+                      <div 
+                        className="mt-3 mb-3 p-3 bg-gray-50 rounded-lg border border-blue-200"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-900">
+                              Thêm việc cần làm lớn (Checklist)
+                            </h4>
+                            <p className="text-xs text-gray-500">
+                              Việc cần làm lớn sẽ được gắn với nhiệm vụ này
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setShowCreateChecklist(false)
+                              setNewChecklistTitle('')
+                              setTargetTaskId(null)
+                            }}
+                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <input
+                              type="text"
+                              value={newChecklistTitle}
+                              onChange={(e) => setNewChecklistTitle(e.target.value)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                              }}
+                              onFocus={(e) => {
+                                e.stopPropagation()
+                              }}
+                              placeholder="Tên việc cần làm lớn..."
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                              onKeyDown={(e) => {
+                                e.stopPropagation()
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  handleCreateChecklist()
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setShowCreateChecklist(false)
+                                setNewChecklistTitle('')
+                                setTargetTaskId(null)
+                              }}
+                              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCreateChecklist()
+                              }}
+                              disabled={creatingChecklist || !newChecklistTitle.trim()}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {creatingChecklist ? (
+                                <>
+                                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  <span>Đang tạo...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4" />
+                                  <span>Tạo việc cần làm</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {task.description && (
                       <p className="text-gray-600 mb-3 line-clamp-2">{task.description}</p>
                     )}
@@ -938,8 +1299,125 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                             <div key={checklist.id} className="bg-white border border-gray-200 rounded-lg p-4">
                               <div className="flex items-center justify-between mb-3">
                                 <span className="font-semibold text-gray-800 text-sm">{checklist.title}</span>
-                                <span className="text-xs text-gray-500">{Math.round(progress)}%</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-500">{Math.round(progress)}%</span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setShowCreateChecklistItem(checklist.id)
+                                      setChecklistItemContent('')
+                                      setChecklistItemFiles([])
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                                    title="Thêm việc cần làm nhỏ"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    <span>Thêm</span>
+                                  </button>
+                                </div>
                               </div>
+                              
+                              {/* Create Checklist Item Form */}
+                              {showCreateChecklistItem === checklist.id && (
+                                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-blue-200">
+                                  <div className="space-y-2">
+                                    <input
+                                      type="text"
+                                      value={checklistItemContent}
+                                      onChange={(e) => setChecklistItemContent(e.target.value)}
+                                      placeholder="Nhập nội dung việc cần làm nhỏ..."
+                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault()
+                                          handleCreateChecklistItem(checklist.id, task.id)
+                                        }
+                                      }}
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        ref={checklistItemFileInputRef}
+                                        type="file"
+                                        multiple
+                                        onChange={(e) => {
+                                          const files = Array.from(e.target.files || [])
+                                          setChecklistItemFiles(prev => [...prev, ...files])
+                                        }}
+                                        className="hidden"
+                                        id={`checklist-item-file-${checklist.id}`}
+                                      />
+                                      <label
+                                        htmlFor={`checklist-item-file-${checklist.id}`}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer text-gray-700"
+                                      >
+                                        <Paperclip className="h-3 w-3" />
+                                        <span>Chọn file</span>
+                                      </label>
+                                      {checklistItemFiles.length > 0 && (
+                                        <div className="flex-1 flex items-center gap-1 flex-wrap">
+                                          {checklistItemFiles.map((file, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs"
+                                            >
+                                              <File className="h-3 w-3" />
+                                              <span className="max-w-[100px] truncate">{file.name}</span>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  setChecklistItemFiles(prev => prev.filter((_, i) => i !== idx))
+                                                }}
+                                                className="ml-1 text-blue-700 hover:text-blue-900"
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setShowCreateChecklistItem(null)
+                                          setChecklistItemContent('')
+                                          setChecklistItemFiles([])
+                                          if (checklistItemFileInputRef.current) {
+                                            checklistItemFileInputRef.current.value = ''
+                                          }
+                                        }}
+                                        className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
+                                      >
+                                        Hủy
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleCreateChecklistItem(checklist.id, task.id)
+                                        }}
+                                        disabled={creatingChecklistItem === checklist.id || (!checklistItemContent.trim() && checklistItemFiles.length === 0)}
+                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {creatingChecklistItem === checklist.id ? (
+                                          <>
+                                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            <span>Đang tạo...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Plus className="h-3 w-3" />
+                                            <span>Tạo</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                               <div className="w-full h-1.5 bg-gray-100 rounded-full mb-4 overflow-hidden">
                                 <div 
                                   className="h-full bg-blue-500 transition-all duration-300" 

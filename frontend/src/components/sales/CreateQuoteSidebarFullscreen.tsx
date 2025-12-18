@@ -2809,9 +2809,15 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           : (displayFractionDigits != null
             ? new Intl.NumberFormat('vi-VN', { minimumFractionDigits: displayFractionDigits, maximumFractionDigits: displayFractionDigits }).format(value)
             : formatNumber(value)))
+      
+      // Truncate display to 15 characters for total_price field
+      const truncatedDisplay = field === 'total_price' && display.length > 15 
+        ? display.substring(0, 15) + '...' 
+        : display
+      
       return (
         <div
-          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text"
+          className={`w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text ${field === 'total_price' ? 'max-w-[15ch] truncate' : ''}`}
           onClick={() => setEditingCell({ index, field })}
           onFocus={(e) => {
             // Auto-open edit mode when focused via Tab
@@ -2840,7 +2846,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           tabIndex={tabIndex ?? 0}
           title={display}
         >
-          {display || (placeholder || '')}
+          {truncatedDisplay || (placeholder || '')}
         </div>
       )
     }
@@ -3502,7 +3508,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                           {visibleColumns.total_price && (
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex items-center justify-between w-full">
-                                <div className="flex flex-col items-end gap-1">
+                                <div className="flex flex-col items-end gap-1 max-w-[15ch]">
                                   <EditableNumberCell
                                     value={item.total_price}
                                     onChange={(v) => updateItem(index, 'total_price', Number(v || 0))}

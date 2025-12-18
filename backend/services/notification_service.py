@@ -219,6 +219,51 @@ class NotificationService:
         except Exception as e:
             print(f"Error creating quote approved manager notification: {e}")
             return False
+    
+    async def get_admin_user_ids(self) -> List[str]:
+        """Get list of admin user IDs (only active users)"""
+        try:
+            result = self.supabase.table("users")\
+                .select("id")\
+                .eq("role", "admin")\
+                .eq("is_active", True)\
+                .execute()
+            
+            if result.data:
+                return [user["id"] for user in result.data]
+            return []
+        except Exception as e:
+            print(f"Error getting admin user IDs: {e}")
+            return []
+    
+    async def notify_admins_quote_created(self, quote_data: Dict[str, Any], creator_name: str = None) -> Dict[str, Any]:
+        """Notify all admin users when a new quote is created"""
+        try:
+            admin_user_ids = await self.get_admin_user_ids()
+            
+            if not admin_user_ids:
+                print("No admin users found to notify")
+                return {"created": 0, "errors": ["No admin users found"]}
+            
+            quote_number = quote_data.get('quote_number', 'N/A')
+            total_amount = quote_data.get('total_amount', 0)
+            quote_id = quote_data.get('id')
+            
+            creator_text = f" bởi {creator_name}" if creator_name else ""
+            title = f"Báo giá mới: {quote_number}"
+            message = f"Báo giá {quote_number}{creator_text} đã được tạo với tổng giá trị {total_amount:,.0f} VND"
+            action_url = f"/sales/quotes/{quote_id}" if quote_id else None
+            
+            return await self.create_notifications_bulk(
+                title=title,
+                message=message,
+                user_ids=admin_user_ids,
+                action_url=action_url,
+                send_email=False  # Don't send email for quote creation notifications
+            )
+        except Exception as e:
+            print(f"Error notifying admins about quote creation: {e}")
+            return {"created": 0, "errors": [str(e)]}
 
 # Global notification service instance
 notification_service = NotificationService()

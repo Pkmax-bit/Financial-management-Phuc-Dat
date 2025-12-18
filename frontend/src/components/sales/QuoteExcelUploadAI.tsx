@@ -646,7 +646,7 @@ export default function QuoteExcelUploadAI({ onImportSuccess }: { onImportSucces
       alert('Lỗi khi thêm sản phẩm: ' + (error as Error).message)
     }
   }
-
+  
   // Helper: recalculate totals from items list
   const recalculateTotalsFromItems = (items: QuoteItem[], defaultTaxRate: number) => {
     const newSubtotal = items.reduce((sum, item) => sum + (item.thanh_tien || 0), 0)

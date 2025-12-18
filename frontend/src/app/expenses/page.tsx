@@ -64,7 +64,8 @@ function ExpensesPageContent() {
         }, 200)
       }
     }
-  }, [searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.toString()])
 
   // Reset modal flag after it opens to allow re-triggering
   useEffect(() => {
