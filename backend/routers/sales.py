@@ -881,16 +881,33 @@ async def create_invoice_from_quote(quote_id: str, quote: dict, approver_user_id
             raw_items_res = supabase.table("quote_items").select("*").eq("quote_id", quote_id).execute()
             if raw_items_res.data:
                 invoice_items = []
+                
+                # Collect all product_service_ids to validate
+                product_ids = [q_item.get("product_service_id") for q_item in raw_items_res.data if q_item.get("product_service_id")]
+                
+                # Get existing product IDs in one query
+                valid_product_ids = set()
+                if product_ids:
+                    products_res = supabase.table("products_services").select("id").in_("id", product_ids).execute()
+                    if products_res.data:
+                        valid_product_ids = {p.get("id") for p in products_res.data}
+                
                 for q_item in raw_items_res.data:
                     # Safely handle product_components
                     product_components = q_item.get("product_components")
                     if not product_components or not isinstance(product_components, list):
                         product_components = []
 
+                    # Validate product_service_id - set to None if product doesn't exist
+                    product_service_id = q_item.get("product_service_id")
+                    if product_service_id and product_service_id not in valid_product_ids:
+                        print(f"⚠️ Warning: Product {product_service_id} not found, setting to None for invoice item")
+                        product_service_id = None
+
                     inv_item = {
                         "id": str(uuid.uuid4()),
                         "invoice_id": invoice_id,
-                        "product_service_id": q_item.get("product_service_id"),
+                        "product_service_id": product_service_id,
                         "description": q_item.get("description", ""),
                         "quantity": q_item.get("quantity", 0),
                         "unit_price": q_item.get("unit_price", 0),
@@ -2251,8 +2268,7 @@ async def get_invoices(
         query = supabase.table("invoices").select("""
             *,
             customers!invoices_customer_id_fkey(id, name, email, phone, company),
-            projects!invoices_project_id_fkey(id, name, project_code),
-            invoice_items(*)
+            projects!invoices_project_id_fkey(id, name, project_code)
         """)
         
         # Filter by accessible projects if user is not admin/accountant
