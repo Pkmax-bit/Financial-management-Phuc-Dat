@@ -122,7 +122,7 @@ export default function QuoteDetailPage() {
 
   // Check if should open preview modal
   useEffect(() => {
-    const action = searchParams.get('action')
+    const action = searchParams?.get('action')
     if (action === 'preview' && quote && !showPreviewModal) {
       setShowPreviewModal(true)
     }

@@ -14,6 +14,25 @@ class QuoteStatus(str, Enum):
     REJECTED = "rejected"
     EXPIRED = "expired"
 
+class QuoteItem(BaseModel):
+    """Quote item model"""
+    id: str
+    quote_id: str
+    product_service_id: Optional[str] = None
+    description: str
+    quantity: float
+    unit_price: float
+    total_price: float
+    created_at: datetime
+    # Add other fields returned by DB if needed, but careful about required vs optional
+    name_product: Optional[str] = None
+    unit: Optional[str] = None
+    area: Optional[float] = None
+    volume: Optional[float] = None
+    height: Optional[float] = None
+    length: Optional[float] = None
+    depth: Optional[float] = None
+
 class Quote(BaseModel):
     """Quote model"""
     id: str
@@ -31,20 +50,9 @@ class Quote(BaseModel):
     notes: Optional[str] = None
     created_by: Optional[str] = None
     product_components: Optional[List[dict]] = None
-    quote_items: Optional[List[dict]] = None  # Chi tiết sản phẩm của báo giá
+    quote_items: Optional[List[QuoteItem]] = None
     created_at: datetime
     updated_at: datetime
-
-class QuoteItem(BaseModel):
-    """Quote item model"""
-    id: str
-    quote_id: str
-    product_service_id: Optional[str] = None
-    description: str
-    quantity: float
-    unit_price: float
-    total_price: float
-    created_at: datetime
 
 class QuoteCreate(BaseModel):
     """Quote creation model"""

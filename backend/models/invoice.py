@@ -61,6 +61,10 @@ class Invoice(BaseModel):
     reminder_count: int = 0
     created_at: datetime
     updated_at: datetime
+    # Related objects from joins
+    projects: Optional[dict] = None  # Project info from join
+    customers: Optional[dict] = None  # Customer info from join
+    invoice_items: Optional[List[dict]] = None  # Invoice items from join
 
 class InvoiceCreate(BaseModel):
     """Invoice creation model"""
