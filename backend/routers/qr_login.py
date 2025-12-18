@@ -311,11 +311,14 @@ async def complete_qr_login(
                 detail="QR code has expired"
             )
         
-        if session["status"] == "verified":
+        if session["status"] == "completed":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="QR code has already been used"
             )
+        
+        # Allow complete if status is "verified" (already verified, now completing)
+        # or "pending" (direct complete without verify step)
         
         # Get user - either from session (if web user created QR) or from mobile user (if anonymous QR)
         supabase = get_supabase_client()

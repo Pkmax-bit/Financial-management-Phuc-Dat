@@ -244,6 +244,16 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return current_user
 
+@router.get("/users/me", response_model=UserResponse)
+async def get_current_user_with_employee(
+    include_employee: bool = False,
+    current_user: User = Depends(get_current_user)
+):
+    """Get current user information (compatible with Android API)"""
+    # For now, just return current_user
+    # TODO: Add employee information if include_employee is True
+    return current_user
+
 @router.put("/me", response_model=UserResponse)
 async def update_current_user(
     user_update: UserUpdate,

@@ -169,11 +169,22 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             user_metadata = user_response.user.user_metadata or {}
             app_metadata = user_response.user.app_metadata or {}
             
+            # Determine role: check app_metadata first, then check email for admin test
+            default_role = UserRole.EMPLOYEE
+            if app_metadata.get("role"):
+                try:
+                    default_role = UserRole(app_metadata.get("role").lower())
+                except ValueError:
+                    pass
+            elif email.lower() == "admin@test.com":
+                # Admin test account should have admin role
+                default_role = UserRole.ADMIN
+            
             user_data = {
                 "id": user_id,
                 "email": email,
                 "full_name": user_metadata.get("full_name", email.split("@")[0]),
-                "role": app_metadata.get("role", UserRole.EMPLOYEE),  # default role
+                "role": default_role,
                 "is_active": True,
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
@@ -205,6 +216,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                     )
         else:
             user_data = result.data[0]
+            # Fix role for admin test account if it's wrong
+            if email.lower() == "admin@test.com":
+                current_role = user_data.get("role")
+                if current_role != "admin" and current_role != UserRole.ADMIN:
+                    # Update role to admin for admin test account
+                    try:
+                        supabase.table("users").update({
+                            "role": UserRole.ADMIN.value,
+                            "updated_at": datetime.utcnow().isoformat()
+                        }).eq("id", user_id).execute()
+                        user_data["role"] = UserRole.ADMIN.value
+                    except Exception as update_error:
+                        print(f"[AUTH] Warning: Failed to update role for admin test: {str(update_error)}")
         
         # Check if user is active
         if not user_data.get("is_active", True):
