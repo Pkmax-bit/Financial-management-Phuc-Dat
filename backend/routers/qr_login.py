@@ -329,18 +329,31 @@ async def complete_qr_login(
             if user_result.data:
                 user = user_result.data[0]
         elif current_user:
-            # QR was created anonymously, use mobile user's info
+            # QR was created anonymously, use mobile user's info from authentication
             user_id_to_use = current_user.id
+            user_email = current_user.email
+            
+            # Get user from database to ensure it exists
             user_result = supabase.table("users").select("*").eq("id", user_id_to_use).execute()
             if user_result.data:
                 user = user_result.data[0]
-                # Update session with mobile user info
-                update_qr_session(
-                    request.session_id, 
-                    "verified",
-                    user_id=current_user.id,
-                    user_email=current_user.email
-                )
+            else:
+                # If user doesn't exist in database, create from auth user info
+                user = {
+                    "id": user_id_to_use,
+                    "email": user_email,
+                    "full_name": getattr(current_user, 'full_name', user_email.split("@")[0]),
+                    "role": getattr(current_user, 'role', 'employee'),
+                    "is_active": True
+                }
+            
+            # Update session with mobile user info from authentication
+            update_qr_session(
+                request.session_id, 
+                "verified",
+                user_id=user_id_to_use,
+                user_email=user_email
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -353,21 +366,17 @@ async def complete_qr_login(
                 detail="User not found"
             )
         
-        # Get Supabase auth user to create a proper session
-        auth_user = supabase.auth.admin.get_user_by_id(user_id_to_use)
-        if not auth_user or not auth_user.user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Auth user not found"
-            )
-        
         # Generate a Supabase-compatible JWT token
+        # We don't need to call admin API since we already have user from database
         # This token will be accepted by Supabase auth
         import jwt
         from datetime import timedelta
         
-        # Get user email - handle both dict and object
-        if isinstance(user, dict):
+        # Get user email - prioritize from authentication user if available
+        if current_user:
+            # Use email from authenticated user (Supabase auth)
+            user_email = current_user.email
+        elif isinstance(user, dict):
             user_email = user.get("email")
         else:
             user_email = getattr(user, 'email', None)
@@ -377,6 +386,10 @@ async def complete_qr_login(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User email not found"
             )
+        
+        # Ensure user_id_to_use is from authentication if available
+        if current_user:
+            user_id_to_use = current_user.id
         
         # Create a token that Supabase will accept
         # Using the same format as Supabase auth tokens
