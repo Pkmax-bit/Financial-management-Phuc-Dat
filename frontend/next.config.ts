@@ -51,10 +51,20 @@ const nextConfig: NextConfig = {
     
     // Server-side: handle pdfjs-dist and other Node.js modules
     if (isServer) {
-      // Ensure pdfjs-dist is properly handled
-      // It should be bundled, not externalized
-      if (!config.externals) {
-        config.externals = []
+      // Externalize pdfjs-dist to avoid bundling issues
+      // It will be loaded at runtime via require()
+      if (Array.isArray(config.externals)) {
+        config.externals.push('pdfjs-dist', 'pdfjs-dist/legacy/build/pdf.js', 'pdfjs-dist/build/pdf.js')
+      } else if (typeof config.externals === 'function') {
+        const originalExternals = config.externals
+        config.externals = (context, request, callback) => {
+          if (request && (request.includes('pdfjs-dist'))) {
+            return callback(null, `commonjs ${request}`)
+          }
+          return originalExternals(context, request, callback)
+        }
+      } else {
+        config.externals = ['pdfjs-dist', 'pdfjs-dist/legacy/build/pdf.js', 'pdfjs-dist/build/pdf.js']
       }
     }
     

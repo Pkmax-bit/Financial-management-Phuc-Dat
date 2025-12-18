@@ -188,10 +188,11 @@ async def health_check():
     }
 
 # Import routers
-from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks, products, product_categories, chat
+from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks, products, product_categories, chat, app_updates, qr_login
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(qr_login.router, prefix="/api/auth", tags=["QR Login"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(employees.router, prefix="/api/employees", tags=["Employees"])
 app.include_router(employee_excel.router, prefix="/api/employee-excel", tags=["Employee Excel"])
@@ -235,6 +236,7 @@ app.include_router(material_adjustment_rules.router, prefix="/api/material-adjus
 app.include_router(file_upload.router, tags=["File Upload"])
 app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
 app.include_router(chat.router, tags=["Internal Chat"])
+app.include_router(app_updates.router, prefix="/api/app-updates", tags=["App Updates"])
 
 if __name__ == "__main__":
     uvicorn.run(
