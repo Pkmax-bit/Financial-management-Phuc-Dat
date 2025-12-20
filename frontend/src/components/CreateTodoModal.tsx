@@ -1,26 +1,29 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Calendar, User, Clock } from 'lucide-react'
+import { X, Calendar, User, Clock, Shield } from 'lucide-react'
 import { apiPost, apiPut } from '@/lib/api'
 import { Task } from '@/types/task'
 
 interface CreateTodoModalProps {
     parentTaskId: string
     groupId?: string
+    projectId?: string
     onClose: () => void
     onSuccess: (newSubTask?: Task) => void
     groupMembers: Array<{ employee_id: string; employee_name?: string; employee_email?: string }>
     initialData?: Task | null
 }
 
-export default function CreateTodoModal({ parentTaskId, groupId, onClose, onSuccess, groupMembers, initialData }: CreateTodoModalProps) {
+export default function CreateTodoModal({ parentTaskId, groupId, projectId, onClose, onSuccess, groupMembers, initialData }: CreateTodoModalProps) {
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
     const [dueDate, setDueDate] = useState('')
     const [assigneeId, setAssigneeId] = useState('')
+    const [accountablePersonId, setAccountablePersonId] = useState('')
     const [estimatedTime, setEstimatedTime] = useState<number | undefined>(undefined)
     const [loading, setLoading] = useState(false)
+    const [projectTeamMembers, setProjectTeamMembers] = useState<Array<{id: string, name: string, email?: string, responsibility_type?: string}>>([])
 
     useEffect(() => {
         if (initialData) {
@@ -28,15 +31,63 @@ export default function CreateTodoModal({ parentTaskId, groupId, onClose, onSucc
             setDescription(initialData.description || '')
             setDueDate(initialData.due_date ? new Date(initialData.due_date).toISOString().slice(0, 16) : '')
             setAssigneeId(initialData.assigned_to || '')
+            setAccountablePersonId((initialData as any).accountable_person || '')
             setEstimatedTime(initialData.estimated_time)
         } else {
             setTitle('')
             setDescription('')
             setDueDate('')
             setAssigneeId('')
+            setAccountablePersonId('')
             setEstimatedTime(undefined)
         }
     }, [initialData])
+
+    // Fetch project team members
+    useEffect(() => {
+        if (projectId) {
+            fetchProjectTeamMembers()
+        }
+    }, [projectId])
+
+    const fetchProjectTeamMembers = async () => {
+        try {
+            const response = await apiPost('/api/project-team/search', { project_id: projectId })
+            const members = response?.members || []
+            setProjectTeamMembers(members.map((m: any) => ({
+                id: m.user_id || m.id,
+                name: m.name,
+                email: m.email,
+                responsibility_type: m.responsibility_type
+            })))
+        } catch (error) {
+            console.error('Failed to fetch project team members:', error)
+            setProjectTeamMembers([])
+        }
+    }
+
+    const createTaskNotification = async (task: Task, userId: string, role: string) => {
+        try {
+            const notificationPayload = {
+                user_id: userId,
+                type: 'task_assigned',
+                title: `Bạn được giao nhiệm vụ: ${task.title}`,
+                message: `Bạn được ${role === 'accountable' ? 'chịu trách nhiệm' : 'phân công'} cho nhiệm vụ "${task.title}"`,
+                data: {
+                    task_id: task.id,
+                    project_id: projectId,
+                    role: role
+                },
+                priority: 'medium',
+                expires_at: task.due_date ? new Date(task.due_date).toISOString() : null
+            }
+
+            await apiPost('/api/notifications', notificationPayload)
+        } catch (error) {
+            console.error('Failed to create task notification:', error)
+            // Don't block task creation if notification fails
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -49,6 +100,7 @@ export default function CreateTodoModal({ parentTaskId, groupId, onClose, onSucc
                 description: description.trim() || null,
                 due_date: dueDate ? new Date(dueDate).toISOString() : null,
                 assigned_to: assigneeId || null,
+                accountable_person: accountablePersonId || null,
                 estimated_time: estimatedTime,
                 parent_id: parentTaskId,
                 group_id: groupId,
@@ -63,6 +115,16 @@ export default function CreateTodoModal({ parentTaskId, groupId, onClose, onSucc
             } else {
                 // Create new task
                 result = await apiPost('/api/tasks', payload)
+            }
+
+            // Create notification for accountable person if assigned
+            if (accountablePersonId && !initialData) {
+                await createTaskNotification(result, accountablePersonId, 'accountable')
+            }
+
+            // Create notification for assigned person if assigned
+            if (assigneeId && !initialData) {
+                await createTaskNotification(result, assigneeId, 'assigned')
             }
 
             onSuccess(result)
@@ -154,6 +216,26 @@ export default function CreateTodoModal({ parentTaskId, groupId, onClose, onSucc
                             ))}
                         </select>
                     </div>
+
+                    {projectId && projectTeamMembers.length > 0 && (
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                                <Shield className="h-3.5 w-3.5" /> Người chịu trách nhiệm
+                            </label>
+                            <select
+                                value={accountablePersonId}
+                                onChange={e => setAccountablePersonId(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-black text-sm"
+                            >
+                                <option value="">-- Chọn người chịu trách nhiệm --</option>
+                                {projectTeamMembers.map(member => (
+                                    <option key={member.id} value={member.id}>
+                                        {member.name} {member.responsibility_type ? `(${member.responsibility_type})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     <div className="pt-4 flex justify-end gap-3 border-t border-gray-100 mt-2">
                         <button

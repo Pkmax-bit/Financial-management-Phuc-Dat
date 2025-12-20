@@ -30,6 +30,7 @@ import {
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { TaskChecklist, TaskChecklistItem, TaskComment } from '@/types/task'
 import { supabase } from '@/lib/supabase'
+import CreateTodoModal from '@/components/CreateTodoModal'
 
 interface Task {
   id: string
@@ -111,6 +112,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const [checklistItemFiles, setChecklistItemFiles] = useState<File[]>([])
   const [creatingChecklistItem, setCreatingChecklistItem] = useState<string | null>(null)
   const checklistItemFileInputRef = useRef<HTMLInputElement | null>(null)
+  const [showCreateTodoModal, setShowCreateTodoModal] = useState(false)
 
   useEffect(() => {
     fetchUser()
@@ -951,17 +953,12 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                // Create checklist for first task if available
-                if (filteredTasks.length > 0) {
-                  openCreateChecklist(filteredTasks[0].id)
-                } else {
-                  alert('Chưa có nhiệm vụ nào. Vui lòng tạo nhiệm vụ trước.')
-                }
+                setShowCreateTodoModal(true)
               }}
               className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
             >
               <Plus className="h-4 w-4" />
-              <span className="text-sm font-medium">Thêm nhiệm vụ</span>
+              <span className="text-sm font-medium">Thêm việc cần làm</span>
             </button>
             <button
               onClick={() => router.push(`/tasks?project_id=${projectId}`)}
@@ -2127,6 +2124,21 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           </div>
         </div>
       </div>
+
+      {/* Create Todo Modal */}
+      {showCreateTodoModal && (
+        <CreateTodoModal
+          parentTaskId=""
+          projectId={projectId}
+          onClose={() => setShowCreateTodoModal(false)}
+          onSuccess={(newTask) => {
+            setShowCreateTodoModal(false)
+            // Refresh tasks after creating new task
+            fetchTasks()
+          }}
+          groupMembers={[]}
+        />
+      )}
     </div>
   )
 }

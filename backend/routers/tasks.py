@@ -10,6 +10,7 @@ import uuid
 import re
 import logging
 import unicodedata
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,37 @@ from services.file_upload_service import get_file_upload_service
 from services.task_cleanup_service import task_cleanup_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+@router.post("/run-migration")
+async def run_accountable_person_migration(current_user: User = Depends(require_manager_or_admin)):
+    """Run migration to add accountable_person column to tasks table"""
+    try:
+        supabase = get_supabase_client()
+
+        # SQL to add accountable_person column
+        sql = """
+        ALTER TABLE tasks
+        ADD COLUMN IF NOT EXISTS accountable_person UUID REFERENCES employees(id) ON DELETE SET NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_tasks_accountable_person ON tasks(accountable_person);
+
+        COMMENT ON COLUMN tasks.accountable_person IS 'Employee responsible for overseeing task completion';
+        """
+
+        # Execute SQL directly (this might not work with Supabase, but let's try)
+        # For Supabase, we might need to run this manually in the dashboard
+        # For now, return the SQL that needs to be executed
+
+        return {
+            "message": "Migration SQL prepared. Please execute this SQL in Supabase dashboard:",
+            "sql": sql.strip()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to prepare migration: {str(e)}"
+        )
 
 
 def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -973,6 +1005,7 @@ async def create_task(
             "group_id": task_data.group_id,
             "created_by": current_user.id,
             "assigned_to": task_data.assigned_to,
+            "accountable_person": task_data.accountable_person,
             "project_id": task_data.project_id,
             "estimated_time": task_data.estimated_time or 0,
             "time_spent": 0,
@@ -1358,6 +1391,8 @@ async def update_task(
             update_data["group_id"] = task_data.group_id
         if task_data.assigned_to is not None:
             update_data["assigned_to"] = task_data.assigned_to
+        if task_data.accountable_person is not None:
+            update_data["accountable_person"] = task_data.accountable_person
         if task_data.project_id is not None:
             update_data["project_id"] = task_data.project_id
         if task_data.estimated_time is not None:

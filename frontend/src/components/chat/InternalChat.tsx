@@ -395,7 +395,8 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     } else {
       loadConversations()
     }
-  }, [searchParams, handleSelectConversationById, loadConversations, currentUserId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams?.get('conversation'), handleSelectConversationById, loadConversations, currentUserId])
 
   // Load employees when switching to employees tab or when no conversations
   useEffect(() => {

@@ -740,7 +740,7 @@ function SalesPageWithParams() {
       setActiveTab(tab)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.toString()])
+  }, [searchParams?.get('tab')])
 
   return <SalesPageContent activeTab={activeTab} setActiveTab={setActiveTab} />
 }

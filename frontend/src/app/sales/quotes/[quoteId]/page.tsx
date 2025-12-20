@@ -127,7 +127,7 @@ export default function QuoteDetailPage() {
       setShowPreviewModal(true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.toString(), quote, showPreviewModal])
+  }, [searchParams?.get('action'), quote, showPreviewModal])
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0)
   const formatDate = (d?: string) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')

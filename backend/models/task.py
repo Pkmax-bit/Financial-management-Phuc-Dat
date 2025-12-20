@@ -96,6 +96,7 @@ class Task(BaseModel):
     group_id: Optional[str] = None
     created_by: Optional[str] = None
     assigned_to: Optional[str] = None
+    accountable_person: Optional[str] = None
     project_id: Optional[str] = None
     completed_at: Optional[datetime] = None
     completed_by: Optional[str] = None
@@ -123,6 +124,7 @@ class TaskCreate(BaseModel):
     due_date: Optional[datetime] = None
     group_id: Optional[str] = None
     assigned_to: Optional[str] = None
+    accountable_person: Optional[str] = None
     project_id: Optional[str] = None
     assignee_ids: Optional[List[str]] = []  # Multiple assignees
     estimated_time: Optional[int] = 0
@@ -138,6 +140,7 @@ class TaskUpdate(BaseModel):
     due_date: Optional[datetime] = None
     group_id: Optional[str] = None
     assigned_to: Optional[str] = None
+    accountable_person: Optional[str] = None
     project_id: Optional[str] = None
     estimated_time: Optional[int] = None
 

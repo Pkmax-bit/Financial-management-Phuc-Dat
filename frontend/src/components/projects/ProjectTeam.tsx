@@ -20,6 +20,7 @@ interface TeamMember {
   id: string
   name: string
   role: string
+  responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed'
   email?: string
   phone?: string
   start_date: string
@@ -39,6 +40,47 @@ interface ProjectTeamProps {
   };
 }
 
+// RACI Matrix - Responsibility Assignment Matrix
+const RESPONSIBILITY_TYPES = {
+  accountable: {
+    label: 'Người chịu trách nhiệm',
+    description: 'Người cuối cùng chịu trách nhiệm về kết quả',
+    icon: '👑',
+    color: 'bg-red-500',
+    bgColor: 'bg-red-50',
+    textColor: 'text-red-700',
+    borderColor: 'border-red-200'
+  },
+  responsible: {
+    label: 'Người thực hiện',
+    description: 'Người trực tiếp thực hiện công việc',
+    icon: '🔧',
+    color: 'bg-blue-500',
+    bgColor: 'bg-blue-50',
+    textColor: 'text-blue-700',
+    borderColor: 'border-blue-200'
+  },
+  consulted: {
+    label: 'Người tư vấn',
+    description: 'Người được tham khảo ý kiến',
+    icon: '💬',
+    color: 'bg-yellow-500',
+    bgColor: 'bg-yellow-50',
+    textColor: 'text-yellow-700',
+    borderColor: 'border-yellow-200'
+  },
+  informed: {
+    label: 'Người quan sát',
+    description: 'Người được thông báo về tiến độ',
+    icon: '👁️',
+    color: 'bg-gray-500',
+    bgColor: 'bg-gray-50',
+    textColor: 'text-gray-700',
+    borderColor: 'border-gray-200'
+  }
+};
+
+// Legacy role config for backward compatibility
 const roleConfig = {
   'project_manager': {
     label: 'Quản lý dự án',
@@ -266,9 +308,21 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
         ) : (
           <div className="divide-y">
             {teamMembers.map((member) => {
-              const roleInfo = roleConfig[member.role as keyof typeof roleConfig] || roleConfig.other
+              // Priority: responsibility_type > role
+              const hasResponsibilityType = !!member.responsibility_type
+              const responsibilityInfo = member.responsibility_type
+                ? RESPONSIBILITY_TYPES[member.responsibility_type as keyof typeof RESPONSIBILITY_TYPES]
+                : null
+              const roleInfo = hasResponsibilityType
+                ? null
+                : (roleConfig[member.role as keyof typeof roleConfig] || roleConfig.other)
               const statusInfo = statusConfig[member.status]
-              const RoleIcon = roleInfo.icon
+              
+              // Handle icon rendering - responsibility types use emoji strings, role config uses React components
+              const isResponsibilityType = hasResponsibilityType && responsibilityInfo
+              const iconDisplay = isResponsibilityType 
+                ? <span className="text-base">{responsibilityInfo.icon}</span>
+                : roleInfo && <roleInfo.icon className="h-4 w-4" />
 
               return (
                 <div key={member.id} className="p-6 hover:bg-gray-50 transition-colors">
@@ -297,13 +351,23 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
                             {statusInfo.label}
                           </span>
+                          {/* Responsibility Type Badge */}
+                          {hasResponsibilityType && responsibilityInfo && (
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${responsibilityInfo.bgColor} ${responsibilityInfo.textColor} border ${responsibilityInfo.borderColor}`}>
+                              <span className="mr-1">{responsibilityInfo.icon}</span>
+                              {responsibilityInfo.label}
+                            </span>
+                          )}
                         </div>
                         
                         <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <div className="flex items-center gap-1">
-                            <RoleIcon className="h-4 w-4" />
-                            <span>{roleInfo.label}</span>
-                          </div>
+                          {/* Show role if no responsibility type, or show both */}
+                          {!hasResponsibilityType && roleInfo && (
+                            <div className="flex items-center gap-1">
+                              {iconDisplay}
+                              <span>{roleInfo.label}</span>
+                            </div>
+                          )}
                           
                           {member.email && (
                             <div className="flex items-center gap-1">

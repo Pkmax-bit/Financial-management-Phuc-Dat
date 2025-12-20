@@ -100,11 +100,13 @@ export default function ProjectsPage() {
   // Fetch customer name by ID
   const fetchCustomerName = async (id: string) => {
     try {
-      const response = await fetch(`/api/customers/${id}`)
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/customers/${id}`)
       if (response.ok) {
         const customer = await response.json()
         setCustomerName(customer.name || 'Khách hàng')
       } else {
+        console.warn('Failed to fetch customer name:', response.status, response.statusText)
         setCustomerName('Khách hàng')
       }
     } catch (error) {

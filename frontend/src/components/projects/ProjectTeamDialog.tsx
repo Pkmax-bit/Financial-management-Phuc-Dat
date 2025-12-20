@@ -36,18 +36,48 @@ interface ProjectTeamDialogProps {
   };
 }
 
-const ROLES = [
-  'Người phụ trách',
-  'Người tạo',
-  'Thành viên dự án',
-  'Giám sát',
-  'Lắp đặt',
-  'Vận chuyển',
-  'Xưởng',
-  'Kỹ thuật',
-  'Thiết kế',
-  'Quản lý dự án'
-];
+// RACI Matrix - Responsibility Assignment Matrix
+const RESPONSIBILITY_TYPES = {
+  accountable: {
+    label: 'Người chịu trách nhiệm',
+    description: 'Người cuối cùng chịu trách nhiệm về kết quả',
+    icon: '👑',
+    color: 'bg-red-500',
+    bgColor: 'bg-red-50',
+    textColor: 'text-red-700',
+    borderColor: 'border-red-200'
+  },
+  responsible: {
+    label: 'Người thực hiện',
+    description: 'Người trực tiếp thực hiện công việc',
+    icon: '🔧',
+    color: 'bg-blue-500',
+    bgColor: 'bg-blue-50',
+    textColor: 'text-blue-700',
+    borderColor: 'border-blue-200'
+  },
+  consulted: {
+    label: 'Người tư vấn',
+    description: 'Người được tham khảo ý kiến',
+    icon: '💬',
+    color: 'bg-yellow-500',
+    bgColor: 'bg-yellow-50',
+    textColor: 'text-yellow-700',
+    borderColor: 'border-yellow-200'
+  },
+  informed: {
+    label: 'Người quan sát',
+    description: 'Người được thông báo về tiến độ',
+    icon: '👁️',
+    color: 'bg-gray-500',
+    bgColor: 'bg-gray-50',
+    textColor: 'text-gray-700',
+    borderColor: 'border-gray-200'
+  }
+};
+
+// Define order to show 'informed' (observer) first as default
+const RESPONSIBILITY_KEYS: (keyof typeof RESPONSIBILITY_TYPES)[] = ['informed', 'accountable', 'responsible', 'consulted'];
 
 export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
   open,
@@ -59,7 +89,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
 }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
-  const [employeeRoles, setEmployeeRoles] = useState<{[key: string]: string}>({});
+  const [employeeResponsibilities, setEmployeeResponsibilities] = useState<{[key: string]: keyof typeof RESPONSIBILITY_TYPES}>({});
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -81,9 +111,10 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           user_id: currentUser.id
         };
         setSelectedEmployees([currentUserEmployee]);
-        setEmployeeRoles(prev => ({
+        // Admin can choose any role including 'informed' (observer)
+        setEmployeeResponsibilities(prev => ({
           ...prev,
-          [currentUserEmployee.id]: 'Quản lý dự án'
+          [currentUserEmployee.id]: 'informed' // Default to observer, admin can change
         }));
       }
     }
@@ -385,17 +416,28 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
     setSelectedEmployees(prev => {
       const isSelected = prev.some(e => e.id === employee.id);
       if (isSelected) {
+        // Remove employee
+        setEmployeeResponsibilities(prevResponsibilities => {
+          const newResponsibilities = { ...prevResponsibilities };
+          delete newResponsibilities[employee.id];
+          return newResponsibilities;
+        });
         return prev.filter(e => e.id !== employee.id);
       } else {
+        // Add employee and set default responsibility to 'informed' for ALL users
+        setEmployeeResponsibilities(prev => ({
+          ...prev,
+          [employee.id]: 'informed'
+        }));
         return [...prev, employee];
       }
     });
   };
 
-  const handleEmployeeRoleChange = (employeeId: string, role: string) => {
-    setEmployeeRoles(prev => ({
+  const handleEmployeeResponsibilityChange = (employeeId: string, responsibility: keyof typeof RESPONSIBILITY_TYPES) => {
+    setEmployeeResponsibilities(prev => ({
       ...prev,
-      [employeeId]: role
+      [employeeId]: responsibility
     }));
   };
 
@@ -430,6 +472,90 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
       return null;
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  const syncTeamMembersWithTasks = async (newTeamMembers: any[]) => {
+    try {
+      // Get all tasks for this project
+      const { data: projectTasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('id, title, status, priority, assigned_to')
+        .eq('project_id', projectId);
+
+      if (tasksError) {
+        console.error('Error fetching project tasks:', tasksError);
+        return;
+      }
+
+      // For each new team member, add them to appropriate tasks based on responsibility type
+      for (const teamMember of newTeamMembers) {
+        // Skip if no user_id (cannot assign to tasks without user account)
+        if (!teamMember.user_id) {
+          console.log(`Skipping task assignment for ${teamMember.name} - no user_id`);
+          continue;
+        }
+
+        const responsibilityType = teamMember.responsibility_type;
+
+        if (responsibilityType === 'accountable') {
+          // Accountable: Add to all tasks as observer
+          await addMemberToTasks(teamMember, projectTasks || [], 'observer');
+        } else if (responsibilityType === 'responsible') {
+          // Responsible: Add to tasks that need implementation
+          const relevantTasks = (projectTasks || []).filter(task =>
+            task.status === 'todo' || task.status === 'in_progress'
+          );
+          await addMemberToTasks(teamMember, relevantTasks, 'assignee');
+        } else if (responsibilityType === 'consulted') {
+          // Consulted: Add to tasks that need consultation
+          const relevantTasks = (projectTasks || []).filter(task =>
+            task.priority === 'high' || task.priority === 'urgent'
+          );
+          await addMemberToTasks(teamMember, relevantTasks, 'consultant');
+        } else if (responsibilityType === 'informed') {
+          // Informed: Add to all tasks as observer
+          await addMemberToTasks(teamMember, projectTasks || [], 'observer');
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing team members with tasks:', error);
+    }
+  };
+
+  const addMemberToTasks = async (teamMember: any, tasks: any[], role: string) => {
+    for (const task of tasks) {
+      try {
+        // Check if member is already a participant in this task with this role
+        const { data: existingParticipant, error: checkError } = await supabase
+          .from('task_participants')
+          .select('id')
+          .eq('task_id', task.id)
+          .eq('employee_id', teamMember.user_id)
+          .eq('role', role)
+          .single();
+
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error(`Error checking existing participant for task ${task.id}:`, checkError);
+          continue;
+        }
+
+        if (!existingParticipant) {
+          // Add member to task as participant
+          const { data: { session } } = await supabase.auth.getSession();
+          await supabase
+            .from('task_participants')
+            .insert({
+              task_id: task.id,
+              employee_id: teamMember.user_id,
+              role: role,
+              added_by: session?.user?.id,
+              created_at: new Date().toISOString()
+            });
+        }
+      } catch (error) {
+        console.error(`Error adding member to task ${task.id}:`, error);
+      }
     }
   };
 
@@ -468,17 +594,23 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           }
           return true;
         })
-        .map(employee => ({
-          project_id: projectId,
-          name: employee.name,
-          email: employee.email,
-          role: employeeRoles[employee.id] || 'Chưa phân công',
-          start_date: startDate,
-          user_id: employee.user_id,
-          status: 'active',
-          phone: employee.phone,
-          avatar: employee.avatar_url
-        }));
+        .map(employee => {
+          const responsibilityKey = employeeResponsibilities[employee.id] || 'informed';
+          const responsibility = RESPONSIBILITY_TYPES[responsibilityKey];
+
+          return {
+            project_id: projectId,
+            name: employee.name,
+            email: employee.email,
+            role: responsibility.label,
+            responsibility_type: responsibilityKey,
+            start_date: startDate,
+            user_id: employee.user_id,
+            status: 'active',
+            phone: employee.phone,
+            avatar: employee.avatar_url
+          };
+        });
 
       // Nếu không có thành viên nào để thêm
       if (membersToAdd.length === 0) {
@@ -492,7 +624,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
       }
 
       // Upload avatar nếu có (chỉ upload một lần cho tất cả thành viên)
-      let avatarUrl = null;
+      let avatarUrl: string | null = null;
       if (selectedAvatar) {
         avatarUrl = await handleAvatarUpload(selectedAvatar);
         if (!avatarUrl) {
@@ -501,7 +633,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
         }
         // Áp dụng avatar cho tất cả thành viên
         membersToAdd.forEach(member => {
-          member.avatar = avatarUrl;
+          member.avatar = avatarUrl ?? undefined;
         });
       }
 
@@ -523,17 +655,38 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
         alert(`✅ Đã thêm ${addedCount} thành viên thành công.`);
       }
       
+      // Sync team members with project tasks
+      await syncTeamMembersWithTasks(membersToAdd);
+
       onSuccess();
       handleClose();
     } catch (error) {
       console.error('Error adding team members:', error);
-      alert('Lỗi khi thêm thành viên: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      console.error('Error details:', {
+        message: (error as any)?.message,
+        details: (error as any)?.details,
+        hint: (error as any)?.hint,
+        code: (error as any)?.code
+      });
+
+      // Try to provide more specific error message
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const err = error as any;
+        if (err.message) errorMessage = err.message;
+        if (err.details) errorMessage += ` - ${err.details}`;
+        if (err.hint) errorMessage += ` (Hint: ${err.hint})`;
+      }
+
+      alert('Lỗi khi thêm thành viên: ' + errorMessage);
     }
   };
 
   const handleClose = () => {
     setSelectedEmployees([]);
-    setEmployeeRoles({});
+    setEmployeeResponsibilities({});
     setStartDate(new Date().toISOString().split('T')[0]);
     setSearchTerm('');
     setSelectedDepartment('all');
@@ -866,18 +1019,37 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
                         </span>
                       )}
                     </label>
-                    <select
-                      value={employeeRoles[employee.id] || ''}
-                      onChange={(e) => handleEmployeeRoleChange(employee.id, e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-black font-medium"
-                    >
-                      <option value="" className="text-black font-medium">Chọn vai trò</option>
-                      {ROLES.map((role) => (
-                        <option key={role} value={role} className="text-black font-medium">
-                          {role}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      {RESPONSIBILITY_KEYS.map((responsibilityKey) => {
+                        const responsibility = RESPONSIBILITY_TYPES[responsibilityKey];
+                        const isSelected = employeeResponsibilities[employee.id] === responsibilityKey;
+
+                        return (
+                          <button
+                            key={responsibilityKey}
+                            type="button"
+                            onClick={() => handleEmployeeResponsibilityChange(employee.id, responsibilityKey)}
+                            className={`p-3 rounded-lg border-2 transition-all duration-200 text-left font-medium ${
+                              isSelected
+                                ? `${responsibility.bgColor} ${responsibility.borderColor} shadow-md ring-2 ring-opacity-50 ${responsibility.borderColor.replace('border-', 'ring-')}`
+                                : 'border-gray-200 hover:border-gray-300 bg-gray-50 hover:bg-gray-100 hover:shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{responsibility.icon}</span>
+                              <div>
+                                <div className={`font-medium ${isSelected ? responsibility.textColor : 'text-gray-900'}`}>
+                                  {responsibility.label}
+                                </div>
+                                <div className={`text-xs ${isSelected ? responsibility.textColor : 'text-gray-500'}`}>
+                                  {responsibility.description}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -974,4 +1146,5 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
     </div>
   );
 };
+
 

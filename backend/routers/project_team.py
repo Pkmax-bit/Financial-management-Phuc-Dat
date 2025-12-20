@@ -18,6 +18,7 @@ class TeamMember(BaseModel):
     project_id: str
     name: str
     role: str
+    responsibility_type: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     start_date: str
@@ -31,6 +32,7 @@ class TeamMember(BaseModel):
 class TeamMemberCreate(BaseModel):
     name: str
     role: str
+    responsibility_type: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     start_date: str
@@ -43,6 +45,7 @@ class TeamMemberCreate(BaseModel):
 class TeamMemberUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
+    responsibility_type: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     start_date: Optional[str] = None
