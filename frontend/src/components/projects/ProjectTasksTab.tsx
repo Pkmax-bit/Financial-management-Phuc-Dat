@@ -32,6 +32,9 @@ import { TaskChecklist, TaskChecklistItem, TaskComment } from '@/types/task'
 import { supabase } from '@/lib/supabase'
 import CreateTodoModal from '@/components/CreateTodoModal'
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback
+
 // Get file icon path from icon folder based on file type or filename
 const getFileIconPath = (fileType: string, fileName?: string): string | null => {
   if (!fileName && !fileType) return null
@@ -844,22 +847,46 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
     try {
       setSendingMessage(true)
 
-      // Gửi file trước (mỗi file là 1 comment riêng)
+      // Upload tất cả files trước
+      const uploadedFiles: Array<{ file: File; url: string }> = []
       for (const file of pendingFiles) {
-        const fileUrl = await uploadChatFile(file, selectedTaskId)
-        const messageType: 'file' | 'image' = file.type.startsWith('image/') ? 'image' : 'file'
+        try {
+          const fileUrl = await uploadChatFile(file, selectedTaskId)
+          uploadedFiles.push({ file, url: fileUrl })
+        } catch (fileError) {
+          console.error(`Error uploading file ${file.name}:`, fileError)
+          alert(`Không thể gửi file "${file.name}": ${getErrorMessage(fileError, 'Lỗi không xác định')}`)
+        }
+      }
 
+      // Nếu có cả text và file: gộp thành 1 tin nhắn
+      if (trimmedMessage && uploadedFiles.length > 0) {
+        // Gửi 1 comment với text và file đầu tiên
+        const firstFile = uploadedFiles[0]
+        const messageType: 'file' | 'image' = firstFile.file.type.startsWith('image/') ? 'image' : 'file'
+        
         await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
-          comment: file.name || 'File đính kèm',
+          comment: trimmedMessage,
           type: messageType,
-          file_url: fileUrl,
+          file_url: firstFile.url,
           is_pinned: false,
           parent_id: replyingTo?.id || null
         })
-      }
-
-      // Sau đó gửi tin nhắn text (nếu có)
-      if (trimmedMessage) {
+        
+        // Gửi các file còn lại (nếu có nhiều file) như các comment riêng
+        for (let i = 1; i < uploadedFiles.length; i++) {
+          const fileData = uploadedFiles[i]
+          const fileMessageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
+          await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
+            comment: fileData.file.name || 'File đính kèm',
+            type: fileMessageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            parent_id: replyingTo?.id || null
+          })
+        }
+      } else if (trimmedMessage) {
+        // Chỉ có text, không có file
         await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
           comment: trimmedMessage,
           type: 'text',
@@ -867,24 +894,40 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           is_pinned: false,
           parent_id: replyingTo?.id || null
         })
+      } else if (uploadedFiles.length > 0) {
+        // Chỉ có file, không có text - gửi từng file riêng
+        for (const fileData of uploadedFiles) {
+          const messageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
+          await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
+            comment: fileData.file.name || 'File đính kèm',
+            type: messageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            parent_id: replyingTo?.id || null
+          })
+        }
       }
 
-      // Optimistic update - add message immediately
-      const tempComment: TaskComment = {
-        id: `temp-${Date.now()}`,
-        task_id: selectedTaskId,
-        user_id: user?.id,
-        comment: trimmedMessage,
-        type: 'text',
-        is_pinned: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        user_name: user?.full_name,
-        parent_id: replyingTo?.id || null
+      // Optimistic update - add message immediately (only if we have text or first file)
+      if (trimmedMessage || uploadedFiles.length > 0) {
+        const firstFile = uploadedFiles[0]
+        const tempComment: TaskComment = {
+          id: `temp-${Date.now()}`,
+          task_id: selectedTaskId,
+          user_id: user?.id,
+          comment: trimmedMessage || firstFile?.file.name || 'File đính kèm',
+          type: firstFile ? (firstFile.file.type.startsWith('image/') ? 'image' : 'file') : 'text',
+          file_url: firstFile?.url,
+          is_pinned: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_name: user?.full_name,
+          parent_id: replyingTo?.id || null
+        }
+        
+        // Add to top of comments list
+        setAllComments(prev => [tempComment, ...prev])
       }
-      
-      // Add to top of comments list
-      setAllComments(prev => [tempComment, ...prev])
       
       // Scroll to top to show new message
       setTimeout(() => {

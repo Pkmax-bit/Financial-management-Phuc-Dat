@@ -337,6 +337,7 @@ export default function TaskDetailPage() {
   const [leftColumnWidth, setLeftColumnWidth] = useState(320)
   const [rightColumnWidth, setRightColumnWidth] = useState(320)
   const [middleSplitRatio, setMiddleSplitRatio] = useState(0.55)
+  const [mainChatRatio, setMainChatRatio] = useState(0.6) // Ratio between main and chat (0.5 = 50:50, 0.6 = 60:40, etc.)
   const [showLeftSidebar, setShowLeftSidebar] = useState(true)
   const [showRightSidebar, setShowRightSidebar] = useState(true)
   const [showInfoPanel, setShowInfoPanel] = useState(false)
@@ -346,14 +347,17 @@ export default function TaskDetailPage() {
   const [showAllLinks, setShowAllLinks] = useState(false)
   const [zoomedImage, setZoomedImage] = useState<{ url: string; index: number } | null>(null)
   const middleColumnRef = useRef<HTMLDivElement | null>(null)
+  const mainChatContainerRef = useRef<HTMLDivElement | null>(null)
   const resizeStateRef = useRef<{
-    type: 'left' | 'right' | 'middle'
+    type: 'left' | 'right' | 'middle' | 'main-chat'
     startX: number
     startY: number
     startLeftWidth: number
     startRightWidth: number
     startSplit: number
+    startMainChatRatio: number
     containerHeight: number
+    containerWidth: number
   } | null>(null)
 
   // Edit/Delete states
@@ -404,6 +408,13 @@ export default function TaskDetailPage() {
       const delta = state.startX - event.clientX
       const newWidth = clamp(state.startRightWidth + delta, 240, 520)
       setRightColumnWidth(newWidth)
+    } else if (state.type === 'main-chat') {
+      if (!state.containerWidth || state.containerWidth <= 0) return
+      const delta = event.clientX - state.startX
+      const ratioDelta = delta / state.containerWidth
+      // Clamp ratio between 0.5 (50:50) and 0.9 (90:10) - main can be 50% to 90%, chat can be 10% to 50%
+      const newRatio = clamp(state.startMainChatRatio + ratioDelta, 0.5, 0.9)
+      setMainChatRatio(newRatio)
     } else if (state.type === 'middle') {
       if (!state.containerHeight || state.containerHeight <= 0) return
       const delta = event.clientY - state.startY
@@ -431,7 +442,7 @@ export default function TaskDetailPage() {
     }
   }, [handleMouseMove, handleMouseUp])
 
-  const startResize = (type: 'left' | 'right' | 'middle', event: React.MouseEvent) => {
+  const startResize = (type: 'left' | 'right' | 'middle' | 'main-chat', event: React.MouseEvent) => {
     event.preventDefault()
     // Set cursor and prevent text selection
     document.body.style.userSelect = 'none'
@@ -446,7 +457,22 @@ export default function TaskDetailPage() {
         startLeftWidth: leftColumnWidth,
         startRightWidth: rightColumnWidth,
         startSplit: middleSplitRatio,
-        containerHeight: rect.height
+        startMainChatRatio: mainChatRatio,
+        containerHeight: rect.height,
+        containerWidth: 0
+      }
+    } else if (type === 'main-chat' && mainChatContainerRef.current) {
+      const rect = mainChatContainerRef.current.getBoundingClientRect()
+      resizeStateRef.current = {
+        type,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeftWidth: leftColumnWidth,
+        startRightWidth: rightColumnWidth,
+        startSplit: middleSplitRatio,
+        startMainChatRatio: mainChatRatio,
+        containerHeight: 0,
+        containerWidth: rect.width
       }
     } else {
       resizeStateRef.current = {
@@ -456,7 +482,9 @@ export default function TaskDetailPage() {
         startLeftWidth: leftColumnWidth,
         startRightWidth: rightColumnWidth,
         startSplit: middleSplitRatio,
-        containerHeight: middleColumnRef.current?.getBoundingClientRect().height || 0
+        startMainChatRatio: mainChatRatio,
+        containerHeight: middleColumnRef.current?.getBoundingClientRect().height || 0,
+        containerWidth: 0
       }
     }
   }
@@ -1078,32 +1106,48 @@ export default function TaskDetailPage() {
         }
       }
 
-      // Gửi file trước (mỗi file là 1 comment riêng)
-      const uploadedFileIndices: number[] = []
+      // Upload tất cả files trước
+      const uploadedFiles: Array<{ file: File; url: string; index: number }> = []
       for (let i = 0; i < pendingFiles.length; i++) {
         const file = pendingFiles[i]
         try {
           const fileUrl = await uploadChatFile(file)
-          const messageType: 'file' | 'image' = file.type.startsWith('image/') ? 'image' : 'file'
-
-          await apiPost(`/api/tasks/${taskId}/comments`, {
-            comment: file.name || 'File đính kèm',
-            type: messageType,
-            file_url: fileUrl,
-            is_pinned: false,
-            parent_id: replyingTo?.id || null
-          })
-          uploadedFileIndices.push(i)
+          uploadedFiles.push({ file, url: fileUrl, index: i })
         } catch (fileError) {
           console.error(`Error uploading file ${file.name}:`, fileError)
           alert(`Không thể gửi file "${file.name}": ${getErrorMessage(fileError, 'Lỗi không xác định')}`)
-          // Tiếp tục với các file khác
         }
       }
 
-      // Sau đó gửi tin nhắn text (nếu có)
+      // Nếu có cả text và file: gộp thành 1 tin nhắn
       let createdComment: any = null
-      if (trimmedMessage) {
+      if (trimmedMessage && uploadedFiles.length > 0) {
+        // Gửi 1 comment với text và file đầu tiên
+        const firstFile = uploadedFiles[0]
+        const messageType: 'file' | 'image' = firstFile.file.type.startsWith('image/') ? 'image' : 'file'
+        
+        createdComment = await apiPost(`/api/tasks/${taskId}/comments`, {
+          comment: trimmedMessage,
+          type: messageType,
+          file_url: firstFile.url,
+          is_pinned: false,
+          parent_id: replyingTo?.id || null
+        })
+        
+        // Gửi các file còn lại (nếu có nhiều file) như các comment riêng
+        for (let i = 1; i < uploadedFiles.length; i++) {
+          const fileData = uploadedFiles[i]
+          const fileMessageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
+          await apiPost(`/api/tasks/${taskId}/comments`, {
+            comment: fileData.file.name || 'File đính kèm',
+            type: fileMessageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            parent_id: replyingTo?.id || null
+          })
+        }
+      } else if (trimmedMessage) {
+        // Chỉ có text, không có file
         createdComment = await apiPost(`/api/tasks/${taskId}/comments`, {
           comment: trimmedMessage,
           type: 'text',
@@ -1111,6 +1155,18 @@ export default function TaskDetailPage() {
           is_pinned: false,
           parent_id: replyingTo?.id || null
         })
+      } else if (uploadedFiles.length > 0) {
+        // Chỉ có file, không có text - gửi từng file riêng
+        for (const fileData of uploadedFiles) {
+          const messageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
+          await apiPost(`/api/tasks/${taskId}/comments`, {
+            comment: fileData.file.name || 'File đính kèm',
+            type: messageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            parent_id: replyingTo?.id || null
+          })
+        }
       }
 
       // Gửi thông báo cho các nhân viên được mention
@@ -1155,20 +1211,11 @@ export default function TaskDetailPage() {
       }
 
       // Clear messages and files only if at least one message or file was sent successfully
-      if (uploadedFileIndices.length > 0 || createdComment) {
+      if (uploadedFiles.length > 0 || createdComment) {
         setChatMessage('')
-        // Only clear files that were successfully uploaded
-        if (uploadedFileIndices.length === pendingFiles.length) {
-          setPendingFiles([])
-          setPendingPreview(null)
-        } else if (uploadedFileIndices.length > 0) {
-          // Remove only successfully uploaded files (remove from highest index to lowest to maintain indices)
-          const remainingFiles = pendingFiles.filter((_, index) => !uploadedFileIndices.includes(index))
-          setPendingFiles(remainingFiles)
-          if (remainingFiles.length === 0) {
-            setPendingPreview(null)
-          }
-        }
+        // Clear all files since they've been uploaded
+        setPendingFiles([])
+        setPendingPreview(null)
         setReplyingTo(null)
         // Only reload comments, not the entire task
         await loadComments()
@@ -1497,7 +1544,7 @@ export default function TaskDetailPage() {
       </header>
 
       {/* Main Layout with Resizable Panels */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+      <div ref={mainChatContainerRef} className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
 
         {/* LEFT COLUMN: INFO */}
         {showLeftSidebar && (
@@ -1688,7 +1735,15 @@ export default function TaskDetailPage() {
         )}
 
         {/* MIDDLE COLUMN */}
-        <main ref={middleColumnRef} className="flex flex-1 min-w-[300px] flex-col bg-white relative">
+        <main 
+          ref={middleColumnRef} 
+          className="flex flex-col bg-white relative"
+          style={{ 
+            flex: mainChatRatio, 
+            minWidth: '300px',
+            maxWidth: '50%' // Tối đa 50% (5:5 ratio)
+          }}
+        >
 
           {/* TOP HALF: CHECKLISTS & DESCRIPTION */}
           <div
@@ -2403,9 +2458,9 @@ export default function TaskDetailPage() {
             className="hidden lg:flex items-center justify-center w-2 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors relative group select-none"
             onMouseDown={(e) => {
               e.preventDefault()
-              startResize('right', e)
+              startResize('main-chat', e)
             }}
-            title="Kéo để thay đổi kích thước"
+            title="Kéo để thay đổi kích thước (tối đa 5:5)"
             style={{ userSelect: 'none' }}
           >
             <div className="w-0.5 h-12 bg-gray-400 group-hover:bg-white rounded-full transition-colors"></div>
@@ -2416,7 +2471,11 @@ export default function TaskDetailPage() {
         {showRightSidebar && (
         <aside
             className="hidden lg:flex flex-col border-l border-gray-200 bg-white min-h-0 relative"
-          style={{ width: rightColumnWidth, minWidth: 240, maxWidth: 520 }}
+          style={{ 
+            flex: 1 - mainChatRatio,
+            minWidth: '240px',
+            maxWidth: '50%' // Tối đa 50% (5:5 ratio)
+          }}
         >
             <button
               onClick={() => setShowRightSidebar(false)}
