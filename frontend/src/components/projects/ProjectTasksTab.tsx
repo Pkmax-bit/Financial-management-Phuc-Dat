@@ -32,6 +32,62 @@ import { TaskChecklist, TaskChecklistItem, TaskComment } from '@/types/task'
 import { supabase } from '@/lib/supabase'
 import CreateTodoModal from '@/components/CreateTodoModal'
 
+// Get file icon path from icon folder based on file type or filename
+const getFileIconPath = (fileType: string, fileName?: string): string | null => {
+  if (!fileName && !fileType) return null
+  
+  const type = fileType?.toLowerCase() || ''
+  const name = fileName?.toLowerCase() || ''
+
+  // Extract file extension from name (handle query params and spaces)
+  const getExtension = (filename: string): string => {
+    // Remove query params and decode if needed
+    const cleanName = filename.split('?')[0].trim()
+    const match = cleanName.match(/\.([a-z0-9]+)$/i)
+    return match ? match[1].toLowerCase() : ''
+  }
+  const extension = getExtension(name)
+
+  // Check by file extension first (more reliable)
+  // PDF
+  if (extension === 'pdf' || type === 'application/pdf' || name.includes('.pdf')) {
+    return '/icon/pdf.png'
+  }
+
+  // Excel files - check extension first
+  if (['xls', 'xlsx', 'xlsm', 'xlsb'].includes(extension) || name.includes('.xls')) {
+    return '/icon/Excel.png'
+  }
+  // Then check MIME type
+  if (type.includes('spreadsheet') || 
+      type === 'application/vnd.ms-excel' ||
+      type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      type === 'application/vnd.ms-excel.sheet.macroenabled.12') {
+    return '/icon/Excel.png'
+  }
+
+  // Word files - check extension first
+  if (['doc', 'docx', 'docm'].includes(extension) || name.includes('.doc')) {
+    return '/icon/doc.png'
+  }
+  // Then check MIME type
+  if (type.includes('word') || 
+      type === 'application/msword' ||
+      type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      type === 'application/vnd.ms-word.document.macroenabled.12') {
+    return '/icon/doc.png'
+  }
+
+  // Images - return null to use ImageIcon component
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(extension) ||
+      type.startsWith('image/')) {
+    return null
+  }
+
+  // Default - return null to use File icon component
+  return null
+}
+
 interface Task {
   id: string
   title: string
@@ -89,7 +145,15 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null)
-  const [groupMembers, setGroupMembers] = useState<Array<{ employee_id: string; employee_name?: string; employee_email?: string }>>([])
+  const [groupMembers, setGroupMembers] = useState<Array<{ 
+    employee_id: string; 
+    employee_name?: string; 
+    employee_email?: string;
+    responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
+    avatar?: string;
+    phone?: string;
+    status?: string;
+  }>>([])
   const [newMessageNotification, setNewMessageNotification] = useState<{ id: string; message: string } | null>(null)
   const mentionInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [showQuickCreate, setShowQuickCreate] = useState(false)
@@ -284,7 +348,8 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
         
         const membersPromises = groupIds.map(async (groupId) => {
           try {
-            const members = await apiGet(`/api/tasks/groups/${groupId}/members`)
+            // Pass project_id to get project team information
+            const members = await apiGet(`/api/tasks/groups/${groupId}/members?project_id=${projectId}`)
             return members || []
           } catch (err) {
             console.error(`Error fetching members for group ${groupId}:`, err)
@@ -1654,7 +1719,39 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                               onClick={(e) => e.stopPropagation()}
                               className="inline-flex items-center gap-2 px-3 py-2 mb-2 rounded-lg text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors"
                             >
-                              <Paperclip className="h-3.5 w-3.5" />
+                              {(() => {
+                                // Get file name from comment (which usually contains the file name) or file_name field
+                                // Extract file name from URL if needed
+                                let fileName = comment.comment || (comment as any).file_name || ''
+                                
+                                // Always try to extract from URL if we have it (most reliable)
+                                if (comment.file_url) {
+                                  const urlParts = comment.file_url.split('/')
+                                  const lastPart = urlParts[urlParts.length - 1]
+                                  const nameFromUrl = lastPart.split('?')[0] // Remove query params
+                                  if (nameFromUrl && nameFromUrl.includes('.')) {
+                                    fileName = nameFromUrl
+                                  } else if (!fileName && nameFromUrl) {
+                                    fileName = nameFromUrl
+                                  }
+                                }
+                                
+                                // Fallback to generic name if still empty
+                                if (!fileName || fileName === 'File đính kèm') {
+                                  fileName = 'File đính kèm'
+                                }
+                                
+                                const fileType = (comment as any).file_type || ''
+                                const iconPath = getFileIconPath(fileType, fileName)
+                                
+                                if (iconPath) {
+                                  return <img src={iconPath} alt={fileName} className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => {
+                                    console.error('Failed to load icon:', iconPath)
+                                    e.currentTarget.style.display = 'none'
+                                  }} />
+                                }
+                                return <Paperclip className="h-3.5 w-3.5" />
+                              })()}
                               <span className="truncate max-w-[200px]">
                                 {comment.comment || 'File đính kèm'}
                               </span>
@@ -1830,7 +1927,39 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                         onClick={(e) => e.stopPropagation()}
                                         className="inline-flex items-center gap-1 px-2 py-1 mb-1 rounded text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
                                       >
-                                        <Paperclip className="h-3 w-3" />
+                                        {(() => {
+                                          // Get file name from comment (which usually contains the file name) or file_name field
+                                          // Extract file name from URL if needed
+                                          let fileName = reply.comment || (reply as any).file_name || ''
+                                          
+                                          // Always try to extract from URL if we have it (most reliable)
+                                          if (reply.file_url) {
+                                            const urlParts = reply.file_url.split('/')
+                                            const lastPart = urlParts[urlParts.length - 1]
+                                            const nameFromUrl = lastPart.split('?')[0] // Remove query params
+                                            if (nameFromUrl && nameFromUrl.includes('.')) {
+                                              fileName = nameFromUrl
+                                            } else if (!fileName && nameFromUrl) {
+                                              fileName = nameFromUrl
+                                            }
+                                          }
+                                          
+                                          // Fallback to generic name if still empty
+                                          if (!fileName || fileName === 'File đính kèm') {
+                                            fileName = 'File đính kèm'
+                                          }
+                                          
+                                          const fileType = (reply as any).file_type || ''
+                                          const iconPath = getFileIconPath(fileType, fileName)
+                                          
+                                          if (iconPath) {
+                                            return <img src={iconPath} alt={fileName} className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => {
+                                              console.error('Failed to load icon:', iconPath)
+                                              e.currentTarget.style.display = 'none'
+                                            }} />
+                                          }
+                                          return <Paperclip className="h-3 w-3" />
+                                        })()}
                                         <span className="truncate max-w-[150px]">
                                           {reply.comment || 'File đính kèm'}
                                         </span>

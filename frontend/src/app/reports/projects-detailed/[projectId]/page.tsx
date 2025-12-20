@@ -93,7 +93,10 @@ interface ExpenseComparison {
 
 export default function ProjectDetailedReportDetailPage() {
   const params = useParams()
-  const projectId = params?.projectId as string
+  // Extract projectId immediately to avoid direct params access
+  // Extract projectId immediately to avoid direct params access - destructure to prevent enumeration
+  const { projectId: paramProjectId } = params || {}
+  const projectId = (paramProjectId ?? '') as string
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)

@@ -73,11 +73,15 @@ class TaskGroupMember(BaseModel):
     id: str
     group_id: str
     employee_id: str
-    role: str = "member"
+    role: str = "member"  # Legacy role from task_group_members
+    responsibility_type: Optional[str] = None  # RACI role from project_team
     added_by: Optional[str] = None
     created_at: datetime
     employee_name: Optional[str] = None
     employee_email: Optional[str] = None
+    avatar: Optional[str] = None  # Avatar from project_team
+    phone: Optional[str] = None  # Phone from project_team
+    status: Optional[str] = None  # Status from project_team
 
 class TaskGroupMemberAdd(BaseModel):
     """Add member to group"""

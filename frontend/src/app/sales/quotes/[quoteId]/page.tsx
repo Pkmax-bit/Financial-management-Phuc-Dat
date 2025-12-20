@@ -25,7 +25,10 @@ interface QuoteItem {
 export default function QuoteDetailPage() {
   const params = useParams() as { quoteId?: string }
   const searchParams = useSearchParams()
-  const quoteId = params?.quoteId as string
+  // Extract quoteId immediately to avoid direct params access
+  // Extract quoteId immediately to avoid direct params access - destructure to prevent enumeration
+  const { quoteId: paramQuoteId } = params || {}
+  const quoteId = (paramQuoteId ?? '') as string
   const [loading, setLoading] = useState(true)
   const [quote, setQuote] = useState<any>(null)
   const [items, setItems] = useState<QuoteItem[]>([])
@@ -122,12 +125,12 @@ export default function QuoteDetailPage() {
 
   // Check if should open preview modal
   useEffect(() => {
-    const action = searchParams?.get('action')
+    // Extract action immediately to avoid searchParams enumeration
+    const action = searchParams.get('action')
     if (action === 'preview' && quote && !showPreviewModal) {
       setShowPreviewModal(true)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams?.get('action'), quote, showPreviewModal])
+  }, [searchParams, quote, showPreviewModal])
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0)
   const formatDate = (d?: string) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')

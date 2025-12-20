@@ -14,7 +14,10 @@ interface ProjectBasic {
 
 export default function CustomerProjectTimelinePage() {
   const params = useParams()
-  const projectId = params.projectId as string
+  // Extract projectId immediately to avoid direct params access
+  // Extract projectId immediately to avoid direct params access - destructure to prevent enumeration
+  const { projectId: paramProjectId } = params || {}
+  const projectId = (paramProjectId ?? '') as string
   const [project, setProject] = useState<ProjectBasic | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

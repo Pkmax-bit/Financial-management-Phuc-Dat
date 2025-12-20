@@ -56,7 +56,10 @@ interface QuoteItem {
 
 export default function ApproveQuotePage() {
   const params = useParams()
-  const quoteId = params?.quoteId as string
+  // Extract quoteId immediately to avoid direct params access
+  // Extract quoteId immediately to avoid direct params access - destructure to prevent enumeration
+  const { quoteId: paramQuoteId } = params || {}
+  const quoteId = (paramQuoteId ?? '') as string
   const [quote, setQuote] = useState<Quote | null>(null)
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(true)

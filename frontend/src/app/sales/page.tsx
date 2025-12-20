@@ -735,12 +735,12 @@ function SalesPageWithParams() {
   const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
+    // Extract tab immediately to avoid searchParams enumeration
     const tab = searchParams.get('tab')
     if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments', 'all-sales'].includes(tab)) {
       setActiveTab(tab)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams?.get('tab')])
+  }, [searchParams])
 
   return <SalesPageContent activeTab={activeTab} setActiveTab={setActiveTab} />
 }

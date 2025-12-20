@@ -50,12 +50,14 @@ function ExpensesPageContent() {
   }, [])
 
   useEffect(() => {
+    // Extract values immediately to avoid searchParams enumeration
     const tab = searchParams.get('tab')
+    const action = searchParams.get('action')
+    
     if (tab && ['project-expenses', 'expenses', 'bills', 'vendors'].includes(tab)) {
       setActiveTab(tab)
     }
 
-    const action = searchParams.get('action')
     if (action === 'create') {
       if (tab === 'project-expenses' || tab === 'expenses') {
         // Use setTimeout to ensure tab is set before opening modal
@@ -64,8 +66,7 @@ function ExpensesPageContent() {
         }, 200)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams?.get('tab'), searchParams?.get('action')])
+  }, [searchParams])
 
   // Reset modal flag after it opens to allow re-triggering
   useEffect(() => {

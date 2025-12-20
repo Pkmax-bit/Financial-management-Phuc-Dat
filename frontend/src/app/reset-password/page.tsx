@@ -11,7 +11,9 @@ type RequestState = 'idle' | 'loading' | 'success' | 'error'
 function ResetPasswordContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const initialToken = useMemo(() => searchParams.get('token') || '', [searchParams])
+  // Extract token immediately to avoid searchParams enumeration
+  const tokenValue = searchParams.get('token')
+  const initialToken = useMemo(() => tokenValue || '', [tokenValue])
 
   const [token, setToken] = useState(initialToken)
   const [newPassword, setNewPassword] = useState('')

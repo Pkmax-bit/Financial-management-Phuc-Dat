@@ -246,17 +246,24 @@ async def delete_team_member(
         # Delete team member
         result = supabase.table("project_team").delete().eq("id", member_id).execute()
         
-        # Also remove from task participants if employee_id is known
+        # Also remove from task participants and task_group_members if employee_id is known
         if employee_id:
             try:
                 # Get all task ids of this project
-                tasks_result = supabase.table("tasks").select("id").eq("project_id", project_id).is_("deleted_at", "null").execute()
+                tasks_result = supabase.table("tasks").select("id, group_id").eq("project_id", project_id).is_("deleted_at", "null").execute()
                 task_ids = [t["id"] for t in (tasks_result.data or []) if t.get("id")]
                 if task_ids:
+                    # Remove from task participants
                     supabase.table("task_participants").delete().in_("task_id", task_ids).eq("employee_id", employee_id).execute()
+                
+                # Get all unique group_ids from tasks in this project
+                group_ids = list(set([t.get("group_id") for t in (tasks_result.data or []) if t.get("group_id")]))
+                if group_ids:
+                    # Remove from all task_group_members in this project's task groups
+                    supabase.table("task_group_members").delete().in_("group_id", group_ids).eq("employee_id", employee_id).execute()
             except Exception as rm_err:
                 # Log but do not fail delete
-                print(f"Warning: failed to remove participant when deleting team member: {rm_err}")
+                print(f"Warning: failed to remove participant/group member when deleting team member: {rm_err}")
 
         return {"message": "Team member deleted successfully"}
         

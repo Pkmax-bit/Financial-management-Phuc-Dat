@@ -23,7 +23,10 @@ interface InvoiceItem {
 
 export default function InvoiceDetailPage() {
   const params = useParams() as { invoiceId?: string }
-  const invoiceId = params?.invoiceId as string
+  // Extract invoiceId immediately to avoid direct params access
+  // Extract invoiceId immediately to avoid direct params access - destructure to prevent enumeration
+  const { invoiceId: paramInvoiceId } = params || {}
+  const invoiceId = (paramInvoiceId ?? '') as string
   const [loading, setLoading] = useState(true)
   const [invoice, setInvoice] = useState<any>(null)
   const [items, setItems] = useState<InvoiceItem[]>([])

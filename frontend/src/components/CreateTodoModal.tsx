@@ -11,7 +11,15 @@ interface CreateTodoModalProps {
     projectId?: string
     onClose: () => void
     onSuccess: (newSubTask?: Task) => void
-    groupMembers: Array<{ employee_id: string; employee_name?: string; employee_email?: string }>
+    groupMembers: Array<{ 
+      employee_id: string; 
+      employee_name?: string; 
+      employee_email?: string;
+      responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
+      avatar?: string;
+      phone?: string;
+      status?: string;
+    }>
     initialData?: Task | null
 }
 
@@ -209,11 +217,20 @@ export default function CreateTodoModal({ parentTaskId, groupId, projectId, onCl
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-black text-sm"
                         >
                             <option value="">-- Chọn thành viên --</option>
-                            {groupMembers.map(member => (
-                                <option key={member.employee_id} value={member.employee_id}>
-                                    {member.employee_name || member.employee_email}
-                                </option>
-                            ))}
+                            {groupMembers.map(member => {
+                                const responsibilityLabel = member.responsibility_type 
+                                    ? member.responsibility_type === 'accountable' ? ' (👑 Người chịu trách nhiệm)'
+                                    : member.responsibility_type === 'responsible' ? ' (🔧 Người thực hiện)'
+                                    : member.responsibility_type === 'consulted' ? ' (💬 Người tư vấn)'
+                                    : member.responsibility_type === 'informed' ? ' (👁️ Người quan sát)'
+                                    : ''
+                                    : ''
+                                return (
+                                    <option key={member.employee_id} value={member.employee_id}>
+                                        {member.employee_name || member.employee_email}{responsibilityLabel}
+                                    </option>
+                                )
+                            })}
                         </select>
                     </div>
 

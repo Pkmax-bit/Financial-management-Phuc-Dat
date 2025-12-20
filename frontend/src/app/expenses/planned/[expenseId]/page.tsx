@@ -18,7 +18,10 @@ interface CompanySettings {
 export default function ExpenseEditPage() {
     const params = useParams()
     const router = useRouter()
-    const expenseId = params.expenseId as string
+    // Extract expenseId immediately to avoid direct params access
+    // Extract expenseId immediately to avoid direct params access - destructure to prevent enumeration
+    const { expenseId: paramExpenseId } = params || {}
+    const expenseId = (paramExpenseId ?? '') as string
 
     const [loading, setLoading] = useState(true)
     const [expenseData, setExpenseData] = useState<any>(null)

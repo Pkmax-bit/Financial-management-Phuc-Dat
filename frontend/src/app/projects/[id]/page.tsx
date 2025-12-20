@@ -103,7 +103,10 @@ const priorityColors = {
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const projectId = params.id as string;
+  // Extract projectId immediately to avoid direct params access
+  // Extract projectId immediately to avoid direct params access - destructure to prevent enumeration
+  const { id: paramId } = params || {}
+  const projectId = (paramId ?? '') as string;
   
   const [project, setProject] = useState<Project | null>(null);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);

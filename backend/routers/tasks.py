@@ -663,19 +663,65 @@ async def delete_task_group(
 @router.get("/groups/{group_id}/members", response_model=List[TaskGroupMember])
 async def get_group_members(
     group_id: str,
+    project_id: Optional[str] = Query(None, description="Project ID to get team members from"),
     current_user: User = Depends(get_current_user)
 ):
-    """Get members of a task group"""
+    """Get members of a task group, enriched with project team information"""
     try:
         supabase = get_supabase_client()
         
+        # Get project_id if not provided - try to get from first task in group
+        if not project_id:
+            try:
+                task_result = supabase.table("tasks").select("project_id").eq("group_id", group_id).is_("deleted_at", "null").limit(1).execute()
+                if task_result.data and len(task_result.data) > 0:
+                    project_id = task_result.data[0].get("project_id")
+            except Exception:
+                pass  # Continue without project_id
+        
+        # Get task group members
         result = supabase.table("task_group_members").select("""
             *,
-            employees:employee_id(id, first_name, last_name, email)
+            employees:employee_id(id, first_name, last_name, email, user_id)
         """).eq("group_id", group_id).execute()
+        
+        # Get project team members if project_id is available
+        project_team_map = {}
+        if project_id:
+            try:
+                # Get all project team members for this project
+                team_result = supabase.table("project_team").select("""
+                    *,
+                    employees:user_id(id, first_name, last_name, email)
+                """).eq("project_id", project_id).eq("status", "active").execute()
+                
+                # Create a map: user_id -> project_team member
+                for team_member in team_result.data or []:
+                    # Get user_id from employees table
+                    employee = team_member.get("employees")
+                    if employee:
+                        if isinstance(employee, list):
+                            employee = employee[0] if employee else None
+                        if employee and employee.get("id"):
+                            # Map by employee_id
+                            project_team_map[employee.get("id")] = team_member
+                    # Also try direct user_id if available
+                    if team_member.get("user_id"):
+                        # Try to find employee by user_id
+                        try:
+                            emp_result = supabase.table("employees").select("id").eq("user_id", team_member.get("user_id")).limit(1).execute()
+                            if emp_result.data and len(emp_result.data) > 0:
+                                emp_id = emp_result.data[0].get("id")
+                                project_team_map[emp_id] = team_member
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.warning(f"Failed to fetch project team members: {str(e)}")
         
         members = []
         for member in result.data or []:
+            employee_id = member.get("employee_id")
+            
             # Try to get employee name from join first
             employee = member.get("employees")
             if employee:
@@ -688,9 +734,9 @@ async def get_group_members(
                     member["employee_email"] = employee.get("email")
             
             # If join didn't work, query directly
-            if not member.get("employee_name") and member.get("employee_id"):
+            if not member.get("employee_name") and employee_id:
                 try:
-                    emp_result = supabase.table("employees").select("first_name, last_name, email").eq("id", member.get("employee_id")).single().execute()
+                    emp_result = supabase.table("employees").select("first_name, last_name, email, user_id").eq("id", employee_id).single().execute()
                     if emp_result.data:
                         emp_data = emp_result.data
                         member["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
@@ -698,6 +744,18 @@ async def get_group_members(
                 except Exception:
                     # Employee not found or query failed
                     pass
+            
+            # Enrich with project team information
+            if employee_id and employee_id in project_team_map:
+                team_member = project_team_map[employee_id]
+                # Use responsibility_type from project_team (priority over role)
+                member["responsibility_type"] = team_member.get("responsibility_type")
+                member["avatar"] = team_member.get("avatar")
+                member["phone"] = team_member.get("phone")
+                member["status"] = team_member.get("status")
+                # Keep role from task_group_members as fallback
+                if not member.get("responsibility_type"):
+                    member["responsibility_type"] = None
             
             members.append(member)
         
@@ -746,13 +804,74 @@ async def remove_group_member(
     member_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Remove a member from a task group"""
+    """Remove a member from a task group and sync with project_team"""
     try:
         supabase = get_supabase_client()
         
+        # Get the member record before deleting to get employee_id
+        member_result = supabase.table("task_group_members").select("employee_id").eq("id", member_id).eq("group_id", group_id).single().execute()
+        
+        if not member_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Group member not found"
+            )
+        
+        employee_id = member_result.data.get("employee_id")
+        
+        # Get task group to find project_id
+        group_result = supabase.table("task_groups").select("category_id").eq("id", group_id).single().execute()
+        category_id = group_result.data.get("category_id") if group_result.data else None
+        
+        # Get project_id from category or from tasks in this group
+        project_id = None
+        if category_id:
+            # Try to get project_id from projects that use this category
+            project_result = supabase.table("projects").select("id").eq("category_id", category_id).limit(1).execute()
+            if project_result.data:
+                project_id = project_result.data[0].get("id")
+        
+        # If still no project_id, try to get from tasks in this group
+        if not project_id:
+            task_result = supabase.table("tasks").select("project_id").eq("group_id", group_id).is_("deleted_at", "null").limit(1).execute()
+            if task_result.data:
+                project_id = task_result.data[0].get("project_id")
+        
+        # Delete from task_group_members
         supabase.table("task_group_members").delete().eq("id", member_id).eq("group_id", group_id).execute()
         
+        # If employee_id and project_id are available, check if member is still in other task groups of this project
+        if employee_id and project_id:
+            try:
+                # Get all task groups in this project
+                if category_id:
+                    # Get all groups with same category
+                    all_groups_result = supabase.table("task_groups").select("id").eq("category_id", category_id).execute()
+                    all_group_ids = [g["id"] for g in (all_groups_result.data or [])]
+                else:
+                    # Get all groups from tasks in this project
+                    tasks_result = supabase.table("tasks").select("group_id").eq("project_id", project_id).is_("deleted_at", "null").execute()
+                    all_group_ids = list(set([t.get("group_id") for t in (tasks_result.data or []) if t.get("group_id")]))
+                
+                # Check if employee is still in any other task group of this project
+                if all_group_ids:
+                    remaining_members = supabase.table("task_group_members").select("id").in_("group_id", all_group_ids).eq("employee_id", employee_id).execute()
+                    
+                    # If not in any other task group, remove from project_team
+                    if not remaining_members.data or len(remaining_members.data) == 0:
+                        # Get user_id from employee
+                        emp_result = supabase.table("employees").select("user_id").eq("id", employee_id).limit(1).execute()
+                        if emp_result.data and emp_result.data[0].get("user_id"):
+                            user_id = emp_result.data[0].get("user_id")
+                            # Remove from project_team
+                            supabase.table("project_team").delete().eq("project_id", project_id).eq("user_id", user_id).execute()
+            except Exception as sync_err:
+                # Log but do not fail delete
+                logger.warning(f"Failed to sync with project_team when removing group member: {str(sync_err)}")
+        
         return {"message": "Member removed successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

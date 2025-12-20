@@ -182,7 +182,15 @@ export default function TasksPage() {
   const [newGroup, setNewGroup] = useState<NewTaskGroupForm>(createEmptyGroup())
   const [employees, setEmployees] = useState<Array<{ id: string; name: string; email?: string }>>([])
   const [loadingEmployees, setLoadingEmployees] = useState(false)
-  const [groupMembers, setGroupMembers] = useState<Array<{ employee_id: string; employee_name?: string; employee_email?: string }>>([])
+  const [groupMembers, setGroupMembers] = useState<Array<{ 
+    employee_id: string; 
+    employee_name?: string; 
+    employee_email?: string;
+    responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
+    avatar?: string;
+    phone?: string;
+    status?: string;
+  }>>([])
   const [loadingGroupMembers, setLoadingGroupMembers] = useState(false)
 
   useEffect(() => {
@@ -1459,7 +1467,15 @@ function CreateTaskModal({
   groups: TaskGroup[]
   employees: Array<{ id: string; name: string; email?: string }>
   loadingEmployees: boolean
-  groupMembers: Array<{ employee_id: string; employee_name?: string; employee_email?: string }>
+  groupMembers: Array<{ 
+    employee_id: string; 
+    employee_name?: string; 
+    employee_email?: string;
+    responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
+    avatar?: string;
+    phone?: string;
+    status?: string;
+  }>
   loadingGroupMembers: boolean
   onClose: () => void
   onSubmit: () => void

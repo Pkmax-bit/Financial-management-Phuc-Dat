@@ -178,7 +178,15 @@ export default function TaskDetailModal({ taskId, onClose, onUpdate }: TaskDetai
     const [newNote, setNewNote] = useState('')
     const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
     const [editingNoteContent, setEditingNoteContent] = useState('')
-    const [groupMembers, setGroupMembers] = useState<Array<{ employee_id: string; employee_name?: string; employee_email?: string }>>([])
+    const [groupMembers, setGroupMembers] = useState<Array<{ 
+      employee_id: string; 
+      employee_name?: string; 
+      employee_email?: string;
+      responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
+      avatar?: string;
+      phone?: string;
+      status?: string;
+    }>>([])
 
     const [chatMessage, setChatMessage] = useState('')
     const [chatFilter, setChatFilter] = useState<'all' | 'pinned'>('all')
@@ -255,7 +263,12 @@ export default function TaskDetailModal({ taskId, onClose, onUpdate }: TaskDetai
             // Load group members if task has group_id
             if (data?.task?.group_id) {
                 try {
-                    const members = await apiGet(`/api/tasks/groups/${data.task.group_id}/members`)
+                    // Pass project_id if available to get project team information
+                    const projectId = data?.task?.project_id
+                    const url = projectId 
+                        ? `/api/tasks/groups/${data.task.group_id}/members?project_id=${projectId}`
+                        : `/api/tasks/groups/${data.task.group_id}/members`
+                    const members = await apiGet(url)
                     setGroupMembers(members || [])
                 } catch (err) {
                     console.error('Failed to load group members', err)
