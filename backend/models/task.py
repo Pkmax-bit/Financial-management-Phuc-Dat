@@ -37,8 +37,9 @@ class NoteVisibility(str, Enum):
 class TaskGroup(BaseModel):
     """Task Group model"""
     id: str
-    name: str
-    description: Optional[str] = None
+    name: str  # Có thể lấy từ project_categories nếu có category_id
+    description: Optional[str] = None  # Có thể lấy từ project_categories nếu có category_id
+    category_id: Optional[str] = None  # Reference đến project_categories
     created_by: Optional[str] = None
     is_active: bool = True
     created_at: datetime
@@ -46,6 +47,10 @@ class TaskGroup(BaseModel):
     member_count: Optional[int] = None
     avatar_url: Optional[str] = None
     color: Optional[str] = "#3b82f6"
+    # Thông tin từ category (khi JOIN)
+    category_name: Optional[str] = None
+    category_color: Optional[str] = None
+    category_icon: Optional[str] = None
 
 class TaskGroupCreate(BaseModel):
     """Task Group creation model"""

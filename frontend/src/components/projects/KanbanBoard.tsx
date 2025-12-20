@@ -4,8 +4,9 @@ import React, { useEffect, useMemo, useState, useImperativeHandle, forwardRef } 
 import KanbanColumn from './KanbanColumn'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, X, AlertTriangle, Plus, Edit2, Trash2, Settings } from 'lucide-react'
-import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
+import { CheckCircle, X, AlertTriangle, Plus, Edit2, Trash2, Settings, Tag, Filter, Users, Calendar, ChevronDown } from 'lucide-react'
+import { apiGet, apiPost, apiPut, apiDelete, projectCategoryApi } from '@/lib/api'
+import ProjectCategoriesManager from './ProjectCategoriesManager'
 
 type ProjectStatus = string
 
@@ -30,6 +31,9 @@ interface ProjectItem {
   manager_id?: string
   manager_name?: string
   manager_code?: string
+  category_id?: string
+  category_name?: string
+  category_color?: string
   start_date?: string
   end_date?: string
   budget?: number
@@ -46,13 +50,38 @@ interface ProjectItem {
 
 interface KanbanBoardProps {
   onViewProject?: (project: ProjectItem) => void
+  customerId?: string
+  // Filter props controlled externally
+  categoryFilter?: string
+  customerFilter?: string
+  dateFilter?: string
+  startDate?: string
+  endDate?: string
+  onCategoryFilterChange?: (value: string) => void
+  onCustomerFilterChange?: (value: string) => void
+  onDateFilterChange?: (value: string) => void
+  onStartDateChange?: (value: string) => void
+  onEndDateChange?: (value: string) => void
 }
 
 export interface KanbanBoardRef {
   refresh: () => Promise<void>
 }
 
-const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProject }, ref) => {
+const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
+  onViewProject,
+  customerId,
+  categoryFilter: externalCategoryFilter,
+  customerFilter: externalCustomerFilter,
+  dateFilter: externalDateFilter,
+  startDate: externalStartDate,
+  endDate: externalEndDate,
+  onCategoryFilterChange,
+  onCustomerFilterChange,
+  onDateFilterChange,
+  onStartDateChange,
+  onEndDateChange
+}, ref) => {
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [statuses, setStatuses] = useState<ProjectStatusItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -80,6 +109,33 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
   const [isDeletingStatus, setIsDeletingStatus] = useState(false)
   const [deletingStatusId, setDeletingStatusId] = useState<string | null>(null)
   const [projectInvoiceTotals, setProjectInvoiceTotals] = useState<Record<string, number>>({})
+  const [showCategoriesManager, setShowCategoriesManager] = useState(false)
+  const [userRole, setUserRole] = useState<string>('')
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; color?: string }>>([])
+
+  // Use external filter states or internal fallbacks
+  const [internalCategoryFilter, setInternalCategoryFilter] = useState<string>('all')
+  const [internalCustomerFilter, setInternalCustomerFilter] = useState<string>('all')
+  const [internalDateFilter, setInternalDateFilter] = useState<string>('all')
+  const [internalStartDate, setInternalStartDate] = useState<string>('')
+  const [internalEndDate, setInternalEndDate] = useState<string>('')
+
+  const categoryFilter = externalCategoryFilter ?? internalCategoryFilter
+  const customerFilter = externalCustomerFilter ?? internalCustomerFilter
+  const dateFilter = externalDateFilter ?? internalDateFilter
+  const startDate = externalStartDate ?? internalStartDate
+  const endDate = externalEndDate ?? internalEndDate
+
+  const setCategoryFilter = onCategoryFilterChange ?? setInternalCategoryFilter
+  const setCustomerFilter = onCustomerFilterChange ?? setInternalCustomerFilter
+  const setDateFilter = onDateFilterChange ?? setInternalDateFilter
+  const setStartDate = onStartDateChange ?? setInternalStartDate
+  const setEndDate = onEndDateChange ?? setInternalEndDate
+  const [filteredProjects, setFilteredProjects] = useState<ProjectItem[]>([])
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string }>>([])
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false)
+  const [showDatePickerDialog, setShowDatePickerDialog] = useState<boolean>(false)
+  const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start')
 
   // Predefined color options with Tailwind classes
   const colorOptions = [
@@ -141,24 +197,39 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
   const fetchData = async () => {
     try {
       setLoading(true)
+      
+      // Get current user role
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (authUser) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', authUser.id)
+          .single()
+        if (userData) {
+          setUserRole(userData.role)
+        }
+      }
+      
       // Fetch statuses first
       const statusesData = await apiGet('/api/projects/statuses')
       setStatuses(statusesData || [])
 
-      // Then fetch projects with status_id
-      const { data, error } = await supabase
+      // Then fetch projects with status_id and category data
+      let query = supabase
         .from('projects')
         .select(`
-          id, 
-          name, 
-          project_code, 
+          id,
+          name,
+          project_code,
           description,
-          status, 
+          status,
           status_id,
-          priority, 
+          priority,
           progress,
           customer_id,
           manager_id,
+          category_id,
           start_date,
           end_date,
           budget,
@@ -173,8 +244,20 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
             employee_code,
             first_name,
             last_name
+          ),
+          project_categories(
+            id,
+            name,
+            color
           )
         `)
+
+      // Filter by customer_id if provided
+      if (customerId) {
+        query = query.eq('customer_id', customerId)
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
 
@@ -207,6 +290,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
           manager_id: p.manager_id,
           manager_name: managerName,
           manager_code: manager?.employee_code,
+          category_id: p.category_id,
+          category_name: p.project_categories?.name,
+          category_color: p.project_categories?.color,
           start_date: p.start_date,
           end_date: p.end_date,
           budget: p.budget,
@@ -246,6 +332,98 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
     }
   }
 
+  // Fetch categories for filter
+  const fetchCategories = async () => {
+    try {
+      const categoriesData = await projectCategoryApi.getCategories(true)
+      setCategories(categoriesData || [])
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
+
+  // Fetch customers for filter
+  const fetchCustomers = async () => {
+    try {
+      const response = await apiGet('/api/customers?limit=1000')
+      const customersData = response?.customers || response || []
+      setCustomers(customersData.map((c: any) => ({ id: c.id, name: c.name })))
+    } catch (error) {
+      console.error('Error fetching customers:', error)
+    }
+  }
+
+  // Filter projects by category, customer, and date
+  const filterProjects = () => {
+    let filtered = [...projects]
+
+    // Filter by category
+    if (categoryFilter !== 'all') {
+      filtered = filtered.filter((p) => p.category_id === categoryFilter)
+    }
+
+    // Filter by customer
+    if (customerFilter !== 'all') {
+      filtered = filtered.filter((p) => p.customer_id === customerFilter)
+    }
+
+    // Filter by date range
+    if (dateFilter === 'custom' && (startDate || endDate)) {
+      filtered = filtered.filter((p) => {
+        if (!p.start_date) return false
+
+        const projectStartDate = new Date(p.start_date)
+        let isInRange = true
+
+        if (startDate) {
+          const filterStartDate = new Date(startDate)
+          isInRange = isInRange && projectStartDate >= filterStartDate
+        }
+
+        if (endDate) {
+          const filterEndDate = new Date(endDate)
+          // Set end date to end of day
+          filterEndDate.setHours(23, 59, 59, 999)
+          isInRange = isInRange && projectStartDate <= filterEndDate
+        }
+
+        return isInRange
+      })
+    } else if (dateFilter === 'this_month') {
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+
+      filtered = filtered.filter((p) => {
+        if (!p.start_date) return false
+        const projectStartDate = new Date(p.start_date)
+        return projectStartDate >= startOfMonth && projectStartDate <= endOfMonth
+      })
+    } else if (dateFilter === 'last_month') {
+      const now = new Date()
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+
+      filtered = filtered.filter((p) => {
+        if (!p.start_date) return false
+        const projectStartDate = new Date(p.start_date)
+        return projectStartDate >= startOfLastMonth && projectStartDate <= endOfLastMonth
+      })
+    } else if (dateFilter === 'this_year') {
+      const now = new Date()
+      const startOfYear = new Date(now.getFullYear(), 0, 1)
+      const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
+
+      filtered = filtered.filter((p) => {
+        if (!p.start_date) return false
+        const projectStartDate = new Date(p.start_date)
+        return projectStartDate >= startOfYear && projectStartDate <= endOfYear
+      })
+    }
+
+    setFilteredProjects(filtered)
+  }
+
   // Expose refresh function via ref
   useImperativeHandle(ref, () => ({
     refresh: fetchData
@@ -253,7 +431,16 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
 
   useEffect(() => {
     fetchData()
+  }, [customerId])
+
+  useEffect(() => {
+    fetchCategories()
+    fetchCustomers()
   }, [])
+
+  useEffect(() => {
+    filterProjects()
+  }, [projects, categoryFilter, customerFilter, dateFilter, startDate, endDate])
 
   const handleDragStart = (project: ProjectItem) => {
     setDraggedProject(project)
@@ -404,24 +591,24 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
 
   const grouped = useMemo(() => {
     const byStatus: Record<string, ProjectItem[]> = {}
-    
+
     // Initialize with all statuses from database (using Vietnamese names)
     statuses.forEach(status => {
       byStatus[status.name] = []
     })
-    
-    for (const p of projects) {
+
+    for (const p of filteredProjects) {
       // Use status name directly (already mapped from project_statuses or fallback to enum)
       // The status field now contains the Vietnamese name from project_statuses
       const finalStatusName = p.status || 'Lập kế hoạch' // Default fallback
-      
+
       if (!byStatus[finalStatusName]) {
         byStatus[finalStatusName] = []
       }
       byStatus[finalStatusName].push(p)
     }
     return byStatus
-  }, [projects, statuses])
+  }, [filteredProjects, statuses])
 
   const getStatusMeta = (statusName: string) => {
     const status = statuses.find(s => s.name === statusName)
@@ -657,25 +844,168 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
 
   return (
     <>
-      {/* Status Management Button */}
-      <div className="mb-4 flex justify-end">
-        <button
-          onClick={() => {
-            setEditingStatus(null)
-            setStatusForm({
-              name: '',
-              display_order: statuses.length > 0 ? Math.max(...statuses.map(s => s.display_order)) + 1 : 1,
-              description: '',
-              color_class: 'bg-gray-100 text-gray-800'
-            })
-            setSelectedColor('#6b7280')
-            setShowStatusModal(true)
-          }}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          Tạo trạng thái mới
-        </button>
+      {/* Status Management Button and Filters */}
+      <div className="mb-4 space-y-4">
+        {/* Main filter row */}
+        <div className="flex flex-col sm:flex-row justify-between gap-4">
+          {/* Category Filter */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Tag className="h-5 w-5 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Lọc theo nhóm:</span>
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => {
+                const newCategoryFilter = e.target.value
+                setCategoryFilter(newCategoryFilter)
+                // When selecting "all" categories, also reset customer and date filters to show all projects
+                if (newCategoryFilter === 'all') {
+                  setCustomerFilter('all')
+                  setDateFilter('all')
+                  setStartDate('')
+                  setEndDate('')
+                }
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-sm"
+            >
+              <option value="all">Tất cả nhóm</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Toggle Button */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                showAdvancedFilters
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+              }`}
+              title={showAdvancedFilters ? 'Ẩn bộ lọc nâng cao' : 'Hiện bộ lọc nâng cao'}
+            >
+              <Filter className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                {showAdvancedFilters ? 'Ẩn bộ lọc' : 'Bộ lọc'}
+              </span>
+            </button>
+          </div>
+
+          {/* Management Buttons */}
+          <div className="flex gap-2">
+            {(userRole === 'admin' || userRole === 'manager') && (
+              <button
+                onClick={() => setShowCategoriesManager(true)}
+                className="flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700 shadow-sm"
+                title="Quản lý nhóm phân loại dự án"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">Quản lý nhóm</span>
+                <span className="sm:hidden">Nhóm</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setEditingStatus(null)
+                setStatusForm({
+                  name: '',
+                  display_order: statuses.length > 0 ? Math.max(...statuses.map(s => s.display_order)) + 1 : 1,
+                  description: '',
+                  color_class: 'bg-gray-100 text-gray-800'
+                })
+                setSelectedColor('#6b7280')
+                setShowStatusModal(true)
+              }}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              Tạo trạng thái mới
+            </button>
+          </div>
+        </div>
+
+        {/* Advanced Filters */}
+        {showAdvancedFilters && (
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Customer Filter */}
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Khách hàng:</span>
+                <select
+                  value={customerFilter}
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-sm"
+                >
+                  <option value="all">Tất cả khách hàng</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Date Filter */}
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Thời gian:</span>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-sm"
+                >
+                  <option value="all">Tất cả thời gian</option>
+                  <option value="this_month">Tháng này</option>
+                  <option value="last_month">Tháng trước</option>
+                  <option value="this_year">Năm nay</option>
+                  <option value="custom">Tùy chỉnh</option>
+                </select>
+              </div>
+
+              {/* Custom date range - only show when custom is selected */}
+              {dateFilter === 'custom' && (
+                <div className="md:col-span-2 flex flex-col sm:flex-row gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Từ ngày:</span>
+                    <button
+                      onClick={() => {
+                        setDatePickerMode('start')
+                        setShowDatePickerDialog(true)
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-sm min-w-[140px]"
+                    >
+                      <span className="flex-1 text-left">
+                        {startDate ? new Date(startDate).toLocaleDateString('vi-VN') : 'Chọn ngày'}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Đến ngày:</span>
+                    <button
+                      onClick={() => {
+                        setDatePickerMode('end')
+                        setShowDatePickerDialog(true)
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-sm min-w-[140px]"
+                    >
+                      <span className="flex-1 text-left">
+                        {endDate ? new Date(endDate).toLocaleDateString('vi-VN') : 'Chọn ngày'}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Kanban Board with Horizontal Scroll */}
@@ -1153,6 +1483,68 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ onViewProjec
                 </button>
                 <button
                   onClick={handleConfirmStatusChange}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Xác nhận
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Project Categories Manager */}
+      <ProjectCategoriesManager
+        isOpen={showCategoriesManager}
+        onClose={() => setShowCategoriesManager(false)}
+        onSuccess={() => {
+          // Refresh categories and projects to get updated category data
+          fetchCategories()
+          fetchData()
+        }}
+      />
+
+      {/* Date Picker Dialog */}
+      {showDatePickerDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <Calendar className="h-6 w-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Chọn {datePickerMode === 'start' ? 'ngày bắt đầu' : 'ngày kết thúc'}
+                </h3>
+              </div>
+
+              <div className="mb-6">
+                <input
+                  type="date"
+                  autoFocus
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-lg"
+                  onChange={(e) => {
+                    if (datePickerMode === 'start') {
+                      setStartDate(e.target.value)
+                    } else {
+                      setEndDate(e.target.value)
+                    }
+                    setShowDatePickerDialog(false)
+                  }}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDatePickerDialog(false)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Hủy
+                </button>
+                <button
+                  onClick={() => setShowDatePickerDialog(false)}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <CheckCircle className="h-4 w-4" />

@@ -27,3 +27,4 @@
 - Log lỗi nhưng không crash server
 - Return error response thay vì raise exception
 
+

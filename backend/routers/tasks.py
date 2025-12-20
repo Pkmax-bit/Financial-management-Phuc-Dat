@@ -292,19 +292,35 @@ def _fetch_task_notes(supabase, task_id: str, current_user_id: Optional[str] = N
 @router.get("/groups", response_model=List[TaskGroup])
 async def get_task_groups(
     current_user: User = Depends(get_current_user),
-    is_active: Optional[bool] = Query(None, description="Filter by active status")
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    category_id: Optional[str] = Query(None, description="Filter by project category ID")
 ):
-    """Get all task groups"""
+    """Get all task groups, optionally filtered by active status or category_id"""
     try:
         supabase = get_supabase_client()
         
-        query = supabase.table("task_groups").select("*")
+        # Join với project_categories để lấy name/description (Single Source of Truth)
+        query = supabase.table("task_groups").select("""
+            *,
+            project_categories:category_id(
+                id,
+                name,
+                code,
+                description,
+                color,
+                icon,
+                display_order
+            )
+        """)
         
         # Filter out deleted groups
         query = query.is_("deleted_at", "null")
         
         if is_active is not None:
             query = query.eq("is_active", is_active)
+        
+        if category_id is not None:
+            query = query.eq("category_id", category_id)
         
         result = query.order("created_at", desc=True).execute()
         
@@ -313,6 +329,20 @@ async def get_task_groups(
             # Get member count
             member_count = supabase.table("task_group_members").select("id", count="exact").eq("group_id", group["id"]).execute()
             group["member_count"] = member_count.count if hasattr(member_count, 'count') else 0
+            
+            # Nếu có category, lấy name/description từ category
+            if group.get("project_categories"):
+                category = group["project_categories"]
+                group["category_name"] = category.get("name")
+                group["category_description"] = category.get("description")
+                group["category_color"] = category.get("color")
+                group["category_icon"] = category.get("icon")
+                # Nếu task_group không có name, dùng name từ category
+                if not group.get("name") and category.get("name"):
+                    group["name"] = category.get("name")
+                if not group.get("description") and category.get("description"):
+                    group["description"] = category.get("description")
+            
             groups.append(group)
         
         return groups

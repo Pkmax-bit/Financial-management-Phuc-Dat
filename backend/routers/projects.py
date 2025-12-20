@@ -79,6 +79,7 @@ async def get_projects(
     search: Optional[str] = Query(None),
     customer_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    category_id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
     """Get projects with optional filtering. Only shows projects where user is in project_team, except for admin and accountant who see all projects."""
@@ -90,7 +91,8 @@ async def get_projects(
             query = supabase.table("projects").select("""
                 *,
                 customers:customer_id(name),
-                employees:manager_id(first_name, last_name)
+                employees:manager_id(first_name, last_name),
+                project_categories:category_id(name, color)
             """)
         else:
             # Non-admin users: only see projects where they are in project_team
@@ -136,7 +138,8 @@ async def get_projects(
             query = supabase.table("projects").select("""
                 *,
                 customers:customer_id(name),
-                employees:manager_id(first_name, last_name)
+                employees:manager_id(first_name, last_name),
+                project_categories:category_id(name, color)
             """).in_("id", project_ids)
         
         # Apply filters
@@ -151,15 +154,26 @@ async def get_projects(
         if status:
             query = query.eq("status", status)
         
+        if category_id:
+            query = query.eq("category_id", category_id)
+        
         # Apply pagination
         result = query.range(skip, skip + limit - 1).execute()
         
-        # Process data to add customer_name and manager_name
+        # Process data to add customer_name, manager_name, and category info
         processed_projects = []
         for project in result.data:
             project_data = dict(project)
             project_data['customer_name'] = project.get('customers', {}).get('name') if project.get('customers') else None
             project_data['manager_name'] = f"{project.get('employees', {}).get('first_name', '')} {project.get('employees', {}).get('last_name', '')}".strip() if project.get('employees') else None
+            # Add category information
+            category = project.get('project_categories')
+            if category:
+                project_data['category_name'] = category.get('name')
+                project_data['category_color'] = category.get('color')
+            else:
+                project_data['category_name'] = None
+                project_data['category_color'] = None
             processed_projects.append(Project(**project_data))
         
         return processed_projects
@@ -592,6 +606,13 @@ def check_user_has_project_access(supabase, current_user: User, project_id: Opti
     
     return False
 
+# ============================================================================
+# Project Categories Routes - Must be defined BEFORE /{project_id} route
+# ============================================================================
+# Note: Categories routes are handled by project_categories router at /api/projects/categories
+# This comment ensures /categories doesn't conflict with /{project_id}
+# The actual routes are in routers/project_categories.py
+
 @router.get("/{project_id}", response_model=Project)
 async def get_project(
     project_id: str,
@@ -619,9 +640,11 @@ async def get_project(
                 detail="You don't have access to this project"
             )
         
-        # Get customer and manager data separately
+        # Get customer, manager, and category data separately
         customer_name = None
         manager_name = None
+        category_name = None
+        category_color = None
         
         if project.get('customer_id'):
             customer_result = supabase.table("customers").select("name").eq("id", project['customer_id']).execute()
@@ -634,10 +657,18 @@ async def get_project(
                 manager_data = manager_result.data[0]
                 manager_name = f"{manager_data.get('first_name', '')} {manager_data.get('last_name', '')}".strip()
         
-        # Process data to add customer_name and manager_name
+        if project.get('category_id'):
+            category_result = supabase.table("project_categories").select("name, color").eq("id", project['category_id']).execute()
+            if category_result.data:
+                category_name = category_result.data[0].get('name')
+                category_color = category_result.data[0].get('color')
+        
+        # Process data to add customer_name, manager_name, and category info
         project_data = dict(project)
         project_data['customer_name'] = customer_name
         project_data['manager_name'] = manager_name
+        project_data['category_name'] = category_name
+        project_data['category_color'] = category_color
         
         return Project(**project_data)
         

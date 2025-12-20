@@ -11,6 +11,8 @@ interface ProjectItem {
   progress: number
   priority?: 'low' | 'medium' | 'high' | 'urgent'
   status: string
+  category_name?: string
+  category_color?: string
 }
 
 interface KanbanColumnProps {
@@ -79,6 +81,8 @@ export default function KanbanColumn({
             customerName={p.customer_name}
             progress={p.progress}
             priority={p.priority}
+            categoryName={p.category_name}
+            categoryColor={p.category_color}
             onClick={() => onCardClick?.(p.id)}
             onDragStart={() => onDragStart?.(p)}
           />

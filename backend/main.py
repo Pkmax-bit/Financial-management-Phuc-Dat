@@ -202,7 +202,7 @@ async def health_check():
     }
 
 # Import routers
-from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks, products, product_categories, chat, app_updates, qr_login
+from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks, products, product_categories, chat, app_updates, qr_login, project_categories
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -223,6 +223,7 @@ app.include_router(project_expenses.router, prefix="/api", tags=["Project Expens
 app.include_router(purchase_orders.router, tags=["Purchase Orders"])
 app.include_router(expense_claims.router, tags=["Expense Claims"])
 app.include_router(budgeting.router, tags=["Budgeting"])
+app.include_router(project_categories.router, prefix="/api/project-categories", tags=["Project Categories"])
 app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
 app.include_router(projects_financial.router, prefix="/api/projects", tags=["Project Financial"])
 app.include_router(project_team.router, prefix="/api", tags=["Project Team"])

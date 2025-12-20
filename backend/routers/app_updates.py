@@ -125,3 +125,4 @@ async def get_update_info():
         "update_required": APP_UPDATE_REQUIRED
     }
 
+

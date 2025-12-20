@@ -43,6 +43,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { customerApi } from '@/lib/api'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
+import CustomerKanbanBoard, { CustomerKanbanBoardRef } from '@/components/customers/CustomerKanbanBoard'
 
 const TOUR_STORAGE_KEY = 'customers-page-tour-status-v1'
 const CUSTOMER_FORM_TOUR_STORAGE_KEY = 'customer-form-tour-status-v1'
@@ -114,6 +115,8 @@ export default function CustomersPage() {
 
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
+  const kanbanBoardRef = useRef<CustomerKanbanBoardRef>(null)
 
   // Mock transaction data
   const mockTransactions: Transaction[] = [
@@ -334,6 +337,7 @@ export default function CustomersPage() {
       setShowAddModal(false)
       setNotice({ type: 'success', text: 'Thêm khách hàng thành công' })
       await fetchCustomers()
+      kanbanBoardRef.current?.refresh()
     } catch (err: unknown) {
       setAddError((err as Error)?.message || 'Không thể thêm khách hàng')
     } finally {
@@ -369,6 +373,7 @@ export default function CustomersPage() {
       setShowEditModal(false)
       setNotice({ type: 'success', text: 'Cập nhật khách hàng thành công' })
       await fetchCustomers()
+      kanbanBoardRef.current?.refresh()
     } catch (err: unknown) {
       setEditError((err as Error)?.message || 'Không thể cập nhật khách hàng')
     } finally {
@@ -382,6 +387,7 @@ export default function CustomersPage() {
       await customerApi.deleteCustomer(customer.id)
       setNotice({ type: 'success', text: 'Đã xóa khách hàng khỏi hệ thống' })
       await fetchCustomers()
+      kanbanBoardRef.current?.refresh()
     } catch (err: unknown) {
       setNotice({ type: 'error', text: (err as Error)?.message || 'Không thể xóa khách hàng' })
     }
@@ -398,6 +404,7 @@ export default function CustomersPage() {
           : 'Đã bỏ đánh dấu khách hàng tiềm năng' 
       })
       await fetchCustomers()
+      kanbanBoardRef.current?.refresh()
       // Auto-hide notice after 3 seconds
       setTimeout(() => setNotice(null), 3000)
     } catch (err: unknown) {
@@ -1042,9 +1049,11 @@ export default function CustomersPage() {
                 </p>
                 <div className="flex items-center mt-2 space-x-4">
                   <div className="flex items-center">
-                    <div className={`w-2 h-2 rounded-full mr-2 ${
-                      customers.length > 0 ? 'bg-green-500' : 'bg-red-500'
-                    }`}></div>
+                    <div
+                      className={`w-2 h-2 rounded-full mr-2 ${
+                        customers.length > 0 ? 'bg-green-500' : 'bg-red-500'
+                      }`}
+                    ></div>
                     <span className="text-xs text-black">
                       {customers.length > 0 ? `${customers.length} khách hàng` : 'Chưa có dữ liệu'}
                     </span>
@@ -1052,7 +1061,9 @@ export default function CustomersPage() {
                   {user && (
                     <div className="flex items-center">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                      <span className="text-xs text-black">Đã đăng nhập: {user?.email || 'Unknown'}</span>
+                      <span className="text-xs text-black">
+                        Đã đăng nhập: {user?.email || 'Unknown'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1072,17 +1083,58 @@ export default function CustomersPage() {
                   <CircleHelp className="h-5 w-5 mr-2" />
                   <span>Bắt đầu hướng dẫn</span>
                 </button>
+                {/* View toggle: Kanban | List (Bitrix24 style) */}
+                <div className="inline-flex rounded-[2px] border border-gray-300 overflow-hidden">
+                  <button
+                    type="button"
+                    aria-label="Chuyển sang xem Kanban"
+                    onClick={() => setViewMode('kanban')}
+                    className={`flex h-8 w-10 items-center justify-center border-r border-gray-300 text-xs transition-colors ${
+                      viewMode === 'kanban'
+                        ? 'bg-[#E8F4FD] text-[#2066B0] border-[#2066B0]'
+                        : 'bg-white text-[#535C69] hover:bg-[#F5F7F8]'
+                    }`}
+                  >
+                    <div className="grid grid-cols-2 gap-[2px]">
+                      <span className="h-2 w-2 rounded-[2px] border border-current" />
+                      <span className="h-2 w-2 rounded-[2px] border border-current" />
+                      <span className="h-2 w-2 rounded-[2px] border border-current" />
+                      <span className="h-2 w-2 rounded-[2px] border border-current" />
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Chuyển sang xem danh sách"
+                    onClick={() => setViewMode('list')}
+                    className={`flex h-8 w-10 items-center justify-center text-xs transition-colors ${
+                      viewMode === 'list'
+                        ? 'bg-[#E8F4FD] text-[#2066B0] border-l border-[#2066B0]'
+                        : 'bg-white text-[#535C69] hover:bg-[#F5F7F8] border-l border-gray-300'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-[2px]">
+                      <span className="h-[2px] w-4 rounded-full bg-current" />
+                      <span className="h-[2px] w-4 rounded-full bg-current" />
+                      <span className="h-[2px] w-4 rounded-full bg-current" />
+                    </div>
+                  </button>
+                </div>
                 <button
                   onClick={fetchCustomers}
                   disabled={loading}
                   className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                 >
                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
                   </svg>
                   {loading ? 'Đang tải...' : 'Làm mới'}
                 </button>
-                <button 
+                <button
                   onClick={openAddModal}
                   data-tour-id="customers-add-button"
                   className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -1271,8 +1323,20 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          {/* Customer List */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-md" data-tour-id="customers-table">
+          {/* Customer View: Kanban or List */}
+          {viewMode === 'kanban' ? (
+            <div className="bg-white rounded-lg shadow-sm border p-6" data-tour-id="customers-kanban">
+              <CustomerKanbanBoard
+                ref={kanbanBoardRef}
+                onViewCustomer={(customer) => {
+                  // Navigate to projects page filtered by customer
+                  router.push(`/projects?customer_id=${customer.id}`)
+                }}
+                onAddCustomer={() => setShowAddModal(true)}
+              />
+            </div>
+          ) : (
+            <div className="bg-white shadow overflow-hidden sm:rounded-md" data-tour-id="customers-table">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 Danh sách Khách hàng ({filteredCustomers.length})
@@ -1405,8 +1469,8 @@ export default function CustomersPage() {
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => {
-                                  setSelectedCustomer(customer)
-                                  setShowDetailModal(true)
+                                  // Navigate to projects page filtered by customer
+                                  router.push(`/projects?customer_id=${customer.id}`)
                                 }}
                                 className="text-black hover:text-black"
                                 title="Xem chi tiết"
@@ -1445,6 +1509,7 @@ export default function CustomersPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Quick Action Bar */}
           {selectedCustomer && (

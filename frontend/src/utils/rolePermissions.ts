@@ -99,14 +99,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     roles: ['customer', 'admin', 'sales', 'accountant'],
     category: 'system'
   },
-  {
-    name: 'Tiến độ thi công',
-    href: '/projects/kanban',
-    icon: 'FolderOpen',
-    description: 'Theo dõi tiến độ thi công nội bộ',
-    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
-    category: 'system'
-  },
+  // {
+  //   name: 'Tiến độ thi công',
+  //   href: '/projects/kanban',
+  //   icon: 'FolderOpen',
+  //   description: 'Theo dõi tiến độ thi công nội bộ',
+  //   roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
+  //   category: 'system'
+  // },
   {
     name: 'Nhân viên',
     href: '/employees',
@@ -131,14 +131,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker', 'customer'],
     category: 'system'
   },
-  {
-    name: 'Chat nội bộ',
-    href: '/chat',
-    icon: 'MessageSquare',
-    description: 'Tin nhắn nội bộ giữa nhân viên',
-    roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
-    category: 'system'
-  },
+  // {
+  //   name: 'Chat nội bộ',
+  //   href: '/chat',
+  //   icon: 'MessageSquare',
+  //   description: 'Tin nhắn nội bộ giữa nhân viên',
+  //   roles: ['admin', 'sales', 'accountant', 'workshop_employee', 'transport', 'employee', 'worker'],
+  //   category: 'system'
+  // },
   {
     name: 'Góp ý hệ thống',
     href: '/system/feedback',

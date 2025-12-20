@@ -30,6 +30,9 @@ class Project(BaseModel):
     manager_id: Optional[str] = None
     customer_name: Optional[str] = None  # Added for display
     manager_name: Optional[str] = None  # Added for display
+    category_id: Optional[str] = None  # Project category
+    category_name: Optional[str] = None  # Added for display
+    category_color: Optional[str] = None  # Category color for UI
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None
@@ -49,6 +52,7 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = None
     customer_id: Optional[str] = None
     manager_id: Optional[str] = None
+    category_id: Optional[str] = None
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None
@@ -65,6 +69,7 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     customer_id: Optional[str] = None
     manager_id: Optional[str] = None
+    category_id: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     budget: Optional[float] = None

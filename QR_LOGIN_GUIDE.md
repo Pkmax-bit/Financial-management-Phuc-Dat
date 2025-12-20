@@ -219,3 +219,4 @@ Bảng `qr_login_sessions` lưu trữ các session QR code:
 - **Android logs**: Sử dụng `adb logcat` hoặc Android Studio Logcat
 - **Web console**: Mở DevTools > Console để xem logs
 
+

@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, Eye, Edit, Trash2, Calendar, DollarSign, Users, Target, MoreVertical, Filter, X } from 'lucide-react'
+import { Search, Eye, Edit, Trash2, Calendar, DollarSign, Users, Target, MoreVertical, Filter, X, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { projectCategoryApi, customerApi } from '@/lib/api'
+import ProjectCategoriesManager from './ProjectCategoriesManager'
 
 interface Project {
   id: string
@@ -13,6 +15,9 @@ interface Project {
   customer_name?: string
   manager_id: string
   manager_name?: string
+  category_id?: string
+  category_name?: string
+  category_color?: string
   start_date: string
   end_date?: string
   budget?: number
@@ -31,6 +36,7 @@ interface ProjectsTabProps {
   onEditProject: (project: Project) => void
   onViewProject: (project: Project) => void
   onDeleteProject: (project: Project) => void
+  customerId?: string
 }
 
 const statusColors: Record<string, string> = {
@@ -67,15 +73,21 @@ export default function ProjectsTab({
   onCreateProject,
   onEditProject,
   onViewProject,
-  onDeleteProject
+  onDeleteProject,
+  customerId
 }: ProjectsTabProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [customerFilter, setCustomerFilter] = useState<string>('all')
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; color?: string }>>([])
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string }>>([])
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [showFilter, setShowFilter] = useState(false)
+  const [showCategoriesManager, setShowCategoriesManager] = useState(false)
   const [dateFilter, setDateFilter] = useState({
     from: '',
     to: ''
@@ -87,7 +99,9 @@ export default function ProjectsTab({
   useEffect(() => {
     fetchProjects()
     fetchTeamMembers()
-  }, [])
+    fetchCategories()
+    fetchCustomers()
+  }, [customerId])
 
   useEffect(() => {
     console.log('🔄 useEffect filterProjects triggered:', {
@@ -95,10 +109,12 @@ export default function ProjectsTab({
       teamMembersCount: teamMembers.length,
       selectedTeamMemberId,
       searchQuery,
-      statusFilter
+      statusFilter,
+      categoryFilter,
+      customerFilter
     })
     filterProjects()
-  }, [projects, searchQuery, statusFilter, dateFilter, selectedTeamMemberId, teamMembers])
+  }, [projects, searchQuery, statusFilter, categoryFilter, customerFilter, dateFilter, selectedTeamMemberId, teamMembers])
 
   const fetchProjects = async () => {
     try {
@@ -142,6 +158,7 @@ export default function ProjectsTab({
           description,
           customer_id,
           manager_id,
+          category_id,
           start_date,
           end_date,
           budget,
@@ -158,8 +175,18 @@ export default function ProjectsTab({
             id,
             first_name,
             last_name
+          ),
+          project_categories:category_id(
+            id,
+            name,
+            color
           )
         `)
+
+      // Filter by customer_id if provided
+      if (customerId) {
+        query = query.eq('customer_id', customerId)
+      }
 
       // Admin and accountant see all projects
       if (userData.role === 'admin' || userData.role === 'accountant') {
@@ -217,6 +244,9 @@ export default function ProjectsTab({
         manager_name: p.employees
           ? `${p.employees.first_name || ''} ${p.employees.last_name || ''}`.trim()
           : undefined,
+        category_id: p.category_id,
+        category_name: p.project_categories?.name,
+        category_color: p.project_categories?.color,
         start_date: p.start_date,
         end_date: p.end_date,
         budget: p.budget,
@@ -236,6 +266,24 @@ export default function ProjectsTab({
       console.error('Error fetching projects:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      const categoriesData = await projectCategoryApi.getCategories(true)
+      setCategories(categoriesData || [])
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
+
+  const fetchCustomers = async () => {
+    try {
+      const customersData = await customerApi.getCustomers({ limit: 1000 })
+      setCustomers(customersData || [])
+    } catch (error) {
+      console.error('Error fetching customers:', error)
     }
   }
 
@@ -526,6 +574,8 @@ export default function ProjectsTab({
       totalProjects: projects.length,
       searchQuery,
       statusFilter,
+      categoryFilter,
+      customerFilter,
       selectedTeamMemberId,
       teamMembersCount: teamMembers.length
     })
@@ -551,6 +601,20 @@ export default function ProjectsTab({
       const beforeCount = filtered.length
       filtered = filtered.filter((p) => p.status === statusFilter)
       console.log(`📊 Status filter (${statusFilter}): ${beforeCount} -> ${filtered.length}`)
+    }
+
+    // Filter by category
+    if (categoryFilter !== 'all') {
+      const beforeCount = filtered.length
+      filtered = filtered.filter((p) => p.category_id === categoryFilter)
+      console.log(`🏷️ Category filter (${categoryFilter}): ${beforeCount} -> ${filtered.length}`)
+    }
+
+    // Filter by customer
+    if (customerFilter !== 'all') {
+      const beforeCount = filtered.length
+      filtered = filtered.filter((p) => p.customer_id === customerFilter)
+      console.log(`👤 Customer filter (${customerFilter}): ${beforeCount} -> ${filtered.length}`)
     }
 
     // Filter by team member
@@ -753,6 +817,16 @@ export default function ProjectsTab({
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
           />
         </div>
+        {(userRole === 'admin' || userRole === 'manager') && (
+          <button
+            onClick={() => setShowCategoriesManager(true)}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+            title="Quản lý nhóm phân loại"
+          >
+            <Settings className="h-4 w-4" />
+            Quản lý nhóm
+          </button>
+        )}
         <button
           onClick={() => setShowFilter(!showFilter)}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${showFilter
@@ -786,6 +860,40 @@ export default function ProjectsTab({
                 <option value="on_hold">Tạm dừng</option>
                 <option value="completed">Hoàn thành</option>
                 <option value="cancelled">Đã hủy</option>
+              </select>
+            </div>
+
+            {/* Category Filter */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-black mb-2">Nhóm phân loại</label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+              >
+                <option value="all">Tất cả nhóm</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Customer Filter */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-black mb-2">Khách hàng</label>
+              <select
+                value={customerFilter}
+                onChange={(e) => setCustomerFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+              >
+                <option value="all">Tất cả khách hàng</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -859,14 +967,14 @@ export default function ProjectsTab({
             <div className="text-center py-12">
               <Target className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {searchQuery || statusFilter !== 'all' || dateFilter.from || dateFilter.to ? 'Không tìm thấy dự án' : 'Chưa có dự án nào'}
+                {searchQuery || statusFilter !== 'all' || categoryFilter !== 'all' || customerFilter !== 'all' || dateFilter.from || dateFilter.to ? 'Không tìm thấy dự án' : 'Chưa có dự án nào'}
               </h3>
               <p className="text-gray-600 mb-4">
-                {searchQuery || statusFilter !== 'all' || dateFilter.from || dateFilter.to
+                {searchQuery || statusFilter !== 'all' || categoryFilter !== 'all' || customerFilter !== 'all' || dateFilter.from || dateFilter.to
                   ? 'Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm'
                   : 'Bắt đầu bằng cách tạo dự án mới'}
               </p>
-              {!searchQuery && statusFilter === 'all' && !dateFilter.from && !dateFilter.to && (
+              {!searchQuery && statusFilter === 'all' && categoryFilter === 'all' && customerFilter === 'all' && !dateFilter.from && !dateFilter.to && (
                 <button
                   onClick={onCreateProject}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -924,7 +1032,7 @@ export default function ProjectsTab({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 mb-4">
+                        <div className="flex items-center gap-2 mb-4 flex-wrap">
                           <span
                             className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[project.status] || statusColors.planning}`}
                           >
@@ -935,6 +1043,17 @@ export default function ProjectsTab({
                           >
                             {priorityLabels[project.priority] || project.priority}
                           </span>
+                          {project.category_name && (
+                            <span
+                              className="px-2 py-1 text-xs font-medium rounded-full"
+                              style={{
+                                backgroundColor: project.category_color ? `${project.category_color}20` : '#E5E7EB',
+                                color: project.category_color || '#374151'
+                              }}
+                            >
+                              {project.category_name}
+                            </span>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-600">
@@ -1034,7 +1153,7 @@ export default function ProjectsTab({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 mb-4">
+                      <div className="flex items-center gap-2 mb-4 flex-wrap">
                         <span
                           className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[project.status] || statusColors.planning}`}
                         >
@@ -1045,6 +1164,17 @@ export default function ProjectsTab({
                         >
                           {priorityLabels[project.priority] || project.priority}
                         </span>
+                        {project.category_name && (
+                          <span
+                            className="px-2 py-1 text-xs font-medium rounded-full"
+                            style={{
+                              backgroundColor: project.category_color ? `${project.category_color}20` : '#E5E7EB',
+                              color: project.category_color || '#374151'
+                            }}
+                          >
+                            {project.category_name}
+                          </span>
+                        )}
                       </div>
 
                       <div className="mb-4">
@@ -1137,6 +1267,16 @@ export default function ProjectsTab({
           </div>
         </div>
       )}
+
+      {/* Project Categories Manager */}
+      <ProjectCategoriesManager
+        isOpen={showCategoriesManager}
+        onClose={() => setShowCategoriesManager(false)}
+        onSuccess={() => {
+          fetchCategories()
+          fetchProjects()
+        }}
+      />
     </div>
   )
 }

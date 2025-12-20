@@ -40,3 +40,4 @@ CREATE POLICY "Users can read their own QR sessions"
     FOR SELECT
     USING (auth.uid() = user_id);
 
+

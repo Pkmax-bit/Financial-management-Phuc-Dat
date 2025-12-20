@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Calendar, DollarSign, Users, Target, Clock, AlertCircle, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { projectApi, customerApi, employeeApi, apiPost, apiGet } from '@/lib/api'
+import { projectApi, customerApi, employeeApi, projectCategoryApi, apiPost, apiGet } from '@/lib/api'
 import ProjectSuccessModal from '../ProjectSuccessModal'
 
 interface Customer {
@@ -33,6 +33,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     description: '',
     customer_id: '',
     manager_id: '',
+    category_id: '',
     start_date: '',
     end_date: '',
     budget: '',
@@ -45,6 +46,8 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
   const [customers, setCustomers] = useState<Customer[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; color?: string }>>([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
   const [taskGroups, setTaskGroups] = useState<Array<{ id: string; name: string }>>([])
   const [loadingTaskGroups, setLoadingTaskGroups] = useState(false)
   const [selectedTaskGroupId, setSelectedTaskGroupId] = useState<string>('')
@@ -58,6 +61,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     if (isOpen) {
       fetchCustomers()
       fetchEmployees()
+      fetchCategories()
       fetchTaskGroups()
       generateProjectCode()
     }
@@ -66,18 +70,15 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   const fetchTaskGroups = async () => {
     try {
       setLoadingTaskGroups(true)
-      const groups = await apiGet('/api/tasks/groups')
+      const groups = await apiGet('/api/tasks/groups?is_active=true')
       setTaskGroups(groups || [])
       
-      // Tìm nhóm "Dự án cửa" và set làm mặc định
-      const duAnCuaGroup = groups.find((g: any) => 
-        g.name && (g.name.toLowerCase().includes('dự án cửa') || g.name.toLowerCase().includes('du an cua'))
-      )
-      if (duAnCuaGroup) {
-        setSelectedTaskGroupId(duAnCuaGroup.id)
-      } else {
-        // Nếu không tìm thấy, tạo nhóm "Dự án cửa"
-        await createDefaultTaskGroup()
+      // Nếu đã chọn category, tự động chọn task_group tương ứng
+      if (formData.category_id) {
+        const categoryGroup = groups.find((g: any) => g.category_id === formData.category_id)
+        if (categoryGroup) {
+          setSelectedTaskGroupId(categoryGroup.id)
+        }
       }
     } catch (error) {
       console.error('Error fetching task groups:', error)
@@ -86,20 +87,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     }
   }
 
-  const createDefaultTaskGroup = async () => {
-    try {
-      const newGroup = await apiPost('/api/tasks/groups', {
-        name: 'Dự án cửa',
-        description: 'Nhóm nhiệm vụ cho các dự án cửa',
-        is_active: true
-      })
-      
-      setTaskGroups(prev => [...prev, newGroup])
-      setSelectedTaskGroupId(newGroup.id)
-    } catch (error) {
-      console.error('Error creating default task group:', error)
-    }
-  }
+  // createDefaultTaskGroup function removed - task_groups are now auto-created from project_categories
 
   const generateProjectCode = async () => {
     try {
@@ -164,6 +152,27 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       }
     } catch (error) {
       console.error('Error fetching customers:', error)
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      setLoadingCategories(true)
+      console.log('🔄 Fetching project categories...')
+      const categoriesData = await projectCategoryApi.getCategories(true)
+      console.log('✅ Categories fetched:', categoriesData)
+      setCategories(categoriesData || [])
+      
+      if (!categoriesData || categoriesData.length === 0) {
+        console.warn('⚠️ No categories found. Make sure migration has been run.')
+      }
+    } catch (error: any) {
+      console.error('❌ Error fetching categories:', error)
+      console.error('Error details:', error.response?.data || error.message)
+      // Set empty array to prevent errors
+      setCategories([])
+    } finally {
+      setLoadingCategories(false)
     }
   }
 
@@ -247,27 +256,10 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         console.log('Supabase success:', data)
       }
 
-      // Tạo task trong nhóm "Dự án cửa" sau khi tạo project thành công
-      if (createdProjectData && selectedTaskGroupId) {
-        try {
-          const taskData = {
-            title: formData.name,
-            description: formData.description || `Nhiệm vụ cho dự án ${formData.name}`,
-            status: 'todo',
-            priority: formData.priority,
-            group_id: selectedTaskGroupId,
-            project_id: createdProjectData.id,
-            assigned_to: formData.manager_id || null,
-            start_date: formData.start_date ? new Date(formData.start_date).toISOString() : null,
-            due_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
-          }
-
-          await apiPost('/api/tasks', taskData)
-          console.log('Task created successfully for project')
-        } catch (taskError) {
-          console.error('Error creating task:', taskError)
-          // Không throw error để không làm gián đoạn việc tạo project
-        }
+      // Task sẽ được tự động tạo bởi database trigger khi project có category_id
+      // Không cần tạo task thủ công ở đây nữa
+      if (createdProjectData && formData.category_id) {
+        console.log('✅ Project created with category. Task will be auto-created by database trigger.')
       }
 
       // Show success notification
@@ -295,6 +287,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         description: '',
         customer_id: '',
         manager_id: '',
+        category_id: '',
         start_date: '',
         end_date: '',
         budget: '',
@@ -304,7 +297,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         billing_type: 'fixed',
         hourly_rate: ''
       })
-      // Không reset selectedTaskGroupId để giữ mặc định "Dự án cửa"
+      // selectedTaskGroupId sẽ được tự động set khi chọn category
       
       // Don't auto-close modal, let success modal handle it
     } catch (error) {
@@ -316,12 +309,36 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
       [name]: value
     }))
+    
+    // Khi chọn category, tự động tìm và chọn task_group tương ứng
+    if (name === 'category_id' && value) {
+      try {
+        const groups = await apiGet(`/api/tasks/groups?category_id=${value}`)
+        if (groups && groups.length > 0) {
+          setSelectedTaskGroupId(groups[0].id)
+          console.log('✅ Auto-selected task group:', groups[0].name, 'for category:', value)
+        } else {
+          // Nếu chưa có task_group, đợi trigger tạo (hoặc có thể tạo thủ công)
+          console.log('⚠️ No task group found for category, waiting for auto-creation...')
+          // Retry sau 1 giây để đợi trigger tạo task_group
+          setTimeout(async () => {
+            const retryGroups = await apiGet(`/api/tasks/groups?category_id=${value}`)
+            if (retryGroups && retryGroups.length > 0) {
+              setSelectedTaskGroupId(retryGroups[0].id)
+              console.log('✅ Task group created, auto-selected:', retryGroups[0].name)
+            }
+          }, 1000)
+        }
+      } catch (error) {
+        console.error('Error fetching task group for category:', error)
+      }
+    }
   }
 
   if (!isOpen) return null
@@ -492,6 +509,35 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                   ))}
                 </select>
               </div>
+            </div>
+          </div>
+
+          <div data-tour-id="project-field-category">
+            <label className="block text-sm font-medium text-black mb-2">
+              Nhóm phân loại
+            </label>
+            <div className="relative">
+              <select
+                name="category_id"
+                value={formData.category_id}
+                onChange={handleChange}
+                disabled={loadingCategories}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {loadingCategories ? 'Đang tải...' : categories.length === 0 ? 'Chưa có nhóm phân loại' : 'Chọn nhóm phân loại'}
+                </option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              {categories.length === 0 && !loadingCategories && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Chưa có nhóm phân loại. Vui lòng chạy migration hoặc tạo nhóm phân loại trong phần Quản lý nhóm.
+                </p>
+              )}
             </div>
           </div>
 

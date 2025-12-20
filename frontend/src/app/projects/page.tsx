@@ -23,6 +23,7 @@ import ProjectsTab from '@/components/projects/ProjectsTab'
 import CreateProjectModal from '@/components/projects/CreateProjectModal'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 import ProjectDetailSidebar from '@/components/projects/ProjectDetailSidebar'
+import KanbanBoard, { KanbanBoardRef } from '@/components/projects/KanbanBoard'
 
 const TOUR_STORAGE_KEY = 'projects-page-tour-status-v1'
 const TOUR_COUNTDOWN_SECONDS = 5
@@ -60,6 +61,7 @@ interface User {
 
 export default function ProjectsPage() {
   const [activeTab, setActiveTab] = useState('projects')
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -69,6 +71,15 @@ export default function ProjectsPage() {
     completed: 0,
     onHold: 0
   })
+  const [customerId, setCustomerId] = useState<string | undefined>(undefined)
+  const [customerName, setCustomerName] = useState<string>('')
+
+  // Filter states moved from KanbanBoard for external control
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [customerFilter, setCustomerFilter] = useState<string>('all')
+  const [dateFilter, setDateFilter] = useState<string>('all')
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
   const router = useRouter()
 
   // Modal states
@@ -81,9 +92,26 @@ export default function ProjectsPage() {
   const [isTourRunning, setIsTourRunning] = useState(false)
   const shepherdRef = useRef<ProjectsShepherdType | null>(null)
   const tourRef = useRef<ProjectsShepherdTour | null>(null)
+  const kanbanBoardRef = useRef<KanbanBoardRef>(null)
   const autoStartAttemptedRef = useRef(false)
   const currentTourModeRef = useRef<'auto' | 'manual'>('manual')
   const isBrowser = typeof window !== 'undefined'
+
+  // Fetch customer name by ID
+  const fetchCustomerName = async (id: string) => {
+    try {
+      const response = await fetch(`/api/customers/${id}`)
+      if (response.ok) {
+        const customer = await response.json()
+        setCustomerName(customer.name || 'Khách hàng')
+      } else {
+        setCustomerName('Khách hàng')
+      }
+    } catch (error) {
+      console.error('Error fetching customer name:', error)
+      setCustomerName('Khách hàng')
+    }
+  }
 
   const handleTourComplete = useCallback(() => {
     setIsTourRunning(false)
@@ -567,13 +595,24 @@ export default function ProjectsPage() {
     fetchStats()
   }, [])
 
-  // Handle action=create from query parameters
+  // Handle action=create and customer_id from query parameters
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search)
       const action = urlParams.get('action')
+      const customerIdParam = urlParams.get('customer_id')
+
       if (action === 'create') {
         setShowCreateModal(true)
+      }
+
+      if (customerIdParam) {
+        // Auto-switch to kanban view and pre-select customer filter when coming from customer page
+        setViewMode('kanban')
+        // Don't set customerId for database filtering - load all projects for better performance
+        // Instead, set the customer filter in UI to show focus on this customer
+        setCustomerFilter(customerIdParam)
+        fetchCustomerName(customerIdParam)
       }
     }
   }, [])
@@ -709,9 +748,13 @@ export default function ProjectsPage() {
       <div className="w-full">
         {/* Sticky Top Navigation */}
         <div data-tour-id="projects-header">
-          <StickyTopNav 
-            title="Dự án" 
-            subtitle="Quản lý và theo dõi dự án"
+          <StickyTopNav
+            title="Dự án"
+            subtitle={
+              customerId && customerName
+                ? `Dự án của khách hàng ${customerName}`
+                : "Quản lý và theo dõi dự án"
+            }
           >
             <button
               onClick={() => startProjectsTour()}
@@ -727,12 +770,44 @@ export default function ProjectsPage() {
               <CircleHelp className="h-5 w-5" />
               Hướng dẫn
             </button>
-            <button
-              onClick={() => router.push('/projects/kanban')}
-              className="flex items-center gap-2 px-4 py-2 text-black bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-            >
-              Kanban
-            </button>
+            {/* View toggle: Kanban | List (Bitrix24 style) */}
+            <div className="ml-4 inline-flex rounded-[2px] border border-gray-300 overflow-hidden">
+              <button
+                type="button"
+                aria-label="Chuyển sang xem Kanban"
+                onClick={() => setViewMode('kanban')}
+                className={`flex h-8 w-10 items-center justify-center border-r border-gray-300 text-xs transition-colors ${
+                  viewMode === 'kanban'
+                    ? 'bg-[#E8F4FD] text-[#2066B0] border-[#2066B0]'
+                    : 'bg-white text-[#535C69] hover:bg-[#F5F7F8]'
+                }`}
+              >
+                {/* Kanban icon: 4 columns */}
+                <div className="grid grid-cols-2 gap-[2px]">
+                  <span className="h-2 w-2 rounded-[2px] border border-current" />
+                  <span className="h-2 w-2 rounded-[2px] border border-current" />
+                  <span className="h-2 w-2 rounded-[2px] border border-current" />
+                  <span className="h-2 w-2 rounded-[2px] border border-current" />
+                </div>
+              </button>
+              <button
+                type="button"
+                aria-label="Chuyển sang xem danh sách"
+                onClick={() => setViewMode('list')}
+                className={`flex h-8 w-10 items-center justify-center text-xs transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-[#E8F4FD] text-[#2066B0] border-l border-[#2066B0]'
+                    : 'bg-white text-[#535C69] hover:bg-[#F5F7F8]'
+                }`}
+              >
+                {/* List icon: 3 rows */}
+                <div className="flex flex-col gap-[2px]">
+                  <span className="h-[2px] w-4 rounded-full bg-current" />
+                  <span className="h-[2px] w-4 rounded-full bg-current" />
+                  <span className="h-[2px] w-4 rounded-full bg-current" />
+                </div>
+              </button>
+            </div>
             <button
               onClick={handleCreateProject}
               data-tour-id="projects-create-button"
@@ -746,88 +821,110 @@ export default function ProjectsPage() {
 
         {/* Page content */}
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour-id="projects-stats">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-black">Tổng dự án</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg">
+                  <FolderOpen className="h-6 w-6 text-blue-600" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-black">Dự án đang hoạt động</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-green-100 to-green-200 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-black">Đã hoàn thành</p>
+                  <p className="text-2xl font-bold text-black">{stats.completed}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg">
+                  <Target className="h-6 w-6 text-black" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-black">Tạm dừng</p>
+                  <p className="text-2xl font-bold text-yellow-600">{stats.onHold}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg">
+                  <Clock className="h-6 w-6 text-yellow-600" />
+                </div>
+              </div>
+            </div>
+          </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour-id="projects-stats">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-black">Tổng dự án</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-              </div>
-              <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg">
-                <FolderOpen className="h-6 w-6 text-blue-600" />
-              </div>
+          {/* View content: Kanban | List */}
+          {viewMode === 'list' ? (
+            <div className="bg-white rounded-lg shadow-sm border" data-tour-id="projects-tab">
+              {activeTab === 'projects' && (
+                <ProjectsTab
+                  onCreateProject={handleCreateProject}
+                  onEditProject={handleEditProject}
+                  onViewProject={handleViewProject}
+                  onDeleteProject={handleDeleteProject}
+                  customerId={undefined}
+                />
+              )}
+              
+              {activeTab === 'reports' && (
+                <div className="p-6">
+                  <div className="text-center py-12">
+                    <BarChart3 className="mx-auto h-12 w-12 text-black mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Project Reports</h3>
+                    <p className="text-black mb-4">
+                      View detailed reports and analytics for your projects
+                    </p>
+                    <button
+                      onClick={() => router.push('/projects/reports')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      View Reports
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-black">Dự án đang hoạt động</p>
-                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
-              </div>
-              <div className="p-3 bg-gradient-to-br from-green-100 to-green-200 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-black">Đã hoàn thành</p>
-                <p className="text-2xl font-bold text-black">{stats.completed}</p>
-              </div>
-              <div className="p-3 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg">
-                <Target className="h-6 w-6 text-black" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-black">Tạm dừng</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.onHold}</p>
-              </div>
-              <div className="p-3 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg">
-                <Clock className="h-6 w-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        <div className="bg-white rounded-lg shadow-sm border" data-tour-id="projects-tab">
-          {activeTab === 'projects' && (
-            <ProjectsTab
-              onCreateProject={handleCreateProject}
-              onEditProject={handleEditProject}
-              onViewProject={handleViewProject}
-              onDeleteProject={handleDeleteProject}
-            />
-          )}
-          
-          {activeTab === 'reports' && (
-            <div className="p-6">
-              <div className="text-center py-12">
-                <BarChart3 className="mx-auto h-12 w-12 text-black mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Project Reports</h3>
-                <p className="text-black mb-4">
-                  View detailed reports and analytics for your projects
-                </p>
-                <button
-                  onClick={() => router.push('/projects/reports')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  View Reports
-                </button>
-              </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm border p-4">
+              <KanbanBoard
+                ref={kanbanBoardRef}
+                onViewProject={(project) => {
+                  handleViewProject(project as Project)
+                }}
+                customerId={undefined}
+                categoryFilter={categoryFilter}
+                customerFilter={customerFilter}
+                dateFilter={dateFilter}
+                startDate={startDate}
+                endDate={endDate}
+                onCategoryFilterChange={setCategoryFilter}
+                onCustomerFilterChange={setCustomerFilter}
+                onDateFilterChange={setDateFilter}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+              />
             </div>
           )}
         </div>
-      </div>
 
       {showTourCompletionPrompt && (
         <div className="fixed right-4 sm:right-6 bottom-4 sm:bottom-6 z-50 max-w-sm bg-white border border-gray-200 rounded-xl shadow-xl p-5">

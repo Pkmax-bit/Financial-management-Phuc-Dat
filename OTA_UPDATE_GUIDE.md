@@ -219,3 +219,4 @@ Có thể mở rộng với:
 - A/B testing
 - Analytics cho update rate
 
+

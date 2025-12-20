@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
 from datetime import datetime, date
 import uuid
+from pydantic import BaseModel
 
 from models.customer import Customer, CustomerCreate, CustomerUpdate
 from models.user import User
@@ -220,6 +221,283 @@ async def get_customers(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch customers: {str(e)}"
+        )
+
+# ============================================================================
+# Customer Statuses Management
+# Must be defined BEFORE /{customer_id} route to avoid route conflicts
+# ============================================================================
+
+class CustomerStatus(BaseModel):
+    """Customer status model"""
+    id: str
+    code: str
+    name: str
+    color: str  # HEX color code
+    display_order: int
+    is_default: bool = False
+    is_system: bool = False
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+class CustomerStatusCreate(BaseModel):
+    """Customer status creation model"""
+    code: str
+    name: str
+    color: str  # HEX color code
+    display_order: int
+    description: Optional[str] = None
+    is_default: bool = False
+
+class CustomerStatusUpdate(BaseModel):
+    """Customer status update model"""
+    code: Optional[str] = None
+    name: Optional[str] = None
+    color: Optional[str] = None
+    display_order: Optional[int] = None
+    description: Optional[str] = None
+    is_default: Optional[bool] = None
+
+@router.get("/statuses", response_model=List[CustomerStatus])
+async def get_customer_statuses(
+    current_user: User = Depends(get_current_user)
+):
+    """Get all customer statuses ordered by display_order"""
+    try:
+        supabase = get_supabase_client()
+        
+        result = supabase.table("customer_statuses")\
+            .select("*")\
+            .order("display_order", desc=False)\
+            .execute()
+        
+        if result.data:
+            return result.data
+        
+        return []
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch customer statuses: {str(e)}"
+        )
+
+@router.post("/statuses", response_model=CustomerStatus)
+async def create_customer_status(
+    status_data: CustomerStatusCreate,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Create a new customer status"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if code already exists
+        existing = supabase.table("customer_statuses")\
+            .select("id")\
+            .eq("code", status_data.code)\
+            .execute()
+        
+        if existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Customer status with code '{status_data.code}' already exists"
+            )
+        
+        # Check if display_order already exists
+        existing_order = supabase.table("customer_statuses")\
+            .select("id")\
+            .eq("display_order", status_data.display_order)\
+            .execute()
+        
+        if existing_order.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Customer status with display_order '{status_data.display_order}' already exists"
+            )
+        
+        # Create new status
+        result = supabase.table("customer_statuses")\
+            .insert({
+                "code": status_data.code,
+                "name": status_data.name,
+                "color": status_data.color,
+                "display_order": status_data.display_order,
+                "description": status_data.description,
+                "is_default": status_data.is_default,
+                "is_system": False
+            })\
+            .execute()
+        
+        if result.data:
+            return result.data[0]
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to create customer status"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create customer status: {str(e)}"
+        )
+
+@router.put("/statuses/{status_id}", response_model=CustomerStatus)
+async def update_customer_status(
+    status_id: str,
+    status_data: CustomerStatusUpdate,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Update a customer status"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if status exists
+        existing = supabase.table("customer_statuses")\
+            .select("*")\
+            .eq("id", status_id)\
+            .execute()
+        
+        if not existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer status not found"
+            )
+        
+        existing_status = existing.data[0]
+        
+        # Check if it's a system status - prevent deletion/modification of critical fields
+        if existing_status.get("is_system") and status_data.code and status_data.code != existing_status.get("code"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot modify code of system status"
+            )
+        
+        # Check code uniqueness if code is being updated
+        if status_data.code:
+            code_check = supabase.table("customer_statuses")\
+                .select("id")\
+                .eq("code", status_data.code)\
+                .neq("id", status_id)\
+                .execute()
+            
+            if code_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Customer status with code '{status_data.code}' already exists"
+                )
+        
+        # Check display_order uniqueness if order is being updated
+        if status_data.display_order is not None:
+            order_check = supabase.table("customer_statuses")\
+                .select("id")\
+                .eq("display_order", status_data.display_order)\
+                .neq("id", status_id)\
+                .execute()
+            
+            if order_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Customer status with display_order '{status_data.display_order}' already exists"
+                )
+        
+        # Build update data
+        update_data = {}
+        if status_data.code is not None:
+            update_data["code"] = status_data.code
+        if status_data.name is not None:
+            update_data["name"] = status_data.name
+        if status_data.color is not None:
+            update_data["color"] = status_data.color
+        if status_data.display_order is not None:
+            update_data["display_order"] = status_data.display_order
+        if status_data.description is not None:
+            update_data["description"] = status_data.description
+        if status_data.is_default is not None:
+            update_data["is_default"] = status_data.is_default
+        
+        # Update status
+        result = supabase.table("customer_statuses")\
+            .update(update_data)\
+            .eq("id", status_id)\
+            .execute()
+        
+        if result.data:
+            return result.data[0]
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to update customer status"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update customer status: {str(e)}"
+        )
+
+@router.delete("/statuses/{status_id}")
+async def delete_customer_status(
+    status_id: str,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Delete a customer status"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if status exists
+        existing = supabase.table("customer_statuses")\
+            .select("*")\
+            .eq("id", status_id)\
+            .execute()
+        
+        if not existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer status not found"
+            )
+        
+        existing_status = existing.data[0]
+        
+        # Prevent deletion of system statuses
+        if existing_status.get("is_system"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete system status"
+            )
+        
+        # Check if any customers are using this status
+        customers_using_status = supabase.table("customers")\
+            .select("id")\
+            .eq("status_id", status_id)\
+            .limit(1)\
+            .execute()
+        
+        if customers_using_status.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete status that is in use by customers"
+            )
+        
+        # Delete status
+        result = supabase.table("customer_statuses")\
+            .delete()\
+            .eq("id", status_id)\
+            .execute()
+        
+        return {"message": "Customer status deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete customer status: {str(e)}"
         )
 
 @router.get("/{customer_id}", response_model=Customer)

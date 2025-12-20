@@ -227,3 +227,4 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 - [Railway Documentation](https://docs.railway.app)
 - [Supabase Documentation](https://supabase.com/docs)
 
+

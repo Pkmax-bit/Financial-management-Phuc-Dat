@@ -9,6 +9,8 @@ interface ProjectCardProps {
   customerName?: string
   progress?: number
   priority?: 'low' | 'medium' | 'high' | 'urgent'
+  categoryName?: string
+  categoryColor?: string
   onClick?: () => void
   onDragStart?: () => void
 }
@@ -27,6 +29,8 @@ export default function KanbanCard({
   customerName,
   progress,
   priority,
+  categoryName,
+  categoryColor,
   onClick,
   onDragStart
 }: ProjectCardProps) {
@@ -48,6 +52,21 @@ export default function KanbanCard({
         {priority && (
           <span className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${priorityColors[priority]}`}>
             {priority}
+          </span>
+        )}
+      </div>
+
+      {/* Category and Priority Tags */}
+      <div className="flex items-center gap-1 mt-2 flex-wrap">
+        {categoryName && (
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{
+              backgroundColor: categoryColor ? `${categoryColor}20` : '#E5E7EB',
+              color: categoryColor || '#374151'
+            }}
+          >
+            {categoryName}
           </span>
         )}
       </div>

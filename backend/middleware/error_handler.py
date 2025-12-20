@@ -36,3 +36,4 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                 }
             )
 
+

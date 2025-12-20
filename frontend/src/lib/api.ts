@@ -612,6 +612,7 @@ export const projectApi = {
     end_date?: string
     customer_id?: string
     manager_id?: string
+    category_id?: string
     hourly_rate?: number
     progress?: number
     actual_cost?: number
@@ -637,6 +638,45 @@ export const projectApi = {
     
     const url = `/api/projects/search?${searchParams.toString()}`
     return apiGet(url)
+  }
+}
+
+// Project Categories API functions
+export const projectCategoryApi = {
+  // Get all project categories
+  getCategories: (isActive?: boolean) => {
+    const searchParams = new URLSearchParams()
+    if (isActive !== undefined) searchParams.append('is_active', isActive.toString())
+    const url = `/api/project-categories${searchParams.toString() ? '?' + searchParams.toString() : ''}`
+    return apiGet(url)
+  },
+
+  // Get category by ID
+  getCategory: (id: string) => {
+    return apiGet(`/api/project-categories/${id}`)
+  },
+
+  // Create category
+  createCategory: (data: {
+    name: string
+    code: string
+    description?: string
+    color?: string
+    icon?: string
+    display_order?: number
+    is_active?: boolean
+  }) => {
+    return apiPost(`/api/project-categories`, data)
+  },
+
+  // Update category
+  updateCategory: (id: string, data: Record<string, unknown>) => {
+    return apiPut(`/api/project-categories/${id}`, data)
+  },
+
+  // Delete category
+  deleteCategory: (id: string) => {
+    return apiDelete(`/api/project-categories/${id}`)
   }
 }
 
