@@ -144,3 +144,6 @@ COMMENT ON FUNCTION auto_sync_task_participant_role_from_project_team() IS 'Tự
 COMMENT ON FUNCTION auto_update_project_team_role_in_tasks() IS 'Tự động cập nhật role trong task_participants khi cập nhật responsibility_type trong project_team';
 
 
+
+
+

@@ -11,6 +11,7 @@ interface ProjectCardProps {
   priority?: 'low' | 'medium' | 'high' | 'urgent'
   categoryName?: string
   categoryColor?: string
+  managerName?: string
   onClick?: () => void
   onDragStart?: () => void
 }
@@ -31,6 +32,7 @@ export default function KanbanCard({
   priority,
   categoryName,
   categoryColor,
+  managerName,
   onClick,
   onDragStart
 }: ProjectCardProps) {
@@ -73,6 +75,12 @@ export default function KanbanCard({
       <div className="mt-1 text-xs text-gray-500">{projectCode}</div>
       {customerName && (
         <div className="mt-1 text-xs text-gray-600">{customerName}</div>
+      )}
+      {managerName && (
+        <div className="mt-1 text-xs text-gray-600 flex items-center gap-1">
+          <span className="text-gray-400">👤</span>
+          <span>Người chịu trách nhiệm: {managerName}</span>
+        </div>
       )}
       {typeof progress === 'number' && (
         <div className="mt-3">

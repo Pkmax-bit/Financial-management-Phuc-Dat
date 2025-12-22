@@ -195,3 +195,6 @@ async def get_category_projects(
             detail=f"Failed to get category projects: {str(e)}"
         )
 
+
+
+

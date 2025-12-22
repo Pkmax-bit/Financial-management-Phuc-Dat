@@ -69,3 +69,6 @@ USING (
 COMMENT ON TABLE task_checklist_item_assignments IS 'Lưu nhiều nhân viên được gán cho mỗi checklist item với vai trò RACI';
 
 
+
+
+

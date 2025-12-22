@@ -1,12 +1,26 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Edit, Trash2, Calendar, DollarSign, Users, Target, Clock, TrendingUp, BarChart3, FileText, Activity, AlertCircle, CheckCircle, Pause, CheckSquare } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { projectApi } from '@/lib/api'
+import { useEffect, useState } from 'react'
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Calendar,
+  CheckCircle,
+  CheckSquare,
+  Clock,
+  DollarSign,
+  Edit,
+  MessageSquare,
+  Pause,
+  Target,
+  Trash2,
+  TrendingUp,
+  Users,
+  X,
+} from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import ProjectTeam from './ProjectTeam'
-import ProjectTimeline from './ProjectTimeline'
 import ProjectTasksTab from './ProjectTasksTab'
 
 interface Project {
@@ -39,170 +53,134 @@ interface ProjectDetailSidebarProps {
   onDelete: (project: Project) => void
 }
 
-const statusColors = {
-  planning: 'bg-blue-100 text-blue-800',
-  active: 'bg-green-100 text-green-800',
-  on_hold: 'bg-yellow-100 text-yellow-800',
-  completed: 'bg-gray-100 text-gray-800',
-  cancelled: 'bg-red-100 text-red-800'
-}
-
-const priorityColors = {
-  low: 'bg-gray-100 text-gray-800',
-  medium: 'bg-blue-100 text-blue-800',
-  high: 'bg-orange-100 text-orange-800',
-  urgent: 'bg-red-100 text-red-800'
-}
-
 const statusConfig = {
   planning: { label: 'Lập kế hoạch', color: 'bg-blue-100 text-blue-800', icon: Target },
   active: { label: 'Đang thực hiện', color: 'bg-green-100 text-green-800', icon: Activity },
   on_hold: { label: 'Tạm dừng', color: 'bg-yellow-100 text-yellow-800', icon: Pause },
   completed: { label: 'Hoàn thành', color: 'bg-gray-100 text-gray-800', icon: CheckCircle },
-  cancelled: { label: 'Đã hủy', color: 'bg-red-100 text-red-800', icon: AlertCircle }
+  cancelled: { label: 'Đã hủy', color: 'bg-red-100 text-red-800', icon: AlertCircle },
 }
 
 const priorityConfig = {
   low: { label: 'Thấp', color: 'bg-gray-100 text-gray-800' },
   medium: { label: 'Trung bình', color: 'bg-blue-100 text-blue-800' },
   high: { label: 'Cao', color: 'bg-orange-100 text-orange-800' },
-  urgent: { label: 'Khẩn cấp', color: 'bg-red-100 text-red-800' }
+  urgent: { label: 'Khẩn cấp', color: 'bg-red-100 text-red-800' },
 }
 
-export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit, onDelete }: ProjectDetailSidebarProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'tasks'>('overview')
+export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
+  const { isOpen, onClose, project, onEdit, onDelete } = props
+
+  const [collapsed, setCollapsed] = useState({
+    overview: false,
+    timeline: false,
+    team: false,
+    tasks: false,
+  })
   const [financialData, setFinancialData] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [responsibleName, setResponsibleName] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isOpen && project) {
-      fetchFinancialData()
-      fetchUser()
+    if (!isOpen || !project) return
+
+    const fetchFinancial = async () => {
+      try {
+        const res = await fetch(getApiEndpoint(`/api/projects/${project.id}/financial-summary`))
+        if (res.ok) {
+          const data = await res.json()
+          setFinancialData(data)
+        }
+      } catch (e) {
+        console.error('Failed to fetch project financial summary', e)
+      }
     }
+
+    const fetchResponsible = async () => {
+      try {
+        const res = await fetch(getApiEndpoint(`/api/projects/${project.id}/team`))
+        if (!res.ok) return
+        const data = await res.json()
+        const members = data?.team_members || data || []
+        // Ưu tiên người có responsibility_type = 'accountable', sau đó 'responsible'
+        const accountable = members.find((m: any) => m.responsibility_type === 'accountable')
+        const responsible = members.find((m: any) => m.responsibility_type === 'responsible')
+        const name =
+          accountable?.name ||
+          responsible?.name ||
+          project.manager_name ||
+          null
+        setResponsibleName(name)
+      } catch (e) {
+        console.error('Failed to fetch project team for responsible member', e)
+      }
+    }
+
+    fetchFinancial()
+    fetchResponsible()
   }, [isOpen, project])
 
   useEffect(() => {
-    if (isOpen) {
-      setActiveTab('overview')
-    }
-  }, [isOpen])
-
-  // Listen for events to close sidebar when create quote dialog opens
-  useEffect(() => {
-    const handleCloseSidebar = () => {
-      if (isOpen) {
-        onClose()
-      }
+    const handleClose = () => {
+      if (isOpen) onClose()
     }
 
-    // Listen for custom events when create quote dialog opens
-    window.addEventListener('closeProjectDetailSidebar', handleCloseSidebar)
-
-    return () => {
-      window.removeEventListener('closeProjectDetailSidebar', handleCloseSidebar)
-    }
+    window.addEventListener('closeProjectDetailSidebar', handleClose)
+    return () => window.removeEventListener('closeProjectDetailSidebar', handleClose)
   }, [isOpen, onClose])
-
-  const fetchUser = async () => {
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (authUser) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authUser.id)
-          .single()
-        if (userData) {
-          setUser(userData)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching user:', error)
-    }
-  }
-
-  const fetchFinancialData = async () => {
-    if (!project) return
-
-    try {
-      setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${project.id}/financial-summary`))
-      if (response.ok) {
-        const data = await response.json()
-        setFinancialData(data)
-      }
-    } catch (error) {
-      console.error('Error fetching financial data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!project) return
-
-    if (window.confirm(`Bạn có chắc chắn muốn xóa dự án "${project.name}"?`)) {
-      try {
-        const response = await fetch(getApiEndpoint(`/api/projects/${project.id}`), {
-          method: 'DELETE'
-        })
-        
-        if (response.ok) {
-          onDelete(project)
-          onClose()
-        } else {
-          alert('Không thể xóa dự án')
-        }
-      } catch (error) {
-        console.error('Error deleting project:', error)
-        alert('Không thể xóa dự án')
-      }
-    }
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(amount)
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
 
   if (!isOpen || !project) return null
 
-  // Safe access with fallback values
   const statusInfo = statusConfig[project.status] || {
-    label: project.status || 'Không xác định',
+    label: project.status,
     color: 'bg-gray-100 text-gray-800',
-    icon: AlertCircle
+    icon: AlertCircle,
   }
   const priorityInfo = priorityConfig[project.priority] || {
-    label: project.priority || 'Không xác định',
-    color: 'bg-gray-100 text-gray-800'
+    label: project.priority,
+    color: 'bg-gray-100 text-gray-800',
   }
   const StatusIcon = statusInfo.icon
 
+  const formatCurrency = (amount?: number) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0)
+
+  const formatDate = (value?: string) =>
+    value
+      ? new Date(value).toLocaleDateString('vi-VN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+      : '—'
+
+  const handleDeleteClick = async () => {
+    if (!project) return
+    if (!confirm(`Bạn có chắc chắn muốn xóa dự án "${project.name}"?`)) return
+
+    try {
+      const res = await fetch(getApiEndpoint(`/api/projects/${project.id}`), { method: 'DELETE' })
+      if (res.ok) {
+        onDelete(project)
+        onClose()
+      } else {
+        alert('Không thể xóa dự án')
+      }
+    } catch (e) {
+      console.error('Failed to delete project', e)
+      alert('Không thể xóa dự án')
+    }
+  }
+
   return (
-    <>
+    <div>
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 z-40 transition-opacity duration-300 "
-        onClick={onClose}
-      />
-      
-      {/* Sidebar */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-4xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
-        <div className="flex flex-col h-full">
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+
+      {/* Panel bên phải: 50% info + 50% chat */}
+      <div className="fixed inset-y-0 right-0 z-50 flex max-w-full items-stretch">
+        <div className="h-full w-screen max-w-7xl bg-white shadow-2xl rounded-l-lg overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex-1 min-w-0">
               <h2 className="text-2xl font-bold text-gray-900 truncate">{project.name}</h2>
               <p className="text-sm text-gray-600 mt-1">#{project.project_code}</p>
@@ -216,7 +194,7 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
                 <Edit className="h-5 w-5" />
               </button>
               <button
-                onClick={handleDelete}
+                onClick={handleDeleteClick}
                 className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 title="Xóa"
               >
@@ -232,259 +210,315 @@ export default function ProjectDetailSidebar({ isOpen, onClose, project, onEdit,
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200 bg-white flex-shrink-0 overflow-x-auto">
-            <div className="flex space-x-1 px-4">
-              {[
-                { id: 'overview', label: 'Tổng quan', icon: BarChart3, color: 'blue' },
-                { id: 'timeline', label: 'Timeline', icon: Calendar, color: 'orange' },
-                { id: 'team', label: 'Đội ngũ', icon: Users, color: 'indigo' },
-                { id: 'tasks', label: 'Nhiệm vụ', icon: CheckSquare, color: 'green' }
-              ].map((tab) => {
-                const Icon = tab.icon
-                const isActive = activeTab === tab.id
-                return (
+          {/* Main layout */}
+          <div className="flex-1 flex flex-col lg:flex-row min-h-0 border-t border-gray-200">
+            {/* LEFT 50%: Thông tin dự án (gộp tất cả tab) */}
+            <div className="w-full lg:w-1/2 flex flex-col min-h-0 border-r border-gray-200 bg-gray-50/40">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Tổng quan */}
+                <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium whitespace-nowrap ${
-                      isActive
-                        ? `bg-${tab.color}-50 text-${tab.color}-700 border border-${tab.color}-200 shadow-sm`
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
+                    onClick={() => setCollapsed(prev => ({ ...prev, overview: !prev.overview }))}
+                    className="w-full flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
                   >
-                    <Icon className={`h-4 w-4 ${isActive ? `text-${tab.color}-600` : ''}`} />
-                    <span>{tab.label}</span>
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-gray-900">Tổng quan</span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {collapsed.overview ? 'Hiển thị' : 'Ẩn bớt'}
+                    </span>
                   </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Content - Scrollable */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-6">
-              {/* Overview Tab */}
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  {/* Status and Priority Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <StatusIcon className="h-5 w-5 text-gray-600" />
-                        <h3 className="text-sm font-medium text-gray-700">Trạng thái</h3>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}>
-                        {statusInfo.label}
-                      </span>
-                    </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <Target className="h-5 w-5 text-gray-600" />
-                        <h3 className="text-sm font-medium text-gray-700">Ưu tiên</h3>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${priorityInfo.color}`}>
-                        {priorityInfo.label}
-                      </span>
-                    </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <TrendingUp className="h-5 w-5 text-gray-600" />
-                        <h3 className="text-sm font-medium text-gray-700">Tiến độ</h3>
-                      </div>
-                      <span className="text-2xl font-bold text-blue-600">{project.progress}%</span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-4">
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-gray-700">Tiến độ dự án</span>
-                      <span className="font-medium text-gray-900">{project.progress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div 
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
-                        style={{ width: `${project.progress}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      {project.progress === 0 ? 'Dự án mới bắt đầu - Có thể nhập % để thay đổi tiến độ nhanh' :
-                       project.progress < 25 ? 'Dự án mới bắt đầu' :
-                       project.progress < 50 ? 'Đang triển khai' :
-                       project.progress < 75 ? 'Tiến triển tốt' :
-                       project.progress < 100 ? 'Gần hoàn thành' : 'Đã hoàn thành'}
-                    </p>
-                  </div>
-
-                  {/* Project Info */}
-                  {project.description && (
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Mô tả dự án</h3>
-                      <p className="text-sm text-gray-600 break-words">{project.description}</p>
-                    </div>
-                  )}
-
-                  {/* Project Details Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Thông tin cơ bản</h3>
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Users className="h-4 w-4 text-gray-500" />
-                          <span className="text-gray-600">Khách hàng:</span>
-                          <span className="font-medium text-gray-900">{project.customer_name || 'Chưa có'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Users className="h-4 w-4 text-gray-500" />
-                          <span className="text-gray-600">Quản lý:</span>
-                          <span className="font-medium text-gray-900">{project.manager_name || 'Chưa có'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="h-4 w-4 text-gray-500" />
-                          <span className="text-gray-600">Bắt đầu:</span>
-                          <span className="font-medium text-gray-900">{formatDate(project.start_date)}</span>
-                        </div>
-                        {project.end_date && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Calendar className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-600">Kết thúc:</span>
-                            <span className="font-medium text-gray-900">{formatDate(project.end_date)}</span>
+                  {!collapsed.overview && (
+                    <div className="p-4 space-y-6">
+                      {/* Status / Priority / Progress */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <StatusIcon className="h-5 w-5 text-gray-600" />
+                            <h3 className="text-sm font-medium text-gray-700">Trạng thái</h3>
                           </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Thông tin tài chính</h3>
-                      <div className="space-y-3">
-                        {project.budget && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <DollarSign className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-600">Ngân sách:</span>
-                            <span className="font-medium text-gray-900">{formatCurrency(project.budget)}</span>
-                          </div>
-                        )}
-                        {project.actual_cost && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <DollarSign className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-600">Chi phí thực tế:</span>
-                            <span className="font-medium text-gray-900">{formatCurrency(project.actual_cost)}</span>
-                          </div>
-                        )}
-                        {project.budget && project.actual_cost && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <DollarSign className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-600">Chênh lệch:</span>
-                            <span className={`font-medium ${
-                              project.actual_cost > project.budget ? 'text-red-600' : 'text-green-600'
-                            }`}>
-                              {formatCurrency(project.actual_cost - project.budget)}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2 text-sm">
-                          <Clock className="h-4 w-4 text-gray-500" />
-                          <span className="text-gray-600">Loại thanh toán:</span>
-                          <span className="font-medium text-gray-900">
-                            {project.billing_type === 'fixed' ? 'Cố định' : 
-                             project.billing_type === 'hourly' ? 'Theo giờ' : 'Theo milestone'}
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}>
+                            {statusInfo.label}
                           </span>
                         </div>
-                        {project.hourly_rate && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <DollarSign className="h-4 w-4 text-gray-500" />
-                            <span className="text-gray-600">Giá/giờ:</span>
-                            <span className="font-medium text-gray-900">{formatCurrency(project.hourly_rate)}</span>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <Target className="h-5 w-5 text-gray-600" />
+                            <h3 className="text-sm font-medium text-gray-700">Ưu tiên</h3>
                           </div>
-                        )}
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${priorityInfo.color}`}>
+                            {priorityInfo.label}
+                          </span>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <TrendingUp className="h-5 w-5 text-gray-600" />
+                            <h3 className="text-sm font-medium text-gray-700">Tiến độ</h3>
+                          </div>
+                          <span className="text-2xl font-bold text-blue-600">{project.progress}%</span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Financial Summary */}
-                  {financialData && (
-                    <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-gray-200 p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <BarChart3 className="h-5 w-5 text-gray-700" />
-                        <h4 className="font-semibold text-gray-900">Tóm tắt tài chính</h4>
+                      {/* Thanh tiến độ */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-4">
+                        <div className="flex items-center justify-between text-sm mb-2">
+                          <span className="text-gray-700">Tiến độ dự án</span>
+                          <span className="font-medium text-gray-900">{project.progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+                            style={{ width: `${project.progress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {project.progress === 0
+                            ? 'Dự án mới bắt đầu - Có thể nhập % để thay đổi tiến độ nhanh'
+                            : project.progress < 25
+                              ? 'Dự án mới bắt đầu'
+                              : project.progress < 50
+                                ? 'Đang triển khai'
+                                : project.progress < 75
+                                  ? 'Tiến triển tốt'
+                                  : project.progress < 100
+                                    ? 'Gần hoàn thành'
+                                    : 'Đã hoàn thành'}
+                        </p>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="text-center bg-white rounded-lg p-3">
-                          <p className="text-xs text-gray-600 mb-1">Tổng doanh thu</p>
-                          <p className="text-lg font-bold text-green-600">
-                            {formatCurrency(financialData.total_revenue || 0)}
-                          </p>
-                        </div>
-                        <div className="text-center bg-white rounded-lg p-3">
-                          <p className="text-xs text-gray-600 mb-1">Tổng chi phí</p>
-                          <p className="text-lg font-bold text-red-600">
-                            {formatCurrency(financialData.total_costs || 0)}
-                          </p>
-                        </div>
-                        <div className="text-center bg-white rounded-lg p-3">
-                          <p className="text-xs text-gray-600 mb-1">Lợi nhuận</p>
-                          <p className={`text-lg font-bold ${
-                            (financialData.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {formatCurrency(financialData.profit || 0)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Recent Transactions */}
-                  {financialData?.recent_transactions && financialData.recent_transactions.length > 0 && (
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <h4 className="font-semibold text-gray-900 mb-3">Giao dịch gần đây</h4>
-                      <div className="space-y-2">
-                        {financialData.recent_transactions.slice(0, 5).map((transaction: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{transaction.type}</p>
-                              <p className="text-xs text-gray-600">{transaction.description}</p>
+                      {/* Mô tả */}
+                      {project.description && (
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Mô tả dự án</h3>
+                          <p className="text-sm text-gray-600 break-words">{project.description}</p>
+                        </div>
+                      )}
+
+                      {/* Thông tin cơ bản + tài chính */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-3">Thông tin cơ bản</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Users className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-600">Khách hàng:</span>
+                              <span className="font-medium text-gray-900">
+                                {project.customer_name || 'Chưa có'}
+                              </span>
                             </div>
-                            <div className="text-right">
-                              <p className={`text-sm font-medium ${
-                                transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount)}
+                            <div className="flex items-center gap-2 text-sm">
+                              <Users className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-600">Người chịu trách nhiệm:</span>
+                              <span className="font-medium text-gray-900">
+                                {responsibleName || project.manager_name || 'Chưa có'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Calendar className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-600">Bắt đầu:</span>
+                              <span className="font-medium text-gray-900">
+                                {formatDate(project.start_date)}
+                              </span>
+                            </div>
+                            {project.end_date && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Calendar className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-600">Kết thúc:</span>
+                                <span className="font-medium text-gray-900">
+                                  {formatDate(project.end_date)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-3">Thông tin tài chính</h3>
+                          <div className="space-y-3">
+                            {project.budget && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <DollarSign className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-600">Ngân sách:</span>
+                                <span className="font-medium text-gray-900">
+                                  {formatCurrency(project.budget)}
+                                </span>
+                              </div>
+                            )}
+                            {project.actual_cost && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <DollarSign className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-600">Chi phí thực tế:</span>
+                                <span className="font-medium text-gray-900">
+                                  {formatCurrency(project.actual_cost)}
+                                </span>
+                              </div>
+                            )}
+                            {project.budget && project.actual_cost && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <DollarSign className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-600">Chênh lệch:</span>
+                                <span
+                                  className={`font-medium ${project.actual_cost > project.budget ? 'text-red-600' : 'text-green-600'
+                                    }`}
+                                >
+                                  {formatCurrency(project.actual_cost - project.budget)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 text-sm">
+                              <Clock className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-600">Loại thanh toán:</span>
+                              <span className="font-medium text-gray-900">
+                                {project.billing_type === 'fixed'
+                                  ? 'Cố định'
+                                  : project.billing_type === 'hourly'
+                                    ? 'Theo giờ'
+                                    : 'Theo milestone'}
+                              </span>
+                            </div>
+                            {project.hourly_rate && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <DollarSign className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-600">Giá/giờ:</span>
+                                <span className="font-medium text-gray-900">
+                                  {formatCurrency(project.hourly_rate)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tóm tắt tài chính */}
+                      {financialData && (
+                        <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <BarChart3 className="h-5 w-5 text-gray-700" />
+                            <h4 className="font-semibold text-gray-900">Tóm tắt tài chính</h4>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="text-center bg-white rounded-lg p-3">
+                              <p className="text-xs text-gray-600 mb-1">Tổng doanh thu</p>
+                              <p className="text-lg font-bold text-green-600">
+                                {formatCurrency(financialData.total_revenue || 0)}
                               </p>
-                              <p className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString('vi-VN')}</p>
+                            </div>
+                            <div className="text-center bg-white rounded-lg p-3">
+                              <p className="text-xs text-gray-600 mb-1">Tổng chi phí</p>
+                              <p className="text-lg font-bold text-red-600">
+                                {formatCurrency(financialData.total_costs || 0)}
+                              </p>
+                            </div>
+                            <div className="text-center bg-white rounded-lg p-3">
+                              <p className="text-xs text-gray-600 mb-1">Lợi nhuận</p>
+                              <p
+                                className={`text-lg font-bold ${(financialData.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }`}
+                              >
+                                {formatCurrency(financialData.profit || 0)}
+                              </p>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
+                </section>
 
-              {/* Timeline Tab */}
-              {activeTab === 'timeline' && project && (
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <ProjectTimeline projectId={project.id} projectName={project.name} currentUser={user} />
-                </div>
-              )}
+                {/* Timeline */}
+                <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <button
+                    onClick={() => setCollapsed(prev => ({ ...prev, timeline: !prev.timeline }))}
+                    className="w-full flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-orange-500" />
+                      <span className="text-sm font-semibold text-gray-900">Timeline</span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {collapsed.timeline ? 'Hiển thị' : 'Ẩn bớt'}
+                    </span>
+                  </button>
+                  {!collapsed.timeline && (
+                    <div className="p-4">
+                      <p className="text-sm text-gray-500 italic">
+                        Timeline chi tiết sẽ hiển thị tại đây (có thể mở sang màn Timeline riêng).
+                      </p>
+                    </div>
+                  )}
+                </section>
 
-              {/* Team Tab */}
-              {activeTab === 'team' && project && (
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <ProjectTeam projectId={project.id} projectName={project.name} currentUser={user} />
-                </div>
-              )}
+                {/* Đội ngũ */}
+                <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <button
+                    onClick={() => setCollapsed(prev => ({ ...prev, team: !prev.team }))}
+                    className="w-full flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-indigo-500" />
+                      <span className="text-sm font-semibold text-gray-900">Đội ngũ</span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {collapsed.team ? 'Hiển thị' : 'Ẩn bớt'}
+                    </span>
+                  </button>
+                  {!collapsed.team && project && (
+                    <div className="p-4">
+                      <ProjectTeam projectId={project.id} projectName={project.name} />
+                    </div>
+                  )}
+                </section>
 
-              {/* Tasks Tab */}
-              {activeTab === 'tasks' && project && (
-                <ProjectTasksTab projectId={project.id} projectName={project.name} />
-              )}
-
-              {/* Đã ẩn tab Hóa đơn & Chi phí khỏi sidebar chi tiết dự án */}
+                {/* Nhiệm vụ */}
+                <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <button
+                    onClick={() => setCollapsed(prev => ({ ...prev, tasks: !prev.tasks }))}
+                    className="w-full flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckSquare className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-semibold text-gray-900">Nhiệm vụ</span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {collapsed.tasks ? 'Hiển thị' : 'Ẩn bớt'}
+                    </span>
+                  </button>
+                  {!collapsed.tasks && project && (
+                    <div className="p-4">
+                      <ProjectTasksTab projectId={project.id} projectName={project.name} />
+                    </div>
+                  )}
+                </section>
+              </div>
             </div>
+
+            {/* RIGHT 50%: Chat - Zalo style */}
+            <aside className="w-full lg:w-1/2 flex flex-col min-h-0 bg-[#e5ddd5]">
+              {/* Zalo-style header */}
+              <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shadow-sm backdrop-blur-sm">
+                    <MessageSquare className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-white">Trao đổi dự án</h2>
+                    <p className="text-xs text-blue-100">Chat nội bộ • Online</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chat messages area with Zalo background pattern */}
+              <div className="flex-1 overflow-y-auto bg-[#e5ddd5]">
+                {project && (
+                  <ProjectTasksTab projectId={project.id} projectName={project.name} mode="chat-only" />
+                )}
+              </div>
+            </aside>
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
+

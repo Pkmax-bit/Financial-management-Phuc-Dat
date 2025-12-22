@@ -1,4 +1,4 @@
-import { Mail, Phone, MoreVertical, Building2, User } from 'lucide-react';
+import { Mail, Phone, MoreVertical, Building2, User, MapPin } from 'lucide-react';
 import { Customer, Status } from '../../types';
 import { motion } from 'motion/react';
 
@@ -117,6 +117,14 @@ export function CustomerCard({ customer, status }: CustomerCardProps) {
           <Phone size={14} className="text-[#9CA3AF] shrink-0" />
           <span>{customer.phone}</span>
         </div>
+
+        {/* Địa chỉ - theo FIGMA spec */}
+        {customer.address && (
+          <div className="flex items-center gap-2" style={{ fontSize: '13px', color: '#535C69' }}>
+            <MapPin size={14} className="text-[#9CA3AF] shrink-0" />
+            <span className="truncate">{customer.address}</span>
+          </div>
+        )}
 
         {/* Hạn mức tín dụng - theo FIGMA spec */}
         {customer.creditLimit && (

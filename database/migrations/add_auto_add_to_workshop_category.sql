@@ -49,3 +49,6 @@ CREATE TRIGGER trigger_auto_add_to_workshop_category
 -- Comment
 COMMENT ON FUNCTION auto_add_project_to_workshop_category() IS 'Tự động thêm dự án vào nhóm xưởng khi status = xưởng sản xuất, và xóa khỏi nhóm khi status thay đổi';
 
+
+
+

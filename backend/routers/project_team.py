@@ -109,6 +109,29 @@ async def add_team_member(
         member_dict["created_at"] = datetime.now().isoformat()
         member_dict["updated_at"] = datetime.now().isoformat()
         
+        # Đảm bảo role luôn có giá trị (NOT NULL constraint)
+        if not member_dict.get("role") or member_dict["role"] is None:
+            member_dict["role"] = "member"  # Giá trị mặc định
+        
+        # Đảm bảo start_date luôn có giá trị (NOT NULL constraint)
+        # Nếu không có, lấy từ project.start_date hoặc dùng ngày hiện tại
+        if not member_dict.get("start_date") or member_dict["start_date"] is None:
+            try:
+                # Lấy start_date từ project
+                project_result = supabase.table("projects").select("start_date").eq("id", project_id).single().execute()
+                if project_result.data and project_result.data.get("start_date"):
+                    project_start_date = project_result.data["start_date"]
+                    # Nếu là datetime string, chỉ lấy phần date
+                    if isinstance(project_start_date, str) and 'T' in project_start_date:
+                        project_start_date = project_start_date.split('T')[0]
+                    member_dict["start_date"] = project_start_date
+                else:
+                    # Fallback: dùng ngày hiện tại
+                    member_dict["start_date"] = datetime.now().date().isoformat()
+            except Exception:
+                # Nếu không lấy được, dùng ngày hiện tại
+                member_dict["start_date"] = datetime.now().date().isoformat()
+        
         result = supabase.table("project_team").insert(member_dict).execute()
         
         if not result.data:
@@ -195,6 +218,11 @@ async def update_team_member(
         # Update team member
         update_data = member_data.model_dump(exclude_unset=True)
         update_data["updated_at"] = datetime.now().isoformat()
+        
+        # Nếu role được cập nhật và là None, không cho phép (giữ nguyên giá trị cũ)
+        if "role" in update_data and (update_data["role"] is None or update_data["role"] == ""):
+            # Nếu role là None hoặc rỗng, không cập nhật role (giữ nguyên giá trị cũ)
+            del update_data["role"]
         
         result = supabase.table("project_team").update(update_data).eq("id", member_id).execute()
         

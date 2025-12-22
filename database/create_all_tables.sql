@@ -536,6 +536,21 @@ CREATE TABLE IF NOT EXISTS task_checklist_items (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Task Checklist Item Assignments table
+-- Lưu nhiều nhân viên được gán cho mỗi checklist item với vai trò RACI
+CREATE TABLE IF NOT EXISTS task_checklist_item_assignments (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    checklist_item_id UUID REFERENCES task_checklist_items(id) ON DELETE CASCADE NOT NULL,
+    employee_id UUID REFERENCES employees(id) ON DELETE CASCADE NOT NULL,
+    responsibility_type TEXT NOT NULL CHECK (responsibility_type IN ('accountable', 'responsible', 'consulted', 'informed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(checklist_item_id, employee_id)
+);
+
+-- Indexes for task_checklist_item_assignments
+CREATE INDEX IF NOT EXISTS idx_checklist_item_assignments_item_id ON task_checklist_item_assignments(checklist_item_id);
+CREATE INDEX IF NOT EXISTS idx_checklist_item_assignments_employee_id ON task_checklist_item_assignments(employee_id);
+
 -- Task Time Logs table
 CREATE TABLE IF NOT EXISTS task_time_logs (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,

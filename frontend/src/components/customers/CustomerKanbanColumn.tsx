@@ -1,6 +1,7 @@
 "use client"
 
 import React from 'react'
+import { Plus } from 'lucide-react'
 import CustomerKanbanCard from './CustomerKanbanCard'
 
 interface Customer {
@@ -9,6 +10,7 @@ interface Customer {
   name: string
   email?: string
   phone?: string
+  address?: string
   type?: 'individual' | 'company' | 'government'
   credit_limit?: number
   status?: 'prospect' | 'active' | 'inactive'
@@ -19,7 +21,7 @@ interface Customer {
 interface CustomerKanbanColumnProps {
   title: string
   count: number
-  statusColor: string
+  colorClass: string
   customers: Customer[]
   onCardClick?: (customer: Customer) => void
   onDragStart?: (customer: Customer) => void
@@ -27,13 +29,30 @@ interface CustomerKanbanColumnProps {
   onDragLeave?: () => void
   onDrop?: (e: React.DragEvent) => void
   isDragOver?: boolean
-  onAddClick?: () => void
+  onAddStatus?: () => void
+  statusId?: string
 }
 
-export default function CustomerKanbanColumn({
-  title,
-  count,
-  statusColor,
+// Convert hex color to Tailwind color class
+const hexToColorClass = (hex: string): string => {
+  // Map common hex colors to Tailwind classes
+  const colorMap: Record<string, string> = {
+    '#2FC6F6': 'bg-cyan-100 text-cyan-800',
+    '#2066B0': 'bg-blue-200 text-blue-900',
+    '#9ECF00': 'bg-lime-100 text-lime-800',
+    '#FFA900': 'bg-yellow-100 text-yellow-800',
+    '#FF5752': 'bg-red-100 text-red-800',
+    '#9CA3AF': 'bg-gray-100 text-gray-800',
+    '#6B7280': 'bg-gray-200 text-gray-900',
+    '#A855F7': 'bg-purple-100 text-purple-800'
+  }
+  return colorMap[hex] || 'bg-gray-100 text-gray-800'
+}
+
+export default function CustomerKanbanColumn({ 
+  title, 
+  count, 
+  colorClass, 
   customers,
   onCardClick,
   onDragStart,
@@ -41,65 +60,55 @@ export default function CustomerKanbanColumn({
   onDragLeave,
   onDrop,
   isDragOver,
-  onAddClick
+  onAddStatus,
+  statusId
 }: CustomerKanbanColumnProps) {
+  // If colorClass is a hex color, convert it
+  const finalColorClass = colorClass.startsWith('#') ? hexToColorClass(colorClass) : colorClass
+
   return (
-    <div
-      className={`flex h-full min-h-[540px] w-full flex-shrink-0 flex-col rounded-md border border-gray-200 bg-white transition-colors ${
-        isDragOver ? 'border-blue-300 bg-blue-50' : ''
+    <div 
+      className={`flex h-full min-h-[540px] w-full flex-shrink-0 flex-col rounded-lg border transition-colors ${
+        isDragOver ? 'bg-blue-50 border-blue-300' : 'bg-gray-50'
       }`}
-      style={{ width: '300px' }}
+      style={{ width: '320px' }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {/* Header - Bitrix24 style with tab-like appearance */}
-      <div className="rounded-t-md bg-gray-50 px-4 py-3 border-b border-gray-200">
-        <div className="flex items-center justify-between">
+      <div className={`rounded-t-lg ${finalColorClass}`}>
+        <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold">
+          <span>{title}</span>
           <div className="flex items-center gap-2">
-            {/* Tab-like status name with arrow pointing right */}
-            <div
-              className="relative px-3 py-1 rounded-tl rounded-tr text-sm font-semibold text-gray-700"
-              style={{
-                backgroundColor: statusColor + '20', // 20% opacity
-                clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%)'
-              }}
-            >
-              <span>{title}</span>
-            </div>
-            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">
-              {count}
-            </span>
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs text-gray-700">{count}</span>
+            {onAddStatus && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAddStatus()
+                }}
+                className="p-1 rounded hover:bg-white/20 transition-colors"
+                title="Thêm trạng thái mới"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Body */}
-      <div className="flex-1 space-y-2 p-3 overflow-y-auto bg-gray-50">
-        {customers.map((customer) => (
+      <div className="flex-1 space-y-3 p-3 overflow-y-auto">
+        {customers.map(customer => (
           <CustomerKanbanCard
             key={customer.id}
             customer={customer}
-            statusColor={statusColor}
+            statusColor={colorClass.startsWith('#') ? colorClass : undefined}
             onClick={() => onCardClick?.(customer)}
             onDragStart={() => onDragStart?.(customer)}
           />
         ))}
         {customers.length === 0 && (
-          <div className="rounded-md border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
-            Chưa có khách hàng
-          </div>
+          <div className="rounded-md border border-dashed bg-white p-6 text-center text-sm text-gray-500">Không có khách hàng</div>
         )}
-      </div>
-
-      {/* Footer - Add button */}
-      <div className="px-3 py-2 border-t border-gray-200 bg-white rounded-b-md">
-        <button
-          onClick={onAddClick}
-          className="w-full text-left text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1.5 rounded transition-colors"
-        >
-          + Thêm khách hàng
-        </button>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import React from 'react'
-import { Building2, Mail, Phone, DollarSign, MoreVertical } from 'lucide-react'
+import { Building2, Mail, Phone, DollarSign, MoreVertical, MapPin } from 'lucide-react'
 
 interface Customer {
   id: string
@@ -9,6 +9,7 @@ interface Customer {
   name: string
   email?: string
   phone?: string
+  address?: string
   type?: 'individual' | 'company' | 'government'
   credit_limit?: number
   status?: 'prospect' | 'active' | 'inactive'
@@ -125,6 +126,12 @@ export default function CustomerKanbanCard({
           <div className="flex items-center gap-1.5 text-xs text-gray-600">
             <Phone className="h-3 w-3 text-gray-400" />
             <span>{customer.phone}</span>
+          </div>
+        )}
+        {customer.address && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+            <MapPin className="h-3 w-3 text-gray-400" />
+            <span className="truncate">{customer.address}</span>
           </div>
         )}
         {customer.credit_limit !== undefined && customer.credit_limit > 0 && (

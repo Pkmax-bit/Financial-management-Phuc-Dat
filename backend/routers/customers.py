@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
 from datetime import datetime, date
 import uuid
+import re
+import unicodedata
 from pydantic import BaseModel
 
 from models.customer import Customer, CustomerCreate, CustomerUpdate
@@ -243,10 +245,10 @@ class CustomerStatus(BaseModel):
 
 class CustomerStatusCreate(BaseModel):
     """Customer status creation model"""
-    code: str
+    code: Optional[str] = None
     name: str
     color: str  # HEX color code
-    display_order: int
+    display_order: Optional[int] = None
     description: Optional[str] = None
     is_default: bool = False
 
@@ -288,41 +290,79 @@ async def create_customer_status(
     status_data: CustomerStatusCreate,
     current_user: User = Depends(require_manager_or_admin)
 ):
-    """Create a new customer status"""
+    """Create a new customer status.
+    
+    If code is not provided, it will be auto-generated from the name.
+    """
     try:
         supabase = get_supabase_client()
+
+        # Helper to slugify and generate a unique code
+        def slugify(value: str) -> str:
+            value = unicodedata.normalize("NFKD", value)
+            value = value.encode("ascii", "ignore").decode("ascii")
+            value = re.sub(r"[^a-zA-Z0-9]+", "_", value)
+            value = value.strip("_").lower()
+            return value or "status"
+
+        def generate_unique_code(base_name: str) -> str:
+            base_code = slugify(base_name)
+            # Try base_code, then base_code_2, base_code_3, ...
+            candidate = base_code
+            counter = 2
+            while True:
+                existing = (
+                    supabase.table("customer_statuses")
+                    .select("id")
+                    .eq("code", candidate)
+                    .execute()
+                )
+                if not existing.data:
+                    return candidate
+                candidate = f"{base_code}_{counter}"
+                counter += 1
+
+        # Determine final code: use provided or auto-generate
+        final_code = status_data.code.strip() if status_data.code else ""
+        if not final_code:
+            final_code = generate_unique_code(status_data.name)
         
-        # Check if code already exists
-        existing = supabase.table("customer_statuses")\
-            .select("id")\
-            .eq("code", status_data.code)\
-            .execute()
-        
-        if existing.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Customer status with code '{status_data.code}' already exists"
+        # Determine display_order: if not provided, auto-increment from max(display_order)
+        display_order = status_data.display_order
+        if display_order is None:
+            max_order_result = (
+                supabase.table("customer_statuses")
+                .select("display_order")
+                .order("display_order", desc=True)
+                .limit(1)
+                .execute()
             )
-        
-        # Check if display_order already exists
-        existing_order = supabase.table("customer_statuses")\
-            .select("id")\
-            .eq("display_order", status_data.display_order)\
-            .execute()
-        
-        if existing_order.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Customer status with display_order '{status_data.display_order}' already exists"
+            if max_order_result.data and len(max_order_result.data) > 0:
+                last_order = max_order_result.data[0].get("display_order") or 0
+                display_order = int(last_order) + 1
+            else:
+                display_order = 1
+        else:
+            # If display_order is provided explicitly, ensure it's unique
+            existing_order = (
+                supabase.table("customer_statuses")
+                .select("id")
+                .eq("display_order", display_order)
+                .execute()
             )
+            if existing_order.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Customer status with display_order '{display_order}' already exists"
+                )
         
         # Create new status
         result = supabase.table("customer_statuses")\
             .insert({
-                "code": status_data.code,
+                "code": final_code,
                 "name": status_data.name,
                 "color": status_data.color,
-                "display_order": status_data.display_order,
+                "display_order": display_order,
                 "description": status_data.description,
                 "is_default": status_data.is_default,
                 "is_system": False

@@ -638,6 +638,14 @@ export const projectApi = {
     
     const url = `/api/projects/search?${searchParams.toString()}`
     return apiGet(url)
+  },
+
+  // Get project statuses
+  getProjectStatuses: (categoryId?: string) => {
+    const url = categoryId && categoryId !== 'all'
+      ? `/api/projects/statuses?category_id=${categoryId}`
+      : '/api/projects/statuses'
+    return apiGet(url)
   }
 }
 
@@ -703,6 +711,46 @@ export const projectCategoryMembersApi = {
   // Get all projects in a category
   getCategoryProjects: (categoryId: string) => {
     return apiGet(`/api/project-category-members/categories/${categoryId}/projects`)
+  }
+}
+
+// Project Status Flow Rules API functions
+export const projectStatusFlowRulesApi = {
+  // Get all flow rules
+  getFlowRules: (params?: { is_active?: boolean; status_id?: string; category_id?: string }) => {
+    const searchParams = new URLSearchParams()
+    if (params?.is_active !== undefined) searchParams.append('is_active', params.is_active.toString())
+    if (params?.status_id) searchParams.append('status_id', params.status_id)
+    if (params?.category_id) searchParams.append('category_id', params.category_id)
+    const url = `/api/project-status-flow-rules${searchParams.toString() ? '?' + searchParams.toString() : ''}`
+    return apiGet(url)
+  },
+
+  // Get flow rule by ID
+  getFlowRule: (id: string) => {
+    return apiGet(`/api/project-status-flow-rules/${id}`)
+  },
+
+  // Create flow rule
+  createFlowRule: (data: {
+    status_id: string
+    category_id: string
+    action_type?: 'add' | 'remove'
+    is_active?: boolean
+    priority?: number
+    description?: string
+  }) => {
+    return apiPost('/api/project-status-flow-rules', data)
+  },
+
+  // Update flow rule
+  updateFlowRule: (id: string, data: Record<string, unknown>) => {
+    return apiPut(`/api/project-status-flow-rules/${id}`, data)
+  },
+
+  // Delete flow rule
+  deleteFlowRule: (id: string) => {
+    return apiDelete(`/api/project-status-flow-rules/${id}`)
   }
 }
 

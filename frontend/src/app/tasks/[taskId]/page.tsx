@@ -289,6 +289,7 @@ export default function TaskDetailPage() {
   const [project, setProject] = useState<any>(null)
   const [projectStatuses, setProjectStatuses] = useState<any[]>([])
   const [updatingProjectStatus, setUpdatingProjectStatus] = useState(false)
+  const [availableEmployees, setAvailableEmployees] = useState<Array<{ id: string; name: string }>>([])
 
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [checklistItemsDraft, setChecklistItemsDraft] = useState<Record<string, string>>({})
@@ -307,6 +308,7 @@ export default function TaskDetailPage() {
   const [editingChecklistItemContent, setEditingChecklistItemContent] = useState('')
   const [editingChecklistItemFiles, setEditingChecklistItemFiles] = useState<File[]>([])
   const [editingChecklistItemFileUrls, setEditingChecklistItemFileUrls] = useState<string[]>([])
+  const [showAssignEmployeeDropdown, setShowAssignEmployeeDropdown] = useState(false)
   const [editingChecklistItemPreviews, setEditingChecklistItemPreviews] = useState<string[]>([])
   const [uploadingEditChecklistItem, setUploadingEditChecklistItem] = useState(false)
   // Sử dụng participants từ taskData thay vì groupMembers
@@ -596,6 +598,38 @@ export default function TaskDetailPage() {
       ).sort((a, b) => a.display_order - b.display_order)
       
       setProjectStatuses(uniqueStatuses)
+      
+      // Load project team members for assignment
+      if (projectId) {
+        try {
+          const teamMembers = await apiGet(`/api/project-team/projects/${projectId}/team`)
+          if (teamMembers && Array.isArray(teamMembers)) {
+            const employees = teamMembers.map((member: any) => ({
+              id: member.employee_id || member.id,
+              name: member.employee_name || member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim()
+            })).filter((emp: any) => emp.id && emp.name)
+            setAvailableEmployees(employees)
+          }
+        } catch (err) {
+          console.error('Error loading project team:', err)
+          // Fallback: try to get all employees if project team fails
+          try {
+            const { data: employeesData } = await supabase
+              .from('employees')
+              .select('id, first_name, last_name')
+              .limit(100)
+            if (employeesData) {
+              const employees = employeesData.map((emp: any) => ({
+                id: emp.id,
+                name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
+              })).filter((emp: any) => emp.name)
+              setAvailableEmployees(employees)
+            }
+          } catch (fallbackErr) {
+            console.error('Error loading employees fallback:', fallbackErr)
+          }
+        }
+      }
     } catch (err) {
       console.error('Error loading project info:', err)
     }
@@ -619,6 +653,23 @@ export default function TaskDetailPage() {
       // Load project info if task has project_id
       if (data?.task?.project_id) {
         loadProjectInfo(data.task.project_id)
+      } else {
+        // Load all employees if no project
+        try {
+          const { data: employeesData } = await supabase
+            .from('employees')
+            .select('id, first_name, last_name')
+            .limit(100)
+          if (employeesData) {
+            const employees = employeesData.map((emp: any) => ({
+              id: emp.id,
+              name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
+            })).filter((emp: any) => emp.name)
+            setAvailableEmployees(employees)
+          }
+        } catch (err) {
+          console.error('Error loading employees:', err)
+        }
       }
 
       // Participants đã được bao gồm trong TaskResponse từ backend
@@ -1292,9 +1343,21 @@ export default function TaskDetailPage() {
     return roleMap[role] || role
   }
 
-  // Get all available members for assignment (combines task participants + assignments)
+  // Get all available members for assignment (combines task participants + assignments + project team)
   const getAllAvailableMembers = () => {
     const membersMap = new Map<string, { id: string; name: string; email?: string; role?: string }>()
+    
+    // Add members from available employees (project team)
+    if (availableEmployees.length > 0) {
+      availableEmployees.forEach(emp => {
+        if (!membersMap.has(emp.id)) {
+          membersMap.set(emp.id, {
+            id: emp.id,
+            name: emp.name
+          })
+        }
+      })
+    }
     
     // Add members from task assignments
     if (assignments && assignments.length > 0) {
@@ -1704,8 +1767,89 @@ export default function TaskDetailPage() {
                   <Users className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 mb-2">Nhân viên được gán</p>
-                  {participants && participants.length > 0 ? (
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500">Nhân viên được gán</p>
+                    <button
+                      onClick={() => setShowAssignEmployeeDropdown(!showAssignEmployeeDropdown)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Gán nhân viên</span>
+                    </button>
+                  </div>
+                  
+                  {/* Dropdown để chọn nhân viên */}
+                  {showAssignEmployeeDropdown && (
+                    <div className="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-md">
+                      <select
+                        className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                        onChange={async (e) => {
+                          const employeeId = e.target.value
+                          if (employeeId && taskId) {
+                            try {
+                              await apiPost(`/api/tasks/${taskId}/participants`, {
+                                employee_id: employeeId,
+                                role: 'responsible'
+                              })
+                              await loadTaskDetails()
+                              setShowAssignEmployeeDropdown(false)
+                            } catch (err: any) {
+                              console.error('Failed to assign employee:', err)
+                              alert(err.message || 'Không thể gán nhân viên')
+                            }
+                          }
+                          e.target.value = ''
+                        }}
+                      >
+                        <option value="">Chọn nhân viên...</option>
+                        {getAllAvailableMembers().filter(member => {
+                          // Lọc ra những nhân viên chưa được gán
+                          const isAssigned = assignments?.some(a => a.assigned_to === member.id) ||
+                                           participants?.some(p => p.employee_id === member.id)
+                          return !isAssigned
+                        }).map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.name} {member.role ? `(${getRoleLabel(member.role)})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  
+                  {/* Hiển thị assignments từ task_assignments */}
+                  {assignments && assignments.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {assignments.map((assignment) => (
+                        <div
+                          key={assignment.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded-md text-xs"
+                        >
+                          <User className="h-3 w-3 text-blue-600" />
+                          <span className="text-gray-700 font-medium">{assignment.assigned_to_name || 'Nhân viên'}</span>
+                          <button
+                            onClick={async () => {
+                              if (confirm('Bạn có chắc muốn bỏ gán nhân viên này?')) {
+                                try {
+                                  // Tìm participant tương ứng để xóa
+                                  const participant = participants?.find(p => p.employee_id === assignment.assigned_to)
+                                  if (participant) {
+                                    await apiDelete(`/api/tasks/participants/${participant.id}`)
+                                    await loadTaskDetails()
+                                  }
+                                } catch (err: any) {
+                                  console.error('Failed to remove assignment:', err)
+                                  alert(err.message || 'Không thể bỏ gán nhân viên')
+                                }
+                              }
+                            }}
+                            className="ml-1 text-gray-400 hover:text-red-600"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : participants && participants.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {participants.map((participant) => {
                         const getRoleLabel = (role: string) => {
@@ -1729,6 +1873,22 @@ export default function TaskDetailPage() {
                                 <span className="text-gray-600">{getRoleLabel(participant.role)}</span>
                               </>
                             )}
+                            <button
+                              onClick={async () => {
+                                if (confirm('Bạn có chắc muốn bỏ gán nhân viên này?')) {
+                                  try {
+                                    await apiDelete(`/api/tasks/participants/${participant.id}`)
+                                    await loadTaskDetails()
+                                  } catch (err: any) {
+                                    console.error('Failed to remove participant:', err)
+                                    alert(err.message || 'Không thể bỏ gán nhân viên')
+                                  }
+                                }
+                              }}
+                              className="ml-1 text-gray-400 hover:text-red-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
                           </div>
                         )
                       })}

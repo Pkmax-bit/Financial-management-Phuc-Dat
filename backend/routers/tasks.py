@@ -1862,6 +1862,15 @@ async def get_task_comments(
                             comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
                     except Exception:
                         pass
+
+            # Fallback: nếu chưa có user_name mà có user_id thì lấy từ bảng users
+            if not comment.get("user_name") and comment.get("user_id"):
+                try:
+                    user_result = supabase.table("users").select("full_name").eq("id", comment.get("user_id")).single().execute()
+                    if user_result.data:
+                        comment["user_name"] = user_result.data.get("full_name")
+                except Exception:
+                    pass
             
             # Get replies for this comment (only if parent_id column exists)
             try:

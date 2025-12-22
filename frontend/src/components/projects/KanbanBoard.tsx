@@ -110,6 +110,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [deletingStatusId, setDeletingStatusId] = useState<string | null>(null)
   const [projectInvoiceTotals, setProjectInvoiceTotals] = useState<Record<string, number>>({})
   const [showCategoriesManager, setShowCategoriesManager] = useState(false)
+  const [categoriesManagerInitialTab, setCategoriesManagerInitialTab] = useState<'categories' | 'flow-rules'>('categories')
   const [userRole, setUserRole] = useState<string>('')
   const [categories, setCategories] = useState<Array<{ id: string; name: string; color?: string }>>([])
   const [showStatusManagerModal, setShowStatusManagerModal] = useState(false)
@@ -935,7 +936,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           <div className="flex gap-2">
             {(userRole === 'admin' || userRole === 'manager') && (
               <button
-                onClick={() => setShowCategoriesManager(true)}
+                onClick={() => {
+                  setCategoriesManagerInitialTab('categories')
+                  setShowCategoriesManager(true)
+                }}
                 className="flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700 shadow-sm"
                 title="Quản lý nhóm phân loại dự án"
               >
@@ -1602,6 +1606,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           fetchCategories()
           fetchData()
         }}
+        initialTab={categoriesManagerInitialTab}
       />
 
       {/* Date Picker Dialog */}

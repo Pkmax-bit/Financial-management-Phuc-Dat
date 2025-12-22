@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Plus, Edit, Trash2, Save, Tag, Palette } from 'lucide-react'
-import { projectCategoryApi } from '@/lib/api'
+import { X, Plus, Edit, Trash2, Save, Tag, Palette, ArrowRight, Settings } from 'lucide-react'
+import { projectCategoryApi, projectStatusFlowRulesApi, projectApi } from '@/lib/api'
 
 interface ProjectCategory {
   id: string
@@ -21,13 +21,38 @@ interface ProjectCategoriesManagerProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  initialTab?: 'categories' | 'flow-rules'
 }
 
-export default function ProjectCategoriesManager({ isOpen, onClose, onSuccess }: ProjectCategoriesManagerProps) {
+interface ProjectStatus {
+  id: string
+  name: string
+  display_order: number
+  category_id?: string
+}
+
+interface FlowRule {
+  id: string
+  status_id: string
+  category_id: string
+  action_type: 'add' | 'remove'
+  is_active: boolean
+  priority: number
+  description?: string
+  project_statuses?: { id: string; name: string }
+  project_categories?: { id: string; name: string; code: string }
+}
+
+export default function ProjectCategoriesManager({ isOpen, onClose, onSuccess, initialTab = 'categories' }: ProjectCategoriesManagerProps) {
+  const [activeTab, setActiveTab] = useState<'categories' | 'flow-rules'>(initialTab)
   const [categories, setCategories] = useState<ProjectCategory[]>([])
+  const [statuses, setStatuses] = useState<ProjectStatus[]>([])
+  const [flowRules, setFlowRules] = useState<FlowRule[]>([])
   const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showFlowRuleForm, setShowFlowRuleForm] = useState(false)
+  const [editingFlowRuleId, setEditingFlowRuleId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -37,13 +62,35 @@ export default function ProjectCategoriesManager({ isOpen, onClose, onSuccess }:
     display_order: 0,
     is_active: true
   })
+  const [flowRuleForm, setFlowRuleForm] = useState({
+    status_category_id: '', // Nhóm để lọc trạng thái
+    status_id: '',
+    category_id: '', // Nhóm sẽ được thêm/xóa
+    action_type: 'add' as 'add' | 'remove',
+    is_active: true,
+    priority: 0,
+    description: ''
+  })
+  const [filteredStatuses, setFilteredStatuses] = useState<ProjectStatus[]>([])
+  const [showQuickCreateCategory, setShowQuickCreateCategory] = useState(false)
+  const [quickCategoryName, setQuickCategoryName] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (isOpen) {
       fetchCategories()
+      if (activeTab === 'flow-rules') {
+        fetchStatuses()
+        fetchFlowRules()
+      }
     }
-  }, [isOpen])
+  }, [isOpen, activeTab])
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab)
+    }
+  }, [isOpen, initialTab])
 
   const fetchCategories = async () => {
     try {
@@ -53,6 +100,83 @@ export default function ProjectCategoriesManager({ isOpen, onClose, onSuccess }:
     } catch (error) {
       console.error('Error fetching categories:', error)
       alert('Có lỗi xảy ra khi tải danh sách nhóm phân loại')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchStatuses = async (categoryId?: string) => {
+    try {
+      const data = await projectApi.getProjectStatuses(categoryId)
+      setStatuses(data || [])
+      // Nếu có categoryId, cũng cập nhật filteredStatuses
+      if (categoryId && categoryId !== 'all') {
+        setFilteredStatuses(data || [])
+      } else if (categoryId === 'all') {
+        // Nếu chọn "Tất cả", lấy tất cả statuses (global)
+        setFilteredStatuses(data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching statuses:', error)
+    }
+  }
+
+  // Khi chọn nhóm trạng thái, lọc statuses
+  useEffect(() => {
+    if (flowRuleForm.status_category_id && flowRuleForm.status_category_id !== 'all') {
+      fetchStatuses(flowRuleForm.status_category_id)
+      // Reset status_id khi đổi nhóm
+      setFlowRuleForm(prev => ({ ...prev, status_id: '' }))
+    } else if (flowRuleForm.status_category_id === 'all') {
+      // Nếu chọn "Tất cả", lấy tất cả statuses (global)
+      fetchStatuses()
+      setFlowRuleForm(prev => ({ ...prev, status_id: '' }))
+    }
+  }, [flowRuleForm.status_category_id])
+
+  const handleQuickCreateCategory = async () => {
+    if (!quickCategoryName.trim()) {
+      alert('Vui lòng nhập tên nhóm')
+      return
+    }
+
+    try {
+      setLoading(true)
+      const code = generateCodeFromName(quickCategoryName)
+      const newCategory = await projectCategoryApi.createCategory({
+        name: quickCategoryName.trim(),
+        code: code,
+        description: '',
+        color: '#4ECDC4',
+        display_order: categories.length > 0 ? Math.max(...categories.map(c => c.display_order)) + 1 : 0,
+        is_active: true
+      })
+      
+      // Refresh categories
+      await fetchCategories()
+      
+      // Auto-select the new category
+      setFlowRuleForm(prev => ({ ...prev, category_id: newCategory.id }))
+      
+      // Reset form
+      setQuickCategoryName('')
+      setShowQuickCreateCategory(false)
+    } catch (error: any) {
+      console.error('Error creating category:', error)
+      alert(error.response?.data?.detail || 'Có lỗi xảy ra khi tạo nhóm')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchFlowRules = async () => {
+    try {
+      setLoading(true)
+      const data = await projectStatusFlowRulesApi.getFlowRules()
+      setFlowRules(data || [])
+    } catch (error) {
+      console.error('Error fetching flow rules:', error)
+      alert('Có lỗi xảy ra khi tải danh sách flow rules')
     } finally {
       setLoading(false)
     }
@@ -192,6 +316,104 @@ export default function ProjectCategoriesManager({ isOpen, onClose, onSuccess }:
     setShowCreateForm(false)
   }
 
+  const handleCreateFlowRule = async () => {
+    if (!flowRuleForm.status_category_id || !flowRuleForm.status_id || !flowRuleForm.category_id) {
+      alert('Vui lòng chọn đầy đủ: nhóm trạng thái, trạng thái và nhóm dự án')
+      return
+    }
+
+    try {
+      setLoading(true)
+      await projectStatusFlowRulesApi.createFlowRule(flowRuleForm)
+      setShowFlowRuleForm(false)
+      setFlowRuleForm({
+        status_category_id: '',
+        status_id: '',
+        category_id: '',
+        action_type: 'add',
+        is_active: true,
+        priority: 0,
+        description: ''
+      })
+      setFilteredStatuses([])
+      fetchFlowRules()
+      onSuccess()
+    } catch (error: any) {
+      console.error('Error creating flow rule:', error)
+      alert(error.response?.data?.detail || 'Có lỗi xảy ra khi tạo flow rule')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateFlowRule = async (id: string) => {
+    if (!flowRuleForm.status_category_id || !flowRuleForm.status_id || !flowRuleForm.category_id) {
+      alert('Vui lòng chọn đầy đủ: nhóm trạng thái, trạng thái và nhóm dự án')
+      return
+    }
+
+    try {
+      setLoading(true)
+      await projectStatusFlowRulesApi.updateFlowRule(id, flowRuleForm)
+      setEditingFlowRuleId(null)
+      setFlowRuleForm({
+        status_category_id: '',
+        status_id: '',
+        category_id: '',
+        action_type: 'add',
+        is_active: true,
+        priority: 0,
+        description: ''
+      })
+      setFilteredStatuses([])
+      fetchFlowRules()
+      onSuccess()
+    } catch (error: any) {
+      console.error('Error updating flow rule:', error)
+      alert(error.response?.data?.detail || 'Có lỗi xảy ra khi cập nhật flow rule')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteFlowRule = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa flow rule này?')) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      await projectStatusFlowRulesApi.deleteFlowRule(id)
+      // Refresh flow rules list
+      await fetchFlowRules()
+      onSuccess()
+    } catch (error: any) {
+      console.error('Error deleting flow rule:', error)
+      // Check if it's a 404 error (rule not found)
+      // ApiError has status property, or check error.message
+      const isNotFound = error.status === 404 || 
+                        error.message?.toLowerCase().includes('not found') ||
+                        error.message?.toLowerCase().includes('không tìm thấy')
+      
+      if (isNotFound) {
+        // Rule might have been deleted already, just refresh the list
+        await fetchFlowRules()
+        // Don't show error alert for 404, just refresh silently
+        // The list will update and the rule will disappear
+        return
+      }
+      
+      // For other errors, show alert
+      const errorMessage = error.message || 
+                          error.data?.detail || 
+                          error.response?.data?.detail || 
+                          'Có lỗi xảy ra khi xóa flow rule'
+      alert(errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (!isOpen) return null
 
   const sortedCategories = [...categories].sort((a, b) => a.display_order - b.display_order)
@@ -218,7 +440,350 @@ export default function ProjectCategoriesManager({ isOpen, onClose, onSuccess }:
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Create/Edit Form */}
+          {/* Flow Rules Tab */}
+          {activeTab === 'flow-rules' && (
+            <div className="space-y-4">
+              {/* Flow Rule Form */}
+              {(showFlowRuleForm || editingFlowRuleId) && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    {editingFlowRuleId ? 'Chỉnh sửa flow rule' : 'Tạo flow rule mới'}
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nhóm trạng thái *
+                      </label>
+                      <select
+                        value={flowRuleForm.status_category_id}
+                        onChange={(e) => setFlowRuleForm({ ...flowRuleForm, status_category_id: e.target.value, status_id: '' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                      >
+                        <option value="">Chọn nhóm trạng thái...</option>
+                        <option value="all">Tất cả (Trạng thái toàn cục)</option>
+                        {categories.filter(c => c.is_active).map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">Chọn nhóm để lọc trạng thái</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Trạng thái *
+                      </label>
+                      <select
+                        value={flowRuleForm.status_id}
+                        onChange={(e) => setFlowRuleForm({ ...flowRuleForm, status_id: e.target.value })}
+                        disabled={!flowRuleForm.status_category_id}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">{flowRuleForm.status_category_id ? 'Chọn trạng thái...' : 'Chọn nhóm trạng thái trước'}</option>
+                        {(flowRuleForm.status_category_id ? filteredStatuses : []).map((status) => (
+                          <option key={status.id} value={status.id}>
+                            {status.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!flowRuleForm.status_category_id && (
+                        <p className="text-xs text-gray-500 mt-1">Vui lòng chọn nhóm trạng thái trước</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Nhóm dự án (sẽ được thêm/xóa) *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickCreateCategory(true)}
+                          disabled={!flowRuleForm.status_id}
+                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Tạo mới
+                        </button>
+                      </div>
+                      <select
+                        value={flowRuleForm.category_id}
+                        onChange={(e) => setFlowRuleForm({ ...flowRuleForm, category_id: e.target.value })}
+                        disabled={!flowRuleForm.status_id}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">{flowRuleForm.status_id ? 'Chọn nhóm dự án...' : 'Chọn trạng thái trước'}</option>
+                        {categories.filter(c => c.is_active && c.id !== flowRuleForm.status_category_id).map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!flowRuleForm.status_id && (
+                        <p className="text-xs text-gray-500 mt-1">Vui lòng chọn trạng thái trước</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Hành động *
+                      </label>
+                      <select
+                        value={flowRuleForm.action_type}
+                        onChange={(e) => setFlowRuleForm({ ...flowRuleForm, action_type: e.target.value as 'add' | 'remove' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                      >
+                        <option value="add">Thêm vào nhóm</option>
+                        <option value="remove">Xóa khỏi nhóm</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Độ ưu tiên
+                      </label>
+                      <input
+                        type="number"
+                        value={flowRuleForm.priority}
+                        onChange={(e) => setFlowRuleForm({ ...flowRuleForm, priority: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                        min="0"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Số càng cao càng ưu tiên</p>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Mô tả
+                      </label>
+                      <textarea
+                        value={flowRuleForm.description}
+                        onChange={(e) => setFlowRuleForm({ ...flowRuleForm, description: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                        rows={2}
+                        placeholder="Mô tả về flow rule này..."
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={flowRuleForm.is_active}
+                          onChange={(e) => setFlowRuleForm({ ...flowRuleForm, is_active: e.target.checked })}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">Kích hoạt flow rule này</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={editingFlowRuleId ? () => handleUpdateFlowRule(editingFlowRuleId) : handleCreateFlowRule}
+                      disabled={loading || !flowRuleForm.status_id || !flowRuleForm.category_id}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <Save className="h-4 w-4" />
+                      {loading ? 'Đang lưu...' : (editingFlowRuleId ? 'Cập nhật' : 'Tạo mới')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowFlowRuleForm(false)
+                        setEditingFlowRuleId(null)
+                        setFlowRuleForm({
+                          status_category_id: '',
+                          status_id: '',
+                          category_id: '',
+                          action_type: 'add',
+                          is_active: true,
+                          priority: 0,
+                          description: ''
+                        })
+                        setFilteredStatuses([])
+                      }}
+                      disabled={loading}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Create Category Modal */}
+              {showQuickCreateCategory && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+                  <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+                    <div className="p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Tạo nhóm mới</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Tên nhóm *
+                          </label>
+                          <input
+                            type="text"
+                            value={quickCategoryName}
+                            onChange={(e) => setQuickCategoryName(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                            placeholder="VD: Dự án cửa"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && quickCategoryName.trim()) {
+                                handleQuickCreateCategory()
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleQuickCreateCategory}
+                            disabled={loading || !quickCategoryName.trim()}
+                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          >
+                            {loading ? 'Đang tạo...' : 'Tạo'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowQuickCreateCategory(false)
+                              setQuickCategoryName('')
+                            }}
+                            disabled={loading}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Add Flow Rule Button */}
+              {!showFlowRuleForm && !editingFlowRuleId && (
+                <button
+                  onClick={() => {
+                    setShowFlowRuleForm(true)
+                    setEditingFlowRuleId(null)
+                    setFlowRuleForm({
+                      status_category_id: '',
+                      status_id: '',
+                      category_id: '',
+                      action_type: 'add',
+                      is_active: true,
+                      priority: 0,
+                      description: ''
+                    })
+                    setFilteredStatuses([])
+                  }}
+                  className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Thêm flow rule mới
+                </button>
+              )}
+
+              {/* Flow Rules List */}
+              {loading && !flowRules.length ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                </div>
+              ) : flowRules.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  Chưa có flow rule nào. Hãy tạo flow rule đầu tiên.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {flowRules.map((rule) => (
+                    <div
+                      key={rule.id}
+                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                              {rule.project_statuses?.name || 'N/A'}
+                            </span>
+                            <ArrowRight className="h-4 w-4 text-gray-400" />
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              rule.action_type === 'add' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {rule.action_type === 'add' ? 'Thêm vào' : 'Xóa khỏi'}
+                            </span>
+                            <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+                              {rule.project_categories?.name || 'N/A'}
+                            </span>
+                            {!rule.is_active && (
+                              <span className="px-2 py-1 bg-gray-200 text-gray-600 text-xs rounded">
+                                Tạm dừng
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            {rule.description && <p><strong>Mô tả:</strong> {rule.description}</p>}
+                            <p><strong>Độ ưu tiên:</strong> {rule.priority}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <button
+                            onClick={async () => {
+                              setEditingFlowRuleId(rule.id)
+                              setShowFlowRuleForm(false)
+                              // Tìm category_id của status để set status_category_id
+                              const status = statuses.find(s => s.id === rule.status_id)
+                              const statusCategoryId = status?.category_id || 'all'
+                              
+                              // Fetch statuses cho category đó
+                              if (statusCategoryId && statusCategoryId !== 'all') {
+                                await fetchStatuses(statusCategoryId)
+                              } else {
+                                await fetchStatuses()
+                              }
+                              
+                              setFlowRuleForm({
+                                status_category_id: statusCategoryId || 'all',
+                                status_id: rule.status_id,
+                                category_id: rule.category_id,
+                                action_type: rule.action_type,
+                                is_active: rule.is_active,
+                                priority: rule.priority,
+                                description: rule.description || ''
+                              })
+                            }}
+                            disabled={loading}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="Chỉnh sửa"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFlowRule(rule.id)}
+                            disabled={loading}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="Xóa"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Categories Tab */}
+          {activeTab === 'categories' && (
+            <>
+              {/* Create/Edit Form */}
           {(showCreateForm || editingId) && (
             <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -398,6 +963,8 @@ export default function ProjectCategoriesManager({ isOpen, onClose, onSuccess }:
                 </div>
               ))}
             </div>
+          )}
+            </>
           )}
         </div>
 

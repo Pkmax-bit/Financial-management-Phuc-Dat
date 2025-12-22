@@ -11,6 +11,7 @@ interface Customer {
   id: string
   name: string
   email: string
+  address?: string
 }
 
 interface Employee {
@@ -38,6 +39,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     end_date: '',
     budget: '',
     status: 'planning' as const,
+    status_id: '' as string,
     priority: 'medium' as const,
     progress: 0,
     billing_type: 'fixed' as const,
@@ -48,9 +50,11 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   const [employees, setEmployees] = useState<Employee[]>([])
   const [categories, setCategories] = useState<Array<{ id: string; name: string; color?: string }>>([])
   const [loadingCategories, setLoadingCategories] = useState(false)
-  const [taskGroups, setTaskGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [taskGroups, setTaskGroups] = useState<Array<{ id: string; name: string; category_id?: string }>>([])
   const [loadingTaskGroups, setLoadingTaskGroups] = useState(false)
   const [selectedTaskGroupId, setSelectedTaskGroupId] = useState<string>('')
+  const [statuses, setStatuses] = useState<Array<{ id: string; name: string; category_id?: string | null }>>([])
+  const [loadingStatuses, setLoadingStatuses] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -63,6 +67,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       fetchEmployees()
       fetchCategories()
       fetchTaskGroups()
+      fetchStatuses() // Fetch statuses toàn cục khi mở modal
       generateProjectCode()
     }
   }, [isOpen])
@@ -71,11 +76,17 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     try {
       setLoadingTaskGroups(true)
       const groups = await apiGet('/api/tasks/groups?is_active=true')
-      setTaskGroups(groups || [])
+      // Đảm bảo lưu category_id vào state
+      const groupsWithCategory = (groups || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        category_id: g.category_id
+      }))
+      setTaskGroups(groupsWithCategory)
       
       // Nếu đã chọn category, tự động chọn task_group tương ứng
       if (formData.category_id) {
-        const categoryGroup = groups.find((g: any) => g.category_id === formData.category_id)
+        const categoryGroup = groupsWithCategory.find((g: any) => g.category_id === formData.category_id)
         if (categoryGroup) {
           setSelectedTaskGroupId(categoryGroup.id)
         }
@@ -84,6 +95,33 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       console.error('Error fetching task groups:', error)
     } finally {
       setLoadingTaskGroups(false)
+    }
+  }
+
+  const fetchStatuses = async (categoryId?: string) => {
+    try {
+      setLoadingStatuses(true)
+      const url = categoryId 
+        ? `/api/projects/statuses?category_id=${categoryId}`
+        : '/api/projects/statuses'
+      const statusesData = await apiGet(url)
+      setStatuses(statusesData || [])
+      
+      // Nếu có statuses và chưa chọn status, chọn status đầu tiên
+      if (statusesData && statusesData.length > 0 && !formData.status_id) {
+        const firstStatus = statusesData[0]
+        setFormData(prev => ({
+          ...prev,
+          status_id: firstStatus.id,
+          status: firstStatus.name.toLowerCase().replace(/\s+/g, '_') as any // Fallback cho legacy status enum
+        }))
+      }
+    } catch (error) {
+      console.error('Error fetching statuses:', error)
+      // Fallback: dùng statuses mặc định nếu API fail
+      setStatuses([])
+    } finally {
+      setLoadingStatuses(false)
     }
   }
 
@@ -144,7 +182,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         
         const { data, error } = await supabase
           .from('customers')
-          .select('id, name, email')
+          .select('id, name, email, address')
           .order('name')
 
         if (error) throw error
@@ -292,11 +330,13 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         end_date: '',
         budget: '',
         status: 'planning',
+        status_id: '',
         priority: 'medium',
         progress: 0,
         billing_type: 'fixed',
         hourly_rate: ''
       })
+      setStatuses([]) // Reset statuses
       // selectedTaskGroupId sẽ được tự động set khi chọn category
       
       // Don't auto-close modal, let success modal handle it
@@ -316,28 +356,119 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       [name]: value
     }))
     
-    // Khi chọn category, tự động tìm và chọn task_group tương ứng
+    // Khi chọn khách hàng, tự động tạo tên dự án từ tên khách hàng và địa chỉ
+    if (name === 'customer_id' && value) {
+      const selectedCustomer = customers.find(c => c.id === value)
+      if (selectedCustomer) {
+        let customerName = selectedCustomer.name || ''
+        let customerAddress = selectedCustomer.address || ''
+        
+        // Nếu chưa có address trong danh sách, fetch thông tin chi tiết
+        if (!customerAddress) {
+          // Try to get customer details from API or Supabase
+          try {
+            const customerDetail = await customerApi.getCustomer(value)
+            if (customerDetail?.address) {
+              customerAddress = customerDetail.address
+              // Update customer in list
+              setCustomers(prev => prev.map(c => 
+                c.id === value ? { ...c, address: customerDetail.address } : c
+              ))
+            }
+          } catch (err) {
+            // Fallback to Supabase
+            try {
+              const { data, error } = await supabase
+                .from('customers')
+                .select('name, address')
+                .eq('id', value)
+                .single()
+              
+              if (!error && data) {
+                customerAddress = data.address || ''
+                customerName = data.name || customerName
+                // Update customer in list
+                setCustomers(prev => prev.map(c => 
+                  c.id === value ? { ...c, address: data.address, name: data.name } : c
+                ))
+              }
+            } catch (supabaseErr) {
+              console.error('Error fetching customer address:', supabaseErr)
+            }
+          }
+        }
+        
+        // Tạo tên dự án: "Tên khách hàng - Địa chỉ khách hàng"
+        // Chỉ tự động tạo nếu tên dự án đang trống
+        setFormData(prev => {
+          // Chỉ tự động tạo tên nếu chưa có hoặc đang trống
+          if (!prev.name || prev.name.trim() === '') {
+            let projectName = customerName
+            if (customerAddress) {
+              projectName = `${customerName} - ${customerAddress}`
+            }
+            return {
+              ...prev,
+              name: projectName
+            }
+          }
+          return prev
+        })
+      }
+    }
+    
+    // Khi chọn category, tự động tìm và chọn task_group tương ứng và fetch statuses
     if (name === 'category_id' && value) {
       try {
-        const groups = await apiGet(`/api/tasks/groups?category_id=${value}`)
-        if (groups && groups.length > 0) {
-          setSelectedTaskGroupId(groups[0].id)
-          console.log('✅ Auto-selected task group:', groups[0].name, 'for category:', value)
+        // Fetch statuses cho category này
+        await fetchStatuses(value)
+        
+        // Tìm task_group có category_id tương ứng trong danh sách đã fetch
+        const matchingGroup = taskGroups.find(g => g.category_id === value)
+        if (matchingGroup) {
+          setSelectedTaskGroupId(matchingGroup.id)
+          console.log('✅ Auto-selected task group:', matchingGroup.name, 'for category:', value)
         } else {
-          // Nếu chưa có task_group, đợi trigger tạo (hoặc có thể tạo thủ công)
-          console.log('⚠️ No task group found for category, waiting for auto-creation...')
-          // Retry sau 1 giây để đợi trigger tạo task_group
-          setTimeout(async () => {
-            const retryGroups = await apiGet(`/api/tasks/groups?category_id=${value}`)
-            if (retryGroups && retryGroups.length > 0) {
-              setSelectedTaskGroupId(retryGroups[0].id)
-              console.log('✅ Task group created, auto-selected:', retryGroups[0].name)
-            }
-          }, 1000)
+          // Nếu không tìm thấy trong danh sách, fetch từ API
+          const groups = await apiGet(`/api/tasks/groups?category_id=${value}`)
+          if (groups && groups.length > 0) {
+            setSelectedTaskGroupId(groups[0].id)
+            // Cập nhật danh sách taskGroups nếu cần
+            setTaskGroups(prev => {
+              const existing = prev.find(g => g.id === groups[0].id)
+              if (!existing) {
+                return [...prev, { id: groups[0].id, name: groups[0].name, category_id: value }]
+              }
+              return prev
+            })
+            console.log('✅ Auto-selected task group:', groups[0].name, 'for category:', value)
+          } else {
+            // Nếu chưa có task_group, đợi trigger tạo (hoặc có thể tạo thủ công)
+            console.log('⚠️ No task group found for category, waiting for auto-creation...')
+            // Retry sau 1 giây để đợi trigger tạo task_group
+            setTimeout(async () => {
+              const retryGroups = await apiGet(`/api/tasks/groups?category_id=${value}`)
+              if (retryGroups && retryGroups.length > 0) {
+                setSelectedTaskGroupId(retryGroups[0].id)
+                setTaskGroups(prev => {
+                  const existing = prev.find(g => g.id === retryGroups[0].id)
+                  if (!existing) {
+                    return [...prev, { id: retryGroups[0].id, name: retryGroups[0].name, category_id: value }]
+                  }
+                  return prev
+                })
+                console.log('✅ Task group created, auto-selected:', retryGroups[0].name)
+              }
+            }, 1000)
+          }
         }
       } catch (error) {
         console.error('Error fetching task group for category:', error)
       }
+    } else if (name === 'category_id' && !value) {
+      // Nếu bỏ chọn category, cũng bỏ chọn task_group và fetch statuses toàn cục
+      setSelectedTaskGroupId('')
+      await fetchStatuses() // Fetch statuses toàn cục
     }
   }
 
@@ -599,16 +730,40 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
               </label>
               <div className="relative">
                 <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
+                  name="status_id"
+                  value={formData.status_id}
+                  onChange={(e) => {
+                    const selectedStatusId = e.target.value
+                    const selectedStatus = statuses.find(s => s.id === selectedStatusId)
+                    setFormData(prev => ({
+                      ...prev,
+                      status_id: selectedStatusId,
+                      status: selectedStatus?.name.toLowerCase().replace(/\s+/g, '_') as any || 'planning' // Fallback cho legacy
+                    }))
+                  }}
+                  disabled={loadingStatuses}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="planning">Lập kế hoạch</option>
-                  <option value="active">Đang hoạt động</option>
-                  <option value="on_hold">Tạm dừng</option>
-                  <option value="completed">Hoàn thành</option>
-                  <option value="cancelled">Đã hủy</option>
+                  {loadingStatuses ? (
+                    <option value="">Đang tải...</option>
+                  ) : statuses.length > 0 ? (
+                    <>
+                      <option value="">Chọn trạng thái</option>
+                      {statuses.map((status) => (
+                        <option key={status.id} value={status.id}>
+                          {status.name}
+                        </option>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <option value="planning">Lập kế hoạch</option>
+                      <option value="active">Đang hoạt động</option>
+                      <option value="on_hold">Tạm dừng</option>
+                      <option value="completed">Hoàn thành</option>
+                      <option value="cancelled">Đã hủy</option>
+                    </>
+                  )}
                 </select>
               </div>
             </div>
@@ -680,7 +835,28 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
             <div className="relative">
               <select
                 value={selectedTaskGroupId}
-                onChange={(e) => setSelectedTaskGroupId(e.target.value)}
+                onChange={(e) => {
+                  const selectedGroupId = e.target.value
+                  setSelectedTaskGroupId(selectedGroupId)
+                  
+                  // Khi chọn task_group, tự động chọn category tương ứng
+                  if (selectedGroupId) {
+                    const selectedGroup = taskGroups.find(g => g.id === selectedGroupId)
+                    if (selectedGroup?.category_id) {
+                      setFormData(prev => ({
+                        ...prev,
+                        category_id: selectedGroup.category_id
+                      }))
+                      console.log('✅ Auto-selected category:', selectedGroup.category_id, 'for task group:', selectedGroupId)
+                    }
+                  } else {
+                    // Nếu bỏ chọn task_group, cũng bỏ chọn category
+                    setFormData(prev => ({
+                      ...prev,
+                      category_id: ''
+                    }))
+                  }
+                }}
                 required
                 disabled={loadingTaskGroups}
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black disabled:opacity-50 disabled:cursor-not-allowed"

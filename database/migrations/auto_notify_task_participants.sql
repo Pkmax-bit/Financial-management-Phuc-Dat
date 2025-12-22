@@ -292,3 +292,6 @@ COMMENT ON FUNCTION auto_notify_task_participant_role_updated() IS 'Tự động
 COMMENT ON FUNCTION auto_notify_task_updated() IS 'Tự động gửi thông báo cho tất cả participants khi task được cập nhật (status, priority, due_date)';
 
 
+
+
+

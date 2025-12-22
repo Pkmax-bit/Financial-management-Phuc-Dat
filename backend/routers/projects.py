@@ -8,6 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 import uuid
+import asyncio
 from pydantic import BaseModel
 
 from models.project import Project, ProjectCreate, ProjectUpdate
@@ -1013,6 +1014,7 @@ async def create_project(
         # Create project record
         project_dict = project_data.dict()
         project_dict["id"] = str(uuid.uuid4())
+        project_dict["created_by"] = current_user.id  # Set created_by
         project_dict["created_at"] = datetime.utcnow().isoformat()
         project_dict["updated_at"] = datetime.utcnow().isoformat()
         
@@ -1031,7 +1033,106 @@ async def create_project(
         result = supabase.table("projects").insert(project_dict).execute()
         
         if result.data:
-            return Project(**result.data[0])
+            project = result.data[0]
+            project_id = project["id"]
+            
+            # Tự động thêm manager vào project_team
+            try:
+                # Ưu tiên manager_id, nếu không có thì dùng created_by
+                employee_id_to_add = project_data.manager_id
+                if not employee_id_to_add:
+                    # Nếu không có manager_id, lấy từ created_by (người tạo dự án)
+                    # Tìm employee_id từ user_id (created_by)
+                    if project_dict.get("created_by"):
+                        employee_result = supabase.table("employees").select("id").eq("user_id", project_dict["created_by"]).limit(1).execute()
+                        if employee_result.data:
+                            employee_id_to_add = employee_result.data[0]["id"]
+                
+                if employee_id_to_add:
+                    # Lấy thông tin employee
+                    employee_result = supabase.table("employees").select("id, first_name, last_name, email, phone, user_id").eq("id", employee_id_to_add).single().execute()
+                    
+                    if employee_result.data:
+                        employee = employee_result.data
+                        employee_name = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                        
+                        # Kiểm tra xem đã có trong project_team chưa
+                        # Kiểm tra bằng user_id trước (nếu có)
+                        existing_member = None
+                        if employee.get("user_id"):
+                            existing_member = supabase.table("project_team").select("id").eq("project_id", project_id).eq("user_id", employee.get("user_id")).execute()
+                        
+                        # Nếu không tìm thấy bằng user_id, kiểm tra bằng email
+                        if (not existing_member or not existing_member.data) and employee.get("email"):
+                            existing_member = supabase.table("project_team").select("id").eq("project_id", project_id).eq("email", employee.get("email")).execute()
+                        
+                        # Nếu vẫn không tìm thấy, kiểm tra bằng name
+                        if (not existing_member or not existing_member.data) and employee_name:
+                            existing_member = supabase.table("project_team").select("id").eq("project_id", project_id).eq("name", employee_name).execute()
+                        
+                        if not existing_member or not existing_member.data:
+                            # Thêm vào project_team với role = "manager" hoặc "responsible"
+                            # Lấy start_date từ project (đã được convert sang ISO format)
+                            project_start_date = project_dict.get("start_date")
+                            if not project_start_date:
+                                # Nếu không có, dùng ngày hiện tại
+                                project_start_date = datetime.utcnow().isoformat()
+                            
+                            # Đảm bảo start_date là date string (không phải datetime)
+                            if isinstance(project_start_date, str) and 'T' in project_start_date:
+                                # Nếu là datetime string, chỉ lấy phần date
+                                project_start_date = project_start_date.split('T')[0]
+                            
+                            team_member_data = {
+                                "project_id": project_id,
+                                "name": employee_name,
+                                "role": "manager",  # Đảm bảo role không null
+                                "responsibility_type": "accountable",  # Manager là accountable
+                                "email": employee.get("email"),
+                                "phone": employee.get("phone"),
+                                "start_date": project_start_date,  # Lấy từ project.start_date
+                                "status": "active",
+                                "user_id": employee.get("user_id"),
+                                "created_at": datetime.utcnow().isoformat(),
+                                "updated_at": datetime.utcnow().isoformat()
+                            }
+                            
+                            supabase.table("project_team").insert(team_member_data).execute()
+                            
+                            # Tự động thêm vào task_participants cho tất cả tasks của project
+                            # Trigger có thể tạo task sau khi insert project, nên cần retry
+                            max_retries = 3
+                            retry_delay = 0.5  # 500ms
+                            
+                            for retry in range(max_retries):
+                                tasks_result = supabase.table("tasks").select("id").eq("project_id", project_id).is_("deleted_at", "null").execute()
+                                
+                                if tasks_result.data:
+                                    participants_to_add = []
+                                    for task in tasks_result.data:
+                                        # Kiểm tra xem đã có trong task_participants chưa
+                                        existing_participant = supabase.table("task_participants").select("id").eq("task_id", task["id"]).eq("employee_id", employee_id_to_add).execute()
+                                        
+                                        if not existing_participant.data:
+                                            participants_to_add.append({
+                                                "task_id": task["id"],
+                                                "employee_id": employee_id_to_add,
+                                                "role": "responsible",  # Manager là responsible
+                                                "added_by": current_user.id
+                                            })
+                                    
+                                    if participants_to_add:
+                                        supabase.table("task_participants").insert(participants_to_add).execute()
+                                    break  # Thành công, không cần retry nữa
+                                else:
+                                    # Chưa có tasks, đợi trigger tạo
+                                    if retry < max_retries - 1:
+                                        await asyncio.sleep(retry_delay)
+            except Exception as team_error:
+                # Log error nhưng không fail project creation
+                print(f"Warning: Failed to add manager to project team: {str(team_error)}")
+            
+            return Project(**project)
         
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1101,49 +1202,69 @@ async def update_project(
         
         result = supabase.table("projects").update(update_data).eq("id", project_id).execute()
         
-        # Auto-add/remove from workshop category if status_id changed
+        # Apply flow rules if status_id changed
         new_status_id = update_data.get('status_id')
         if new_status_id and new_status_id != old_status_id:
-            # Find workshop category and status
-            workshop_category = supabase.table("project_categories")\
-                .select("id")\
-                .or_("name.ilike.%xưởng%,code.ilike.%workshop%,code.ilike.%xuong%")\
-                .limit(1)\
+            # Get active flow rules for the new status
+            flow_rules = supabase.table("project_status_flow_rules")\
+                .select("category_id, action_type, priority")\
+                .eq("status_id", new_status_id)\
+                .eq("is_active", True)\
+                .order("priority", desc=True)\
                 .execute()
             
-            workshop_status = supabase.table("project_statuses")\
-                .select("id")\
-                .or_("name.ilike.%xưởng%,name.ilike.%sản xuất%")\
-                .limit(1)\
-                .execute()
-            
-            if workshop_category.data and workshop_status.data:
-                workshop_category_id = workshop_category.data[0].get('id')
-                workshop_status_id = workshop_status.data[0].get('id')
-                
-                # If new status is workshop status, add to workshop category
-                if new_status_id == workshop_status_id:
-                    existing_member = supabase.table("project_category_members")\
-                        .select("id")\
-                        .eq("project_id", project_id)\
-                        .eq("category_id", workshop_category_id)\
-                        .execute()
+            if flow_rules.data:
+                for rule in flow_rules.data:
+                    category_id = rule.get('category_id')
+                    action_type = rule.get('action_type', 'add')
                     
-                    if not existing_member.data:
-                        supabase.table("project_category_members")\
-                            .insert({
-                                "project_id": project_id,
-                                "category_id": workshop_category_id,
-                                "added_by": current_user.id
-                            })\
+                    if action_type == 'add':
+                        # Check if already in category
+                        existing_member = supabase.table("project_category_members")\
+                            .select("id")\
+                            .eq("project_id", project_id)\
+                            .eq("category_id", category_id)\
                             .execute()
-                # If old status was workshop and new status is not, remove from workshop category
-                elif old_status_id == workshop_status_id and new_status_id != workshop_status_id:
-                    supabase.table("project_category_members")\
-                        .delete()\
-                        .eq("project_id", project_id)\
-                        .eq("category_id", workshop_category_id)\
-                        .execute()
+                        
+                        if not existing_member.data:
+                            supabase.table("project_category_members")\
+                                .insert({
+                                    "project_id": project_id,
+                                    "category_id": category_id,
+                                    "added_by": current_user.id
+                                })\
+                                .execute()
+                    elif action_type == 'remove':
+                        # Remove from category
+                        supabase.table("project_category_members")\
+                            .delete()\
+                            .eq("project_id", project_id)\
+                            .eq("category_id", category_id)\
+                            .execute()
+            
+            # Also check for rules on old status (to handle remove actions)
+            if old_status_id:
+                old_flow_rules = supabase.table("project_status_flow_rules")\
+                    .select("category_id, action_type")\
+                    .eq("status_id", old_status_id)\
+                    .eq("is_active", True)\
+                    .eq("action_type", "add")\
+                    .execute()
+                
+                # If old status had "add" rules, check if we should remove from those categories
+                # (only if new status doesn't have "add" rule for same category)
+                if old_flow_rules.data:
+                    new_category_ids = {r.get('category_id') for r in flow_rules.data if r.get('action_type') == 'add'} if flow_rules.data else set()
+                    
+                    for old_rule in old_flow_rules.data:
+                        old_category_id = old_rule.get('category_id')
+                        # Only remove if new status doesn't add to same category
+                        if old_category_id not in new_category_ids:
+                            supabase.table("project_category_members")\
+                                .delete()\
+                                .eq("project_id", project_id)\
+                                .eq("category_id", old_category_id)\
+                                .execute()
         
         if result.data:
             return Project(**result.data[0])
@@ -1919,50 +2040,68 @@ async def update_project_status(
         # Update project status
         result = supabase.table("projects").update(update_dict).eq("id", project_id).execute()
         
-        # Auto-add/remove from workshop category if status_id changed
+        # Apply flow rules if status_id changed (trigger will also handle this, but we do it here for immediate effect)
         if new_status_id and new_status_id != old_status_id:
-            # Find workshop category
-            workshop_category = supabase.table("project_categories")\
-                .select("id")\
-                .or_("name.ilike.%xưởng%,code.ilike.%workshop%,code.ilike.%xuong%")\
-                .limit(1)\
+            # Get active flow rules for the new status
+            flow_rules = supabase.table("project_status_flow_rules")\
+                .select("category_id, action_type, priority")\
+                .eq("status_id", new_status_id)\
+                .eq("is_active", True)\
+                .order("priority", desc=True)\
                 .execute()
             
-            # Find workshop status
-            workshop_status = supabase.table("project_statuses")\
-                .select("id")\
-                .or_("name.ilike.%xưởng%,name.ilike.%sản xuất%")\
-                .limit(1)\
-                .execute()
-            
-            if workshop_category.data and workshop_status.data:
-                workshop_category_id = workshop_category.data[0].get('id')
-                workshop_status_id = workshop_status.data[0].get('id')
-                
-                # If new status is workshop status, add to workshop category
-                if new_status_id == workshop_status_id:
-                    # Check if already in category
-                    existing_member = supabase.table("project_category_members")\
-                        .select("id")\
-                        .eq("project_id", project_id)\
-                        .eq("category_id", workshop_category_id)\
-                        .execute()
+            if flow_rules.data:
+                for rule in flow_rules.data:
+                    category_id = rule.get('category_id')
+                    action_type = rule.get('action_type', 'add')
                     
-                    if not existing_member.data:
-                        supabase.table("project_category_members")\
-                            .insert({
-                                "project_id": project_id,
-                                "category_id": workshop_category_id,
-                                "added_by": current_user.id
-                            })\
+                    if action_type == 'add':
+                        # Check if already in category
+                        existing_member = supabase.table("project_category_members")\
+                            .select("id")\
+                            .eq("project_id", project_id)\
+                            .eq("category_id", category_id)\
                             .execute()
-                # If old status was workshop and new status is not, remove from workshop category
-                elif old_status_id == workshop_status_id and new_status_id != workshop_status_id:
-                    supabase.table("project_category_members")\
-                        .delete()\
-                        .eq("project_id", project_id)\
-                        .eq("category_id", workshop_category_id)\
-                        .execute()
+                        
+                        if not existing_member.data:
+                            supabase.table("project_category_members")\
+                                .insert({
+                                    "project_id": project_id,
+                                    "category_id": category_id,
+                                    "added_by": current_user.id
+                                })\
+                                .execute()
+                    elif action_type == 'remove':
+                        # Remove from category
+                        supabase.table("project_category_members")\
+                            .delete()\
+                            .eq("project_id", project_id)\
+                            .eq("category_id", category_id)\
+                            .execute()
+            
+            # Also check for rules on old status (to handle remove actions)
+            if old_status_id:
+                old_flow_rules = supabase.table("project_status_flow_rules")\
+                    .select("category_id, action_type")\
+                    .eq("status_id", old_status_id)\
+                    .eq("is_active", True)\
+                    .eq("action_type", "add")\
+                    .execute()
+                
+                # If old status had "add" rules, check if we should remove from those categories
+                # (only if new status doesn't have "add" rule for same category)
+                if old_flow_rules.data:
+                    new_category_ids = {r.get('category_id') for r in flow_rules.data if r.get('action_type') == 'add'} if flow_rules.data else set()
+                    
+                    for old_rule in old_flow_rules.data:
+                        old_category_id = old_rule.get('category_id')
+                        # Only remove if new status doesn't add to same category
+                        if old_category_id not in new_category_ids:
+                            supabase.table("project_category_members")\
+                                .delete()\
+                                .eq("project_id", project_id)\
+                                .eq("category_id", old_category_id)\
+                                .execute()
         
         if result.data:
             return {"message": "Project status updated successfully"}

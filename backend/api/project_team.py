@@ -63,6 +63,28 @@ async def create_project_team(team_member: ProjectTeamCreate, db: Session = Depe
                 detail=f"Thành viên đã tồn tại trong dự án này. {existing_member.get('name', 'N/A')} ({existing_member.get('email', 'N/A')})"
             )
         
+        # Đảm bảo role luôn có giá trị (NOT NULL constraint)
+        if not values.get("role") or values["role"] is None:
+            values["role"] = "member"  # Giá trị mặc định
+        
+        # Đảm bảo start_date luôn có giá trị (NOT NULL constraint)
+        # Nếu không có, lấy từ project.start_date hoặc dùng ngày hiện tại
+        if not values.get("start_date") or values["start_date"] is None:
+            try:
+                # Lấy start_date từ project
+                project_query = "SELECT start_date FROM projects WHERE id = :project_id"
+                project_result = db.execute(project_query, {"project_id": values["project_id"]}).fetchone()
+                if project_result and project_result.start_date:
+                    values["start_date"] = project_result.start_date
+                else:
+                    # Fallback: dùng ngày hiện tại
+                    from datetime import date
+                    values["start_date"] = date.today()
+            except Exception:
+                # Nếu không lấy được, dùng ngày hiện tại
+                from datetime import date
+                values["start_date"] = date.today()
+        
         # Insert new team member
         query = """
             INSERT INTO project_team (
@@ -111,6 +133,12 @@ async def update_team_member(
     team_member: ProjectTeamCreate,
     db: Session = Depends(get_db)
 ):
+    values = {**team_member.dict(), "id": team_member_id}
+    
+    # Đảm bảo role luôn có giá trị (NOT NULL constraint)
+    if not values.get("role") or values["role"] is None:
+        values["role"] = "member"  # Giá trị mặc định
+    
     query = """
         UPDATE project_team SET
             name = :name,
@@ -126,7 +154,6 @@ async def update_team_member(
         WHERE id = :id
         RETURNING *
     """
-    values = {**team_member.dict(), "id": team_member_id}
     try:
         result = db.execute(query, values).fetchone()
         if not result:

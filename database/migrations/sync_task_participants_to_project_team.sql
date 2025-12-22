@@ -55,14 +55,19 @@ BEGIN
         END;
         
         -- Thêm vào project_team nếu chưa có
+        -- Map responsibility_type sang role cho project_team
+        -- (role trong project_team khác với role trong task_participants)
         INSERT INTO project_team (
             project_id,
             user_id,
             name,
             email,
             status,
+            role,
             responsibility_type,
-            created_at
+            start_date,  -- FIX: Thêm trường start_date (lấy từ project.start_date)
+            created_at,
+            updated_at
         )
         SELECT 
             task_project_id,
@@ -70,9 +75,17 @@ BEGIN
             e.first_name || ' ' || e.last_name,
             e.email,
             'active',
+            CASE 
+                WHEN mapped_responsibility_type = 'accountable' THEN 'manager'
+                WHEN mapped_responsibility_type = 'responsible' THEN 'member'
+                ELSE 'member'
+            END,  -- Đảm bảo role không null
             mapped_responsibility_type,
+            COALESCE(p.start_date, CURRENT_DATE),  -- Lấy từ project.start_date, nếu null thì dùng ngày hiện tại
+            NOW(),
             NOW()
         FROM employees e
+        INNER JOIN projects p ON p.id = task_project_id  -- JOIN để lấy start_date từ project
         WHERE e.id = NEW.employee_id
             AND NOT EXISTS (
                 SELECT 1 

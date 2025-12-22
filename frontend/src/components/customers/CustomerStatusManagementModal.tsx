@@ -21,24 +21,30 @@ interface CustomerStatusManagementModalProps {
   isOpen: boolean
   onClose: () => void
   onStatusChange: () => void
+  editingStatusId?: string | null
 }
 
-// Color options matching Bitrix24 palette
+// Bảng màu cầu vồng + một số màu trung tính để quản lý trạng thái khách hàng
 const colorOptions = [
-  { name: 'Xanh Bitrix', hex: '#2FC6F6' },
-  { name: 'Xanh đậm', hex: '#2066B0' },
-  { name: 'Xanh lá', hex: '#9ECF00' },
-  { name: 'Vàng', hex: '#FFA900' },
-  { name: 'Đỏ', hex: '#FF5752' },
-  { name: 'Xám', hex: '#9CA3AF' },
-  { name: 'Xám đậm', hex: '#6B7280' },
-  { name: 'Tím', hex: '#A855F7' }
+  { name: 'Đỏ', hex: '#EF4444' },        // red-500
+  { name: 'Cam', hex: '#F97316' },       // orange-500
+  { name: 'Vàng', hex: '#FACC15' },      // yellow-400
+  { name: 'Xanh lá', hex: '#22C55E' },   // green-500
+  { name: 'Xanh ngọc', hex: '#14B8A6' }, // teal-500
+  { name: 'Xanh dương nhạt', hex: '#0EA5E9' }, // sky-500
+  { name: 'Xanh dương', hex: '#3B82F6' },      // blue-500
+  { name: 'Chàm', hex: '#6366F1' },      // indigo-500
+  { name: 'Tím', hex: '#8B5CF6' },       // violet-500
+  { name: 'Hồng', hex: '#EC4899' },      // pink-500
+  { name: 'Xám nhạt', hex: '#9CA3AF' },  // gray-400
+  { name: 'Xám đậm', hex: '#4B5563' }    // gray-600
 ]
 
 export default function CustomerStatusManagementModal({
   isOpen,
   onClose,
-  onStatusChange
+  onStatusChange,
+  editingStatusId
 }: CustomerStatusManagementModalProps) {
   const [statuses, setStatuses] = useState<CustomerStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,11 +60,48 @@ export default function CustomerStatusManagementModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Tạo mã tự động từ tên (giống logic generateCodeFromName bên quản lý nhóm / trạng thái)
+  const generateCodeFromName = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+  }
+
   useEffect(() => {
     if (isOpen) {
       fetchStatuses()
     }
   }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen && editingStatusId && statuses.length > 0) {
+      const statusToEdit = statuses.find(s => s.id === editingStatusId)
+      if (statusToEdit) {
+        setEditingStatus(statusToEdit)
+        setIsAddingNew(false)
+        setFormData({
+          code: statusToEdit.code,
+          name: statusToEdit.name,
+          color: statusToEdit.color,
+          display_order: statusToEdit.display_order,
+          description: statusToEdit.description || ''
+        })
+      }
+    } else if (isOpen && !editingStatusId) {
+      setEditingStatus(null)
+      setIsAddingNew(false)
+      setFormData({
+        code: '',
+        name: '',
+        color: '#2FC6F6',
+        display_order: statuses.length > 0 ? Math.max(...statuses.map(s => s.display_order)) + 1 : 1,
+        description: ''
+      })
+    }
+  }, [editingStatusId, isOpen, statuses])
 
   const fetchStatuses = async () => {
     try {
@@ -99,9 +142,18 @@ export default function CustomerStatusManagementModal({
     setError(null)
   }
 
+  const handleNameChange = (name: string) => {
+    setFormData(prev => ({
+      ...prev,
+      name,
+      // Khi tạo mới, tự động sinh code theo tên
+      code: isAddingNew && !editingStatus ? generateCodeFromName(name) : prev.code
+    }))
+  }
+
   const handleSave = async () => {
-    if (!formData.name.trim() || !formData.code.trim()) {
-      setError('Vui lòng điền đầy đủ tên và mã trạng thái')
+    if (!formData.name.trim()) {
+      setError('Vui lòng điền tên trạng thái')
       return
     }
 
@@ -110,18 +162,18 @@ export default function CustomerStatusManagementModal({
       setError(null)
 
       if (editingStatus) {
-        // Update existing
+        // Update existing - cho phép sửa code nếu cần (trừ trạng thái hệ thống)
         await apiPut(`/api/customers/statuses/${editingStatus.id}`, {
-          code: formData.code,
+          code: formData.code || undefined,
           name: formData.name,
           color: formData.color,
           display_order: formData.display_order,
           description: formData.description || null
         })
       } else {
-        // Create new
+        // Create new - để backend tự sinh mã code nếu không gửi hoặc rỗng
         await apiPost('/api/customers/statuses', {
-          code: formData.code,
+          // Không gửi code để backend tự sinh
           name: formData.name,
           color: formData.color,
           display_order: formData.display_order,
@@ -213,7 +265,7 @@ export default function CustomerStatusManagementModal({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mã trạng thái *
+                      Mã trạng thái
                     </label>
                     <input
                       type="text"
@@ -231,7 +283,7 @@ export default function CustomerStatusManagementModal({
                     <input
                       type="text"
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) => handleNameChange(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Tiềm năng"
                     />
@@ -272,8 +324,14 @@ export default function CustomerStatusManagementModal({
                     </label>
                     <input
                       type="number"
-                      value={formData.display_order}
-                      onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 1 })}
+                      value={formData.display_order ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setFormData({
+                          ...formData,
+                          display_order: val === '' ? undefined : parseInt(val) || undefined
+                        })
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                       min="1"
                     />

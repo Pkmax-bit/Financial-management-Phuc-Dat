@@ -14,6 +14,7 @@ interface ProjectItem {
   status: string
   category_name?: string
   category_color?: string
+  manager_name?: string
 }
 
 interface KanbanColumnProps {
@@ -102,6 +103,7 @@ export default function KanbanColumn({
             priority={p.priority}
             categoryName={p.category_name}
             categoryColor={p.category_color}
+            managerName={p.manager_name}
             onClick={() => onCardClick?.(p.id)}
             onDragStart={() => onDragStart?.(p)}
           />

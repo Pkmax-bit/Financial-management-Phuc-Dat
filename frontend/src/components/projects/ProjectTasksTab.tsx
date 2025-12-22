@@ -38,7 +38,7 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 // Get file icon path from icon folder based on file type or filename
 const getFileIconPath = (fileType: string, fileName?: string): string | null => {
   if (!fileName && !fileType) return null
-  
+
   const type = fileType?.toLowerCase() || ''
   const name = fileName?.toLowerCase() || ''
 
@@ -62,10 +62,10 @@ const getFileIconPath = (fileType: string, fileName?: string): string | null => 
     return '/icon/Excel.png'
   }
   // Then check MIME type
-  if (type.includes('spreadsheet') || 
-      type === 'application/vnd.ms-excel' ||
-      type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      type === 'application/vnd.ms-excel.sheet.macroenabled.12') {
+  if (type.includes('spreadsheet') ||
+    type === 'application/vnd.ms-excel' ||
+    type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    type === 'application/vnd.ms-excel.sheet.macroenabled.12') {
     return '/icon/Excel.png'
   }
 
@@ -74,16 +74,16 @@ const getFileIconPath = (fileType: string, fileName?: string): string | null => 
     return '/icon/doc.png'
   }
   // Then check MIME type
-  if (type.includes('word') || 
-      type === 'application/msword' ||
-      type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      type === 'application/vnd.ms-word.document.macroenabled.12') {
+  if (type.includes('word') ||
+    type === 'application/msword' ||
+    type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    type === 'application/vnd.ms-word.document.macroenabled.12') {
     return '/icon/doc.png'
   }
 
   // Images - return null to use ImageIcon component
   if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(extension) ||
-      type.startsWith('image/')) {
+    type.startsWith('image/')) {
     return null
   }
 
@@ -97,6 +97,7 @@ interface Task {
   description?: string
   status: 'todo' | 'in_progress' | 'completed' | 'cancelled'
   priority: 'low' | 'medium' | 'high' | 'urgent'
+  group_id?: string
   due_date?: string
   start_date?: string
   assigned_to_name?: string
@@ -127,9 +128,10 @@ const priorityConfig = {
 interface ProjectTasksTabProps {
   projectId: string
   projectName?: string
+  mode?: 'full' | 'chat-only'
 }
 
-export default function ProjectTasksTab({ projectId, projectName }: ProjectTasksTabProps) {
+export default function ProjectTasksTab({ projectId, projectName, mode = 'full' }: ProjectTasksTabProps) {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -142,6 +144,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const [loadingComments, setLoadingComments] = useState(false)
   const [chatMessage, setChatMessage] = useState('')
   const [replyingTo, setReplyingTo] = useState<TaskComment | null>(null)
+  const [messageLimit, setMessageLimit] = useState(20)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const [sendingMessage, setSendingMessage] = useState(false)
@@ -150,9 +153,9 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionPosition, setMentionPosition] = useState<{ start: number; end: number } | null>(null)
-  const [groupMembers, setGroupMembers] = useState<Array<{ 
-    employee_id: string; 
-    employee_name?: string; 
+  const [groupMembers, setGroupMembers] = useState<Array<{
+    employee_id: string;
+    employee_name?: string;
     employee_email?: string;
     responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
     avatar?: string;
@@ -168,13 +171,52 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const [quickParentTaskId, setQuickParentTaskId] = useState<string | null>(null)
   const [quickTaskFiles, setQuickTaskFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // Function to scroll chat to bottom
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior })
+    }
+  }
+
+  const getDisplayName = (comment: TaskComment) => {
+    if (comment.user_name) return comment.user_name
+    if (comment.employee_name) return comment.employee_name
+
+    // Check if it's current user
+    if (user && (
+      (comment.user_id && user.id === comment.user_id) ||
+      (comment.employee_id && user.id === comment.employee_id)
+    )) {
+      return user.full_name || 'Tôi'
+    }
+
+    // Try to find in groupMembers
+    if (groupMembers.length > 0) {
+      const member = groupMembers.find(m => m.employee_id === comment.employee_id)
+      if (member?.employee_name) return member.employee_name
+    }
+
+    return 'Người dùng'
+  }
+
+  // Auto scroll to bottom when comments change
+  useEffect(() => {
+    if (allComments.length > 0) {
+      // Use 'auto' for initial load, 'smooth' for new messages
+      const behavior = loadingComments ? 'auto' : 'smooth'
+      // Small timeout to ensure DOM has updated
+      setTimeout(() => scrollToBottom(behavior), 100)
+    }
+  }, [allComments, loadingComments])
+
   // Checklist creation states
   const [showCreateChecklist, setShowCreateChecklist] = useState(false)
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [creatingChecklist, setCreatingChecklist] = useState(false)
   const [targetTaskId, setTargetTaskId] = useState<string | null>(null)
-  
+
   // Checklist item creation states
   const [showCreateChecklistItem, setShowCreateChecklistItem] = useState<string | null>(null)
   const [checklistItemContent, setChecklistItemContent] = useState('')
@@ -212,16 +254,40 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
     }
   }, [tasks, selectedTaskId])
 
-  // Poll for new messages every 5 seconds
+  // Realtime subscription for new messages
   useEffect(() => {
     if (tasks.length === 0) return
-    
-    const interval = setInterval(() => {
-      fetchAllComments(true) // silent update
-    }, 5000)
 
-    return () => clearInterval(interval)
-  }, [tasks])
+    const taskIds = tasks.map(t => t.id)
+
+    // Subscribe to task_comments changes
+    const channel = supabase
+      .channel(`project-comments-${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_comments'
+        },
+        (payload) => {
+          // Check if this comment belongs to one of the project tasks
+          const newComment = payload.new as any
+          const oldComment = payload.old as any
+          const taskId = newComment?.task_id || oldComment?.task_id
+
+          if (taskId && taskIds.includes(taskId)) {
+            // Refresh comments to get latest data including joined fields
+            fetchAllComments(true)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [tasks, projectId])
 
   useEffect(() => {
     // Auto-create preview for first image file
@@ -263,7 +329,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
 
   const fetchProjectStatuses = async (categoryId?: string) => {
     try {
-      const url = categoryId && categoryId !== 'all' 
+      const url = categoryId && categoryId !== 'all'
         ? `/api/projects/statuses?category_id=${categoryId}`
         : '/api/projects/statuses'
       const data = await apiGet(url)
@@ -275,7 +341,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
 
   const handleUpdateProjectStatus = async (statusId: string) => {
     if (!project || updatingStatus) return
-    
+
     try {
       setUpdatingStatus(true)
       await apiPut(`/api/projects/${projectId}`, {
@@ -331,11 +397,11 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
       })
       const commentsArrays = await Promise.all(commentsPromises)
       const allCommentsFlat = commentsArrays.flat()
-      // Sort by created_at descending
-      allCommentsFlat.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      // Sort by created_at ascending (oldest first, like a chat)
+      allCommentsFlat.sort((a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       )
-      
+
       // Check for new messages (not from current user)
       if (silent && user && allComments.length > 0) {
         const newComments = allCommentsFlat.filter(newComment => {
@@ -343,13 +409,13 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           const isNotFromMe = newComment.user_id !== user.id && newComment.employee_id !== user.id
           return isNew && isNotFromMe
         })
-        
+
         if (newComments.length > 0) {
           // Show notification
           const latestComment = newComments[0]
           setNewMessageNotification({
             id: latestComment.id,
-            message: `${latestComment.user_name || latestComment.employee_name || 'Ai đó'}: ${latestComment.comment?.substring(0, 50) || 'đã gửi tin nhắn'}...`
+            message: `${getDisplayName(latestComment)}: ${latestComment.comment?.substring(0, 50) || 'đã gửi tin nhắn'}...`
           })
           // Auto-hide after 5 seconds
           setTimeout(() => {
@@ -357,7 +423,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           }, 5000)
         }
       }
-      
+
       setAllComments(allCommentsFlat)
     } catch (err) {
       console.error('Error fetching comments:', err)
@@ -374,7 +440,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
       try {
         const teamData = await apiGet(`/api/projects/${projectId}/team`)
         const teamMembers = teamData?.team_members || []
-        
+
         // Convert to format expected by mentions
         const members = teamMembers
           .filter((member: any) => member.status === 'active')
@@ -383,7 +449,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
             employee_name: member.name,
             employee_email: member.email
           }))
-        
+
         setGroupMembers(members)
       } catch (teamErr) {
         console.error('Error fetching project team members:', teamErr)
@@ -393,7 +459,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           setGroupMembers([])
           return
         }
-        
+
         const membersPromises = groupIds.map(async (groupId) => {
           try {
             // Pass project_id to get project team information
@@ -404,7 +470,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
             return []
           }
         })
-        
+
         const membersArrays = await Promise.all(membersPromises)
         const allMembers = membersArrays.flat()
         // Remove duplicates
@@ -421,7 +487,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
 
   const getMentionMembers = () => {
     const members: Array<{ id: string; name: string; type: 'member' }> = []
-    
+
     groupMembers.forEach(member => {
       const name = member.employee_name || member.employee_email || 'Thành viên'
       members.push({
@@ -430,13 +496,13 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
         type: 'member'
       })
     })
-    
+
     return members
   }
 
   const getMentionChecklistItems = () => {
     const items: Array<{ id: string; name: string; type: 'checklist' }> = []
-    
+
     tasks.forEach(task => {
       task.checklists?.forEach(checklist => {
         checklist.items?.forEach(item => {
@@ -447,7 +513,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
             displayContent = displayContent.replace(/\[FILE_URLS:[^\]]+\]/g, '').trim()
             displayContent = displayContent.replace(/^📎 \d+ file\(s\)\s*$/g, '').trim()
           }
-          
+
           if (displayContent) {
             items.push({
               id: item.id,
@@ -458,20 +524,20 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
         })
       })
     })
-    
+
     return items
   }
 
   const handleMentionInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     const cursorPos = e.target.selectionStart || 0
-    
+
     setChatMessage(value)
-    
+
     // Find @ mention
     const textBeforeCursor = value.substring(0, cursorPos)
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/)
-    
+
     if (mentionMatch) {
       const query = mentionMatch[1]
       setMentionQuery(query)
@@ -489,20 +555,20 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
 
   const insertMention = (item: { id: string; name: string; type: 'member' | 'checklist' }) => {
     if (!mentionPosition) return
-    
+
     const beforeMention = chatMessage.substring(0, mentionPosition.start)
     const afterMention = chatMessage.substring(mentionPosition.end)
-    
-    const mentionText = item.type === 'member' 
+
+    const mentionText = item.type === 'member'
       ? `@${item.name}`
       : `@[${item.name}](checklist:${item.id})`
-    
+
     const newMessage = beforeMention + mentionText + ' ' + afterMention
     setChatMessage(newMessage)
     setShowMentionDropdown(false)
     setMentionQuery('')
     setMentionPosition(null)
-    
+
     // Focus back to textarea
     setTimeout(() => {
       if (mentionInputRef.current) {
@@ -516,15 +582,15 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const getFilteredMentions = () => {
     const members = getMentionMembers()
     const checklistItems = getMentionChecklistItems()
-    
+
     const allMentions = [...members, ...checklistItems]
-    
+
     if (!mentionQuery) {
       return allMentions
     }
-    
+
     const query = mentionQuery.toLowerCase()
-    return allMentions.filter(item => 
+    return allMentions.filter(item =>
       item.name.toLowerCase().includes(query)
     )
   }
@@ -567,44 +633,44 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
 
   const getFileIcon = (url: string): string | null => {
     const fileName = getFileNameFromUrl(url).toLowerCase()
-    
+
     // PDF
     if (fileName.endsWith('.pdf')) {
       return '/icon/pdf.png'
     }
-    
+
     // Excel files
     if (fileName.match(/\.(xls|xlsx|xlsm)(\?|$)/i)) {
       return '/icon/Excel.png'
     }
-    
+
     // Word files
     if (fileName.match(/\.(doc|docx)(\?|$)/i)) {
       return '/icon/doc.png'
     }
-    
+
     // Images - return null to use ImageIcon component
     if (fileName.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i) || url.includes('image')) {
       return null
     }
-    
+
     // Default - return null to use File icon component
     return null
   }
-  
+
   const getFileIconComponent = (url: string) => {
     const fileName = getFileNameFromUrl(url).toLowerCase()
-    
+
     // Images
     if (fileName.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i) || url.includes('image')) {
       return ImageIcon
     }
-    
+
     // Text files
     if (fileName.match(/\.(txt|md|rtf)(\?|$)/i)) {
       return FileText
     }
-    
+
     // Default
     return File
   }
@@ -667,7 +733,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
     try {
       setCreatingChecklistItem(checklistId)
       let fileUrls: string[] = []
-      
+
       // Upload files if any
       if (checklistItemFiles.length > 0) {
         const { data: { session } } = await supabase.auth.getSession()
@@ -702,7 +768,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
       let itemContent = checklistItemContent.trim() || ''
       if (fileUrls.length > 0) {
         const fileUrlsText = fileUrls.join(' ')
-        itemContent = itemContent 
+        itemContent = itemContent
           ? `${itemContent} [FILE_URLS: ${fileUrlsText}]`
           : `📎 ${fileUrls.length} file(s) [FILE_URLS: ${fileUrlsText}]`
       }
@@ -710,7 +776,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
       const newItem = await apiPost(`/api/tasks/checklists/${checklistId}/items`, {
         content: itemContent
       })
-      
+
       // Update tasks state
       setTasks(prev => prev.map(task => {
         if (task.id === taskId) {
@@ -764,7 +830,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
       const created = await apiPost('/api/tasks', payload)
       if (created) {
         setTasks(prev => [created, ...prev])
-        
+
         // Upload files if any
         if (quickTaskFiles.length > 0 && created.id) {
           try {
@@ -888,7 +954,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
     }
     const trimmedMessage = chatMessage.trim()
     if (!trimmedMessage && pendingFiles.length === 0) return
-    
+
     try {
       setSendingMessage(true)
 
@@ -909,7 +975,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
         // Gửi 1 comment với text và file đầu tiên
         const firstFile = uploadedFiles[0]
         const messageType: 'file' | 'image' = firstFile.file.type.startsWith('image/') ? 'image' : 'file'
-        
+
         await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
           comment: trimmedMessage,
           type: messageType,
@@ -917,7 +983,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           is_pinned: false,
           parent_id: replyingTo?.id || null
         })
-        
+
         // Gửi các file còn lại (nếu có nhiều file) như các comment riêng
         for (let i = 1; i < uploadedFiles.length; i++) {
           const fileData = uploadedFiles[i]
@@ -969,11 +1035,11 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           user_name: user?.full_name,
           parent_id: replyingTo?.id || null
         }
-        
+
         // Add to top of comments list
         setAllComments(prev => [tempComment, ...prev])
       }
-      
+
       // Scroll to top to show new message
       setTimeout(() => {
         const chatContainer = document.querySelector('[data-chat-container]')
@@ -981,12 +1047,12 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
           chatContainer.scrollTop = 0
         }
       }, 100)
-      
+
       setChatMessage('')
       setPendingFiles([])
       setPendingPreview(null)
       setReplyingTo(null)
-      
+
       // Then fetch real comments
       await fetchAllComments()
     } catch (err: any) {
@@ -1081,101 +1147,102 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-50 rounded-lg">
-              <CheckSquare className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">Nhiệm vụ dự án</h3>
-              <p className="text-sm text-gray-600">
-                {project?.name 
-                  ? `Danh sách các nhiệm vụ của dự án "${project.name}"`
-                  : 'Danh sách các nhiệm vụ liên quan đến dự án này'}
-              </p>
-              {tasks.length > 0 && tasks[0]?.group_name && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Nhóm: {tasks[0].group_name}
+      {/* Header - Only show in full mode */}
+      {mode !== 'chat-only' && (
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-50 rounded-lg">
+                <CheckSquare className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Nhiệm vụ dự án</h3>
+                <p className="text-sm text-gray-600">
+                  {project?.name
+                    ? `Danh sách các nhiệm vụ của dự án "${project.name}"`
+                    : 'Danh sách các nhiệm vụ liên quan đến dự án này'}
                 </p>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2 items-center">
-            {/* Project Status Selector */}
-            {project && (
-              <div className="relative">
-                <select
-                  value={project.status_id || ''}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleUpdateProjectStatus(e.target.value)
-                    }
-                  }}
-                  disabled={updatingStatus}
-                  className="px-4 py-2 pr-8 border border-gray-300 rounded-lg text-sm font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">Chọn trạng thái...</option>
-                  {projectStatuses.map((status) => (
-                    <option key={status.id} value={status.id}>
-                      {status.name}
-                    </option>
-                  ))}
-                </select>
-                {updatingStatus && (
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                  </div>
+                {tasks.length > 0 && tasks[0]?.group_name && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Nhóm: {tasks[0].group_name}
+                  </p>
                 )}
               </div>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowCreateTodoModal(true)
-              }}
-              className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="text-sm font-medium">Thêm việc cần làm</span>
-            </button>
-            <button
-              onClick={() => router.push(`/tasks?project_id=${projectId}`)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <span className="text-sm font-medium">Xem tất cả</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+            </div>
+            <div className="flex gap-2 items-center">
+              {/* Project Status Selector */}
+              {project && (
+                <div className="relative">
+                  <select
+                    value={project.status_id || ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleUpdateProjectStatus(e.target.value)
+                      }
+                    }}
+                    disabled={updatingStatus}
+                    className="px-4 py-2 pr-8 border border-gray-300 rounded-lg text-sm font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Chọn trạng thái...</option>
+                    {projectStatuses.map((status) => (
+                      <option key={status.id} value={status.id}>
+                        {status.name}
+                      </option>
+                    ))}
+                  </select>
+                  {updatingStatus && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                    </div>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowCreateTodoModal(true)
+                }}
+                className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="text-sm font-medium">Thêm việc cần làm</span>
+              </button>
+              <button
+                onClick={() => router.push(`/tasks?project_id=${projectId}`)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <span className="text-sm font-medium">Xem tất cả</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Status Filter */}
-        <div className="flex flex-wrap gap-2">
-          {[
-            { value: 'all', label: 'Tất cả', count: taskCounts.all },
-            { value: 'todo', label: 'Cần làm', count: taskCounts.todo },
-            { value: 'in_progress', label: 'Đang làm', count: taskCounts.in_progress },
-            { value: 'completed', label: 'Hoàn thành', count: taskCounts.completed },
-            { value: 'cancelled', label: 'Đã hủy', count: taskCounts.cancelled }
-          ].map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setStatusFilter(filter.value as any)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                statusFilter === filter.value
+          {/* Status Filter */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'all', label: 'Tất cả', count: taskCounts.all },
+              { value: 'todo', label: 'Cần làm', count: taskCounts.todo },
+              { value: 'in_progress', label: 'Đang làm', count: taskCounts.in_progress },
+              { value: 'completed', label: 'Hoàn thành', count: taskCounts.completed },
+              { value: 'cancelled', label: 'Đã hủy', count: taskCounts.cancelled }
+            ].map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setStatusFilter(filter.value as any)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statusFilter === filter.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {filter.label} ({filter.count})
-            </button>
-          ))}
+                  }`}
+              >
+                {filter.label} ({filter.count})
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Tasks List */}
-      {filteredTasks.length === 0 ? (
+      {/* Tasks List - Only show in full mode */}
+      {mode !== 'chat-only' && (filteredTasks.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border p-6">
           <div className="text-center py-8">
             <CheckSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -1368,10 +1435,10 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                         <span>Tạo nhiệm vụ lớn</span>
                       </button>
                     </div>
-                    
+
                     {/* Create Checklist Form - Inside Task Card */}
                     {showCreateChecklist && targetTaskId === task.id && (
-                      <div 
+                      <div
                         className="mt-3 mb-3 p-3 bg-gray-50 rounded-lg border border-blue-200"
                         onClick={(e) => {
                           e.stopPropagation()
@@ -1459,11 +1526,11 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                         </div>
                       </div>
                     )}
-                    
+
                     {task.description && (
                       <p className="text-gray-600 mb-3 line-clamp-2">{task.description}</p>
                     )}
-                    
+
                     {/* Checklist Items */}
                     {task.checklists && task.checklists.length > 0 && (
                       <div className="mb-3 space-y-4">
@@ -1471,7 +1538,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                           const completedItems = checklist.items?.filter(item => item.is_completed).length || 0
                           const totalItems = checklist.items?.length || 0
                           const progress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0
-                          
+
                           return (
                             <div key={checklist.id} className="bg-white border border-gray-200 rounded-lg p-4">
                               <div className="flex items-center justify-between mb-3">
@@ -1493,7 +1560,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                   </button>
                                 </div>
                               </div>
-                              
+
                               {/* Create Checklist Item Form */}
                               {showCreateChecklistItem === checklist.id && (
                                 <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-blue-200">
@@ -1596,9 +1663,9 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                 </div>
                               )}
                               <div className="w-full h-1.5 bg-gray-100 rounded-full mb-4 overflow-hidden">
-                                <div 
-                                  className="h-full bg-blue-500 transition-all duration-300" 
-                                  style={{ width: `${progress}%` }} 
+                                <div
+                                  className="h-full bg-blue-500 transition-all duration-300"
+                                  style={{ width: `${progress}%` }}
                                 />
                               </div>
 
@@ -1608,12 +1675,12 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                     // Parse file URLs from content (similar to task detail page)
                                     const fileUrls: string[] = []
                                     let displayContent = item.content || ''
-                                    
+
                                     // Extract file URLs from [FILE_URLS: ...] pattern
                                     const fileUrlsMatch = displayContent.match(/\[FILE_URLS:\s*([^\]]+)\]/)
                                     if (fileUrlsMatch) {
                                       const urlsText = fileUrlsMatch[1].trim()
-                                      const urls = urlsText.split(/\s+/).filter(url => 
+                                      const urls = urlsText.split(/\s+/).filter(url =>
                                         url.length > 0 && (url.startsWith('http://') || url.startsWith('https://'))
                                       )
                                       fileUrls.push(...urls)
@@ -1622,7 +1689,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                     }
 
                                     return (
-                                      <div 
+                                      <div
                                         key={item.id}
                                         data-checklist-item-id={item.id}
                                         className="group flex items-start gap-3 py-1.5 hover:bg-gray-50 rounded-md px-2 -mx-2 transition-colors"
@@ -1632,26 +1699,24 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                             e.stopPropagation()
                                             toggleChecklistItem(item.id, item.is_completed)
                                           }}
-                                          className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-                                            item.is_completed 
-                                              ? 'bg-blue-600 border-blue-600 hover:bg-blue-700' 
-                                              : 'border-gray-300 hover:border-blue-500'
-                                          }`}
+                                          className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${item.is_completed
+                                            ? 'bg-blue-600 border-blue-600 hover:bg-blue-700'
+                                            : 'border-gray-300 hover:border-blue-500'
+                                            }`}
                                         >
                                           {item.is_completed && <Check className="h-3 w-3 text-white" />}
                                         </button>
                                         <div className="flex-1 space-y-2 min-w-0">
                                           {/* Content text */}
                                           {displayContent && (
-                                            <span className={`text-sm leading-snug block ${
-                                              item.is_completed 
-                                                ? 'text-gray-400 line-through' 
-                                                : 'text-gray-700'
-                                            }`}>
+                                            <span className={`text-sm leading-snug block ${item.is_completed
+                                              ? 'text-gray-400 line-through'
+                                              : 'text-gray-700'
+                                              }`}>
                                               {displayContent}
                                             </span>
                                           )}
-                                          
+
                                           {/* Display files/images */}
                                           {fileUrls.length > 0 && (
                                             <div className="flex flex-wrap gap-2 mt-1">
@@ -1659,7 +1724,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                                 const fileName = getFileNameFromUrl(url)
                                                 const iconPath = getFileIcon(url)
                                                 const FileIconComponent = iconPath ? null : getFileIconComponent(url)
-                                                
+
                                                 return (
                                                   <div key={idx} className="relative group/file">
                                                     <a
@@ -1671,8 +1736,8 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                                     >
                                                       <div className="h-12 w-12 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-blue-400 transition-colors cursor-pointer flex items-center justify-center overflow-hidden">
                                                         {iconPath ? (
-                                                          <img 
-                                                            src={iconPath} 
+                                                          <img
+                                                            src={iconPath}
                                                             alt={fileName}
                                                             className="h-full w-full object-contain"
                                                           />
@@ -1682,8 +1747,8 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                                           )
                                                         )}
                                                       </div>
-                                                      <span 
-                                                        className="text-[10px] text-gray-600 truncate max-w-[60px] text-center" 
+                                                      <span
+                                                        className="text-[10px] text-gray-600 truncate max-w-[60px] text-center"
                                                         title={fileName}
                                                       >
                                                         {fileName}
@@ -1694,7 +1759,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                               })}
                                             </div>
                                           )}
-                                          
+
                                           {/* Assignee name */}
                                           {item.assignee_name && (
                                             <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -1713,7 +1778,7 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                         })}
                       </div>
                     )}
-                    
+
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                       {task.assigned_to_name && (
                         <div className="flex items-center gap-1">
@@ -1753,143 +1818,177 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
             )
           })}
         </div>
-      )}
+      ))}
 
-      {/* Chat Section */}
-      <div className="bg-white rounded-xl shadow-sm border">
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Trao đổi</h3>
-            <span className="text-sm text-gray-500">({allComments.length})</span>
+      {/* Chat Section - Only show in chat-only mode */}
+      {mode === 'chat-only' && (
+        <div className="bg-white rounded-xl shadow-sm border">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Trao đổi</h3>
+              <span className="text-sm text-gray-500">({allComments.length})</span>
+            </div>
           </div>
-        </div>
 
-        {loadingComments ? (
-          <div className="p-8 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-          </div>
-        ) : allComments.length === 0 ? (
-          <div className="p-8 text-center">
-            <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4 opacity-50" />
-            <p className="text-gray-500">Chưa có tin nhắn nào</p>
-          </div>
-        ) : (
-          <div className="p-4 space-y-4 max-h-[600px] overflow-y-auto" data-chat-container>
-            {allComments
-              .filter(comment => !comment.parent_id) // Only show top-level comments
-              .slice(0, 20) // Show max 20 comments
-              .map((comment, index) => {
-                const task = tasks.find(t => t.id === comment.task_id)
-                const isNewMessage = comment.id?.startsWith('temp-') || (index === 0 && new Date(comment.created_at).getTime() > Date.now() - 10000)
-                return (
-                  <div 
-                    key={comment.id} 
-                    className={`group ${isNewMessage ? 'animate-fade-in bg-blue-50/30 border-l-4 border-blue-500' : ''}`}
+          {loadingComments ? (
+            <div className="p-8 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+          ) : allComments.length === 0 ? (
+            <div className="p-8 text-center">
+              <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4 opacity-50" />
+              <p className="text-gray-500">Chưa có tin nhắn nào</p>
+            </div>
+          ) : (
+            <div className="p-4 space-y-4 max-h-[600px] overflow-y-auto" data-chat-container>
+              {allComments.filter(comment => !comment.parent_id).length > messageLimit && (
+                <div className="text-center pb-2">
+                  <button
+                    onClick={() => setMessageLimit(prev => prev + 20)}
+                    className="text-xs text-blue-600 hover:underline font-medium"
                   >
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0" 
-                           title={comment.user_name || comment.employee_name || 'Người dùng'}>
-                        {(comment.user_name || comment.employee_name || 'U')?.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1 space-y-1 min-w-0">
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="font-semibold text-gray-900">
-                            {comment.user_name || comment.employee_name || 'Người dùng'}
-                          </span>
-                          <span className="text-gray-500">
-                            {formatDate(comment.created_at, true)}
-                          </span>
-                          {comment.is_pinned && (
-                            <span className="flex items-center gap-1 text-blue-600">
-                              <Pin className="h-3 w-3" />
-                              <span className="text-xs">Đã ghim</span>
-                            </span>
-                          )}
-                          {task && (
-                            <span 
-                              className="text-xs text-blue-600 hover:underline cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                router.push(`/tasks/${comment.task_id}`)
-                              }}
-                            >
-                              • {task.title}
-                            </span>
-                          )}
+                    Xem thêm tin nhắn cũ ({allComments.filter(comment => !comment.parent_id).length - messageLimit} tin nhắn khác)
+                  </button>
+                </div>
+              )}
+              {allComments
+                .filter(comment => !comment.parent_id) // Only show top-level comments
+                .slice(-messageLimit) // Show last N comments (most recent)
+                .map((comment, index, arr) => {
+                  const task = tasks.find(t => t.id === comment.task_id)
+                  const isNewMessage = comment.id?.startsWith('temp-') || (index === arr.length - 1 && new Date(comment.created_at).getTime() > Date.now() - 10000)
+                  return (
+                    <div
+                      key={comment.id}
+                      className={`group ${isNewMessage ? 'animate-fade-in bg-blue-50/30 border-l-4 border-blue-500' : ''}`}
+                    >
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0"
+                          title={getDisplayName(comment)}>
+                          {getDisplayName(comment).charAt(0).toUpperCase()}
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 border border-gray-200">
-                          {comment.type === 'image' && comment.file_url && (
-                            <img 
-                              src={comment.file_url} 
-                              alt="Attachment" 
-                              className="max-w-full max-h-48 rounded mb-2" 
-                            />
-                          )}
-                          {comment.type === 'file' && comment.file_url && (
-                            <a
-                              href={comment.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-2 px-3 py-2 mb-2 rounded-lg text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors"
-                            >
-                              {(() => {
-                                // Get file name from comment (which usually contains the file name) or file_name field
-                                // Extract file name from URL if needed
-                                let fileName = comment.comment || (comment as any).file_name || ''
-                                
-                                // Always try to extract from URL if we have it (most reliable)
-                                if (comment.file_url) {
-                                  const urlParts = comment.file_url.split('/')
-                                  const lastPart = urlParts[urlParts.length - 1]
-                                  const nameFromUrl = lastPart.split('?')[0] // Remove query params
-                                  if (nameFromUrl && nameFromUrl.includes('.')) {
-                                    fileName = nameFromUrl
-                                  } else if (!fileName && nameFromUrl) {
-                                    fileName = nameFromUrl
-                                  }
-                                }
-                                
-                                // Fallback to generic name if still empty
-                                if (!fileName || fileName === 'File đính kèm') {
-                                  fileName = 'File đính kèm'
-                                }
-                                
-                                const fileType = (comment as any).file_type || ''
-                                const iconPath = getFileIconPath(fileType, fileName)
-                                
-                                if (iconPath) {
-                                  return <img src={iconPath} alt={fileName} className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => {
-                                    console.error('Failed to load icon:', iconPath)
-                                    e.currentTarget.style.display = 'none'
-                                  }} />
-                                }
-                                return <Paperclip className="h-3.5 w-3.5" />
-                              })()}
-                              <span className="truncate max-w-[200px]">
-                                {comment.comment || 'File đính kèm'}
+                        <div className="flex-1 space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="font-semibold text-gray-900">
+                              {getDisplayName(comment)}
+                            </span>
+                            <span className="text-gray-500">
+                              {formatDate(comment.created_at, true)}
+                            </span>
+                            {comment.is_pinned && (
+                              <span className="flex items-center gap-1 text-blue-600">
+                                <Pin className="h-3 w-3" />
+                                <span className="text-xs">Đã ghim</span>
                               </span>
-                            </a>
-                          )}
-                          {comment.comment && comment.type === 'text' && (
-                            <p className="whitespace-pre-wrap">
-                              {(() => {
-                                let text = comment.comment
-                                const parts: Array<{ type: 'text' | 'checklist' | 'member'; content: string; name?: string; checklistId?: string }> = []
-                                
-                                // Find all checklist mentions: @[name](checklist:id)
-                                const checklistRegex = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
-                                let checklistMatch
-                                let lastIndex = 0
-                                
-                                while ((checklistMatch = checklistRegex.exec(text)) !== null) {
-                                  // Add text before mention
-                                  if (checklistMatch.index > lastIndex) {
-                                    const beforeText = text.substring(lastIndex, checklistMatch.index)
-                                    if (beforeText) {
-                                      // Check for member mentions in before text
-                                      const memberParts = beforeText.split(/(@\s*\w+)/g)
+                            )}
+                            {task && (
+                              <span
+                                className="text-xs text-blue-600 hover:underline cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/tasks/${comment.task_id}`)
+                                }}
+                              >
+                                • {task.title}
+                              </span>
+                            )}
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 border border-gray-200">
+                            {comment.type === 'image' && comment.file_url && (
+                              <img
+                                src={comment.file_url}
+                                alt="Attachment"
+                                className="max-w-full max-h-48 rounded mb-2"
+                              />
+                            )}
+                            {comment.type === 'file' && comment.file_url && (
+                              <a
+                                href={comment.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-2 px-3 py-2 mb-2 rounded-lg text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors"
+                              >
+                                {(() => {
+                                  // Get file name from comment (which usually contains the file name) or file_name field
+                                  // Extract file name from URL if needed
+                                  let fileName = comment.comment || (comment as any).file_name || ''
+
+                                  // Always try to extract from URL if we have it (most reliable)
+                                  if (comment.file_url) {
+                                    const urlParts = comment.file_url.split('/')
+                                    const lastPart = urlParts[urlParts.length - 1]
+                                    const nameFromUrl = lastPart.split('?')[0] // Remove query params
+                                    if (nameFromUrl && nameFromUrl.includes('.')) {
+                                      fileName = nameFromUrl
+                                    } else if (!fileName && nameFromUrl) {
+                                      fileName = nameFromUrl
+                                    }
+                                  }
+
+                                  // Fallback to generic name if still empty
+                                  if (!fileName || fileName === 'File đính kèm') {
+                                    fileName = 'File đính kèm'
+                                  }
+
+                                  const fileType = (comment as any).file_type || ''
+                                  const iconPath = getFileIconPath(fileType, fileName)
+
+                                  if (iconPath) {
+                                    return <img src={iconPath} alt={fileName} className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => {
+                                      console.error('Failed to load icon:', iconPath)
+                                      e.currentTarget.style.display = 'none'
+                                    }} />
+                                  }
+                                  return <Paperclip className="h-3.5 w-3.5" />
+                                })()}
+                                <span className="truncate max-w-[200px]">
+                                  {comment.comment || 'File đính kèm'}
+                                </span>
+                              </a>
+                            )}
+                            {comment.comment && comment.type === 'text' && (
+                              <p className="whitespace-pre-wrap">
+                                {(() => {
+                                  let text = comment.comment
+                                  const parts: Array<{ type: 'text' | 'checklist' | 'member'; content: string; name?: string; checklistId?: string }> = []
+
+                                  // Find all checklist mentions: @[name](checklist:id)
+                                  const checklistRegex = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
+                                  let checklistMatch
+                                  let lastIndex = 0
+
+                                  while ((checklistMatch = checklistRegex.exec(text)) !== null) {
+                                    // Add text before mention
+                                    if (checklistMatch.index > lastIndex) {
+                                      const beforeText = text.substring(lastIndex, checklistMatch.index)
+                                      if (beforeText) {
+                                        // Check for member mentions in before text
+                                        const memberParts = beforeText.split(/(@\s*\w+)/g)
+                                        memberParts.forEach((part) => {
+                                          if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                            const memberName = part.trim().substring(1).trim()
+                                            parts.push({ type: 'member', content: part, name: memberName })
+                                          } else if (part) {
+                                            parts.push({ type: 'text', content: part })
+                                          }
+                                        })
+                                      }
+                                    }
+
+                                    // Add checklist mention with ID
+                                    const [, name, checklistId] = checklistMatch
+                                    parts.push({ type: 'checklist', content: checklistMatch[0], name, checklistId })
+                                    lastIndex = checklistRegex.lastIndex
+                                  }
+
+                                  // Add remaining text
+                                  if (lastIndex < text.length) {
+                                    const remainingText = text.substring(lastIndex)
+                                    if (remainingText) {
+                                      // Check for member mentions in remaining text
+                                      const memberParts = remainingText.split(/(@\s*\w+)/g)
                                       memberParts.forEach((part) => {
                                         if (part && part.trim().startsWith('@') && part.trim().length > 1) {
                                           const memberName = part.trim().substring(1).trim()
@@ -1900,19 +1999,10 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                       })
                                     }
                                   }
-                                  
-                                  // Add checklist mention with ID
-                                  const [, name, checklistId] = checklistMatch
-                                  parts.push({ type: 'checklist', content: checklistMatch[0], name, checklistId })
-                                  lastIndex = checklistRegex.lastIndex
-                                }
-                                
-                                // Add remaining text
-                                if (lastIndex < text.length) {
-                                  const remainingText = text.substring(lastIndex)
-                                  if (remainingText) {
-                                    // Check for member mentions in remaining text
-                                    const memberParts = remainingText.split(/(@\s*\w+)/g)
+
+                                  // If no mentions found, check for member mentions only
+                                  if (parts.length === 0) {
+                                    const memberParts = text.split(/(@\s*\w+)/g)
                                     memberParts.forEach((part) => {
                                       if (part && part.trim().startsWith('@') && part.trim().length > 1) {
                                         const memberName = part.trim().substring(1).trim()
@@ -1922,180 +2012,186 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                       }
                                     })
                                   }
-                                }
-                                
-                                // If no mentions found, check for member mentions only
-                                if (parts.length === 0) {
-                                  const memberParts = text.split(/(@\s*\w+)/g)
-                                  memberParts.forEach((part) => {
-                                    if (part && part.trim().startsWith('@') && part.trim().length > 1) {
-                                      const memberName = part.trim().substring(1).trim()
-                                      parts.push({ type: 'member', content: part, name: memberName })
-                                    } else if (part) {
-                                      parts.push({ type: 'text', content: part })
+
+                                  return parts.map((part, idx) => {
+                                    if (part.type === 'checklist' && part.name && part.checklistId) {
+                                      return (
+                                        <span
+                                          key={idx}
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            // Scroll to checklist item
+                                            const checklistItemElement = document.querySelector(`[data-checklist-item-id="${part.checklistId}"]`)
+                                            if (checklistItemElement) {
+                                              checklistItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                              // Highlight briefly
+                                              checklistItemElement.classList.add('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                              setTimeout(() => {
+                                                checklistItemElement.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                              }, 2000)
+                                            }
+                                          }}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-md font-bold cursor-pointer hover:bg-green-200 transition-colors"
+                                          title="Click để xem việc cần làm"
+                                        >
+                                          <CheckSquare className="h-3 w-3" />
+                                          {part.name}
+                                        </span>
+                                      )
+                                    } else if (part.type === 'member' && part.name) {
+                                      return (
+                                        <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md font-bold">
+                                          <User className="h-3 w-3" />
+                                          {part.name}
+                                        </span>
+                                      )
+                                    } else {
+                                      return <span key={idx}>{part.content}</span>
                                     }
                                   })
-                                }
-                                
-                                return parts.map((part, idx) => {
-                                  if (part.type === 'checklist' && part.name && part.checklistId) {
-                                    return (
-                                      <span 
-                                        key={idx} 
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          // Scroll to checklist item
-                                          const checklistItemElement = document.querySelector(`[data-checklist-item-id="${part.checklistId}"]`)
-                                          if (checklistItemElement) {
-                                            checklistItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                                            // Highlight briefly
-                                            checklistItemElement.classList.add('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
-                                            setTimeout(() => {
-                                              checklistItemElement.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
-                                            }, 2000)
-                                          }
-                                        }}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-md font-bold cursor-pointer hover:bg-green-200 transition-colors"
-                                        title="Click để xem việc cần làm"
-                                      >
-                                        <CheckSquare className="h-3 w-3" />
-                                        {part.name}
-                                      </span>
-                                    )
-                                  } else if (part.type === 'member' && part.name) {
-                                    return (
-                                      <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md font-bold">
-                                        <User className="h-3 w-3" />
-                                        {part.name}
-                                      </span>
-                                    )
-                                  } else {
-                                    return <span key={idx}>{part.content}</span>
-                                  }
-                                })
-                              })()}
-                            </p>
-                          )}
-                        </div>
-                        {/* Actions */}
-                        <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleReply(comment)
-                            }} 
-                            className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1"
-                          >
-                            <Reply className="h-3 w-3" />
-                            Trả lời
-                          </button>
-                          {canManageComment(comment) && (
-                            <button 
+                                })()}
+                              </p>
+                            )}
+                          </div>
+                          {/* Actions */}
+                          <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleDeleteComment(comment)
-                              }} 
-                              className="text-xs text-red-500 hover:underline"
+                                handleReply(comment)
+                              }}
+                              className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1"
                             >
-                              Xóa
+                              <Reply className="h-3 w-3" />
+                              Trả lời
                             </button>
-                          )}
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleTogglePin(comment)
-                            }} 
-                            className="text-xs text-gray-500 hover:text-blue-600"
-                          >
-                            {comment.is_pinned ? 'Bỏ ghim' : 'Ghim'}
-                          </button>
-                        </div>
-                        {comment.replies && comment.replies.length > 0 && (
-                          <div className="ml-4 mt-2 space-y-2">
-                            {comment.replies.map((reply) => (
-                              <div key={reply.id} className="flex gap-2">
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm shrink-0">
-                                  {(reply.user_name || reply.employee_name || 'U')?.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 text-xs mb-1">
-                                    <span className="font-semibold text-gray-900">
-                                      {reply.user_name || reply.employee_name || 'Người dùng'}
-                                    </span>
-                                    <span className="text-gray-500">
-                                      {formatDate(reply.created_at, true)}
-                                    </span>
+                            {canManageComment(comment) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteComment(comment)
+                                }}
+                                className="text-xs text-red-500 hover:underline"
+                              >
+                                Xóa
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleTogglePin(comment)
+                              }}
+                              className="text-xs text-gray-500 hover:text-blue-600"
+                            >
+                              {comment.is_pinned ? 'Bỏ ghim' : 'Ghim'}
+                            </button>
+                          </div>
+                          {comment.replies && comment.replies.length > 0 && (
+                            <div className="ml-4 mt-2 space-y-2">
+                              {comment.replies.map((reply) => (
+                                <div key={reply.id} className="flex gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm shrink-0">
+                                    {getDisplayName(reply).charAt(0).toUpperCase()}
                                   </div>
-                                  <div className="bg-gray-50 rounded-lg p-2 text-xs text-gray-700 border border-gray-200">
-                                    {reply.type === 'image' && reply.file_url && (
-                                      <img 
-                                        src={reply.file_url} 
-                                        alt="Attachment" 
-                                        className="max-w-full max-h-32 rounded mb-1" 
-                                      />
-                                    )}
-                                    {reply.type === 'file' && reply.file_url && (
-                                      <a
-                                        href={reply.file_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="inline-flex items-center gap-1 px-2 py-1 mb-1 rounded text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
-                                      >
-                                        {(() => {
-                                          // Get file name from comment (which usually contains the file name) or file_name field
-                                          // Extract file name from URL if needed
-                                          let fileName = reply.comment || (reply as any).file_name || ''
-                                          
-                                          // Always try to extract from URL if we have it (most reliable)
-                                          if (reply.file_url) {
-                                            const urlParts = reply.file_url.split('/')
-                                            const lastPart = urlParts[urlParts.length - 1]
-                                            const nameFromUrl = lastPart.split('?')[0] // Remove query params
-                                            if (nameFromUrl && nameFromUrl.includes('.')) {
-                                              fileName = nameFromUrl
-                                            } else if (!fileName && nameFromUrl) {
-                                              fileName = nameFromUrl
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 text-xs mb-1">
+                                      <span className="font-semibold text-gray-900">
+                                        {getDisplayName(reply)}
+                                      </span>
+                                      <span className="text-gray-500">
+                                        {formatDate(reply.created_at, true)}
+                                      </span>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg p-2 text-xs text-gray-700 border border-gray-200">
+                                      {reply.type === 'image' && reply.file_url && (
+                                        <img
+                                          src={reply.file_url}
+                                          alt="Attachment"
+                                          className="max-w-full max-h-32 rounded mb-1"
+                                        />
+                                      )}
+                                      {reply.type === 'file' && reply.file_url && (
+                                        <a
+                                          href={reply.file_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="inline-flex items-center gap-1 px-2 py-1 mb-1 rounded text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
+                                        >
+                                          {(() => {
+                                            // Get file name from comment (which usually contains the file name) or file_name field
+                                            // Extract file name from URL if needed
+                                            let fileName = reply.comment || (reply as any).file_name || ''
+
+                                            // Always try to extract from URL if we have it (most reliable)
+                                            if (reply.file_url) {
+                                              const urlParts = reply.file_url.split('/')
+                                              const lastPart = urlParts[urlParts.length - 1]
+                                              const nameFromUrl = lastPart.split('?')[0] // Remove query params
+                                              if (nameFromUrl && nameFromUrl.includes('.')) {
+                                                fileName = nameFromUrl
+                                              } else if (!fileName && nameFromUrl) {
+                                                fileName = nameFromUrl
+                                              }
                                             }
-                                          }
-                                          
-                                          // Fallback to generic name if still empty
-                                          if (!fileName || fileName === 'File đính kèm') {
-                                            fileName = 'File đính kèm'
-                                          }
-                                          
-                                          const fileType = (reply as any).file_type || ''
-                                          const iconPath = getFileIconPath(fileType, fileName)
-                                          
-                                          if (iconPath) {
-                                            return <img src={iconPath} alt={fileName} className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => {
-                                              console.error('Failed to load icon:', iconPath)
-                                              e.currentTarget.style.display = 'none'
-                                            }} />
-                                          }
-                                          return <Paperclip className="h-3 w-3" />
-                                        })()}
-                                        <span className="truncate max-w-[150px]">
-                                          {reply.comment || 'File đính kèm'}
-                                        </span>
-                                      </a>
-                                    )}
-                                    {reply.comment && reply.type === 'text' && (
-                                      <p className="whitespace-pre-wrap">
-                                        {(() => {
-                                          let text = reply.comment
-                                          const parts: Array<{ type: 'text' | 'checklist' | 'member'; content: string; name?: string; checklistId?: string }> = []
-                                          
-                                          // Find all checklist mentions: @[name](checklist:id)
-                                          const checklistRegex = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
-                                          let checklistMatch
-                                          let lastIndex = 0
-                                          
-                                          while ((checklistMatch = checklistRegex.exec(text)) !== null) {
-                                            if (checklistMatch.index > lastIndex) {
-                                              const beforeText = text.substring(lastIndex, checklistMatch.index)
-                                              if (beforeText) {
-                                                const memberParts = beforeText.split(/(@\s*\w+)/g)
+
+                                            // Fallback to generic name if still empty
+                                            if (!fileName || fileName === 'File đính kèm') {
+                                              fileName = 'File đính kèm'
+                                            }
+
+                                            const fileType = (reply as any).file_type || ''
+                                            const iconPath = getFileIconPath(fileType, fileName)
+
+                                            if (iconPath) {
+                                              return <img src={iconPath} alt={fileName} className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => {
+                                                console.error('Failed to load icon:', iconPath)
+                                                e.currentTarget.style.display = 'none'
+                                              }} />
+                                            }
+                                            return <Paperclip className="h-3 w-3" />
+                                          })()}
+                                          <span className="truncate max-w-[150px]">
+                                            {reply.comment || 'File đính kèm'}
+                                          </span>
+                                        </a>
+                                      )}
+                                      {reply.comment && reply.type === 'text' && (
+                                        <p className="whitespace-pre-wrap">
+                                          {(() => {
+                                            let text = reply.comment
+                                            const parts: Array<{ type: 'text' | 'checklist' | 'member'; content: string; name?: string; checklistId?: string }> = []
+
+                                            // Find all checklist mentions: @[name](checklist:id)
+                                            const checklistRegex = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
+                                            let checklistMatch
+                                            let lastIndex = 0
+
+                                            while ((checklistMatch = checklistRegex.exec(text)) !== null) {
+                                              if (checklistMatch.index > lastIndex) {
+                                                const beforeText = text.substring(lastIndex, checklistMatch.index)
+                                                if (beforeText) {
+                                                  const memberParts = beforeText.split(/(@\s*\w+)/g)
+                                                  memberParts.forEach((part) => {
+                                                    if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                                      const memberName = part.trim().substring(1).trim()
+                                                      parts.push({ type: 'member', content: part, name: memberName })
+                                                    } else if (part) {
+                                                      parts.push({ type: 'text', content: part })
+                                                    }
+                                                  })
+                                                }
+                                              }
+
+                                              const [, name, checklistId] = checklistMatch
+                                              parts.push({ type: 'checklist', content: checklistMatch[0], name, checklistId })
+                                              lastIndex = checklistRegex.lastIndex
+                                            }
+
+                                            if (lastIndex < text.length) {
+                                              const remainingText = text.substring(lastIndex)
+                                              if (remainingText) {
+                                                const memberParts = remainingText.split(/(@\s*\w+)/g)
                                                 memberParts.forEach((part) => {
                                                   if (part && part.trim().startsWith('@') && part.trim().length > 1) {
                                                     const memberName = part.trim().substring(1).trim()
@@ -2106,16 +2202,9 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                                 })
                                               }
                                             }
-                                            
-                                            const [, name, checklistId] = checklistMatch
-                                            parts.push({ type: 'checklist', content: checklistMatch[0], name, checklistId })
-                                            lastIndex = checklistRegex.lastIndex
-                                          }
-                                          
-                                          if (lastIndex < text.length) {
-                                            const remainingText = text.substring(lastIndex)
-                                            if (remainingText) {
-                                              const memberParts = remainingText.split(/(@\s*\w+)/g)
+
+                                            if (parts.length === 0) {
+                                              const memberParts = text.split(/(@\s*\w+)/g)
                                               memberParts.forEach((part) => {
                                                 if (part && part.trim().startsWith('@') && part.trim().length > 1) {
                                                   const memberName = part.trim().substring(1).trim()
@@ -2125,249 +2214,233 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
                                                 }
                                               })
                                             }
-                                          }
-                                          
-                                          if (parts.length === 0) {
-                                            const memberParts = text.split(/(@\s*\w+)/g)
-                                            memberParts.forEach((part) => {
-                                              if (part && part.trim().startsWith('@') && part.trim().length > 1) {
-                                                const memberName = part.trim().substring(1).trim()
-                                                parts.push({ type: 'member', content: part, name: memberName })
-                                              } else if (part) {
-                                                parts.push({ type: 'text', content: part })
+
+                                            return parts.map((part, idx) => {
+                                              if (part.type === 'checklist' && part.name && part.checklistId) {
+                                                return (
+                                                  <span
+                                                    key={idx}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
+                                                      const checklistItemElement = document.querySelector(`[data-checklist-item-id="${part.checklistId}"]`)
+                                                      if (checklistItemElement) {
+                                                        checklistItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                                        checklistItemElement.classList.add('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                                        setTimeout(() => {
+                                                          checklistItemElement.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                                        }, 2000)
+                                                      }
+                                                    }}
+                                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded-md font-bold text-xs cursor-pointer hover:bg-green-200 transition-colors"
+                                                    title="Click để xem việc cần làm"
+                                                  >
+                                                    <CheckSquare className="h-2.5 w-2.5" />
+                                                    {part.name}
+                                                  </span>
+                                                )
+                                              } else if (part.type === 'member' && part.name) {
+                                                return (
+                                                  <span key={idx} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-md font-bold text-xs">
+                                                    <User className="h-2.5 w-2.5" />
+                                                    {part.name}
+                                                  </span>
+                                                )
+                                              } else {
+                                                return <span key={idx}>{part.content}</span>
                                               }
                                             })
-                                          }
-                                          
-                                          return parts.map((part, idx) => {
-                                            if (part.type === 'checklist' && part.name && part.checklistId) {
-                                              return (
-                                                <span 
-                                                  key={idx} 
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    const checklistItemElement = document.querySelector(`[data-checklist-item-id="${part.checklistId}"]`)
-                                                    if (checklistItemElement) {
-                                                      checklistItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                                                      checklistItemElement.classList.add('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
-                                                      setTimeout(() => {
-                                                        checklistItemElement.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
-                                                      }, 2000)
-                                                    }
-                                                  }}
-                                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded-md font-bold text-xs cursor-pointer hover:bg-green-200 transition-colors"
-                                                  title="Click để xem việc cần làm"
-                                                >
-                                                  <CheckSquare className="h-2.5 w-2.5" />
-                                                  {part.name}
-                                                </span>
-                                              )
-                                            } else if (part.type === 'member' && part.name) {
-                                              return (
-                                                <span key={idx} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-md font-bold text-xs">
-                                                  <User className="h-2.5 w-2.5" />
-                                                  {part.name}
-                                                </span>
-                                              )
-                                            } else {
-                                              return <span key={idx}>{part.content}</span>
-                                            }
-                                          })
-                                        })()}
-                                      </p>
-                                    )}
+                                          })()}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-            {allComments.filter(c => !c.parent_id).length > 20 && (
-              <div className="text-center pt-4 text-sm text-gray-500">
-                +{allComments.filter(c => !c.parent_id).length - 20} tin nhắn khác
+                  )
+                })}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+
+          {/* Input Area */}
+          <div className="p-4 bg-white border-t border-gray-200" data-input-area>
+            {/* Task Selection */}
+            {tasks.length > 1 && (
+              <div className="mb-3">
+                <label className="text-xs text-gray-600 mb-1 block">Gửi tin nhắn vào nhiệm vụ:</label>
+                <select
+                  value={selectedTaskId || ''}
+                  onChange={(e) => setSelectedTaskId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {tasks.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Input Area */}
-        <div className="p-4 bg-white border-t border-gray-200" data-input-area>
-          {/* Task Selection */}
-          {tasks.length > 1 && (
-            <div className="mb-3">
-              <label className="text-xs text-gray-600 mb-1 block">Gửi tin nhắn vào nhiệm vụ:</label>
-              <select
-                value={selectedTaskId || ''}
-                onChange={(e) => setSelectedTaskId(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Reply Preview */}
-          {replyingTo && (
-            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg relative">
-              <div className="flex items-start gap-2">
-                <Reply className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-blue-900 mb-1">
-                    Trả lời {replyingTo.user_name || replyingTo.employee_name || 'Người dùng'}
+            {/* Reply Preview */}
+            {replyingTo && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg relative">
+                <div className="flex items-start gap-2">
+                  <Reply className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-blue-900 mb-1">
+                      Trả lời {replyingTo.user_name || replyingTo.employee_name || 'Người dùng'}
+                    </div>
+                    <p className="text-xs text-gray-600 line-clamp-2">{replyingTo.comment}</p>
                   </div>
-                  <p className="text-xs text-gray-600 line-clamp-2">{replyingTo.comment}</p>
-                </div>
-                <button
-                  onClick={handleCancelReply}
-                  className="p-1 hover:bg-blue-100 rounded-full transition-colors shrink-0"
-                  title="Hủy trả lời"
-                >
-                  <X className="h-3.5 w-3.5 text-blue-600" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Preview file đang chọn */}
-          {pendingPreview && (
-            <div className="mb-2 relative inline-block">
-              <img src={pendingPreview} alt="Preview" className="h-20 rounded-lg border border-gray-200" />
-              <button 
-                onClick={() => { 
-                  setPendingFiles([])
-                  setPendingPreview(null)
-                }} 
-                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
-          )}
-          {!pendingPreview && pendingFiles.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-2">
-              {pendingFiles.map((file, idx) => (
-                <div key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-xs text-gray-700">
-                  <Paperclip className="h-3.5 w-3.5 text-gray-500" />
-                  <span className="truncate max-w-[220px]" title={file.name}>{file.name}</span>
                   <button
-                    onClick={() => {
-                      const newFiles = [...pendingFiles]
-                      newFiles.splice(idx, 1)
-                      setPendingFiles(newFiles)
-                    }}
-                    className="ml-1 text-gray-400 hover:text-red-500"
-                    title="Xóa file đính kèm"
+                    onClick={handleCancelReply}
+                    className="p-1 hover:bg-blue-100 rounded-full transition-colors shrink-0"
+                    title="Hủy trả lời"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3.5 w-3.5 text-blue-600" />
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          <div className="flex gap-2 items-end">
-            <label className="p-2 text-gray-400 hover:text-blue-600 cursor-pointer transition-colors">
-              <Paperclip className="h-5 w-5" />
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || [])
-                  if (files.length > 0) {
-                    setPendingFiles(prev => [...prev, ...files])
-                  }
-                  e.target.value = ''
-                }}
-              />
-            </label>
-            <div className="flex-1 bg-gray-100 rounded-xl px-4 py-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white transition-all relative">
-              <textarea
-                data-chat-textarea
-                ref={mentionInputRef}
-                value={chatMessage}
-                onChange={handleMentionInput}
-                placeholder={replyingTo ? `Trả lời ${replyingTo.user_name || replyingTo.employee_name}...` : "Nhập tin nhắn... (dùng @ để mention)"}
-                className="w-full bg-transparent border-none focus:ring-0 text-sm max-h-24 resize-none p-0 text-black placeholder:text-gray-500"
-                rows={1}
-                onKeyDown={(e) => {
-                  if (showMentionDropdown) {
-                    const filtered = getFilteredMentions()
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault()
-                      // Could add keyboard navigation here
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault()
-                      // Could add keyboard navigation here
-                    } else if (e.key === 'Enter' && filtered.length > 0 && !e.shiftKey) {
-                      e.preventDefault()
-                      insertMention(filtered[0])
-                    } else if (e.key === 'Escape') {
-                      setShowMentionDropdown(false)
-                    }
-                  } else {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    } else if (e.key === 'Escape' && replyingTo) {
-                      handleCancelReply()
-                    }
-                  }
-                }}
-              />
-              
-              {/* Mention Dropdown */}
-              {showMentionDropdown && (
-                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-                  <div className="p-2 space-y-1">
-                    {getFilteredMentions().length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">Không tìm thấy</div>
-                    ) : (
-                      getFilteredMentions().map((item, idx) => (
-                        <button
-                          key={`${item.type}-${item.id}`}
-                          onClick={() => insertMention(item)}
-                          className="w-full text-left px-3 py-2 rounded hover:bg-blue-50 transition-colors flex items-center gap-2"
-                        >
-                          {item.type === 'member' ? (
-                            <>
-                              <User className="h-4 w-4 text-blue-600" />
-                              <span className="text-sm text-gray-900">{item.name}</span>
-                              <span className="text-xs text-gray-500 ml-auto">Thành viên</span>
-                            </>
-                          ) : (
-                            <>
-                              <CheckSquare className="h-4 w-4 text-green-600" />
-                              <span className="text-sm text-gray-900">{item.name}</span>
-                              <span className="text-xs text-gray-500 ml-auto">Việc cần làm</span>
-                            </>
-                          )}
-                        </button>
-                      ))
-                    )}
+            {/* Preview file đang chọn */}
+            {pendingPreview && (
+              <div className="mb-2 relative inline-block">
+                <img src={pendingPreview} alt="Preview" className="h-20 rounded-lg border border-gray-200" />
+                <button
+                  onClick={() => {
+                    setPendingFiles([])
+                    setPendingPreview(null)
+                  }}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {!pendingPreview && pendingFiles.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {pendingFiles.map((file, idx) => (
+                  <div key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-xs text-gray-700">
+                    <Paperclip className="h-3.5 w-3.5 text-gray-500" />
+                    <span className="truncate max-w-[220px]" title={file.name}>{file.name}</span>
+                    <button
+                      onClick={() => {
+                        const newFiles = [...pendingFiles]
+                        newFiles.splice(idx, 1)
+                        setPendingFiles(newFiles)
+                      }}
+                      className="ml-1 text-gray-400 hover:text-red-500"
+                      title="Xóa file đính kèm"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 items-end">
+              <label className="p-2 text-gray-400 hover:text-blue-600 cursor-pointer transition-colors">
+                <Paperclip className="h-5 w-5" />
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || [])
+                    if (files.length > 0) {
+                      setPendingFiles(prev => [...prev, ...files])
+                    }
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              <div className="flex-1 bg-gray-100 rounded-xl px-4 py-2 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white transition-all relative">
+                <textarea
+                  data-chat-textarea
+                  ref={mentionInputRef}
+                  value={chatMessage}
+                  onChange={handleMentionInput}
+                  placeholder={replyingTo ? `Trả lời ${replyingTo.user_name || replyingTo.employee_name}...` : "Nhập tin nhắn... (dùng @ để mention)"}
+                  className="w-full bg-transparent border-none focus:ring-0 text-sm max-h-24 resize-none p-0 text-black placeholder:text-gray-500"
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (showMentionDropdown) {
+                      const filtered = getFilteredMentions()
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        // Could add keyboard navigation here
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        // Could add keyboard navigation here
+                      } else if (e.key === 'Enter' && filtered.length > 0 && !e.shiftKey) {
+                        e.preventDefault()
+                        insertMention(filtered[0])
+                      } else if (e.key === 'Escape') {
+                        setShowMentionDropdown(false)
+                      }
+                    } else {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      } else if (e.key === 'Escape' && replyingTo) {
+                        handleCancelReply()
+                      }
+                    }
+                  }}
+                />
+
+                {/* Mention Dropdown */}
+                {showMentionDropdown && (
+                  <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                    <div className="p-2 space-y-1">
+                      {getFilteredMentions().length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">Không tìm thấy</div>
+                      ) : (
+                        getFilteredMentions().map((item, idx) => (
+                          <button
+                            key={`${item.type}-${item.id}`}
+                            onClick={() => insertMention(item)}
+                            className="w-full text-left px-3 py-2 rounded hover:bg-blue-50 transition-colors flex items-center gap-2"
+                          >
+                            {item.type === 'member' ? (
+                              <>
+                                <User className="h-4 w-4 text-blue-600" />
+                                <span className="text-sm text-gray-900">{item.name}</span>
+                                <span className="text-xs text-gray-500 ml-auto">Thành viên</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckSquare className="h-4 w-4 text-green-600" />
+                                <span className="text-sm text-gray-900">{item.name}</span>
+                                <span className="text-xs text-gray-500 ml-auto">Việc cần làm</span>
+                              </>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleSendMessage}
+                disabled={sendingMessage || (!chatMessage.trim() && pendingFiles.length === 0) || !selectedTaskId}
+                className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Send className="h-5 w-5" />
+              </button>
             </div>
-            <button
-              onClick={handleSendMessage}
-              disabled={sendingMessage || (!chatMessage.trim() && pendingFiles.length === 0) || !selectedTaskId}
-              className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Send className="h-5 w-5" />
-            </button>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Create Todo Modal */}
       {showCreateTodoModal && (

@@ -13,6 +13,7 @@ export interface Customer {
   code: string;
   email: string;
   phone: string;
+  address?: string;
   type: 'individual' | 'company';
   creditLimit?: number;
   statusId: string;
