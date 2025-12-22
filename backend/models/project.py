@@ -30,9 +30,10 @@ class Project(BaseModel):
     manager_id: Optional[str] = None
     customer_name: Optional[str] = None  # Added for display
     manager_name: Optional[str] = None  # Added for display
-    category_id: Optional[str] = None  # Project category
+    category_id: Optional[str] = None  # Project category (primary, for backward compatibility)
     category_name: Optional[str] = None  # Added for display
     category_color: Optional[str] = None  # Category color for UI
+    categories: Optional[list] = None  # List of all categories this project belongs to
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None

@@ -2969,7 +2969,6 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
               title="Bắt đầu hướng dẫn tạo báo giá"
             >
               <CircleHelp className="h-4 w-4" />
-              <span>Hướng dẫn</span>
             </button>
             <button
               onClick={onClose}

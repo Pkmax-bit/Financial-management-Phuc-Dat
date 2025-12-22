@@ -680,6 +680,32 @@ export const projectCategoryApi = {
   }
 }
 
+// Project Category Members API functions (many-to-many relationship)
+export const projectCategoryMembersApi = {
+  // Add project to category
+  addProjectToCategory: (projectId: string, categoryId: string) => {
+    return apiPost('/api/project-category-members', {
+      project_id: projectId,
+      category_id: categoryId
+    })
+  },
+
+  // Remove project from category
+  removeProjectFromCategory: (memberId: string) => {
+    return apiDelete(`/api/project-category-members/${memberId}`)
+  },
+
+  // Get all categories for a project
+  getProjectCategories: (projectId: string) => {
+    return apiGet(`/api/project-category-members/projects/${projectId}/categories`)
+  },
+
+  // Get all projects in a category
+  getCategoryProjects: (categoryId: string) => {
+    return apiGet(`/api/project-category-members/categories/${categoryId}/projects`)
+  }
+}
+
 // Balance Sheet API functions
 export const balanceSheetApi = {
   getBalanceSheet: (asOfDate: string) => {

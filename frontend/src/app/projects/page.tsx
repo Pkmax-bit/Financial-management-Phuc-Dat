@@ -762,7 +762,7 @@ export default function ProjectsPage() {
               onClick={() => startProjectsTour()}
               disabled={isTourRunning}
               data-tour-id="projects-guide-button"
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+              className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors font-medium ${
                 isTourRunning
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -770,7 +770,6 @@ export default function ProjectsPage() {
               title="Bắt đầu tour hướng dẫn tạo dự án"
             >
               <CircleHelp className="h-5 w-5" />
-              Hướng dẫn
             </button>
             {/* View toggle: Kanban | List (Bitrix24 style) */}
             <div className="ml-4 inline-flex rounded-[2px] border border-gray-300 overflow-hidden">

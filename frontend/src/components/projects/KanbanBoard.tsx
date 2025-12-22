@@ -112,6 +112,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [showCategoriesManager, setShowCategoriesManager] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
   const [categories, setCategories] = useState<Array<{ id: string; name: string; color?: string }>>([])
+  const [showStatusManagerModal, setShowStatusManagerModal] = useState(false)
+  const [selectedStatusForEdit, setSelectedStatusForEdit] = useState<ProjectStatusItem | null>(null)
 
   // Use external filter states or internal fallbacks
   const [internalCategoryFilter, setInternalCategoryFilter] = useState<string>('all')
@@ -211,9 +213,17 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         }
       }
       
-      // Fetch statuses first
-      const statusesData = await apiGet('/api/projects/statuses')
-      setStatuses(statusesData || [])
+      // Fetch statuses - will be filtered by category if needed (handled in separate useEffect)
+      // Get statuses data for mapping projects
+      let statusesDataForMapping = statuses
+      if (statuses.length === 0) {
+        // If statuses not loaded yet, fetch them
+        let url = '/api/projects/statuses'
+        if (categoryFilter && categoryFilter !== 'all') {
+          url += `?category_id=${categoryFilter}`
+        }
+        statusesDataForMapping = await apiGet(url) || []
+      }
 
       // Then fetch projects with status_id and category data
       let query = supabase
@@ -245,7 +255,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             first_name,
             last_name
           ),
-          project_categories(
+          project_categories:category_id(
             id,
             name,
             color
@@ -269,8 +279,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         // Get status name from statuses array by matching status_id
         // Otherwise fallback to enum status mapping
         let statusName: string
-        if (p.status_id && statusesData && statusesData.length > 0) {
-          const matchedStatus = statusesData.find((s: ProjectStatusItem) => s.id === p.status_id)
+        if (p.status_id && statusesDataForMapping && statusesDataForMapping.length > 0) {
+          const matchedStatus = statusesDataForMapping.find((s: ProjectStatusItem) => s.id === p.status_id)
           statusName = matchedStatus?.name || enumToStatusName[p.status] || p.status
         } else {
           statusName = enumToStatusName[p.status] || p.status
@@ -329,6 +339,21 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       setError(e.message || 'Lỗi tải dữ liệu')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Fetch statuses with optional category filter
+  const fetchStatuses = async () => {
+    try {
+      let url = '/api/projects/statuses'
+      if (categoryFilter && categoryFilter !== 'all') {
+        url += `?category_id=${categoryFilter}`
+      }
+      const statusesData = await apiGet(url)
+      setStatuses(statusesData || [])
+    } catch (error) {
+      console.error('Error fetching statuses:', error)
+      setStatuses([])
     }
   }
 
@@ -437,6 +462,11 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     fetchCategories()
     fetchCustomers()
   }, [])
+
+  // Fetch statuses when category filter changes
+  useEffect(() => {
+    fetchStatuses()
+  }, [categoryFilter])
 
   useEffect(() => {
     filterProjects()
@@ -661,6 +691,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
   const performCreateOrUpdate = async () => {
     try {
+      // Add category_id to status form if category filter is set
+      const statusData = pendingStatusData?.data || statusForm
+      if (!editingStatus && categoryFilter && categoryFilter !== 'all') {
+        statusData.category_id = categoryFilter
+      }
+      
       if (pendingStatusData?.isEdit && editingStatus) {
         await apiPut(`/api/projects/statuses/${editingStatus.id}`, pendingStatusData.data)
       } else if (pendingStatusData) {
@@ -668,12 +704,11 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       } else if (editingStatus) {
         await apiPut(`/api/projects/statuses/${editingStatus.id}`, statusForm)
       } else {
-        await apiPost('/api/projects/statuses', statusForm)
+        await apiPost('/api/projects/statuses', statusData)
       }
 
-      // Refresh statuses
-      const statusesData = await apiGet('/api/projects/statuses')
-      setStatuses(statusesData || [])
+      // Refresh statuses with current category filter
+      await fetchStatuses()
       
       setShowStatusModal(false)
       setShowOrderConflictDialog(false)
@@ -735,7 +770,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       await new Promise(resolve => setTimeout(resolve, 200))
 
       // Step 5: Refresh statuses to get updated display_order values
-      const updatedStatuses = await apiGet('/api/projects/statuses')
+      await fetchStatuses()
       setStatuses(updatedStatuses || [])
 
       // Step 6: Now proceed with create/update
@@ -816,7 +851,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       }
 
       // Refresh statuses to get updated list
-      const updatedStatuses = await apiGet('/api/projects/statuses')
+      await fetchStatuses()
       setStatuses(updatedStatuses || [])
 
       setIsDeletingStatus(false)
@@ -1066,6 +1101,60 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, status.name)}
                     isDragOver={dragOverColumn === status.name}
+                    onAddStatus={async () => {
+                      // Set display_order = current status's display_order
+                      const newDisplayOrder = status.display_order
+                      
+                      // Shift all statuses with display_order >= newDisplayOrder up by 1
+                      const statusesToShift = statuses
+                        .filter(s => s.display_order >= newDisplayOrder)
+                        .sort((a, b) => b.display_order - a.display_order) // Sort descending to avoid conflicts
+                        .map(s => ({ ...s, originalOrder: s.display_order })) // Store original order
+                      
+                      if (statusesToShift.length > 0) {
+                        try {
+                          // Step 1: Move to temporary high values
+                          const tempOffset = 10000
+                          for (const s of statusesToShift) {
+                            await apiPut(`/api/projects/statuses/${s.id}`, {
+                              display_order: s.originalOrder + tempOffset
+                            })
+                          }
+                          
+                          // Step 2: Wait a bit
+                          await new Promise(resolve => setTimeout(resolve, 200))
+                          
+                          // Step 3: Move to final positions (original + 1)
+                          for (const s of statusesToShift) {
+                            await apiPut(`/api/projects/statuses/${s.id}`, {
+                              display_order: s.originalOrder + 1
+                            })
+                          }
+                          
+                          // Step 4: Wait again
+                          await new Promise(resolve => setTimeout(resolve, 200))
+                          
+                          // Step 5: Refresh statuses
+                          await fetchStatuses()
+                        } catch (e: any) {
+                          console.error('Error shifting statuses:', e)
+                          alert('Có lỗi khi dồn trạng thái. Vui lòng thử lại.')
+                          return
+                        }
+                      }
+                      
+                      // Set form with new display_order
+                      setStatusForm({
+                        name: '',
+                        display_order: newDisplayOrder,
+                        description: '',
+                        color_class: 'bg-gray-100 text-gray-800'
+                      })
+                      setSelectedColor('#6b7280')
+                      setEditingStatus(null)
+                      setShowStatusModal(true)
+                    }}
+                    statusId={status.id}
                   />
                 </div>
               )
@@ -1158,6 +1247,16 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             <h2 className="mb-4 text-xl font-semibold text-black">
               {editingStatus ? 'Chỉnh sửa trạng thái' : 'Tạo trạng thái mới'}
             </h2>
+            {!editingStatus && categoryFilter && categoryFilter !== 'all' && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800">
+                  <strong>Nhóm:</strong> {categories.find(c => c.id === categoryFilter)?.name || 'Đang chọn nhóm'}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Trạng thái mới sẽ được gán vào nhóm này
+                </p>
+              </div>
+            )}
             
             <div className="space-y-4">
               <div>

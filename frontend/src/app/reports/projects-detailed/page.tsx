@@ -1137,7 +1137,6 @@ export default function ProjectsDetailedReportPage() {
             title="Hướng dẫn xem báo cáo"
           >
             <CircleHelp className="h-4 w-4" />
-            Hướng dẫn
           </button>
         </StickyTopNav>
 

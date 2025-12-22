@@ -1872,7 +1872,6 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense, should
             title="Bắt đầu hướng dẫn duyệt chi phí kế hoạch"
           >
             <CircleHelp className="h-4 w-4" />
-            <span>Hướng dẫn duyệt</span>
           </button>
         )}
         <button

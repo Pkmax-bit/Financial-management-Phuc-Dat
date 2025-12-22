@@ -1,6 +1,7 @@
 "use client"
 
 import React from 'react'
+import { Plus } from 'lucide-react'
 import KanbanCard from './KanbanCard'
 
 interface ProjectItem {
@@ -27,6 +28,8 @@ interface KanbanColumnProps {
   onDragLeave?: () => void
   onDrop?: (e: React.DragEvent) => void
   isDragOver?: boolean
+  onAddStatus?: () => void
+  statusId?: string
 }
 
 export default function KanbanColumn({ 
@@ -40,7 +43,9 @@ export default function KanbanColumn({
   onDragOver,
   onDragLeave,
   onDrop,
-  isDragOver
+  isDragOver,
+  onAddStatus,
+  statusId
 }: KanbanColumnProps) {
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -62,7 +67,21 @@ export default function KanbanColumn({
       <div className={`rounded-t-lg ${colorClass}`}>
         <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold">
           <span>{title}</span>
-          <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs text-gray-700">{count}</span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs text-gray-700">{count}</span>
+            {onAddStatus && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAddStatus()
+                }}
+                className="p-1 rounded hover:bg-white/20 transition-colors"
+                title="Thêm trạng thái mới"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
         {totalInvoiceAmount > 0 && (
           <div className="px-4 pb-2 text-xs text-gray-600 border-t border-white/20">

@@ -1494,16 +1494,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
             title="Hướng dẫn chuyển báo giá thành hóa đơn"
           >
-            <CircleHelp className="h-4 w-4 mr-1" />
-            Hướng dẫn chuyển đổi
+            <CircleHelp className="h-4 w-4" />
           </button>
           <button
             onClick={() => setShowHelpModal(true)}
-            className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center justify-center w-9 h-9 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             title="Hướng dẫn sử dụng"
           >
-            <HelpCircle className="h-4 w-4 mr-1" />
-            Hướng dẫn
+            <HelpCircle className="h-4 w-4" />
           </button>
         </div>
       </div>

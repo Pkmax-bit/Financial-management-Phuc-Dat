@@ -154,19 +154,56 @@ async def get_projects(
         if status:
             query = query.eq("status", status)
         
-        if category_id:
-            query = query.eq("category_id", category_id)
-        
-        # Apply pagination
+        # Apply pagination first
         result = query.range(skip, skip + limit - 1).execute()
         
-        # Process data to add customer_name, manager_name, and category info
+        # Get all project IDs to fetch their categories
+        project_ids = [p['id'] for p in result.data] if result.data else []
+        
+        # Fetch all categories for these projects
+        project_categories_map = {}
+        if project_ids:
+            if category_id:
+                # Filter by category through project_category_members
+                category_members_result = supabase.table("project_category_members")\
+                    .select("project_id, project_categories(id, name, color, code)")\
+                    .eq("category_id", category_id)\
+                    .in_("project_id", project_ids)\
+                    .execute()
+            else:
+                # Get all categories for these projects
+                category_members_result = supabase.table("project_category_members")\
+                    .select("project_id, project_categories(id, name, color, code)")\
+                    .in_("project_id", project_ids)\
+                    .execute()
+            
+            # Build map: project_id -> list of categories
+            for member in (category_members_result.data or []):
+                project_id = member.get('project_id')
+                category = member.get('project_categories')
+                if project_id and category:
+                    if project_id not in project_categories_map:
+                        project_categories_map[project_id] = []
+                    project_categories_map[project_id].append({
+                        'id': category.get('id'),
+                        'name': category.get('name'),
+                        'color': category.get('color'),
+                        'code': category.get('code')
+                    })
+        
+        # Filter projects by category if needed
+        if category_id:
+            filtered_project_ids = set(project_categories_map.keys())
+            result.data = [p for p in result.data if p['id'] in filtered_project_ids]
+        
+        # Process data to add customer_name, manager_name, and categories info
         processed_projects = []
         for project in result.data:
             project_data = dict(project)
             project_data['customer_name'] = project.get('customers', {}).get('name') if project.get('customers') else None
             project_data['manager_name'] = f"{project.get('employees', {}).get('first_name', '')} {project.get('employees', {}).get('last_name', '')}".strip() if project.get('employees') else None
-            # Add category information
+            
+            # Add primary category information (backward compatibility)
             category = project.get('project_categories')
             if category:
                 project_data['category_name'] = category.get('name')
@@ -174,6 +211,10 @@ async def get_projects(
             else:
                 project_data['category_name'] = None
                 project_data['category_color'] = None
+            
+            # Add all categories from project_category_members
+            project_id = project.get('id')
+            project_data['categories'] = project_categories_map.get(project_id, [])
             processed_projects.append(Project(**project_data))
         
         return processed_projects
@@ -307,6 +348,7 @@ class ProjectStatus(BaseModel):
     description: Optional[str] = None
     color_class: str = "bg-gray-100 text-gray-800"
     is_active: bool = True
+    category_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -316,6 +358,7 @@ class ProjectStatusCreate(BaseModel):
     display_order: int
     description: Optional[str] = None
     color_class: Optional[str] = "bg-gray-100 text-gray-800"
+    category_id: Optional[str] = None
 
 class ProjectStatusUpdate(BaseModel):
     """Project status update model"""
@@ -324,25 +367,48 @@ class ProjectStatusUpdate(BaseModel):
     description: Optional[str] = None
     color_class: Optional[str] = None
     is_active: Optional[bool] = None
+    category_id: Optional[str] = None
 
 @router.get("/statuses", response_model=List[ProjectStatus])
 async def get_project_statuses(
+    category_id: Optional[str] = Query(None, description="Filter by category ID. Returns global statuses (category_id IS NULL) and statuses for this category"),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all project statuses ordered by display_order"""
+    """Get all project statuses ordered by display_order. 
+    If category_id is provided, returns global statuses (category_id IS NULL) and statuses for that category.
+    If category_id is not provided, returns all active statuses."""
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table("project_statuses")\
+        query = supabase.table("project_statuses")\
             .select("*")\
-            .eq("is_active", True)\
-            .order("display_order", desc=False)\
-            .execute()
+            .eq("is_active", True)
         
-        if result.data:
-            return result.data
-        
-        return []
+        # If category_id is provided, filter to show:
+        # 1. Global statuses (category_id IS NULL)
+        # 2. Statuses for the specified category
+        if category_id:
+            # Use OR condition: category_id IS NULL OR category_id = provided_id
+            # Supabase doesn't support OR directly, so we'll filter in Python
+            result = query.order("display_order", desc=False).execute()
+            
+            if result.data:
+                # Filter in Python: keep global statuses and statuses for this category
+                filtered_data = [
+                    status for status in result.data
+                    if status.get("category_id") is None or status.get("category_id") == category_id
+                ]
+                return filtered_data
+            
+            return []
+        else:
+            # No category filter: return all active statuses
+            result = query.order("display_order", desc=False).execute()
+            
+            if result.data:
+                return result.data
+            
+            return []
         
     except Exception as e:
         raise HTTPException(
@@ -384,14 +450,40 @@ async def create_project_status(
             )
         
         # Create new status
+        # Extract color hex from color_class or use default
+        color_class = status_data.color_class or "bg-gray-100 text-gray-800"
+        # Map common Tailwind color classes to hex values
+        color_map = {
+            "bg-gray-100": "#f3f4f6",
+            "bg-gray-200": "#e5e7eb",
+            "bg-blue-100": "#dbeafe",
+            "bg-blue-200": "#bfdbfe",
+            "bg-green-100": "#dcfce7",
+            "bg-green-200": "#bbf7d0",
+            "bg-yellow-100": "#fef3c7",
+            "bg-yellow-200": "#fde68a",
+            "bg-red-100": "#fee2e2",
+            "bg-red-200": "#fecaca",
+            "bg-purple-100": "#f3e8ff",
+            "bg-purple-200": "#e9d5ff",
+        }
+        # Extract first color class (before space)
+        first_color_class = color_class.split()[0] if color_class else "bg-gray-100"
+        color_hex = color_map.get(first_color_class, "#6b7280")  # Default gray
+        
+        status_dict = {
+            "name": status_data.name,
+            "display_order": status_data.display_order,
+            "description": status_data.description,
+            "color_class": color_class,
+            "color": color_hex,  # Add required color field
+            "is_active": True
+        }
+        if status_data.category_id:
+            status_dict["category_id"] = status_data.category_id
+        
         result = supabase.table("project_statuses")\
-            .insert({
-                "name": status_data.name,
-                "display_order": status_data.display_order,
-                "description": status_data.description,
-                "color_class": status_data.color_class or "bg-gray-100 text-gray-800",
-                "is_active": True
-            })\
+            .insert(status_dict)\
             .execute()
         
         if result.data:
@@ -491,8 +583,27 @@ async def update_project_status_item(
             update_data["description"] = status_data.description
         if status_data.color_class is not None:
             update_data["color_class"] = status_data.color_class
+            # Also update color when color_class changes
+            color_map = {
+                "bg-gray-100": "#f3f4f6",
+                "bg-gray-200": "#e5e7eb",
+                "bg-blue-100": "#dbeafe",
+                "bg-blue-200": "#bfdbfe",
+                "bg-green-100": "#dcfce7",
+                "bg-green-200": "#bbf7d0",
+                "bg-yellow-100": "#fef3c7",
+                "bg-yellow-200": "#fde68a",
+                "bg-red-100": "#fee2e2",
+                "bg-red-200": "#fecaca",
+                "bg-purple-100": "#f3e8ff",
+                "bg-purple-200": "#e9d5ff",
+            }
+            first_color_class = status_data.color_class.split()[0] if status_data.color_class else "bg-gray-100"
+            update_data["color"] = color_map.get(first_color_class, "#6b7280")
         if status_data.is_active is not None:
             update_data["is_active"] = status_data.is_active
+        if status_data.category_id is not None:
+            update_data["category_id"] = status_data.category_id
         
         # Update status
         result = supabase.table("project_statuses")\
@@ -974,8 +1085,9 @@ async def update_project(
         if 'progress' in update_data and 'status_id' not in update_data:
             progress = update_data['progress']
             # Get current project status
-            current_project = supabase.table("projects").select("status").eq("id", project_id).execute()
+            current_project = supabase.table("projects").select("status, status_id").eq("id", project_id).execute()
             current_status = current_project.data[0]['status'] if current_project.data else 'planning'
+            old_status_id = current_project.data[0].get('status_id') if current_project.data else None
             
             # Auto-change status based on progress (only for legacy status enum)
             if progress > 0 and current_status == 'planning':
@@ -983,7 +1095,55 @@ async def update_project(
             elif progress >= 100 and current_status not in ['completed', 'cancelled']:
                 update_data['status'] = 'completed'
         
+        # Get old status_id before update
+        old_project = supabase.table("projects").select("status_id").eq("id", project_id).execute()
+        old_status_id = old_project.data[0].get('status_id') if old_project.data else None
+        
         result = supabase.table("projects").update(update_data).eq("id", project_id).execute()
+        
+        # Auto-add/remove from workshop category if status_id changed
+        new_status_id = update_data.get('status_id')
+        if new_status_id and new_status_id != old_status_id:
+            # Find workshop category and status
+            workshop_category = supabase.table("project_categories")\
+                .select("id")\
+                .or_("name.ilike.%xưởng%,code.ilike.%workshop%,code.ilike.%xuong%")\
+                .limit(1)\
+                .execute()
+            
+            workshop_status = supabase.table("project_statuses")\
+                .select("id")\
+                .or_("name.ilike.%xưởng%,name.ilike.%sản xuất%")\
+                .limit(1)\
+                .execute()
+            
+            if workshop_category.data and workshop_status.data:
+                workshop_category_id = workshop_category.data[0].get('id')
+                workshop_status_id = workshop_status.data[0].get('id')
+                
+                # If new status is workshop status, add to workshop category
+                if new_status_id == workshop_status_id:
+                    existing_member = supabase.table("project_category_members")\
+                        .select("id")\
+                        .eq("project_id", project_id)\
+                        .eq("category_id", workshop_category_id)\
+                        .execute()
+                    
+                    if not existing_member.data:
+                        supabase.table("project_category_members")\
+                            .insert({
+                                "project_id": project_id,
+                                "category_id": workshop_category_id,
+                                "added_by": current_user.id
+                            })\
+                            .execute()
+                # If old status was workshop and new status is not, remove from workshop category
+                elif old_status_id == workshop_status_id and new_status_id != workshop_status_id:
+                    supabase.table("project_category_members")\
+                        .delete()\
+                        .eq("project_id", project_id)\
+                        .eq("category_id", workshop_category_id)\
+                        .execute()
         
         if result.data:
             return Project(**result.data[0])
@@ -1730,18 +1890,79 @@ async def update_project_status(
         supabase = get_supabase_client()
         
         # Check if project exists
-        existing = supabase.table("projects").select("id").eq("id", project_id).execute()
+        existing = supabase.table("projects").select("id, status_id").eq("id", project_id).execute()
         if not existing.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found"
             )
         
-        # Update project status
-        result = supabase.table("projects").update({
+        old_status_id = existing.data[0].get('status_id')
+        
+        # Get status_id from status name if needed
+        status_result = supabase.table("project_statuses")\
+            .select("id")\
+            .ilike("name", f"%{status}%")\
+            .limit(1)\
+            .execute()
+        
+        new_status_id = None
+        update_dict = {
             "status": status,
             "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", project_id).execute()
+        }
+        
+        if status_result.data:
+            new_status_id = status_result.data[0].get('id')
+            update_dict["status_id"] = new_status_id
+        
+        # Update project status
+        result = supabase.table("projects").update(update_dict).eq("id", project_id).execute()
+        
+        # Auto-add/remove from workshop category if status_id changed
+        if new_status_id and new_status_id != old_status_id:
+            # Find workshop category
+            workshop_category = supabase.table("project_categories")\
+                .select("id")\
+                .or_("name.ilike.%xưởng%,code.ilike.%workshop%,code.ilike.%xuong%")\
+                .limit(1)\
+                .execute()
+            
+            # Find workshop status
+            workshop_status = supabase.table("project_statuses")\
+                .select("id")\
+                .or_("name.ilike.%xưởng%,name.ilike.%sản xuất%")\
+                .limit(1)\
+                .execute()
+            
+            if workshop_category.data and workshop_status.data:
+                workshop_category_id = workshop_category.data[0].get('id')
+                workshop_status_id = workshop_status.data[0].get('id')
+                
+                # If new status is workshop status, add to workshop category
+                if new_status_id == workshop_status_id:
+                    # Check if already in category
+                    existing_member = supabase.table("project_category_members")\
+                        .select("id")\
+                        .eq("project_id", project_id)\
+                        .eq("category_id", workshop_category_id)\
+                        .execute()
+                    
+                    if not existing_member.data:
+                        supabase.table("project_category_members")\
+                            .insert({
+                                "project_id": project_id,
+                                "category_id": workshop_category_id,
+                                "added_by": current_user.id
+                            })\
+                            .execute()
+                # If old status was workshop and new status is not, remove from workshop category
+                elif old_status_id == workshop_status_id and new_status_id != workshop_status_id:
+                    supabase.table("project_category_members")\
+                        .delete()\
+                        .eq("project_id", project_id)\
+                        .eq("category_id", workshop_category_id)\
+                        .execute()
         
         if result.data:
             return {"message": "Project status updated successfully"}

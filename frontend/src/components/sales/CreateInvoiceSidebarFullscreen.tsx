@@ -2022,7 +2022,6 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               title="Bắt đầu hướng dẫn tạo hóa đơn"
             >
               <CircleHelp className="h-4 w-4" />
-              <span>Hướng dẫn</span>
             </button>
             <button
               onClick={onClose}

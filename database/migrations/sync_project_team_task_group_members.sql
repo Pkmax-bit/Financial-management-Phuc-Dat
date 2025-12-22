@@ -150,3 +150,6 @@ CREATE TRIGGER trigger_sync_delete_project_team
 COMMENT ON FUNCTION sync_delete_task_group_members_on_project_team_delete() IS 'Tự động xóa khỏi task_group_members khi xóa khỏi project_team';
 COMMENT ON FUNCTION sync_delete_project_team_on_task_group_member_delete() IS 'Tự động xóa khỏi project_team khi xóa khỏi task_group_members (nếu không còn ở task group nào khác)';
 
+
+
+

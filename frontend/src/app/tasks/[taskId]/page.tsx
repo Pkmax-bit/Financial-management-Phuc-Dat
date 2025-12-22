@@ -285,6 +285,10 @@ export default function TaskDetailPage() {
   const [taskData, setTaskData] = useState<TaskResponse | null>(null)
   const [loadingTask, setLoadingTask] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [project, setProject] = useState<any>(null)
+  const [projectStatuses, setProjectStatuses] = useState<any[]>([])
+  const [updatingProjectStatus, setUpdatingProjectStatus] = useState(false)
 
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [checklistItemsDraft, setChecklistItemsDraft] = useState<Record<string, string>>({})
@@ -305,18 +309,8 @@ export default function TaskDetailPage() {
   const [editingChecklistItemFileUrls, setEditingChecklistItemFileUrls] = useState<string[]>([])
   const [editingChecklistItemPreviews, setEditingChecklistItemPreviews] = useState<string[]>([])
   const [uploadingEditChecklistItem, setUploadingEditChecklistItem] = useState(false)
-  const [groupMembers, setGroupMembers] = useState<Array<{ 
-    employee_id: string; 
-    employee_name?: string; 
-    employee_email?: string;
-    employee_position?: string;
-    position_name?: string;
-    role?: string;
-    responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
-    avatar?: string;
-    phone?: string;
-    status?: string;
-  }>>([])
+  // Sử dụng participants từ taskData thay vì groupMembers
+  // groupMembers đã được thay thế bằng taskData?.participants
 
   const [chatMessage, setChatMessage] = useState('')
   const [chatFilter, setChatFilter] = useState<'all' | 'pinned'>('all')
@@ -569,6 +563,44 @@ export default function TaskDetailPage() {
     loadUser()
   }, [router])
 
+  const loadProjectInfo = useCallback(async (projectId: string) => {
+    try {
+      const projectData = await apiGet(`/api/projects/${projectId}`)
+      setProject(projectData)
+      
+      // Get project categories
+      const categories = await apiGet(`/api/project-category-members/projects/${projectId}/categories`)
+      
+      // Fetch statuses for each category
+      const allStatuses: any[] = []
+      
+      // Get global statuses first
+      const globalStatuses = await apiGet('/api/projects/statuses')
+      if (globalStatuses) {
+        allStatuses.push(...globalStatuses.filter((s: any) => !s.category_id))
+      }
+      
+      // Get statuses for each category
+      if (categories && categories.length > 0) {
+        for (const category of categories) {
+          const categoryStatuses = await apiGet(`/api/projects/statuses?category_id=${category.category_id}`)
+          if (categoryStatuses) {
+            allStatuses.push(...categoryStatuses)
+          }
+        }
+      }
+      
+      // Remove duplicates and sort by display_order
+      const uniqueStatuses = Array.from(
+        new Map(allStatuses.map(s => [s.id, s])).values()
+      ).sort((a, b) => a.display_order - b.display_order)
+      
+      setProjectStatuses(uniqueStatuses)
+    } catch (err) {
+      console.error('Error loading project info:', err)
+    }
+  }, [])
+
   const loadTaskDetails = useCallback(async () => {
     if (!taskId) return
     try {
@@ -584,23 +616,13 @@ export default function TaskDetailPage() {
 
       setTaskData(data)
 
-      // Load group members if task has group_id
-      if (data?.task?.group_id) {
-        try {
-          // Pass project_id if available to get project team information
-          const projectId = data?.task?.project_id
-          const url = projectId 
-            ? `/api/tasks/groups/${data.task.group_id}/members?project_id=${projectId}`
-            : `/api/tasks/groups/${data.task.group_id}/members`
-          const members = await apiGet(url)
-          setGroupMembers(members || [])
-        } catch (err) {
-          console.error('Failed to load group members', err)
-          setGroupMembers([])
-        }
-      } else {
-        setGroupMembers([])
+      // Load project info if task has project_id
+      if (data?.task?.project_id) {
+        loadProjectInfo(data.task.project_id)
       }
+
+      // Participants đã được bao gồm trong TaskResponse từ backend
+      // Không cần load group members riêng nữa vì đã chuyển sang task_participants
     } catch (err: any) {
       console.error('Failed to load task', err)
       const status = err?.status || err?.response?.status
@@ -617,7 +639,7 @@ export default function TaskDetailPage() {
     } finally {
       setLoadingTask(false)
     }
-  }, [taskId])
+  }, [taskId, loadProjectInfo])
 
   const loadComments = useCallback(async () => {
     if (!taskId) return
@@ -632,6 +654,24 @@ export default function TaskDetailPage() {
       }
     }
   }, [taskId, loadTaskDetails])
+
+  const handleUpdateProjectStatus = useCallback(async (statusId: string) => {
+    if (!project || !project.id || updatingProjectStatus) return
+    
+    try {
+      setUpdatingProjectStatus(true)
+      await apiPut(`/api/projects/${project.id}`, {
+        status_id: statusId
+      })
+      // Refresh project data
+      await loadProjectInfo(project.id)
+    } catch (err: any) {
+      console.error('Error updating project status:', err)
+      alert(err.message || 'Không thể cập nhật trạng thái dự án')
+    } finally {
+      setUpdatingProjectStatus(false)
+    }
+  }, [project, updatingProjectStatus, loadProjectInfo])
 
   useEffect(() => {
     loadTaskDetails()
@@ -1241,7 +1281,18 @@ export default function TaskDetailPage() {
     setReplyingTo(null)
   }
 
-  // Get all available members for assignment (combines project members + task group members)
+  // Hàm map role sang tiếng Việt
+  const getRoleLabel = (role: string | undefined): string => {
+    if (!role) return ''
+    const roleMap: Record<string, string> = {
+      'responsible': 'Chịu trách nhiệm',
+      'participant': 'Tham gia',
+      'observer': 'Theo dõi'
+    }
+    return roleMap[role] || role
+  }
+
+  // Get all available members for assignment (combines task participants + assignments)
   const getAllAvailableMembers = () => {
     const membersMap = new Map<string, { id: string; name: string; email?: string; role?: string }>()
     
@@ -1257,16 +1308,15 @@ export default function TaskDetailPage() {
       })
     }
     
-    // Add members from task group (includes project team members)
-    if (groupMembers.length > 0) {
-      groupMembers.forEach(member => {
-        if (member.employee_name && member.employee_id) {
-          const role = member.position_name || member.employee_position || member.role || ''
-          membersMap.set(member.employee_id, {
-            id: member.employee_id,
-            name: member.employee_name,
-            email: member.employee_email,
-            role: role
+    // Add members from task participants (đã chuyển từ group members sang task participants)
+    const participants = taskData?.participants || []
+    if (participants.length > 0) {
+      participants.forEach(participant => {
+        if (participant.employee_name && participant.employee_id) {
+          membersMap.set(participant.employee_id, {
+            id: participant.employee_id,
+            name: participant.employee_name,
+            role: participant.role
           })
         }
       })
@@ -1299,22 +1349,26 @@ export default function TaskDetailPage() {
           })
         }
       })
-    } else if (groupMembers.length > 0) {
-      groupMembers.forEach(member => {
-        if (member.employee_name) {
-          members.push({
-            id: member.employee_id,
-            name: member.employee_name,
-            type: 'member'
-          })
-        }
-      })
-    } else if (task?.assigned_to_name) {
-      members.push({
-        id: task.assigned_to || '',
-        name: task.assigned_to_name,
-        type: 'member'
-      })
+    } else {
+      // Sử dụng task participants thay vì group members
+      const participants = taskData?.participants || []
+      if (participants.length > 0) {
+        participants.forEach(participant => {
+          if (participant.employee_name) {
+            members.push({
+              id: participant.employee_id,
+              name: participant.employee_name,
+              type: 'member'
+            })
+          }
+        })
+      } else if (task?.assigned_to_name) {
+        members.push({
+          id: task.assigned_to || '',
+          name: task.assigned_to_name,
+          type: 'member'
+        })
+      }
     }
     
     return members
@@ -1549,7 +1603,7 @@ export default function TaskDetailPage() {
         {/* LEFT COLUMN: INFO */}
         {showLeftSidebar && (
         <aside
-            className="hidden lg:flex flex-col border-r border-gray-200 bg-gray-50/50 min-h-0 relative"
+            className="hidden lg:flex flex-col border-r border-gray-200 bg-gray-50/50 min-h-0 relative flex-shrink-0"
           style={{ width: leftColumnWidth, minWidth: 240, maxWidth: 520 }}
         >
             <button
@@ -1563,10 +1617,45 @@ export default function TaskDetailPage() {
             {/* Title & Status */}
             <div className="pb-4 border-b border-gray-200">
               <h1 className="text-xl font-bold text-gray-900 mb-3 leading-tight">{task?.title}</h1>
-              <div className="flex flex-wrap gap-2">
-                <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${COLOR_BADGES[task?.status || 'todo']}`}>
-                  {task?.status?.replace('_', ' ').toUpperCase()}
-                </span>
+              <div className="flex flex-wrap gap-2 items-center">
+                {/* Status Dropdown */}
+                <div className="relative">
+                  <select
+                    value={task?.status || 'todo'}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value as TaskStatus
+                      if (task && newStatus !== task.status && !updatingStatus) {
+                        try {
+                          setUpdatingStatus(true)
+                          await apiPut(`/api/tasks/${task.id}`, {
+                            status: newStatus
+                          })
+                          // Refresh task data
+                          await loadTaskDetails()
+                        } catch (err: any) {
+                          console.error('Error updating task status:', err)
+                          alert(err.message || 'Không thể cập nhật trạng thái nhiệm vụ')
+                          // Revert select value on error
+                          e.target.value = task.status
+                        } finally {
+                          setUpdatingStatus(false)
+                        }
+                      }
+                    }}
+                    disabled={updatingStatus}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${COLOR_BADGES[task?.status || 'todo']}`}
+                  >
+                    <option value="todo" className="bg-white text-gray-900">TODO</option>
+                    <option value="in_progress" className="bg-white text-gray-900">IN PROGRESS</option>
+                    <option value="completed" className="bg-white text-gray-900">COMPLETED</option>
+                    <option value="cancelled" className="bg-white text-gray-900">CANCELLED</option>
+                  </select>
+                  {updatingStatus && (
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-600 border-t-transparent" />
+                    </div>
+                  )}
+                </div>
                 <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${PRIORITY_COLORS[task?.priority || 'medium']}`}>
                   {task?.priority?.toUpperCase()}
                 </span>
@@ -1608,6 +1697,91 @@ export default function TaskDetailPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Nhân viên được gán */}
+              <div className="flex items-start gap-3 text-sm pb-3">
+                <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
+                  <Users className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 mb-2">Nhân viên được gán</p>
+                  {participants && participants.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {participants.map((participant) => {
+                        const getRoleLabel = (role: string) => {
+                          const roleLabels: Record<string, string> = {
+                            'responsible': 'Thực hiện',
+                            'participant': 'Tham gia',
+                            'observer': 'Theo dõi'
+                          }
+                          return roleLabels[role] || role
+                        }
+                        return (
+                          <div
+                            key={participant.id}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded-md text-xs"
+                          >
+                            <User className="h-3 w-3 text-blue-600" />
+                            <span className="text-gray-700 font-medium">{participant.employee_name || 'Nhân viên'}</span>
+                            {participant.role && (
+                              <>
+                                <span className="text-gray-400">•</span>
+                                <span className="text-gray-600">{getRoleLabel(participant.role)}</span>
+                              </>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : task?.assigned_to_name ? (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded-md text-xs">
+                      <User className="h-3 w-3 text-blue-600" />
+                      <span className="text-gray-700 font-medium">{task.assigned_to_name}</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Chưa có nhân viên được gán</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Project Status (if task has project) */}
+              {project && projectStatuses.length > 0 && (
+                <div className="flex items-center gap-3 text-sm pb-3">
+                  <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
+                    <CheckSquare className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-500 mb-2">Trạng thái dự án</p>
+                    <div className="relative">
+                      <select
+                        value={project.status_id || ''}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleUpdateProjectStatus(e.target.value)
+                          }
+                        }}
+                        disabled={updatingProjectStatus}
+                        className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg text-sm font-medium bg-white text-black hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="" className="text-black">Chọn trạng thái...</option>
+                        {projectStatuses.map((status) => (
+                          <option key={status.id} value={status.id} className="text-black">
+                            {status.name}
+                          </option>
+                        ))}
+                      </select>
+                      {updatingProjectStatus && (
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                        </div>
+                      )}
+                    </div>
+                    {project.name && (
+                      <p className="text-xs text-gray-400 mt-1">Dự án: {project.name}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
 
@@ -1737,11 +1911,10 @@ export default function TaskDetailPage() {
         {/* MIDDLE COLUMN */}
         <main 
           ref={middleColumnRef} 
-          className="flex flex-col bg-white relative"
+          className="flex flex-col bg-white relative min-w-0"
           style={{ 
-            flex: mainChatRatio, 
-            minWidth: '300px',
-            maxWidth: '50%' // Tối đa 50% (5:5 ratio)
+            flex: mainChatRatio,
+            minWidth: '300px'
           }}
         >
 
@@ -1966,6 +2139,18 @@ export default function TaskDetailPage() {
                                   displayContent = displayContent.replace(/^📎 \d+ file\(s\)\s*$/g, '').trim()
                                 }
                                 
+                                // Get assignments for this item (from item.assignments or from taskData)
+                                const itemAssignments = (item as any).assignments || []
+                                
+                                // Debug log - always log to check
+                                console.log('Checklist Item:', {
+                                  id: item.id,
+                                  content: item.content?.substring(0, 50),
+                                  hasAssignments: !!(item as any).assignments,
+                                  assignmentsCount: itemAssignments.length,
+                                  assignments: itemAssignments
+                                })
+                                
                                 return (
                                   <>
                                     {/* Content text */}
@@ -1975,14 +2160,83 @@ export default function TaskDetailPage() {
                                       </span>
                                     )}
                                     
+                                    {/* Display assigned employees */}
+                                    {itemAssignments && Array.isArray(itemAssignments) && itemAssignments.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {itemAssignments.map((assignment: any, idx: number) => {
+                                          const employeeId = assignment.employee_id || assignment.assignee_id
+                                          const employeeName = assignment.employee_name || assignment.assignee_name
+                                          const responsibilityType = assignment.responsibility_type || assignment.role
+                                          
+                                          // Use employee_name directly if available, otherwise find from available members
+                                          let employee: { id: string; name: string } | null = null
+                                          
+                                          if (employeeName && employeeId) {
+                                            employee = { id: employeeId, name: employeeName }
+                                          } else {
+                                            employee = getAllAvailableMembers().find(m => m.id === employeeId) || null
+                                          }
+                                          
+                                          if (!employee) {
+                                            console.warn('Employee not found for assignment:', assignment)
+                                            return null
+                                          }
+                                          
+                                          const responsibilityLabels: Record<string, string> = {
+                                            accountable: 'Chịu trách nhiệm',
+                                            responsible: 'Thực hiện',
+                                            consulted: 'Tư vấn',
+                                            informed: 'Thông báo'
+                                          }
+                                          
+                                          return (
+                                            <div 
+                                              key={`${item.id}-assignment-${idx}`}
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-xs"
+                                            >
+                                              <User className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                                              <span className="text-gray-700 font-medium">{employee.name}</span>
+                                              {responsibilityType && (
+                                                <>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span className="text-gray-600">{responsibilityLabels[responsibilityType] || responsibilityType}</span>
+                                                </>
+                                              )}
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                    
                                     {/* Display files/images */}
                                     {fileUrls.length > 0 && (
                                       <div className="flex flex-wrap gap-2 mt-1">
                                         {fileUrls.map((url, idx) => {
                                           const fileName = url.split('/').pop()?.split('?')[0] || ''
-                                          const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i) || url.includes('image') || url.includes('storage')
-                                          const iconPath = !isImage ? getFileIconPath('', fileName) : null
-                                          const FileIconComponent = !isImage && !iconPath ? getFileIconComponent('') : null
+                                          // Detect file type from extension
+                                          const extension = fileName.split('.').pop()?.toLowerCase() || ''
+                                          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension) || 
+                                                         url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i) || 
+                                                         url.includes('image')
+                                          
+                                          // Get MIME type from extension
+                                          const getMimeType = (ext: string): string => {
+                                            const mimeTypes: Record<string, string> = {
+                                              'pdf': 'application/pdf',
+                                              'xls': 'application/vnd.ms-excel',
+                                              'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                              'doc': 'application/msword',
+                                              'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                              'txt': 'text/plain',
+                                              'csv': 'text/csv'
+                                            }
+                                            return mimeTypes[ext] || ''
+                                          }
+                                          
+                                          const fileType = getMimeType(extension)
+                                          const iconPath = !isImage ? getFileIconPath(fileType, fileName) : null
+                                          const FileIconComponent = !isImage && !iconPath ? getFileIconComponent(fileType) : null
+                                          
                                           return (
                                             <div key={idx} className="relative group/file">
                                               {isImage ? (
@@ -2020,16 +2274,25 @@ export default function TaskDetailPage() {
                                                   className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-blue-300 transition-colors"
                                                 >
                                                   {iconPath ? (
-                                                    <img src={iconPath} alt={fileName} className="h-5 w-5 object-contain" />
+                                                    <img src={iconPath} alt={fileName} className="h-5 w-5 object-contain flex-shrink-0" onError={(e) => {
+                                                      // Fallback if icon image fails to load
+                                                      e.currentTarget.style.display = 'none'
+                                                      const parent = e.currentTarget.parentElement
+                                                      if (parent && FileIconComponent) {
+                                                        const iconEl = document.createElement('div')
+                                                        iconEl.className = 'flex-shrink-0'
+                                                        parent.insertBefore(iconEl, e.currentTarget.nextSibling)
+                                                      }
+                                                    }} />
                                                   ) : FileIconComponent ? (
-                                                    <FileIconComponent className="h-4 w-4 text-gray-600" />
+                                                    <FileIconComponent className="h-4 w-4 text-gray-600 flex-shrink-0" />
                                                   ) : (
-                                                    <Paperclip className="h-4 w-4 text-gray-600" />
+                                                    <Paperclip className="h-4 w-4 text-gray-600 flex-shrink-0" />
                                                   )}
                                                   <span className="text-xs text-gray-700 font-medium truncate max-w-[100px]" title={fileName}>
                                                     {fileName || `File ${idx + 1}`}
                                                   </span>
-                                                  <Download className="h-3 w-3 text-gray-400" />
+                                                  <Download className="h-3 w-3 text-gray-400 flex-shrink-0" />
                                                 </a>
                                               )}
                                             </div>
@@ -2172,6 +2435,31 @@ export default function TaskDetailPage() {
                               }
                             }}
                           />
+                          {/* Send Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleAddChecklistItem(checklist.id)}
+                            disabled={
+                              uploadingChecklistItem === checklist.id || 
+                              (!checklistItemsDraft[checklist.id]?.trim() && 
+                               (checklistItemFiles[checklist.id] || []).length === 0 &&
+                               (checklistItemAssignments[checklist.id] || []).length === 0)
+                            }
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Gửi việc cần làm"
+                          >
+                            {uploadingChecklistItem === checklist.id ? (
+                              <>
+                                <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Đang gửi...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-3.5 w-3.5" />
+                                <span>Gửi</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                         
                         {/* Assignment Section */}
@@ -2208,7 +2496,7 @@ export default function TaskDetailPage() {
                                     {member.role && (
                                       <>
                                         <span className="text-gray-400">•</span>
-                                        <span className="text-gray-500 italic">{member.role}</span>
+                                        <span className="text-gray-500 italic">{getRoleLabel(member.role)}</span>
                                       </>
                                     )}
                                     <span className="text-gray-400">•</span>
@@ -2254,7 +2542,7 @@ export default function TaskDetailPage() {
                                     <option value="">-- Chọn nhân viên --</option>
                                     {getAllAvailableMembers().map(member => (
                                       <option key={member.id} value={member.id}>
-                                        {member.name} {member.role ? `- ${member.role}` : ''} {member.email ? `(${member.email})` : ''}
+                                        {member.name} {member.role ? `- ${getRoleLabel(member.role)}` : ''} {member.email ? `(${member.email})` : ''}
                                       </option>
                                     ))}
                                   </select>
@@ -2271,7 +2559,7 @@ export default function TaskDetailPage() {
                                             <div className="flex-1">
                                               <span className="text-xs text-gray-700 font-medium">{member.name}</span>
                                               {member.role && (
-                                                <span className="text-xs text-gray-500 ml-1 italic">({member.role})</span>
+                                                <span className="text-xs text-gray-500 ml-1 italic">({getRoleLabel(member.role)})</span>
                                               )}
                                             </div>
                                             <select
@@ -2474,7 +2762,7 @@ export default function TaskDetailPage() {
           style={{ 
             flex: 1 - mainChatRatio,
             minWidth: '240px',
-            maxWidth: '50%' // Tối đa 50% (5:5 ratio)
+            flexShrink: 0
           }}
         >
             <button
@@ -2540,21 +2828,24 @@ export default function TaskDetailPage() {
                           })
                         }
                       })
-                    } else if (groupMembers.length > 0) {
-                      groupMembers.forEach(member => {
-                        if (member.employee_name) {
-                          members.push({
-                            id: member.employee_id,
-                            name: member.employee_name,
-                            email: member.employee_email
-                          })
-                        }
-                      })
-                    } else if (task?.assigned_to_name) {
-                      members.push({
-                        id: task.assigned_to || '',
-                        name: task.assigned_to_name
-                      })
+                    } else {
+                      // Sử dụng task participants thay vì group members
+                      const participants = taskData?.participants || []
+                      if (participants.length > 0) {
+                        participants.forEach(participant => {
+                          if (participant.employee_name) {
+                            members.push({
+                              id: participant.employee_id,
+                              name: participant.employee_name
+                            })
+                          }
+                        })
+                      } else if (task?.assigned_to_name) {
+                        members.push({
+                          id: task.assigned_to || '',
+                          name: task.assigned_to_name
+                        })
+                      }
                     }
                     const displayMembers = showAllMembers ? members : members.slice(0, 3)
                     return (
@@ -2972,9 +3263,9 @@ export default function TaskDetailPage() {
                   const renderCommentText = (text: string, isOwnMessage: boolean) => {
                     if (!text) return null
                     
-                    // Parse mentions: @[name](checklist:id) or @name
-                    // First, find all matches (both checklist and user mentions) with their positions
-                    const matches: Array<{ type: 'checklist' | 'mention'; start: number; end: number; name: string; id?: string }> = []
+                    // Parse mentions: @[name](checklist:id), @[name](task:id), or @name
+                    // First, find all matches (checklist, task, and user mentions) with their positions
+                    const matches: Array<{ type: 'checklist' | 'task' | 'mention'; start: number; end: number; name: string; id?: string }> = []
                     
                     // Match @[name](checklist:id) pattern
                     const checklistPattern = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
@@ -2989,14 +3280,26 @@ export default function TaskDetailPage() {
                       })
                     }
                     
-                    // Match @name pattern (user mentions) - but skip if it's part of a checklist mention
+                    // Match @[name](task:id) pattern
+                    const taskPattern = /@\[([^\]]+)\]\(task:([^)]+)\)/g
+                    while ((match = taskPattern.exec(text)) !== null) {
+                      matches.push({
+                        type: 'task',
+                        start: match.index,
+                        end: match.index + match[0].length,
+                        name: match[1],
+                        id: match[2]
+                      })
+                    }
+                    
+                    // Match @name pattern (user mentions) - but skip if it's part of a checklist or task mention
                     const userPattern = /@([a-zA-Z0-9_\u00C0-\u1EF9\s]+)/g
                     while ((match = userPattern.exec(text)) !== null) {
-                      // Check if this match is inside a checklist mention
-                      const isInsideChecklist = matches.some(m => 
-                        m.type === 'checklist' && match.index >= m.start && match.index < m.end
+                      // Check if this match is inside a checklist or task mention
+                      const isInsideOther = matches.some(m => 
+                        (m.type === 'checklist' || m.type === 'task') && match.index >= m.start && match.index < m.end
                       )
-                      if (!isInsideChecklist) {
+                      if (!isInsideOther) {
                         matches.push({
                           type: 'mention',
                           start: match.index,
@@ -3010,7 +3313,7 @@ export default function TaskDetailPage() {
                     matches.sort((a, b) => a.start - b.start)
                     
                     // Build parts array
-                    const parts: Array<{ type: 'text' | 'mention' | 'checklist'; content: string; name?: string; id?: string }> = []
+                    const parts: Array<{ type: 'text' | 'mention' | 'checklist' | 'task'; content: string; name?: string; id?: string }> = []
                     let lastIndex = 0
                     
                     matches.forEach(m => {
@@ -3056,6 +3359,28 @@ export default function TaskDetailPage() {
                                 {part.name}
                               </span>
                             )
+                          } else if (part.type === 'task') {
+                            return (
+                              <span
+                                key={idx}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  if (part.id) {
+                                    router.push(`/tasks/${part.id}`)
+                                  }
+                                }}
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium cursor-pointer hover:opacity-80 transition-opacity ${
+                                  isOwnMessage
+                                    ? 'bg-white/30 text-white'
+                                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                }`}
+                                title={`Nhiệm vụ: ${part.name} (Click để xem)`}
+                              >
+                                <FileText className="h-3 w-3" />
+                                {part.name}
+                              </span>
+                            )
                           } else if (part.type === 'mention') {
                             return (
                               <span
@@ -3081,6 +3406,18 @@ export default function TaskDetailPage() {
                   const renderComment = (c: TaskComment, isReply = false) => {
                     const parentComment = isReply && c.parent_id ? findParentComment(c.parent_id) : null
                     const isOwnMessage = c.user_id === user?.id
+                    
+                    // Extract task ID from comment if it contains task mention
+                    const extractTaskIdFromComment = (text: string): string | null => {
+                      if (!text) return null
+                      const taskPattern = /@\[([^\]]+)\]\(task:([^)]+)\)/
+                      const match = text.match(taskPattern)
+                      return match ? match[2] : null
+                    }
+                    
+                    const mentionedTaskId = c.comment ? extractTaskIdFromComment(c.comment) : null
+                    const hasTaskMention = mentionedTaskId !== null
+                    
                     return (
                       <div key={c.id} className={`group ${isReply ? 'ml-12 mt-2' : 'mt-3 first:mt-0'}`}>
                         <div className={`flex gap-2.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
@@ -3105,11 +3442,24 @@ export default function TaskDetailPage() {
                               )}
                             </div>
                             <div 
+                              onClick={(e) => {
+                                // Only navigate if clicking on the message bubble itself, not on interactive elements inside
+                                const target = e.target as HTMLElement
+                                if (hasTaskMention && mentionedTaskId && 
+                                    !target.closest('a') && 
+                                    !target.closest('button') &&
+                                    !target.closest('[role="button"]')) {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  router.push(`/tasks/${mentionedTaskId}`)
+                                }
+                              }}
                               className={`relative px-3 py-2.5 text-sm shadow-sm ${isOwnMessage
                                 ? 'bg-[#00B2FF] text-white rounded-2xl rounded-tr-none'
                                 : 'bg-white text-gray-900 rounded-2xl rounded-tl-none shadow-[0_1px_2px_rgba(0,0,0,0.1)]'
-                              }`}
+                              } ${hasTaskMention ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
                               style={isOwnMessage ? {} : { boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}
+                              title={hasTaskMention ? 'Click để xem nhiệm vụ được mention' : undefined}
                             >
                               {c.type === 'image' && c.file_url && (
                                 <div className="mb-1 -mx-1">

@@ -4578,14 +4578,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 title="Bắt đầu hướng dẫn tạo chi phí kế hoạch"
               >
                 <CircleHelp className="h-4 w-4" />
-                <span>Hướng dẫn</span>
               </button>
             )}
             {category === 'actual' && (
               <button
                 onClick={() => startActualExpenseTour()}
                 disabled={isActualExpenseTourRunning || submitting}
-                className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                className={`flex items-center justify-center w-9 h-9 text-sm font-semibold rounded-lg transition-colors ${
                   isActualExpenseTourRunning || submitting
                     ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
                     : 'text-white bg-green-600 hover:bg-green-700'
@@ -4593,7 +4592,6 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 title="Bắt đầu hướng dẫn tạo chi phí thực tế"
               >
                 <CircleHelp className="h-4 w-4" />
-                <span>Hướng dẫn</span>
               </button>
             )}
             {/* Update existing expense button */}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search, Eye, Edit, Trash2, Calendar, DollarSign, Users, Target, MoreVertical, Filter, X, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { projectCategoryApi, customerApi } from '@/lib/api'
+import { projectCategoryApi, customerApi, apiGet } from '@/lib/api'
 import ProjectCategoriesManager from './ProjectCategoriesManager'
 
 interface Project {
@@ -95,13 +95,20 @@ export default function ProjectsTab({
   const [teamMembers, setTeamMembers] = useState<Array<{ id: string, name: string, email?: string, user_id?: string, project_id?: string, project_ids?: string[], hasProjects?: boolean }>>([])
   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string>('all')
   const [userRole, setUserRole] = useState<string>('')
+  const [availableStatuses, setAvailableStatuses] = useState<Array<{ id: string; name: string; value: string }>>([])
 
   useEffect(() => {
     fetchProjects()
     fetchTeamMembers()
     fetchCategories()
     fetchCustomers()
+    fetchStatuses()
   }, [customerId])
+
+  // Fetch statuses when category filter changes
+  useEffect(() => {
+    fetchStatuses()
+  }, [categoryFilter])
 
   useEffect(() => {
     console.log('🔄 useEffect filterProjects triggered:', {
@@ -284,6 +291,44 @@ export default function ProjectsTab({
       setCustomers(customersData || [])
     } catch (error) {
       console.error('Error fetching customers:', error)
+    }
+  }
+
+  const fetchStatuses = async () => {
+    try {
+      let url = '/api/projects/statuses'
+      if (categoryFilter && categoryFilter !== 'all') {
+        url += `?category_id=${categoryFilter}`
+      }
+      const statusesData = await apiGet(url)
+      
+      // Map statuses to include both name and value (for filtering)
+      // Create mapping from Vietnamese names to enum values for backward compatibility
+      const statusMapping: Record<string, string> = {
+        'Lập kế hoạch': 'planning',
+        'Đang thực hiện': 'active',
+        'Tạm dừng': 'on_hold',
+        'Hoàn thành': 'completed',
+        'Đã hủy': 'cancelled'
+      }
+      
+      const mappedStatuses = (statusesData || []).map((status: any) => ({
+        id: status.id,
+        name: status.name,
+        value: statusMapping[status.name] || status.name.toLowerCase().replace(/\s+/g, '_')
+      }))
+      
+      setAvailableStatuses(mappedStatuses)
+    } catch (error) {
+      console.error('Error fetching statuses:', error)
+      // Fallback to default statuses
+      setAvailableStatuses([
+        { id: '1', name: 'Lập kế hoạch', value: 'planning' },
+        { id: '2', name: 'Đang hoạt động', value: 'active' },
+        { id: '3', name: 'Tạm dừng', value: 'on_hold' },
+        { id: '4', name: 'Hoàn thành', value: 'completed' },
+        { id: '5', name: 'Đã hủy', value: 'cancelled' }
+      ])
     }
   }
 
@@ -855,11 +900,11 @@ export default function ProjectsTab({
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
               >
                 <option value="all">Tất cả trạng thái</option>
-                <option value="planning">Lập kế hoạch</option>
-                <option value="active">Đang hoạt động</option>
-                <option value="on_hold">Tạm dừng</option>
-                <option value="completed">Hoàn thành</option>
-                <option value="cancelled">Đã hủy</option>
+                {availableStatuses.map((status) => (
+                  <option key={status.id} value={status.value}>
+                    {status.name}
+                  </option>
+                ))}
               </select>
             </div>
 

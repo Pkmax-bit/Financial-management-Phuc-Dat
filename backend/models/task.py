@@ -231,10 +231,16 @@ class TaskChecklistItem(BaseModel):
     assignee_name: Optional[str] = None
 
 
+class ChecklistItemAssignment(BaseModel):
+    employee_id: str
+    responsibility_type: str  # 'accountable', 'responsible', 'consulted', 'informed'
+
+
 class TaskChecklistItemCreate(BaseModel):
     content: str
     assignee_id: Optional[str] = None
     sort_order: Optional[int] = 0
+    assignments: Optional[List[ChecklistItemAssignment]] = None
 
 
 class TaskChecklistItemUpdate(BaseModel):
@@ -242,6 +248,7 @@ class TaskChecklistItemUpdate(BaseModel):
     is_completed: Optional[bool] = None
     assignee_id: Optional[str] = None
     sort_order: Optional[int] = None
+    assignments: Optional[List[ChecklistItemAssignment]] = None
 
 
 class TaskChecklist(BaseModel):

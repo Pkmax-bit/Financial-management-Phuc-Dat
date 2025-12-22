@@ -1341,7 +1341,6 @@ export default function QuoteEmailPreviewModal({
               title="Bắt đầu hướng dẫn email"
             >
               <CircleHelp className="h-4 w-4" />
-              <span>Hướng dẫn</span>
             </button>
             <button
               onClick={handleDownloadPDF}

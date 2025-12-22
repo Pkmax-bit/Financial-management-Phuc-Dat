@@ -136,6 +136,8 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | 'todo' | 'in_progress' | 'completed' | 'cancelled'>('all')
   const [project, setProject] = useState<any>(null)
+  const [projectStatuses, setProjectStatuses] = useState<any[]>([])
+  const [updatingStatus, setUpdatingStatus] = useState(false)
   const [allComments, setAllComments] = useState<TaskComment[]>([])
   const [loadingComments, setLoadingComments] = useState(false)
   const [chatMessage, setChatMessage] = useState('')
@@ -186,6 +188,17 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
     fetchProject()
     fetchTasks()
   }, [projectId, statusFilter])
+
+  useEffect(() => {
+    // Fetch statuses when project is loaded or category changes
+    if (project) {
+      if (project.category_id) {
+        fetchProjectStatuses(project.category_id)
+      } else {
+        fetchProjectStatuses()
+      }
+    }
+  }, [project?.category_id, project?.id])
 
   useEffect(() => {
     if (tasks.length > 0) {
@@ -245,6 +258,38 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
       setProject(data)
     } catch (err) {
       console.error('Error fetching project:', err)
+    }
+  }
+
+  const fetchProjectStatuses = async (categoryId?: string) => {
+    try {
+      const url = categoryId && categoryId !== 'all' 
+        ? `/api/projects/statuses?category_id=${categoryId}`
+        : '/api/projects/statuses'
+      const data = await apiGet(url)
+      setProjectStatuses(data || [])
+    } catch (err) {
+      console.error('Error fetching project statuses:', err)
+    }
+  }
+
+  const handleUpdateProjectStatus = async (statusId: string) => {
+    if (!project || updatingStatus) return
+    
+    try {
+      setUpdatingStatus(true)
+      await apiPut(`/api/projects/${projectId}`, {
+        status_id: statusId
+      })
+      // Refresh project data
+      await fetchProject()
+      // Optionally refresh page to show updated status
+      window.location.reload()
+    } catch (err: any) {
+      console.error('Error updating project status:', err)
+      alert(err.message || 'Không thể cập nhật trạng thái dự án')
+    } finally {
+      setUpdatingStatus(false)
     }
   }
 
@@ -1057,7 +1102,34 @@ export default function ProjectTasksTab({ projectId, projectName }: ProjectTasks
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Project Status Selector */}
+            {project && (
+              <div className="relative">
+                <select
+                  value={project.status_id || ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleUpdateProjectStatus(e.target.value)
+                    }
+                  }}
+                  disabled={updatingStatus}
+                  className="px-4 py-2 pr-8 border border-gray-300 rounded-lg text-sm font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Chọn trạng thái...</option>
+                  {projectStatuses.map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.name}
+                    </option>
+                  ))}
+                </select>
+                {updatingStatus && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                  </div>
+                )}
+              </div>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation()

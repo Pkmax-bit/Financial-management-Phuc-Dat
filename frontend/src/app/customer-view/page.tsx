@@ -565,7 +565,7 @@ export default function CustomerViewPage() {
                 onClick={() => startCustomerViewTour()}
                 disabled={isTourRunning}
                 data-tour-id="customer-guide-button"
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                className={`flex items-center justify-center w-10 h-10 text-sm font-semibold rounded-lg transition-colors ${
                   isTourRunning
                     ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
                     : 'text-white bg-blue-600 hover:bg-blue-700'
@@ -573,7 +573,6 @@ export default function CustomerViewPage() {
                 title="Bắt đầu tour hướng dẫn"
               >
                 <CircleHelp className="h-5 w-5" />
-                <span>Bắt đầu hướng dẫn</span>
               </button>
               <button
                 onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}

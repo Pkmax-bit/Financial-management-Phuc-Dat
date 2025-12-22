@@ -610,7 +610,6 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
           title="Bắt đầu hướng dẫn tạo sản phẩm"
         >
           <CircleHelp className="h-4 w-4" />
-          <span>Hướng dẫn</span>
         </button>
       </div>
       

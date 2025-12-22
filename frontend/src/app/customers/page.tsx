@@ -1073,15 +1073,14 @@ export default function CustomersPage() {
                   onClick={() => startCustomersTour()}
                   disabled={isTourRunning}
                   data-tour-id="customers-guide-button"
-                  className={`inline-flex items-center px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                  className={`inline-flex items-center justify-center w-10 h-10 text-sm font-semibold rounded-md transition-colors ${
                     isTourRunning
                       ? 'cursor-not-allowed bg-gray-100 text-gray-400'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                   title="Bắt đầu tour hướng dẫn"
                 >
-                  <CircleHelp className="h-5 w-5 mr-2" />
-                  <span>Bắt đầu hướng dẫn</span>
+                  <CircleHelp className="h-5 w-5" />
                 </button>
                 {/* View toggle: Kanban | List (Bitrix24 style) */}
                 <div className="inline-flex rounded-[2px] border border-gray-300 overflow-hidden">
@@ -1576,7 +1575,6 @@ export default function CustomersPage() {
                   title="Bắt đầu hướng dẫn form"
                 >
                   <CircleHelp className="h-4 w-4" />
-                  <span>Hướng dẫn</span>
                 </button>
                 <button
                   onClick={() => setShowAddModal(false)}

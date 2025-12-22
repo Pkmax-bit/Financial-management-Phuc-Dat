@@ -133,10 +133,39 @@ def _fetch_task_checklists(supabase, task_id: str) -> List[TaskChecklist]:
             .order("created_at", desc=False)
             .execute()
         )
+        item_ids = [item["id"] for item in items_result.data or []]
+        
+        # Fetch assignments for all items
+        assignments_map = {}
+        if item_ids:
+            assignments_result = (
+                supabase.table("task_checklist_item_assignments")
+                .select("""
+                    *,
+                    employees:employee_id(id, first_name, last_name)
+                """)
+                .in_("checklist_item_id", item_ids)
+                .execute()
+            )
+            for assignment in assignments_result.data or []:
+                item_id = assignment["checklist_item_id"]
+                if item_id not in assignments_map:
+                    assignments_map[item_id] = []
+                employee = assignment.get("employees")
+                assignment_data = {
+                    "employee_id": assignment["employee_id"],
+                    "responsibility_type": assignment["responsibility_type"]
+                }
+                if employee:
+                    assignment_data["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                assignments_map[item_id].append(assignment_data)
+        
         for item in items_result.data or []:
             employee = item.get("employees")
             if employee:
                 item["assignee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+            # Add assignments to item
+            item["assignments"] = assignments_map.get(item["id"], [])
             items_map.setdefault(item["checklist_id"], []).append(item)
 
     enriched_checklists = []
@@ -2190,7 +2219,63 @@ async def create_checklist_item(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create checklist item"
             )
-        return result.data[0]
+        
+        item = result.data[0]
+        item_id = item["id"]
+        
+        # Handle assignments if provided
+        assignments = item_data.assignments or []
+        if assignments:
+            assignment_records = [
+                {
+                    "checklist_item_id": item_id,
+                    "employee_id": assignment.employee_id,
+                    "responsibility_type": assignment.responsibility_type
+                }
+                for assignment in assignments
+            ]
+            if assignment_records:
+                supabase.table("task_checklist_item_assignments").insert(assignment_records).execute()
+        
+        # Fetch the item with assignments
+        items_result = (
+            supabase.table("task_checklist_items")
+            .select("""
+                *,
+                employees:assignee_id(id, first_name, last_name)
+            """)
+            .eq("id", item_id)
+            .execute()
+        )
+        if items_result.data:
+            item = items_result.data[0]
+            employee = item.get("employees")
+            if employee:
+                item["assignee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+            
+            # Fetch assignments
+            assignments_result = (
+                supabase.table("task_checklist_item_assignments")
+                .select("""
+                    *,
+                    employees:employee_id(id, first_name, last_name)
+                """)
+                .eq("checklist_item_id", item_id)
+                .execute()
+            )
+            assignments = []
+            for assignment in assignments_result.data or []:
+                employee = assignment.get("employees")
+                assignment_data = {
+                    "employee_id": assignment["employee_id"],
+                    "responsibility_type": assignment["responsibility_type"]
+                }
+                if employee:
+                    assignment_data["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                assignments.append(assignment_data)
+            item["assignments"] = assignments
+        
+        return item
     except HTTPException:
         raise
     except Exception as e:
@@ -2231,7 +2316,66 @@ async def update_checklist_item(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Checklist item not found"
             )
-        return result.data[0]
+        
+        item = result.data[0]
+        
+        # Handle assignments update if provided
+        if item_data.assignments is not None:
+            # Delete existing assignments
+            supabase.table("task_checklist_item_assignments").delete().eq("checklist_item_id", item_id).execute()
+            
+            # Insert new assignments
+            if item_data.assignments:
+                assignment_records = [
+                    {
+                        "checklist_item_id": item_id,
+                        "employee_id": assignment.employee_id,
+                        "responsibility_type": assignment.responsibility_type
+                    }
+                    for assignment in item_data.assignments
+                ]
+                if assignment_records:
+                    supabase.table("task_checklist_item_assignments").insert(assignment_records).execute()
+        
+        # Fetch the item with assignments
+        items_result = (
+            supabase.table("task_checklist_items")
+            .select("""
+                *,
+                employees:assignee_id(id, first_name, last_name)
+            """)
+            .eq("id", item_id)
+            .execute()
+        )
+        if items_result.data:
+            item = items_result.data[0]
+            employee = item.get("employees")
+            if employee:
+                item["assignee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+            
+            # Fetch assignments
+            assignments_result = (
+                supabase.table("task_checklist_item_assignments")
+                .select("""
+                    *,
+                    employees:employee_id(id, first_name, last_name)
+                """)
+                .eq("checklist_item_id", item_id)
+                .execute()
+            )
+            assignments = []
+            for assignment in assignments_result.data or []:
+                employee = assignment.get("employees")
+                assignment_data = {
+                    "employee_id": assignment["employee_id"],
+                    "responsibility_type": assignment["responsibility_type"]
+                }
+                if employee:
+                    assignment_data["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                assignments.append(assignment_data)
+            item["assignments"] = assignments
+        
+        return item
     except HTTPException:
         raise
     except Exception as e:
