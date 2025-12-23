@@ -1734,6 +1734,86 @@ async def cleanup_deleted_items(
 
 # ==================== Task Comments ====================
 
+@router.get("/project/{project_id}/comments", response_model=List[TaskComment])
+async def get_project_comments(
+    project_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get all comments for all tasks in a project, optimized for chat timeline"""
+    try:
+        supabase = get_supabase_client()
+        
+        # 1. Get all task IDs for this project
+        tasks_result = supabase.table("tasks").select("id, title").eq("project_id", project_id).is_("deleted_at", "null").execute()
+        task_info_map = {t["id"]: t["title"] for t in tasks_result.data or []}
+        task_ids = list(task_info_map.keys())
+        
+        if not task_ids:
+            return []
+            
+        # 2. Get all comments for these tasks
+        comments_result = supabase.table("task_comments").select("""
+            *,
+            users:user_id(id, full_name),
+            employees:employee_id(id, first_name, last_name)
+        """).in_("task_id", task_ids).order("created_at", desc=False).execute()
+        
+        # 3. Enrich comments with names and task_title
+        enriched_comments = []
+        for comment in comments_result.data or []:
+            # Add task title context
+            comment["task_title"] = task_info_map.get(comment["task_id"])
+            
+            # Get user name
+            usr = comment.get("users")
+            if usr:
+                if isinstance(usr, list): usr = usr[0] if usr else None
+                if usr: comment["user_name"] = usr.get("full_name")
+            
+            # Get employee name
+            emp = comment.get("employees")
+            if emp:
+                if isinstance(emp, list): emp = emp[0] if emp else None
+                if emp: comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+            
+            # Fallback for employee name by employee_id then user_id
+            if not comment.get("employee_name"):
+                employee_id = comment.get("employee_id")
+                if employee_id:
+                    try:
+                        emp_res = supabase.table("employees").select("first_name, last_name").eq("id", employee_id).single().execute()
+                        if emp_res.data:
+                            comment["employee_name"] = f"{emp_res.data.get('first_name', '')} {emp_res.data.get('last_name', '')}".strip()
+                    except: pass
+                
+                if not comment.get("employee_name") and comment.get("user_id"):
+                    try:
+                        emp_res = supabase.table("employees").select("first_name, last_name").eq("user_id", comment.get("user_id")).single().execute()
+                        if emp_res.data:
+                            comment["employee_name"] = f"{emp_res.data.get('first_name', '')} {emp_res.data.get('last_name', '')}".strip()
+                    except: pass
+
+            # Fallback for user_name
+            if not comment.get("user_name") and comment.get("user_id"):
+                try:
+                    usr_res = supabase.table("users").select("full_name").eq("id", comment.get("user_id")).single().execute()
+                    if usr_res.data:
+                        comment["user_name"] = usr_res.data.get("full_name")
+                except: pass
+            
+            # We return flat list for sequential chat, but keep replies empty to match model
+            comment["replies"] = []
+            enriched_comments.append(comment)
+            
+        return enriched_comments
+    except Exception as e:
+        logger.error(f"Error fetching project comments: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch project comments: {str(e)}"
+        )
+
+
 def _has_comment_moderation_rights(current_user: User) -> bool:
     """Allow elevated roles to moderate comments."""
     privileged_roles = {"admin", "sales", "accountant"}

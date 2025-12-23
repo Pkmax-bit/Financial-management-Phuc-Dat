@@ -316,108 +316,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     setPendingPreview(null)
   }, [pendingFiles])
 
-  // Extract shared content from comments
-  const sharedContent = useMemo(() => {
-    const images: Array<{ url: string; name: string; date: string; taskId: string }> = []
-    const files: Array<{ url: string; name: string; size?: number; date: string; taskId: string }> = []
-    const links: Array<{ url: string; title: string; date: string; taskId: string }> = []
-    const urlRegex = /(https?:\/\/[^\s]+)/g
-
-    allComments.forEach(comment => {
-      const taskId = comment.task_id || ''
-
-      // 1. Process explicit images/files
-      if (comment.file_url) {
-        const url = comment.file_url
-        const name = comment.comment || getFileNameFromUrl(url)
-        const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i)
-
-        if (isImage) {
-          images.push({ url, name, date: comment.created_at, taskId })
-        } else {
-          files.push({
-            url,
-            name,
-            size: (comment as any).file_size,
-            date: comment.created_at,
-            taskId
-          })
-        }
-      }
-
-      // 2. Process [FILE_URLS: ...] pattern
-      if (comment.comment) {
-        const fileUrlsMatch = comment.comment.match(/\[FILE_URLS:\s*([^\]]+)\]/)
-        if (fileUrlsMatch) {
-          const urls = fileUrlsMatch[1].trim().split(/\s+/)
-          urls.forEach(url => {
-            const name = getFileNameFromUrl(url)
-            const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i)
-            if (isImage) {
-              images.push({ url, name, date: comment.created_at, taskId })
-            } else {
-              files.push({ url, name, date: comment.created_at, taskId })
-            }
-          })
-        }
-
-        // 3. Extract links (excluding file URL blocks)
-        const cleanComment = comment.comment.replace(/\[FILE_URLS:[^\]]+\]/g, '')
-        const matches = cleanComment.match(urlRegex)
-        if (matches) {
-          matches.forEach(url => {
-            links.push({
-              url,
-              title: url.split('/').pop() || url,
-              date: comment.created_at,
-              taskId
-            })
-          })
-        }
-      }
-
-      // 4. Also check nested replies if any
-      if (comment.replies && comment.replies.length > 0) {
-        comment.replies.forEach(reply => {
-          if (reply.file_url) {
-            const url = reply.file_url
-            const name = reply.comment || getFileNameFromUrl(url)
-            const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i)
-            if (isImage) {
-              images.push({ url, name, date: reply.created_at, taskId })
-            } else {
-              files.push({
-                url,
-                name,
-                size: (reply as any).file_size,
-                date: reply.created_at,
-                taskId
-              })
-            }
-          }
-        })
-      }
-    })
-
-    // Sort by date descending
-    const sortByDate = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
-
-    return {
-      images: images.sort(sortByDate),
-      files: files.sort(sortByDate),
-      links: links.sort(sortByDate)
-    }
-  }, [allComments])
-
-  // Filter tasks: only show top-level tasks (no parent_id) and group subtasks with their parents
-  const filteredTasks = tasks.filter(task => {
-    // Only show top-level tasks (no parent_id)
-    if (task.parent_id) return false
-    // Apply status filter
-    if (statusFilter === 'all') return true
-    return task.status === statusFilter
-  })
-
   const fetchUser = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
@@ -498,20 +396,29 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       if (!silent) {
         setLoadingComments(true)
       }
-
-      // Use the new project-level endpoint for much better performance
-      const allCommentsFlat: TaskComment[] = await apiGet(`/api/tasks/project/${projectId}/comments`)
-
-      if (!allCommentsFlat) return
-
+      const commentsPromises = tasks.map(async (task) => {
+        try {
+          const comments = await apiGet(`/api/tasks/${task.id}/comments`)
+          return (comments || []).map((comment: TaskComment) => ({
+            ...comment,
+            task_id: task.id,
+            task_title: task.title
+          }))
+        } catch (err) {
+          console.error(`Error fetching comments for task ${task.id}:`, err)
+          return []
+        }
+      })
+      const commentsArrays = await Promise.all(commentsPromises)
+      const allCommentsFlat = commentsArrays.flat()
       // Sort by created_at ascending (oldest first, like a chat)
-      allCommentsFlat.sort((a: TaskComment, b: TaskComment) =>
+      allCommentsFlat.sort((a, b) =>
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       )
 
       // Check for new messages (not from current user)
       if (silent && user && allComments.length > 0) {
-        const newComments = allCommentsFlat.filter((newComment: TaskComment) => {
+        const newComments = allCommentsFlat.filter(newComment => {
           const isNew = !allComments.find(oldComment => oldComment.id === newComment.id)
           const isNotFromMe = newComment.user_id !== user.id && newComment.employee_id !== user.id
           return isNew && isNotFromMe
@@ -667,7 +574,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     const afterMention = chatMessage.substring(mentionPosition.end)
 
     const mentionText = item.type === 'member'
-      ? `@[${item.name}](member:${item.id})`
+      ? `@${item.name}`
       : `@[${item.name}](checklist:${item.id})`
 
     const newMessage = beforeMention + mentionText + ' ' + afterMention
@@ -1235,7 +1142,85 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     )
   }
 
+  // Filter tasks: only show top-level tasks (no parent_id) and group subtasks with their parents
+  const filteredTasks = tasks.filter(task => {
+    // Only show top-level tasks (no parent_id)
+    if (task.parent_id) return false
+    // Apply status filter
+    if (statusFilter === 'all') return true
+    return task.status === statusFilter
+  })
 
+  // Extract shared content from comments
+  const sharedContent = useMemo(() => {
+    const images: Array<{ url: string; name: string; date: string; taskId: string }> = []
+    const files: Array<{ url: string; name: string; size?: number; date: string; taskId: string }> = []
+    const links: Array<{ url: string; title: string; date: string; taskId: string }> = []
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+
+    allComments.forEach(comment => {
+      const taskId = comment.task_id || ''
+
+      // 1. Process explicit images/files
+      if (comment.file_url) {
+        const url = comment.file_url
+        const name = comment.comment || getFileNameFromUrl(url)
+        const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i)
+
+        if (isImage) {
+          images.push({ url, name, date: comment.created_at, taskId })
+        } else {
+          files.push({
+            url,
+            name,
+            size: (comment as any).file_size,
+            date: comment.created_at,
+            taskId
+          })
+        }
+      }
+
+      // 2. Process [FILE_URLS: ...] pattern
+      if (comment.comment) {
+        const fileUrlsMatch = comment.comment.match(/\[FILE_URLS:\s*([^\]]+)\]/)
+        if (fileUrlsMatch) {
+          const urls = fileUrlsMatch[1].trim().split(/\s+/)
+          urls.forEach(url => {
+            const name = getFileNameFromUrl(url)
+            const isImage = url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i)
+            if (isImage) {
+              images.push({ url, name, date: comment.created_at, taskId })
+            } else {
+              files.push({ url, name, date: comment.created_at, taskId })
+            }
+          })
+        }
+
+        // 3. Extract links (excluding file URL blocks)
+        const cleanComment = comment.comment.replace(/\[FILE_URLS:[^\]]+\]/g, '')
+        const matches = cleanComment.match(urlRegex)
+        if (matches) {
+          matches.forEach(url => {
+            try {
+              const domain = new URL(url).hostname.replace('www.', '')
+              links.push({ url, title: domain, date: comment.created_at, taskId })
+            } catch (e) {
+              // Not a valid URL
+            }
+          })
+        }
+      }
+    })
+
+    // Sort by date descending
+    const sortByDate = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
+
+    return {
+      images: images.sort(sortByDate),
+      files: files.sort(sortByDate),
+      links: links.sort(sortByDate)
+    }
+  }, [allComments])
 
   const taskCounts = {
     all: tasks.length,
@@ -1246,7 +1231,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   }
 
   return (
-    <div className={mode === 'chat-only' ? 'h-full flex flex-col' : 'space-y-6'}>
+    <div className="space-y-6">
       {/* Header - Only show in full mode */}
       {mode !== 'chat-only' && (
         <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -1925,9 +1910,10 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
         </div>
       ))}
 
+      {/* Chat Section - Only show in chat-only mode */}
       {mode === 'chat-only' && (
-        <div className="flex flex-col h-full w-full overflow-hidden bg-transparent">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between shrink-0 bg-white">
+        <div className="bg-white rounded-xl shadow-sm border">
+          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-900">Trao đổi</h3>
@@ -1942,7 +1928,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
             </button>
           </div>
 
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex h-[600px]">
             <div className="flex-1 flex flex-col min-w-0 border-r border-gray-100">
               {loadingComments ? (
                 <div className="flex-1 flex items-center justify-center">
@@ -1957,295 +1943,427 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto p-4 space-y-4" data-chat-container>
-                  {allComments.length > messageLimit && (
+                  {allComments.filter(comment => !comment.parent_id).length > messageLimit && (
                     <div className="text-center pb-2">
                       <button
                         onClick={() => setMessageLimit(prev => prev + 20)}
                         className="text-xs text-blue-600 hover:underline font-medium"
                       >
-                        Xem thêm tin nhắn cũ ({allComments.length - messageLimit} tin nhắn khác)
+                        Xem thêm tin nhắn cũ ({allComments.filter(comment => !comment.parent_id).length - messageLimit} tin nhắn khác)
                       </button>
                     </div>
                   )}
                   {allComments
+                    .filter(comment => !comment.parent_id) // Only show top-level comments
                     .slice(-messageLimit) // Show last N comments (most recent)
                     .map((comment, index, arr) => {
-                      const prevComment = index > 0 ? arr[index - 1] : null
-                      const nextComment = index < arr.length - 1 ? arr[index + 1] : null
-
-                      const isMine = user && (
-                        (comment.user_id && user.id === comment.user_id) ||
-                        (comment.employee_id && user.id === comment.employee_id) ||
-                        (comment.id?.startsWith('temp-'))
-                      )
-
-                      const isSameSenderAsPrev = prevComment && (
-                        (prevComment.user_id && prevComment.user_id === comment.user_id) ||
-                        (prevComment.employee_id && prevComment.employee_id === comment.employee_id)
-                      )
-
-                      const isGroupedWithPrev = isSameSenderAsPrev && (new Date(comment.created_at).getTime() - new Date(prevComment.created_at).getTime()) / 1000 / 60 < 5
-                      const isGroupedWithNext = nextComment && ((nextComment.user_id && nextComment.user_id === comment.user_id) || (nextComment.employee_id && nextComment.employee_id === comment.employee_id)) && (new Date(nextComment.created_at).getTime() - new Date(comment.created_at).getTime()) / 1000 / 60 < 5
-
-                      const isFirstInGroup = !isGroupedWithPrev
-                      const isLastInGroup = !isGroupedWithNext
-
                       const task = tasks.find(t => t.id === comment.task_id)
                       const isNewMessage = comment.id?.startsWith('temp-') || (index === arr.length - 1 && new Date(comment.created_at).getTime() > Date.now() - 10000)
-
-                      // Parent comment for Quote logic
-                      const parentComment = comment.parent_id ? allComments.find(c => c.id === comment.parent_id) : null
-
                       return (
                         <div
                           key={comment.id}
-                          data-comment-id={comment.id}
-                          className={`flex w-full mb-1 ${isMine ? 'justify-end' : 'justify-start'} ${isFirstInGroup ? 'mt-4' : 'mt-0.5'}`}
+                          className={`group ${isNewMessage ? 'animate-fade-in bg-blue-50/30 border-l-4 border-blue-500' : ''}`}
                         >
-                          <div className={`flex max-w-[85%] md:max-w-[70%] ${isMine ? 'flex-row-reverse' : 'flex-row'} items-end gap-2 group`}>
-                            {/* Avatar - Only show for others and only for the last message in a group */}
-                            {!isMine ? (
-                              <div className="w-8 shrink-0 flex flex-col items-center">
-                                {isLastInGroup ? (
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-sm"
-                                    title={getDisplayName(comment)}>
-                                    {getDisplayName(comment).charAt(0).toUpperCase()}
-                                  </div>
-                                ) : (
-                                  <div className="w-8" />
-                                )}
-                              </div>
-                            ) : null}
-
-                            <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} min-w-0`}>
-                              {/* Name - Only show for others and only for the first message in a group */}
-                              {!isMine && isFirstInGroup && (
-                                <span className="text-[11px] font-semibold text-gray-500 mb-1 ml-1 px-1">
+                          <div className="flex gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0"
+                              title={getDisplayName(comment)}>
+                              {getDisplayName(comment).charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 space-y-1 min-w-0">
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="font-semibold text-gray-900">
                                   {getDisplayName(comment)}
                                 </span>
-                              )}
-
-                              <div className="relative group">
-                                <div
-                                  className={`
-                                    relative p-3 text-sm shadow-sm transition-all duration-200
-                                    ${isMine
-                                      ? 'bg-blue-500 text-white rounded-2xl rounded-tr-sm'
-                                      : 'bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-sm'
-                                    }
-                                    ${isNewMessage ? 'animate-pulse ring-2 ring-blue-400' : ''}
-                                    ${isMine && !isLastInGroup ? 'rounded-br-sm' : ''}
-                                    ${isMine && !isFirstInGroup ? 'rounded-tr-sm' : ''}
-                                    ${!isMine && !isLastInGroup ? 'rounded-bl-sm' : ''}
-                                    ${!isMine && !isFirstInGroup ? 'rounded-tl-sm' : ''}
-                                  `}
-                                >
-                                  {/* Facebook/Zalo Style Quote Box */}
-                                  {parentComment && (
-                                    <div
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        const el = document.querySelector(`[data-comment-id="${parentComment.id}"]`)
-                                        if (el) {
-                                          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                                          el.classList.add('animate-pulse-brief')
-                                          setTimeout(() => el.classList.remove('animate-pulse-brief'), 2000)
-                                        }
-                                      }}
-                                      className={`
-                                        mb-2 p-2 rounded-lg border-l-2 text-[11px] flex flex-col gap-0.5 cursor-pointer transition-all hover:bg-opacity-80 active:scale-[0.98]
-                                        ${isMine
-                                          ? 'bg-blue-600/30 border-blue-200/50 text-blue-50'
-                                          : 'bg-gray-100 border-gray-300 text-gray-500'}
-                                      `}
-                                    >
-                                      <div className="font-bold flex items-center gap-1">
-                                        <Reply className="h-2.5 w-2.5 rotate-180" />
-                                        <span>{getDisplayName(parentComment)}</span>
-                                      </div>
-                                      <div className="line-clamp-1 italic opacity-80">
-                                        {parentComment.type === 'image' ? 'Đã gửi một ảnh' :
-                                          parentComment.type === 'file' ? 'Đã gửi một tệp' :
-                                            parentComment.comment}
-                                      </div>
-                                    </div>
-                                  )}
-
-
-                                  {/* Media Content */}
-                                  {comment.type === 'image' && comment.file_url && (
-                                    <div className="mb-2 -mx-1 -mt-1 overflow-hidden rounded-lg">
-                                      <img
-                                        src={comment.file_url}
-                                        alt="Attachment"
-                                        className="max-w-full max-h-64 object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
-                                        onClick={() => {
-                                          const imgIdx = sharedContent.images.findIndex(img => img.url === comment.file_url)
-                                          if (imgIdx !== -1) setZoomedImage({ url: comment.file_url!, index: imgIdx })
-                                        }}
-                                      />
-                                    </div>
-                                  )}
-
-                                  {comment.type === 'file' && comment.file_url && (
-                                    <a
-                                      href={comment.file_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className={`
-                                        flex items-center gap-3 p-2 rounded-lg mb-2 transition-colors
-                                        ${isMine ? 'bg-blue-700/50 hover:bg-blue-700/70' : 'bg-gray-50 hover:bg-gray-100'}
-                                      `}
-                                    >
-                                      <div className={`h-8 w-8 rounded flex items-center justify-center shrink-0 ${isMine ? 'bg-white/20' : 'bg-blue-50'}`}>
-                                        {(() => {
-                                          let fileName = comment.comment || (comment as any).file_name || ''
-                                          if (comment.file_url) {
-                                            const urlParts = comment.file_url.split('/')
-                                            const nameFromUrl = urlParts[urlParts.length - 1].split('?')[0]
-                                            if (nameFromUrl.includes('.')) fileName = nameFromUrl
-                                          }
-                                          const iconPath = getFileIconPath('', fileName)
-                                          return iconPath ? <img src={iconPath} className="h-5 w-5" /> : <Paperclip className={`h-4 w-4 ${isMine ? 'text-white' : 'text-blue-500'}`} />
-                                        })()}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className={`text-xs font-medium truncate ${isMine ? 'text-white' : 'text-gray-900'}`}>
-                                          {comment.comment || 'File đính kèm'}
-                                        </p>
-                                        <p className={`text-[10px] ${isMine ? 'text-blue-100' : 'text-gray-500'}`}>
-                                          Tải xuống
-                                        </p>
-                                      </div>
-                                    </a>
-                                  )}
-
-                                  {/* Text Content */}
-                                  {comment.comment && comment.type === 'text' && (
-                                    <p className="whitespace-pre-wrap break-words leading-relaxed">
-                                      {(() => {
-                                        const text = comment.comment
-                                        // Match both custom @[Name](type:id) format and basic @Name format
-                                        const mentionRegex = /(@|#)?\[([^\]]+)\]\(([^)]+)\)|(@\w+)/g
-                                        const parts = []
-                                        let lastIndex = 0
-                                        let match
-
-                                        while ((match = mentionRegex.exec(text)) !== null) {
-                                          // Add plain text before match
-                                          if (match.index > lastIndex) {
-                                            parts.push({ type: 'text', content: text.substring(lastIndex, match.index) })
-                                          }
-
-                                          if (match[2]) {
-                                            // Handle @[Name](type:id) format
-                                            const name = match[2]
-                                            const info = match[3] // e.g. "member:uuid" or "checklist:uuid"
-                                            const [type, id] = info.includes(':') ? info.split(':') : ['member', info]
-                                            parts.push({ type: type as any, content: name, id })
-                                          } else if (match[4]) {
-                                            // Handle @Name format
-                                            parts.push({ type: 'member', content: match[4].substring(1) })
-                                          }
-
-                                          lastIndex = mentionRegex.lastIndex
-                                        }
-
-                                        // Add remaining text
-                                        if (lastIndex < text.length) {
-                                          parts.push({ type: 'text', content: text.substring(lastIndex) })
-                                        }
-
-                                        return parts.map((part, idx) => {
-                                          if (part.type === 'member') {
-                                            return (
-                                              <span
-                                                key={idx}
-                                                className={`font-semibold cursor-pointer underline-offset-2 hover:underline ${isMine ? 'text-blue-100' : 'text-blue-600'}`}
-                                                title={part.id ? `ID: ${part.id}` : undefined}
-                                              >
-                                                @{part.content}
-                                              </span>
-                                            )
-                                          }
-                                          if (part.type === 'checklist') {
-                                            return (
-                                              <span
-                                                key={idx}
-                                                onClick={() => {
-                                                  if (part.id) {
-                                                    const el = document.querySelector(`[data-checklist-item-id="${part.id}"]`)
-                                                    if (el) {
-                                                      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                                                      el.classList.add('animate-highlight')
-                                                      setTimeout(() => el.classList.remove('animate-highlight'), 3000)
-                                                    }
-                                                  }
-                                                }}
-                                                className={`font-semibold cursor-pointer italic underline-offset-2 hover:underline ${isMine ? 'bg-blue-500/30 text-blue-50 px-1 rounded' : 'bg-blue-50 text-blue-700 px-1 rounded'}`}
-                                              >
-                                                #{part.content}
-                                              </span>
-                                            )
-                                          }
-                                          return <span key={idx}>{part.content}</span>
-                                        })
-                                      })()}
-                                    </p>
-                                  )}
-
-                                  {/* Pinned Indicator */}
-                                  {comment.is_pinned && (
-                                    <div className={`flex items-center gap-1 mt-1 ${isMine ? 'text-blue-100' : 'text-blue-600'} text-[10px]`}>
-                                      <Pin className="h-2.5 w-2.5 fill-current" />
-                                      <span>Đã ghim</span>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Floating Actions - Show on hover next to bubble */}
-                                <div className={`
-                                  absolute top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10
-                                  ${isMine ? 'right-full mr-2 flex-row-reverse' : 'left-full ml-2 flex-row'}
-                                `}>
-                                  <button
-                                    onClick={() => handleReply(comment)}
-                                    className="p-1.5 bg-white shadow-md border border-gray-100 rounded-full text-gray-500 hover:text-blue-600 hover:scale-110 transition-all"
-                                    title="Trả lời"
-                                  >
-                                    <Reply className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleTogglePin(comment)}
-                                    className={`p-1.5 bg-white shadow-md border border-gray-100 rounded-full ${comment.is_pinned ? 'text-blue-600' : 'text-gray-500'} hover:scale-110 transition-all`}
-                                    title={comment.is_pinned ? 'Bỏ ghim' : 'Ghim'}
-                                  >
-                                    <Pin className="h-3.5 w-3.5" />
-                                  </button>
-                                  {canManageComment(comment) && (
-                                    <button
-                                      onClick={() => handleDeleteComment(comment)}
-                                      className="p-1.5 bg-white shadow-md border border-gray-100 rounded-full text-red-400 hover:text-red-600 hover:scale-110 transition-all"
-                                      title="Xóa"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Footer - Time - Only show for last message in group or when hovering */}
-                              {isLastInGroup && (
-                                <span className={`text-[10px] text-gray-400 mt-1 px-1 ${isMine ? 'text-right' : 'text-left'}`}>
+                                <span className="text-gray-500">
                                   {formatDate(comment.created_at, true)}
                                 </span>
+                                {comment.is_pinned && (
+                                  <span className="flex items-center gap-1 text-blue-600">
+                                    <Pin className="h-3 w-3" />
+                                    <span className="text-xs">Đã ghim</span>
+                                  </span>
+                                )}
+                                {task && (
+                                  <span
+                                    className="text-xs text-blue-600 hover:underline cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      router.push(`/tasks/${comment.task_id}`)
+                                    }}
+                                  >
+                                    • {task.title}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 border border-gray-200">
+                                {comment.type === 'image' && comment.file_url && (
+                                  <img
+                                    src={comment.file_url}
+                                    alt="Attachment"
+                                    className="max-w-full max-h-48 rounded mb-2"
+                                  />
+                                )}
+                                {comment.type === 'file' && comment.file_url && (
+                                  <a
+                                    href={comment.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-2 px-3 py-2 mb-2 rounded-lg text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors"
+                                  >
+                                    {(() => {
+                                      // Get file name from comment (which usually contains the file name) or file_name field
+                                      // Extract file name from URL if needed
+                                      let fileName = comment.comment || (comment as any).file_name || ''
+
+                                      // Always try to extract from URL if we have it (most reliable)
+                                      if (comment.file_url) {
+                                        const urlParts = comment.file_url.split('/')
+                                        const lastPart = urlParts[urlParts.length - 1]
+                                        const nameFromUrl = lastPart.split('?')[0] // Remove query params
+                                        if (nameFromUrl && nameFromUrl.includes('.')) {
+                                          fileName = nameFromUrl
+                                        } else if (!fileName && nameFromUrl) {
+                                          fileName = nameFromUrl
+                                        }
+                                      }
+
+                                      // Fallback to generic name if still empty
+                                      if (!fileName || fileName === 'File đính kèm') {
+                                        fileName = 'File đính kèm'
+                                      }
+
+                                      const fileType = (comment as any).file_type || ''
+                                      const iconPath = getFileIconPath(fileType, fileName)
+
+                                      if (iconPath) {
+                                        return <img src={iconPath} alt={fileName} className="h-4 w-4 object-contain flex-shrink-0" onError={(e) => {
+                                          console.error('Failed to load icon:', iconPath)
+                                          e.currentTarget.style.display = 'none'
+                                        }} />
+                                      }
+                                      return <Paperclip className="h-3.5 w-3.5" />
+                                    })()}
+                                    <span className="truncate max-w-[200px]">
+                                      {comment.comment || 'File đính kèm'}
+                                    </span>
+                                  </a>
+                                )}
+                                {comment.comment && comment.type === 'text' && (
+                                  <p className="whitespace-pre-wrap">
+                                    {(() => {
+                                      let text = comment.comment
+                                      const parts: Array<{ type: 'text' | 'checklist' | 'member'; content: string; name?: string; checklistId?: string }> = []
+
+                                      // Find all checklist mentions: @[name](checklist:id)
+                                      const checklistRegex = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
+                                      let checklistMatch
+                                      let lastIndex = 0
+
+                                      while ((checklistMatch = checklistRegex.exec(text)) !== null) {
+                                        // Add text before mention
+                                        if (checklistMatch.index > lastIndex) {
+                                          const beforeText = text.substring(lastIndex, checklistMatch.index)
+                                          if (beforeText) {
+                                            // Check for member mentions in before text
+                                            const memberParts = beforeText.split(/(@\s*\w+)/g)
+                                            memberParts.forEach((part) => {
+                                              if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                                const memberName = part.trim().substring(1).trim()
+                                                parts.push({ type: 'member', content: part, name: memberName })
+                                              } else if (part) {
+                                                parts.push({ type: 'text', content: part })
+                                              }
+                                            })
+                                          }
+                                        }
+
+                                        // Add checklist mention with ID
+                                        const [, name, checklistId] = checklistMatch
+                                        parts.push({ type: 'checklist', content: checklistMatch[0], name, checklistId })
+                                        lastIndex = checklistRegex.lastIndex
+                                      }
+
+                                      // Add remaining text
+                                      if (lastIndex < text.length) {
+                                        const remainingText = text.substring(lastIndex)
+                                        if (remainingText) {
+                                          // Check for member mentions in remaining text
+                                          const memberParts = remainingText.split(/(@\s*\w+)/g)
+                                          memberParts.forEach((part) => {
+                                            if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                              const memberName = part.trim().substring(1).trim()
+                                              parts.push({ type: 'member', content: part, name: memberName })
+                                            } else if (part) {
+                                              parts.push({ type: 'text', content: part })
+                                            }
+                                          })
+                                        }
+                                      }
+
+                                      // If no mentions found, check for member mentions only
+                                      if (parts.length === 0) {
+                                        const memberParts = text.split(/(@\s*\w+)/g)
+                                        memberParts.forEach((part) => {
+                                          if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                            const memberName = part.trim().substring(1).trim()
+                                            parts.push({ type: 'member', content: part, name: memberName })
+                                          } else if (part) {
+                                            parts.push({ type: 'text', content: part })
+                                          }
+                                        })
+                                      }
+
+                                      return parts.map((part, idx) => {
+                                        if (part.type === 'checklist' && part.name && part.checklistId) {
+                                          return (
+                                            <span
+                                              key={idx}
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                // Scroll to checklist item
+                                                const checklistItemElement = document.querySelector(`[data-checklist-item-id="${part.checklistId}"]`)
+                                                if (checklistItemElement) {
+                                                  checklistItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                                  // Highlight briefly
+                                                  checklistItemElement.classList.add('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                                  setTimeout(() => {
+                                                    checklistItemElement.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                                  }, 2000)
+                                                }
+                                              }}
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-md font-bold cursor-pointer hover:bg-green-200 transition-colors"
+                                              title="Click để xem việc cần làm"
+                                            >
+                                              <CheckSquare className="h-3 w-3" />
+                                              {part.name}
+                                            </span>
+                                          )
+                                        } else if (part.type === 'member' && part.name) {
+                                          return (
+                                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md font-bold">
+                                              <User className="h-3 w-3" />
+                                              {part.name}
+                                            </span>
+                                          )
+                                        } else {
+                                          return <span key={idx}>{part.content}</span>
+                                        }
+                                      })
+                                    })()}
+                                  </p>
+                                )}
+                              </div>
+                              {/* Actions */}
+                              <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleReply(comment)
+                                  }}
+                                  className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1"
+                                >
+                                  <Reply className="h-3 w-3" />
+                                  Trả lời
+                                </button>
+                                {canManageComment(comment) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeleteComment(comment)
+                                    }}
+                                    className="text-xs text-red-500 hover:underline"
+                                  >
+                                    Xóa
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleTogglePin(comment)
+                                  }}
+                                  className="text-xs text-gray-500 hover:text-blue-600"
+                                >
+                                  {comment.is_pinned ? 'Bỏ ghim' : 'Ghim'}
+                                </button>
+                              </div>
+                              {comment.replies && comment.replies.length > 0 && (
+                                <div className="ml-4 mt-2 space-y-2">
+                                  {comment.replies.map((reply) => (
+                                    <div key={reply.id} className="flex gap-2">
+                                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm shrink-0">
+                                        {getDisplayName(reply).charAt(0).toUpperCase()}
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 text-xs mb-1">
+                                          <span className="font-semibold text-gray-900">
+                                            {getDisplayName(reply)}
+                                          </span>
+                                          <span className="text-gray-500">
+                                            {formatDate(reply.created_at, true)}
+                                          </span>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-lg p-2 text-xs text-gray-700 border border-gray-200">
+                                          {reply.type === 'image' && reply.file_url && (
+                                            <img
+                                              src={reply.file_url}
+                                              alt="Attachment"
+                                              className="max-w-full max-h-32 rounded mb-1"
+                                            />
+                                          )}
+                                          {reply.type === 'file' && reply.file_url && (
+                                            <a
+                                              href={reply.file_url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="inline-flex items-center gap-1 px-2 py-1 mb-1 rounded text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
+                                            >
+                                              {(() => {
+                                                // Get file name from comment (which usually contains the file name) or file_name field
+                                                // Extract file name from URL if needed
+                                                let fileName = reply.comment || (reply as any).file_name || ''
+
+                                                // Always try to extract from URL if we have it (most reliable)
+                                                if (reply.file_url) {
+                                                  const urlParts = reply.file_url.split('/')
+                                                  const lastPart = urlParts[urlParts.length - 1]
+                                                  const nameFromUrl = lastPart.split('?')[0] // Remove query params
+                                                  if (nameFromUrl && nameFromUrl.includes('.')) {
+                                                    fileName = nameFromUrl
+                                                  } else if (!fileName && nameFromUrl) {
+                                                    fileName = nameFromUrl
+                                                  }
+                                                }
+
+                                                // Fallback to generic name if still empty
+                                                if (!fileName || fileName === 'File đính kèm') {
+                                                  fileName = 'File đính kèm'
+                                                }
+
+                                                const fileType = (reply as any).file_type || ''
+                                                const iconPath = getFileIconPath(fileType, fileName)
+
+                                                if (iconPath) {
+                                                  return <img src={iconPath} alt={fileName} className="h-3.5 w-3.5 object-contain flex-shrink-0" onError={(e) => {
+                                                    console.error('Failed to load icon:', iconPath)
+                                                    e.currentTarget.style.display = 'none'
+                                                  }} />
+                                                }
+                                                return <Paperclip className="h-3 w-3" />
+                                              })()}
+                                              <span className="truncate max-w-[150px]">
+                                                {reply.comment || 'File đính kèm'}
+                                              </span>
+                                            </a>
+                                          )}
+                                          {reply.comment && reply.type === 'text' && (
+                                            <p className="whitespace-pre-wrap">
+                                              {(() => {
+                                                let text = reply.comment
+                                                const parts: Array<{ type: 'text' | 'checklist' | 'member'; content: string; name?: string; checklistId?: string }> = []
+
+                                                // Find all checklist mentions: @[name](checklist:id)
+                                                const checklistRegex = /@\[([^\]]+)\]\(checklist:([^)]+)\)/g
+                                                let checklistMatch
+                                                let lastIndex = 0
+
+                                                while ((checklistMatch = checklistRegex.exec(text)) !== null) {
+                                                  if (checklistMatch.index > lastIndex) {
+                                                    const beforeText = text.substring(lastIndex, checklistMatch.index)
+                                                    if (beforeText) {
+                                                      const memberParts = beforeText.split(/(@\s*\w+)/g)
+                                                      memberParts.forEach((part) => {
+                                                        if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                                          const memberName = part.trim().substring(1).trim()
+                                                          parts.push({ type: 'member', content: part, name: memberName })
+                                                        } else if (part) {
+                                                          parts.push({ type: 'text', content: part })
+                                                        }
+                                                      })
+                                                    }
+                                                  }
+
+                                                  const [, name, checklistId] = checklistMatch
+                                                  parts.push({ type: 'checklist', content: checklistMatch[0], name, checklistId })
+                                                  lastIndex = checklistRegex.lastIndex
+                                                }
+
+                                                if (lastIndex < text.length) {
+                                                  const remainingText = text.substring(lastIndex)
+                                                  if (remainingText) {
+                                                    const memberParts = remainingText.split(/(@\s*\w+)/g)
+                                                    memberParts.forEach((part) => {
+                                                      if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                                        const memberName = part.trim().substring(1).trim()
+                                                        parts.push({ type: 'member', content: part, name: memberName })
+                                                      } else if (part) {
+                                                        parts.push({ type: 'text', content: part })
+                                                      }
+                                                    })
+                                                  }
+                                                }
+
+                                                if (parts.length === 0) {
+                                                  const memberParts = text.split(/(@\s*\w+)/g)
+                                                  memberParts.forEach((part) => {
+                                                    if (part && part.trim().startsWith('@') && part.trim().length > 1) {
+                                                      const memberName = part.trim().substring(1).trim()
+                                                      parts.push({ type: 'member', content: part, name: memberName })
+                                                    } else if (part) {
+                                                      parts.push({ type: 'text', content: part })
+                                                    }
+                                                  })
+                                                }
+
+                                                return parts.map((part, idx) => {
+                                                  if (part.type === 'checklist' && part.name && part.checklistId) {
+                                                    return (
+                                                      <span
+                                                        key={idx}
+                                                        onClick={(e) => {
+                                                          e.stopPropagation()
+                                                          const checklistItemElement = document.querySelector(`[data-checklist-item-id="${part.checklistId}"]`)
+                                                          if (checklistItemElement) {
+                                                            checklistItemElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                                            checklistItemElement.classList.add('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                                            setTimeout(() => {
+                                                              checklistItemElement.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2', 'rounded-md')
+                                                            }, 2000)
+                                                          }
+                                                        }}
+                                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded-md font-bold text-xs cursor-pointer hover:bg-green-200 transition-colors"
+                                                        title="Click để xem việc cần làm"
+                                                      >
+                                                        <CheckSquare className="h-2.5 w-2.5" />
+                                                        {part.name}
+                                                      </span>
+                                                    )
+                                                  } else if (part.type === 'member' && part.name) {
+                                                    return (
+                                                      <span key={idx} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-md font-bold text-xs">
+                                                        <User className="h-2.5 w-2.5" />
+                                                        {part.name}
+                                                      </span>
+                                                    )
+                                                  } else {
+                                                    return <span key={idx}>{part.content}</span>
+                                                  }
+                                                })
+                                              })()}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </div>
                         </div>
                       )
-                    })
-                  }
+                    })}
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -2416,7 +2534,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                   <button
                     onClick={handleSendMessage}
                     disabled={sendingMessage || (!chatMessage.trim() && pendingFiles.length === 0) || !selectedTaskId}
-                    className="p-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Send className="h-5 w-5" />
                   </button>
@@ -2425,200 +2543,193 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
             </div>
 
             {/* Information Panel */}
-            {
-              showInfoPanel && (
-                <div className="w-80 border-l border-gray-200 overflow-y-auto bg-gray-50/50 flex flex-col">
-                  <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
-                    <h4 className="font-semibold text-gray-900">Thông tin hội thoại</h4>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                    {/* Images Section */}
-                    <section>
-                      <div className="flex items-center justify-between mb-3">
-                        <h5 className="text-sm font-semibold text-gray-700">Ảnh/Video đã gửi</h5>
-                        {sharedContent.images.length > 6 && (
-                          <button
-                            onClick={() => setShowAllImages(!showAllImages)}
-                            className="text-xs text-blue-600 hover:underline"
-                          >
-                            {showAllImages ? 'Thu gọn' : 'Xem tất cả'}
-                          </button>
-                        )}
-                      </div>
-                      {sharedContent.images.length === 0 ? (
-                        <p className="text-xs text-gray-400 italic">Chưa có ảnh/video nào</p>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-1">
-                          {sharedContent.images.slice(0, showAllImages ? undefined : 6).map((img, idx) => (
-                            <div
-                              key={idx}
-                              className="aspect-square rounded overflow-hidden cursor-pointer border border-gray-200 hover:opacity-90 transition-opacity bg-gray-100"
-                              onClick={() => setZoomedImage({ url: img.url, index: idx })}
-                            >
-                              <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-
-                    {/* Files Section */}
-                    <section>
-                      <div className="flex items-center justify-between mb-3">
-                        <h5 className="text-sm font-semibold text-gray-700">File đã gửi</h5>
-                        {sharedContent.files.length > 3 && (
-                          <button
-                            onClick={() => setShowAllFiles(!showAllFiles)}
-                            className="text-xs text-blue-600 hover:underline"
-                          >
-                            {showAllFiles ? 'Thu gọn' : 'Xem tất cả'}
-                          </button>
-                        )}
-                      </div>
-                      {sharedContent.files.length === 0 ? (
-                        <p className="text-xs text-gray-400 italic">Chưa có file nào</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {sharedContent.files.slice(0, showAllFiles ? undefined : 3).map((file, idx) => (
-                            <a
-                              key={idx}
-                              href={file.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors group"
-                            >
-                              <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
-                                {(() => {
-                                  const fileName = file.name || getFileNameFromUrl(file.url)
-                                  const iconPath = getFileIconPath('', fileName)
-                                  if (iconPath) return <img src={iconPath} alt="" className="h-6 w-6" />
-                                  return <File className="h-5 w-5 text-gray-500" />
-                                })()}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-gray-900 truncate">{file.name}</p>
-                                <p className="text-[10px] text-gray-500">{formatDate(file.date, false)}</p>
-                              </div>
-                              <Download className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-
-                    {/* Links Section */}
-                    <section>
-                      <div className="flex items-center justify-between mb-3">
-                        <h5 className="text-sm font-semibold text-gray-700">Link đã gửi</h5>
-                        {sharedContent.links.length > 3 && (
-                          <button
-                            onClick={() => setShowAllLinks(!showAllLinks)}
-                            className="text-xs text-blue-600 hover:underline"
-                          >
-                            {showAllLinks ? 'Thu gọn' : 'Xem tất cả'}
-                          </button>
-                        )}
-                      </div>
-                      {sharedContent.links.length === 0 ? (
-                        <p className="text-xs text-gray-400 italic">Chưa có link nào</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {sharedContent.links.slice(0, showAllLinks ? undefined : 3).map((link, idx) => (
-                            <a
-                              key={idx}
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors group"
-                            >
-                              <div className="h-10 w-10 rounded bg-blue-50 flex items-center justify-center shrink-0 text-blue-600">
-                                <ExternalLink className="h-5 w-5" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-gray-900 truncate">{link.title}</p>
-                                <p className="text-[10px] text-gray-500 truncate">{link.url}</p>
-                              </div>
-                              <ChevronRight className="h-4 w-4 text-gray-400" />
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  </div>
+            {showInfoPanel && (
+              <div className="w-80 border-l border-gray-200 overflow-y-auto bg-gray-50/50 flex flex-col">
+                <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
+                  <h4 className="font-semibold text-gray-900">Thông tin hội thoại</h4>
                 </div>
-              )
-            }
-          </div >
-        </div >
-      )
-      }
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                  {/* Images Section */}
+                  <section>
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="text-sm font-semibold text-gray-700">Ảnh/Video đã gửi</h5>
+                      {sharedContent.images.length > 6 && (
+                        <button
+                          onClick={() => setShowAllImages(!showAllImages)}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          {showAllImages ? 'Thu gọn' : 'Xem tất cả'}
+                        </button>
+                      )}
+                    </div>
+                    {sharedContent.images.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">Chưa có ảnh/video nào</p>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-1">
+                        {sharedContent.images.slice(0, showAllImages ? undefined : 6).map((img, idx) => (
+                          <div
+                            key={idx}
+                            className="aspect-square rounded overflow-hidden cursor-pointer border border-gray-200 hover:opacity-90 transition-opacity bg-gray-100"
+                            onClick={() => setZoomedImage({ url: img.url, index: idx })}
+                          >
+                            <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Files Section */}
+                  <section>
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="text-sm font-semibold text-gray-700">File đã gửi</h5>
+                      {sharedContent.files.length > 3 && (
+                        <button
+                          onClick={() => setShowAllFiles(!showAllFiles)}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          {showAllFiles ? 'Thu gọn' : 'Xem tất cả'}
+                        </button>
+                      )}
+                    </div>
+                    {sharedContent.files.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">Chưa có file nào</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {sharedContent.files.slice(0, showAllFiles ? undefined : 3).map((file, idx) => (
+                          <a
+                            key={idx}
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors group"
+                          >
+                            <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                              {(() => {
+                                const fileName = file.name || getFileNameFromUrl(file.url)
+                                const iconPath = getFileIconPath('', fileName)
+                                if (iconPath) return <img src={iconPath} alt="" className="h-6 w-6" />
+                                return <File className="h-5 w-5 text-gray-500" />
+                              })()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-900 truncate">{file.name}</p>
+                              <p className="text-[10px] text-gray-500">{formatDate(file.date, false)}</p>
+                            </div>
+                            <Download className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Links Section */}
+                  <section>
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="text-sm font-semibold text-gray-700">Link đã gửi</h5>
+                      {sharedContent.links.length > 3 && (
+                        <button
+                          onClick={() => setShowAllLinks(!showAllLinks)}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          {showAllLinks ? 'Thu gọn' : 'Xem tất cả'}
+                        </button>
+                      )}
+                    </div>
+                    {sharedContent.links.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">Chưa có link nào</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {sharedContent.links.slice(0, showAllLinks ? undefined : 3).map((link, idx) => (
+                          <a
+                            key={idx}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors group"
+                          >
+                            <div className="h-10 w-10 rounded bg-blue-50 flex items-center justify-center shrink-0 text-blue-600">
+                              <ExternalLink className="h-5 w-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-900 truncate">{link.title}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{link.url}</p>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Image Zoom Modal */}
-      {
-        zoomedImage && sharedContent.images[zoomedImage.index] && (
-          <div
-            className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 md:p-10"
+      {zoomedImage && sharedContent.images[zoomedImage.index] && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 md:p-10"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button
+            className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 rounded-full transition-colors"
             onClick={() => setZoomedImage(null)}
           >
-            <button
-              className="absolute top-4 right-4 p-2 text-white hover:bg-white/10 rounded-full transition-colors"
-              onClick={() => setZoomedImage(null)}
-            >
-              <X className="h-8 w-8" />
-            </button>
+            <X className="h-8 w-8" />
+          </button>
 
-            <div className="relative max-w-full max-h-full flex items-center justify-center group" onClick={(e) => e.stopPropagation()}>
-              <img
-                src={sharedContent.images[zoomedImage.index].url}
-                alt={sharedContent.images[zoomedImage.index].name}
-                className="max-w-full max-h-[90vh] object-contain shadow-2xl"
-              />
+          <div className="relative max-w-full max-h-full flex items-center justify-center group" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={sharedContent.images[zoomedImage.index].url}
+              alt={sharedContent.images[zoomedImage.index].name}
+              className="max-w-full max-h-[90vh] object-contain shadow-2xl"
+            />
 
-              <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
-                <h4 className="text-lg font-semibold">{sharedContent.images[zoomedImage.index].name}</h4>
-                <p className="text-sm opacity-80">{formatDate(sharedContent.images[zoomedImage.index].date, true)}</p>
-              </div>
-
-              {zoomedImage.index > 0 && (
-                <button
-                  className="absolute left-4 p-3 text-white bg-black/20 hover:bg-black/40 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                  onClick={() => setZoomedImage({ ...zoomedImage, index: zoomedImage.index - 1 })}
-                >
-                  <ChevronLeft className="h-8 w-8" />
-                </button>
-              )}
-
-              {zoomedImage.index < sharedContent.images.length - 1 && (
-                <button
-                  className="absolute right-4 p-3 text-white bg-black/20 hover:bg-black/40 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                  onClick={() => setZoomedImage({ ...zoomedImage, index: zoomedImage.index + 1 })}
-                >
-                  <ChevronRight className="h-8 w-8" />
-                </button>
-              )}
+            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent text-white">
+              <h4 className="text-lg font-semibold">{sharedContent.images[zoomedImage.index].name}</h4>
+              <p className="text-sm opacity-80">{formatDate(sharedContent.images[zoomedImage.index].date, true)}</p>
             </div>
+
+            {zoomedImage.index > 0 && (
+              <button
+                className="absolute left-4 p-3 text-white bg-black/20 hover:bg-black/40 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                onClick={() => setZoomedImage({ ...zoomedImage, index: zoomedImage.index - 1 })}
+              >
+                <ChevronLeft className="h-8 w-8" />
+              </button>
+            )}
+
+            {zoomedImage.index < sharedContent.images.length - 1 && (
+              <button
+                className="absolute right-4 p-3 text-white bg-black/20 hover:bg-black/40 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                onClick={() => setZoomedImage({ ...zoomedImage, index: zoomedImage.index + 1 })}
+              >
+                <ChevronRight className="h-8 w-8" />
+              </button>
+            )}
           </div>
-        )
-      }
+        </div>
+      )}
 
       {/* Create Todo Modal */}
-      {
-        showCreateTodoModal && (
-          <CreateTodoModal
-            parentTaskId=""
-            projectId={projectId}
-            onClose={() => setShowCreateTodoModal(false)}
-            onSuccess={(newTask) => {
-              setShowCreateTodoModal(false)
-              // Refresh tasks after creating new task
-              fetchTasks()
-            }}
-            groupMembers={[]}
-          />
-        )
-      }
-    </div >
+      {showCreateTodoModal && (
+        <CreateTodoModal
+          parentTaskId=""
+          projectId={projectId}
+          onClose={() => setShowCreateTodoModal(false)}
+          onSuccess={(newTask) => {
+            setShowCreateTodoModal(false)
+            // Refresh tasks after creating new task
+            fetchTasks()
+          }}
+          groupMembers={[]}
+        />
+      )}
+    </div>
   )
 }
 

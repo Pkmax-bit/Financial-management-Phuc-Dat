@@ -509,7 +509,7 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
               </div>
 
               {/* Chat messages area with Zalo background pattern */}
-              <div className="flex-1 overflow-y-auto bg-[#e5ddd5]">
+              <div className="flex-1 flex flex-col min-h-0 bg-[#e5ddd5]">
                 {project && (
                   <ProjectTasksTab projectId={project.id} projectName={project.name} mode="chat-only" />
                 )}
