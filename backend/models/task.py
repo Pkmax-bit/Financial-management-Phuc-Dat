@@ -1,9 +1,8 @@
 """
 Task Management Models
 """
-from __future__ import annotations
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime, date
 from enum import Enum
 
@@ -116,7 +115,8 @@ class Task(BaseModel):
     comment_count: Optional[int] = 0
     attachment_count: Optional[int] = 0
     parent_id: Optional[str] = None
-    checklists: Optional[List[TaskChecklist]] = []
+    # Use generic list to avoid forward-ref issues in Pydantic v2
+    checklists: Optional[List[dict]] = []
 
 class TaskCreate(BaseModel):
     """Task creation model"""
@@ -133,6 +133,8 @@ class TaskCreate(BaseModel):
     assignee_ids: Optional[List[str]] = []  # Multiple assignees
     estimated_time: Optional[int] = 0
     parent_id: Optional[str] = None
+    # Store participants as generic dicts to avoid forward-ref issues
+    participants: Optional[List[dict]] = []
 
 class TaskUpdate(BaseModel):
     """Task update model"""
@@ -147,6 +149,7 @@ class TaskUpdate(BaseModel):
     accountable_person: Optional[str] = None
     project_id: Optional[str] = None
     estimated_time: Optional[int] = None
+    participants: Optional[List[dict]] = None  # Update participants list
 
 class TaskAssignment(BaseModel):
     """Task Assignment model"""
@@ -335,14 +338,13 @@ class TaskNoteUpdate(BaseModel):
 
 class TaskResponse(BaseModel):
     """Task response with related data"""
-    task: Task
-    assignments: List[TaskAssignment] = []
-    comments: List[TaskComment] = []
-    attachments: List[TaskAttachment] = []
-    checklists: List[TaskChecklist] = []
-    time_logs: List[TaskTimeLog] = []
-    participants: List[TaskParticipant] = []
-    participants: List[TaskParticipant] = []
-    notes: List[TaskNote] = []
-    sub_tasks: List[Task] = []
+    task: "Task"
+    assignments: List["TaskAssignment"] = []
+    comments: List["TaskComment"] = []
+    attachments: List["TaskAttachment"] = []
+    checklists: List["TaskChecklist"] = []
+    time_logs: List["TaskTimeLog"] = []
+    participants: List["TaskParticipant"] = []
+    notes: List["TaskNote"] = []
+    sub_tasks: List["Task"] = []
 

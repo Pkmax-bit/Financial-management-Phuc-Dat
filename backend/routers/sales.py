@@ -3924,8 +3924,8 @@ async def import_quotes_from_excel(
                 height = None
                 length = None
                 
-                # Try to get area from "Diện tích (m²)"
-                for area_col in ['Diện tích (m²)', 'Dien tich', 'Diện tích']:
+                # Try to get area from "Diện tích (m2)"
+                for area_col in ['Diện tích (m2)', 'Dien tich', 'Diện tích']:
                     if area_col in available_columns:
                         area_val = row.get(area_col, '')
                         if pd.notna(area_val) and str(area_val).strip():
@@ -4464,7 +4464,7 @@ async def import_quote_from_ai_analysis(
                 
                 # 1. Try exact match first (highest priority)
                 if exp_name == ten_san_pham or exp_name == search_text:
-                    print(f"✅ Exact match found: '{search_text[:50]}' → '{exp_name}' (expense_object_id: {exp_obj['id']})")
+                    print(f"✅ Exact match found: '{search_text[:50]}' -> '{exp_name}' (expense_object_id: {exp_obj['id']})")
                     return exp_obj['id']
                 
                 # 2. Try contains match (high priority)
@@ -4496,7 +4496,7 @@ async def import_quote_from_ai_analysis(
             if best_match:
                 matched_obj = next((eo for eo in expense_objects if eo['id'] == best_match), None)
                 matched_name = matched_obj.get('name', 'Unknown') if matched_obj else 'Unknown'
-                print(f"✅ Best match found: '{search_text[:50]}' → '{matched_name}' (expense_object_id: {best_match}, score: {best_score:.2f})")
+                print(f"✅ Best match found: '{search_text[:50]}' -> '{matched_name}' (expense_object_id: {best_match}, score: {best_score:.2f})")
             else:
                 print(f"❌ No match found for: '{search_text[:50]}'")
             
@@ -4544,7 +4544,7 @@ async def import_quote_from_ai_analysis(
                         'similarity': match.get('similarity'),
                         'match_type': match.get('match_type')
                     })
-                    print(f"✅ Matched product: '{product_name_short}' → '{match['name']}' (similarity: {match.get('similarity')}%)")
+                    print(f"✅ Matched product: '{product_name_short}' -> '{match['name']}' (similarity: {match.get('similarity')}%)")
                 else:
                     # Create new product
                     category_id = None
@@ -4556,7 +4556,7 @@ async def import_quote_from_ai_analysis(
                             cat_similarity = calculate_string_similarity(category_name, cat_name)
                             if cat_similarity >= 60:
                                 category_id = cat_id
-                                print(f"✅ Matched category: '{category_name}' → '{cat_name}' (similarity: {cat_similarity}%)")
+                                print(f"✅ Matched category: '{category_name}' -> '{cat_name}' (similarity: {cat_similarity}%)")
                                 break
                     
                     # If no match, use first category or None
@@ -4780,7 +4780,7 @@ async def import_quote_from_ai_analysis(
                         'expense_object_id': expense_object_id,
                         'cost': item_cost
                     })
-                    print(f"💰 Saved cost to product material components: {product_name_short} → expense_object_id: {expense_object_id}, cost: {item_cost}, target_product_id: {target_product_id}")
+                    print(f"💰 Saved cost to product material components: {product_name_short} -> expense_object_id: {expense_object_id}, cost: {item_cost}, target_product_id: {target_product_id}")
                 else:
                     print(f"⚠️ Cost item detected but no matching expense object found: {product_name_short}")
             
@@ -5117,7 +5117,7 @@ async def import_quote_from_ai_analysis(
             if item.get('cao'):
                 dim_parts.append(f"Cao: {item['cao']}m")
             if item.get('dien_tich'):
-                dim_parts.append(f"Diện tích: {item['dien_tich']}m²")
+                dim_parts.append(f"Diện tích: {item['dien_tich']}m2")
             if dim_parts:
                 description_parts.append(f"Quy cách: {', '.join(dim_parts)}")
             

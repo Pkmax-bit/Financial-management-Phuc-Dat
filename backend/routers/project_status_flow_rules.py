@@ -1,6 +1,6 @@
 """
 Project Status Flow Rules Router
-Manages automatic flow rules: when project status changes to X → automatically add/remove from category Y
+Manages automatic flow rules: when project status changes to X -> automatically add/remove from category Y
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -284,6 +284,7 @@ async def delete_flow_rule(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete flow rule: {str(e)}"
         )
+
 
 
 

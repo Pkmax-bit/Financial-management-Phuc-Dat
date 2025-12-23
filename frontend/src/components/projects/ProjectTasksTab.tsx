@@ -236,8 +236,13 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   const [checklistItemContent, setChecklistItemContent] = useState('')
   const [checklistItemFiles, setChecklistItemFiles] = useState<File[]>([])
   const [creatingChecklistItem, setCreatingChecklistItem] = useState<string | null>(null)
+  const [selectedChecklistAssigneeId, setSelectedChecklistAssigneeId] = useState<string | null>(null)
   const checklistItemFileInputRef = useRef<HTMLInputElement | null>(null)
   const [showCreateTodoModal, setShowCreateTodoModal] = useState(false)
+  
+  // Multi-assignment states for checklist items
+  const [checklistItemAssignments, setChecklistItemAssignments] = useState<Record<string, Array<{ employee_id: string; responsibility_type: 'accountable' | 'responsible' | 'consulted' | 'informed' }>>>({})
+  const [showAssignmentDropdown, setShowAssignmentDropdown] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetchUser()
@@ -880,8 +885,28 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
           : `📎 ${fileUrls.length} file(s) [FILE_URLS: ${fileUrlsText}]`
       }
 
+      // Get assignments for this checklist item
+      const assignments = checklistItemAssignments[`create_${checklistId}`] || []
+
       const newItem = await apiPost(`/api/tasks/checklists/${checklistId}/items`, {
-        content: itemContent
+        content: itemContent,
+        assignee_id: selectedChecklistAssigneeId,
+        assignments: assignments.length > 0 ? assignments : undefined
+      })
+
+      // Reset states
+      setChecklistItemContent('')
+      setChecklistItemFiles([])
+      setSelectedChecklistAssigneeId(null)
+      setChecklistItemAssignments(prev => {
+        const newAssignments = { ...prev }
+        delete newAssignments[`create_${checklistId}`]
+        return newAssignments
+      })
+      setShowAssignmentDropdown(prev => {
+        const newDropdown = { ...prev }
+        delete newDropdown[`create_${checklistId}`]
+        return newDropdown
       })
 
       // Update tasks state
@@ -986,6 +1011,33 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       alert(err?.message || 'Không thể tạo nhiệm vụ')
     } finally {
       setQuickCreating(false)
+    }
+  }
+
+  const updateChecklistItemAssignee = async (itemId: string, assigneeId: string | null, taskId: string) => {
+    try {
+      const updatedItem = await apiPut(`/api/tasks/checklist-items/${itemId}`, {
+        assignee_id: assigneeId
+      })
+
+      // Update tasks state
+      setTasks(prev => prev.map(task => {
+        if (task.id === taskId) {
+          return {
+            ...task,
+            checklists: task.checklists?.map(checklist => ({
+              ...checklist,
+              items: checklist.items?.map(item =>
+                item.id === itemId ? { ...item, assignee_id: assigneeId || undefined, assignee_name: updatedItem.assignee_name } : item
+              )
+            }))
+          }
+        }
+        return task
+      }))
+    } catch (error) {
+      console.error('Error updating checklist item assignee:', error)
+      alert('Không thể cập nhật người được gán')
     }
   }
 
@@ -1358,7 +1410,10 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
         <div className="grid grid-cols-1 gap-4">
           {/* Quick Create Task Inline Form */}
           {showQuickCreate && (
-            <div className="bg-white border border-blue-100 rounded-xl p-4 shadow-sm">
+            <div
+              className="bg-white border border-blue-100 rounded-xl p-4 shadow-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900">
@@ -1668,7 +1723,10 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
 
                               {/* Create Checklist Item Form */}
                               {showCreateChecklistItem === checklist.id && (
-                                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-blue-200">
+                                <div
+                                  className="mb-4 p-3 bg-gray-50 rounded-lg border border-blue-200"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <div className="space-y-2">
                                     <input
                                       type="text"
@@ -1683,25 +1741,152 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                         }
                                       }}
                                     />
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        ref={checklistItemFileInputRef}
-                                        type="file"
-                                        multiple
-                                        onChange={(e) => {
-                                          const files = Array.from(e.target.files || [])
-                                          setChecklistItemFiles(prev => [...prev, ...files])
-                                        }}
-                                        className="hidden"
-                                        id={`checklist-item-file-${checklist.id}`}
-                                      />
-                                      <label
-                                        htmlFor={`checklist-item-file-${checklist.id}`}
-                                        className="flex items-center gap-2 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer text-gray-700"
+                                    
+                                    {/* Multi-assignment section */}
+                                    <div className="relative flex items-center gap-2 flex-wrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowAssignmentDropdown(prev => ({ ...prev, [`create_${checklist.id}`]: !prev[`create_${checklist.id}`] }))}
+                                        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700 transition-colors"
+                                        title="Thêm nhân viên chịu trách nhiệm"
                                       >
-                                        <Paperclip className="h-3 w-3" />
-                                        <span>Chọn file</span>
-                                      </label>
+                                        <UserIcon className="h-3.5 w-3.5" />
+                                        <span>Gán nhân viên</span>
+                                        {(checklistItemAssignments[`create_${checklist.id}`] || []).length > 0 && (
+                                          <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                            {(checklistItemAssignments[`create_${checklist.id}`] || []).length}
+                                          </span>
+                                        )}
+                                      </button>
+                                      
+                                      {/* Selected Assignments Display */}
+                                      {(checklistItemAssignments[`create_${checklist.id}`] || []).length > 0 && (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          {(checklistItemAssignments[`create_${checklist.id}`] || []).map((assignment, idx) => {
+                                            const member = groupMembers.find(m => m.employee_id === assignment.employee_id)
+                                            const responsibilityLabels: Record<string, string> = {
+                                              accountable: 'Chịu trách nhiệm',
+                                              responsible: 'Thực hiện',
+                                              consulted: 'Tư vấn',
+                                              informed: 'Thông báo'
+                                            }
+                                            return member ? (
+                                              <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-xs">
+                                                <span className="text-gray-700 font-medium">{member.employee_name}</span>
+                                                <span className="text-gray-400">•</span>
+                                                <span className="text-gray-600">{responsibilityLabels[assignment.responsibility_type] || assignment.responsibility_type}</span>
+                                                <button
+                                                  onClick={() => {
+                                                    const newAssignments = (checklistItemAssignments[`create_${checklist.id}`] || []).filter((_, i) => i !== idx)
+                                                    setChecklistItemAssignments(prev => ({ ...prev, [`create_${checklist.id}`]: newAssignments }))
+                                                  }}
+                                                  className="ml-1 text-gray-400 hover:text-red-600"
+                                                >
+                                                  <X className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                            ) : null
+                                          })}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Assignment Dropdown */}
+                                      {showAssignmentDropdown[`create_${checklist.id}`] && (
+                                        <div className="absolute top-full left-0 z-50 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+                                          <div className="space-y-3">
+                                            <div>
+                                              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Chọn nhân viên</label>
+                                              <select
+                                                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                                                onChange={(e) => {
+                                                  const employeeId = e.target.value
+                                                  if (employeeId) {
+                                                    const currentAssignments = checklistItemAssignments[`create_${checklist.id}`] || []
+                                                    if (!currentAssignments.find(a => a.employee_id === employeeId)) {
+                                                      setChecklistItemAssignments(prev => ({
+                                                        ...prev,
+                                                        [`create_${checklist.id}`]: [...currentAssignments, { employee_id: employeeId, responsibility_type: 'responsible' }]
+                                                      }))
+                                                    }
+                                                    e.target.value = ''
+                                                  }
+                                                }}
+                                              >
+                                                <option value="">-- Chọn nhân viên --</option>
+                                                {groupMembers.map(member => (
+                                                  <option key={member.employee_id} value={member.employee_id}>
+                                                    {member.employee_name}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                            
+                                            {(checklistItemAssignments[`create_${checklist.id}`] || []).length > 0 && (
+                                              <div>
+                                                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Phân công nhiệm vụ</label>
+                                                <div className="space-y-2">
+                                                  {(checklistItemAssignments[`create_${checklist.id}`] || []).map((assignment, idx) => {
+                                                    const member = groupMembers.find(m => m.employee_id === assignment.employee_id)
+                                                    return member ? (
+                                                      <div key={idx} className="flex items-center gap-2">
+                                                        <div className="flex-1">
+                                                          <span className="text-xs text-gray-700 font-medium">{member.employee_name}</span>
+                                                        </div>
+                                                        <select
+                                                          className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 text-black"
+                                                          value={assignment.responsibility_type}
+                                                          onChange={(e) => {
+                                                            const newAssignments = [...(checklistItemAssignments[`create_${checklist.id}`] || [])]
+                                                            newAssignments[idx].responsibility_type = e.target.value as 'accountable' | 'responsible' | 'consulted' | 'informed'
+                                                            setChecklistItemAssignments(prev => ({ ...prev, [`create_${checklist.id}`]: newAssignments }))
+                                                          }}
+                                                        >
+                                                          <option value="accountable">Chịu trách nhiệm</option>
+                                                          <option value="responsible">Thực hiện</option>
+                                                          <option value="consulted">Tư vấn</option>
+                                                          <option value="informed">Thông báo</option>
+                                                        </select>
+                                                      </div>
+                                                    ) : null
+                                                  })}
+                                                </div>
+                                              </div>
+                                            )}
+                                            
+                                            <div className="flex justify-end pt-2 border-t border-gray-200">
+                                              <button
+                                                onClick={() => setShowAssignmentDropdown(prev => ({ ...prev, [`create_${checklist.id}`]: false }))}
+                                                className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                              >
+                                                Xong
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <input
+                                          ref={checklistItemFileInputRef}
+                                          type="file"
+                                          multiple
+                                          onChange={(e) => {
+                                            const files = Array.from(e.target.files || [])
+                                            setChecklistItemFiles(prev => [...prev, ...files])
+                                          }}
+                                          className="hidden"
+                                          id={`checklist-item-file-${checklist.id}`}
+                                        />
+                                        <label
+                                          htmlFor={`checklist-item-file-${checklist.id}`}
+                                          className="flex items-center gap-2 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer text-gray-700"
+                                        >
+                                          <Paperclip className="h-3 w-3" />
+                                          <span>File</span>
+                                        </label>
+                                      </div>
                                       {checklistItemFiles.length > 0 && (
                                         <div className="flex-1 flex items-center gap-1 flex-wrap">
                                           {checklistItemFiles.map((file, idx) => (
@@ -1734,6 +1919,16 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                           setShowCreateChecklistItem(null)
                                           setChecklistItemContent('')
                                           setChecklistItemFiles([])
+                                          setChecklistItemAssignments(prev => {
+                                            const newAssignments = { ...prev }
+                                            delete newAssignments[`create_${checklist.id}`]
+                                            return newAssignments
+                                          })
+                                          setShowAssignmentDropdown(prev => {
+                                            const newDropdown = { ...prev }
+                                            delete newDropdown[`create_${checklist.id}`]
+                                            return newDropdown
+                                          })
                                           if (checklistItemFileInputRef.current) {
                                             checklistItemFileInputRef.current.value = ''
                                           }
@@ -1813,14 +2008,38 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                         </button>
                                         <div className="flex-1 space-y-2 min-w-0">
                                           {/* Content text */}
-                                          {displayContent && (
-                                            <span className={`text-sm leading-snug block ${item.is_completed
-                                              ? 'text-gray-400 line-through'
-                                              : 'text-gray-700'
-                                              }`}>
-                                              {displayContent}
-                                            </span>
-                                          )}
+                                          <div className="flex items-center justify-between gap-2">
+                                            {displayContent && (
+                                              <span className={`text-sm leading-snug flex-1 ${item.is_completed
+                                                ? 'text-gray-400 line-through'
+                                                : 'text-gray-700'
+                                                }`}>
+                                                {displayContent}
+                                              </span>
+                                            )}
+
+                                            <div className="flex-shrink-0 relative group/assignee">
+                                              <select
+                                                value={item.assignee_id || ''}
+                                                onChange={(e) => updateChecklistItemAssignee(item.id, e.target.value || null, task.id)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className={`
+                                                  appearance-none bg-transparent pl-6 pr-2 py-0.5 text-[11px] rounded border transition-all cursor-pointer outline-none
+                                                  ${item.assignee_id
+                                                    ? 'text-blue-600 border-blue-200 bg-blue-50/50 hover:bg-blue-50'
+                                                    : 'text-gray-400 border-transparent hover:border-gray-200 hover:text-gray-600'}
+                                                `}
+                                              >
+                                                <option value="">Chưa gán</option>
+                                                {groupMembers.map((member) => (
+                                                  <option key={member.employee_id} value={member.employee_id}>
+                                                    {member.employee_name}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                              <UserIcon className={`absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 ${item.assignee_id ? 'text-blue-500' : 'text-gray-400'}`} />
+                                            </div>
+                                          </div>
 
                                           {/* Display files/images */}
                                           {fileUrls.length > 0 && (
@@ -1865,8 +2084,42 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                             </div>
                                           )}
 
-                                          {/* Assignee name */}
-                                          {item.assignee_name && (
+                                          {/* Display assigned employees with roles */}
+                                          {item.assignments && item.assignments.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                              {item.assignments.map((assignment, idx) => {
+                                                const responsibilityLabels: Record<string, string> = {
+                                                  accountable: 'Chịu trách nhiệm',
+                                                  responsible: 'Thực hiện',
+                                                  consulted: 'Tư vấn',
+                                                  informed: 'Thông báo'
+                                                }
+                                                
+                                                return (
+                                                  <div 
+                                                    key={`${item.id}-assignment-${idx}`}
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-xs"
+                                                  >
+                                                    <UserIcon className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                                                    <span className="text-gray-700 font-medium">
+                                                      {assignment.employee_name || 'Nhân viên'}
+                                                    </span>
+                                                    {assignment.responsibility_type && (
+                                                      <>
+                                                        <span className="text-gray-400">•</span>
+                                                        <span className="text-gray-600">
+                                                          {responsibilityLabels[assignment.responsibility_type] || assignment.responsibility_type}
+                                                        </span>
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                )
+                                              })}
+                                            </div>
+                                          )}
+                                          
+                                          {/* Assignee name - only show if no assignments */}
+                                          {!item.assignments?.length && item.assignee_name && (
                                             <div className="flex items-center gap-1 text-xs text-gray-500">
                                               <User className="h-3 w-3" />
                                               <span>{item.assignee_name}</span>

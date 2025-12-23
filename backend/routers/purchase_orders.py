@@ -230,7 +230,7 @@ async def submit_for_approval(
     po_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Submit purchase order for approval (Draft → Pending Approval)"""
+    """Submit purchase order for approval (Draft -> Pending Approval)"""
     try:
         supabase = get_supabase_client()
         

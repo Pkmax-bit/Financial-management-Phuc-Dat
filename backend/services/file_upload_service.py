@@ -301,7 +301,7 @@ class FileUploadService:
                         detail_msg = f"Không thể upload file: Loại file '{file.content_type}' không được phép bởi cấu hình Supabase Storage bucket."
                         detail_msg += f"\n\n📋 CÁCH KHẮC PHỤC (BẮT BUỘC):"
                         detail_msg += f"\n\n1️⃣ Vào Supabase Dashboard:"
-                        detail_msg += f"\n   https://supabase.com/dashboard → Chọn project → Storage → Buckets → 'minhchung_chiphi'"
+                        detail_msg += f"\n   https://supabase.com/dashboard -> Chọn project -> Storage -> Buckets -> 'minhchung_chiphi'"
                         detail_msg += f"\n\n2️⃣ Vào tab 'Settings' (KHÔNG phải Policies)"
                         detail_msg += f"\n\n3️⃣ Tìm phần 'File type restrictions' hoặc 'Allowed MIME types'"
                         detail_msg += f"\n\n4️⃣ Chọn một trong hai cách:"

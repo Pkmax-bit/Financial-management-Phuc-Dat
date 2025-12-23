@@ -1210,7 +1210,19 @@ async def create_task(
                 "added_by": current_user.id
             })
         
-        # Add assignee_ids as participants (skip if already added as responsible)
+        # Add explicit participants with roles
+        if task_data.participants:
+            for p in task_data.participants:
+                if p.employee_id not in participant_ids:
+                    participant_ids.add(p.employee_id)
+                    participants.append({
+                        "task_id": task["id"],
+                        "employee_id": p.employee_id,
+                        "role": p.role.value,
+                        "added_by": current_user.id
+                    })
+
+        # Add assignee_ids as participants (skip if already added)
         if task_data.assignee_ids:
             for employee_id in task_data.assignee_ids:
                 if employee_id not in participant_ids:
@@ -1546,7 +1558,24 @@ async def update_task(
         if task_data.estimated_time is not None:
             update_data["estimated_time"] = task_data.estimated_time
         
-        if not update_data:
+        if task_data.participants is not None:
+            # Delete existing participants (except maybe owner? No, reset all)
+            supabase.table("task_participants").delete().eq("task_id", task_id).execute()
+            
+            # Insert new participants
+            if task_data.participants:
+                new_participants = []
+                for p in task_data.participants:
+                    new_participants.append({
+                        "task_id": task_id,
+                        "employee_id": p.employee_id,
+                        "role": p.role.value,
+                        "added_by": current_user.id
+                    })
+                if new_participants:
+                    supabase.table("task_participants").insert(new_participants).execute()
+
+        if not update_data and task_data.participants is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No fields to update"
