@@ -38,64 +38,14 @@ import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { TaskChecklist, TaskChecklistItem, TaskComment } from '@/types/task'
 import { supabase } from '@/lib/supabase'
 import CreateTodoModal from '@/components/CreateTodoModal'
+import { getFileIconByType, getFileIconFromUrl } from '@/utils/fileIconUtils'
 
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback
 
 // Get file icon path from icon folder based on file type or filename
 const getFileIconPath = (fileType: string, fileName?: string): string | null => {
-  if (!fileName && !fileType) return null
-
-  const type = fileType?.toLowerCase() || ''
-  const name = fileName?.toLowerCase() || ''
-
-  // Extract file extension from name (handle query params and spaces)
-  const getExtension = (filename: string): string => {
-    // Remove query params and decode if needed
-    const cleanName = filename.split('?')[0].trim()
-    const match = cleanName.match(/\.([a-z0-9]+)$/i)
-    return match ? match[1].toLowerCase() : ''
-  }
-  const extension = getExtension(name)
-
-  // Check by file extension first (more reliable)
-  // PDF
-  if (extension === 'pdf' || type === 'application/pdf' || name.includes('.pdf')) {
-    return '/icon/pdf.png'
-  }
-
-  // Excel files - check extension first
-  if (['xls', 'xlsx', 'xlsm', 'xlsb'].includes(extension) || name.includes('.xls')) {
-    return '/icon/Excel.png'
-  }
-  // Then check MIME type
-  if (type.includes('spreadsheet') ||
-    type === 'application/vnd.ms-excel' ||
-    type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    type === 'application/vnd.ms-excel.sheet.macroenabled.12') {
-    return '/icon/Excel.png'
-  }
-
-  // Word files - check extension first
-  if (['doc', 'docx', 'docm'].includes(extension) || name.includes('.doc')) {
-    return '/icon/doc.png'
-  }
-  // Then check MIME type
-  if (type.includes('word') ||
-    type === 'application/msword' ||
-    type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    type === 'application/vnd.ms-word.document.macroenabled.12') {
-    return '/icon/doc.png'
-  }
-
-  // Images - return null to use ImageIcon component
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(extension) ||
-    type.startsWith('image/')) {
-    return null
-  }
-
-  // Default - return null to use File icon component
-  return null
+  return getFileIconByType(fileType, fileName)
 }
 
 interface Task {
@@ -548,22 +498,25 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
 
   const loadGroupMembers = async () => {
     try {
-      // Get employees that can be assigned to tasks (only actual employees, not all team members)
+      // Lấy nhân viên từ đội ngũ dự án (project team)
       try {
-        const employeesData = await apiGet('/api/employees/public-list')
-        const employees = employeesData || []
+        const teamResponse = await apiGet(`/api/projects/${projectId}/team`)
+        const teamMembers = teamResponse?.team_members || []
 
         // Convert to format expected by mentions and assignments
-        const members = employees.map((emp: any) => ({
-          employee_id: emp.id, // Use actual employee ID from employees table
-          employee_name: `${emp.first_name} ${emp.last_name}`.trim(),
-          employee_email: emp.email
-        }))
+        // Chỉ lấy các thành viên có employee_id và status = 'active'
+        const members = teamMembers
+          .filter((member: any) => member.employee_id && member.status === 'active')
+          .map((member: any) => ({
+            employee_id: member.employee_id, // Use actual employee ID from employees table
+            employee_name: member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email || 'Thành viên',
+            employee_email: member.email
+          }))
 
         setGroupMembers(members)
-      } catch (empErr) {
-        console.error('Error fetching employees:', empErr)
-        // Fallback: Get group members from all tasks (but this might still have issues)
+      } catch (teamErr) {
+        console.error('Error fetching project team members:', teamErr)
+        // Fallback: Get group members from all tasks
         const groupIds = [...new Set(tasks.map(t => t.group_id).filter(id => id && id !== 'null' && id !== 'undefined' && typeof id === 'string'))]
         if (groupIds.length === 0) {
           setGroupMembers([])
@@ -747,30 +700,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   }
 
   const getFileIcon = (url: string): string | null => {
-    const fileName = getFileNameFromUrl(url).toLowerCase()
-
-    // PDF
-    if (fileName.endsWith('.pdf')) {
-      return '/icon/pdf.png'
-    }
-
-    // Excel files
-    if (fileName.match(/\.(xls|xlsx|xlsm)(\?|$)/i)) {
-      return '/icon/Excel.png'
-    }
-
-    // Word files
-    if (fileName.match(/\.(doc|docx)(\?|$)/i)) {
-      return '/icon/doc.png'
-    }
-
-    // Images - return null to use ImageIcon component
-    if (fileName.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i) || url.includes('image')) {
-      return null
-    }
-
-    // Default - return null to use File icon component
-    return null
+    return getFileIconFromUrl(url)
   }
 
   const getFileIconComponent = (url: string) => {

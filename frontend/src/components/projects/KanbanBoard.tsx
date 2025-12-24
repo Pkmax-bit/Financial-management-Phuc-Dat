@@ -94,6 +94,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false)
   const [pendingDrop, setPendingDrop] = useState<{project: ProjectItem, status: ProjectStatus} | null>(null)
   const [showStatusModal, setShowStatusModal] = useState(false)
+  const [draggedStatusId, setDraggedStatusId] = useState<string | null>(null)
+  const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null)
+  const [isReorderingStatuses, setIsReorderingStatuses] = useState(false)
   const [editingStatus, setEditingStatus] = useState<ProjectStatusItem | null>(null)
   const [statusForm, setStatusForm] = useState({
     name: '',
@@ -772,7 +775,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Step 5: Refresh statuses to get updated display_order values
       await fetchStatuses()
-      setStatuses(updatedStatuses || [])
 
       // Step 6: Now proceed with create/update
       await performCreateOrUpdate()
@@ -816,6 +818,93 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     setShowStatusModal(true)
   }
 
+  // Handle status column drag and drop
+  const handleStatusDragStart = (e: React.DragEvent, statusId: string) => {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', statusId)
+    setDraggedStatusId(statusId)
+  }
+
+  const handleStatusDragOver = (e: React.DragEvent, statusId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (draggedStatusId && draggedStatusId !== statusId) {
+      setDragOverStatusId(statusId)
+    }
+  }
+
+  const handleStatusDragLeave = () => {
+    setDragOverStatusId(null)
+  }
+
+  const handleStatusDrop = async (e: React.DragEvent, targetStatusId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!draggedStatusId || draggedStatusId === targetStatusId) {
+      setDraggedStatusId(null)
+      setDragOverStatusId(null)
+      return
+    }
+
+    try {
+      setIsReorderingStatuses(true)
+      
+      const draggedStatus = statuses.find(s => s.id === draggedStatusId)
+      const targetStatus = statuses.find(s => s.id === targetStatusId)
+      
+      if (!draggedStatus || !targetStatus) {
+        return
+      }
+
+      const draggedOrder = draggedStatus.display_order
+      const targetOrder = targetStatus.display_order
+
+      // Calculate new order for dragged status
+      const newOrder = targetOrder
+
+      // Get all statuses that need to be shifted
+      const statusesToShift: Array<{ id: string; newOrder: number }> = []
+      
+      if (draggedOrder < targetOrder) {
+        // Moving forward: shift statuses between dragged and target backward
+        statuses.forEach(s => {
+          if (s.id !== draggedStatusId && s.display_order > draggedOrder && s.display_order <= targetOrder) {
+            statusesToShift.push({ id: s.id, newOrder: s.display_order - 1 })
+          }
+        })
+        // Set dragged status to target order
+        statusesToShift.push({ id: draggedStatusId, newOrder: targetOrder })
+      } else {
+        // Moving backward: shift statuses between target and dragged forward
+        statuses.forEach(s => {
+          if (s.id !== draggedStatusId && s.display_order >= targetOrder && s.display_order < draggedOrder) {
+            statusesToShift.push({ id: s.id, newOrder: s.display_order + 1 })
+          }
+        })
+        // Set dragged status to target order
+        statusesToShift.push({ id: draggedStatusId, newOrder: targetOrder })
+      }
+
+      // Update all statuses
+      for (const { id, newOrder: order } of statusesToShift) {
+        await apiPut(`/api/projects/statuses/${id}`, {
+          display_order: order
+        })
+      }
+
+      // Refresh statuses
+      await fetchStatuses()
+    } catch (error: any) {
+      console.error('Error reordering statuses:', error)
+      alert(error?.data?.detail || error?.message || 'Không thể thay đổi vị trí trạng thái')
+    } finally {
+      setIsReorderingStatuses(false)
+      setDraggedStatusId(null)
+      setDragOverStatusId(null)
+    }
+  }
+
   const handleDeleteStatus = async (statusId: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa trạng thái này?')) {
       return
@@ -853,7 +942,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Refresh statuses to get updated list
       await fetchStatuses()
-      setStatuses(updatedStatuses || [])
 
       setIsDeletingStatus(false)
       setDeletingStatusId(null)
@@ -1057,7 +1145,11 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
               const statusProjects = grouped[status.name] || []
               
               return (
-                <div key={status.id} className="flex-shrink-0" style={{ width: '320px' }}>
+                <div 
+                  key={status.id} 
+                  className={`flex-shrink-0 transition-all ${draggedStatusId === status.id ? 'opacity-50' : ''} ${dragOverStatusId === status.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+                  style={{ width: '320px' }}
+                >
                   <div className="mb-2 flex items-center justify-end">
                     <div className="flex items-center gap-2">
                       <button
@@ -1105,6 +1197,13 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, status.name)}
                     isDragOver={dragOverColumn === status.name}
+                    statusId={status.id}
+                    onStatusHeaderDragStart={(e) => handleStatusDragStart(e, status.id)}
+                    onStatusHeaderDragOver={(e) => handleStatusDragOver(e, status.id)}
+                    onStatusHeaderDragLeave={handleStatusDragLeave}
+                    onStatusHeaderDrop={(e) => handleStatusDrop(e, status.id)}
+                    isStatusHeaderDragging={draggedStatusId === status.id}
+                    isStatusHeaderDragOver={dragOverStatusId === status.id}
                     onAddStatus={async () => {
                       // Set display_order = current status's display_order
                       const newDisplayOrder = status.display_order

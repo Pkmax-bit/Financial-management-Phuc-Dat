@@ -438,17 +438,35 @@ async def create_project_status(
                 detail=f"Project status with name '{status_data.name}' already exists"
             )
         
-        # Check if display_order already exists
+        # Check if display_order already exists and shift if needed
+        # Database has UNIQUE constraint on display_order globally
         existing_order = supabase.table("project_statuses")\
-            .select("id")\
+            .select("id, name, display_order")\
             .eq("display_order", status_data.display_order)\
             .execute()
         
         if existing_order.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Project status with display_order '{status_data.display_order}' already exists"
-            )
+            # Shift all statuses with display_order >= new order up by 1
+            statuses_to_shift = supabase.table("project_statuses")\
+                .select("id, display_order")\
+                .gte("display_order", status_data.display_order)\
+                .order("display_order", desc=True)\
+                .execute()
+            
+            if statuses_to_shift.data:
+                # Shift each status up by 1 (in descending order to avoid conflicts)
+                for status_to_shift in statuses_to_shift.data:
+                    try:
+                        supabase.table("project_statuses")\
+                            .update({"display_order": status_to_shift["display_order"] + 1})\
+                            .eq("id", status_to_shift["id"])\
+                            .execute()
+                    except Exception as shift_error:
+                        # If shift fails, raise error
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Failed to shift existing statuses: {str(shift_error)}"
+                        )
         
         # Create new status
         # Extract color hex from color_class or use default
@@ -540,39 +558,47 @@ async def update_project_status_item(
                 )
         
         # Check display_order uniqueness if order is being updated
-        # Note: We allow temporary conflicts during shifting operations
-        # The frontend handles shifting statuses before creating/updating
+        # Database has UNIQUE constraint on display_order, so we need to handle conflicts
         if status_data.display_order is not None:
-            order_check = supabase.table("project_statuses")\
-                .select("id")\
-                .eq("display_order", status_data.display_order)\
-                .neq("id", status_id)\
-                .execute()
+            current_order = existing.data[0].get('display_order')
+            new_order = status_data.display_order
             
-            if order_check.data:
-                # If we're just incrementing by 1 (likely a shift operation), allow it
-                # by first shifting the conflicting status
-                current_order = existing.data[0].get('display_order')
-                if current_order is not None and status_data.display_order == current_order + 1:
-                    # This is likely a shift operation, check if we can shift the conflicting status
+            # Only check if order is actually changing
+            if new_order != current_order:
+                order_check = supabase.table("project_statuses")\
+                    .select("id, display_order")\
+                    .eq("display_order", new_order)\
+                    .neq("id", status_id)\
+                    .execute()
+                
+                if order_check.data:
+                    # Found conflict - try to shift the conflicting status
                     conflicting_status = order_check.data[0]
-                    # Try to shift the conflicting status up by 1
+                    conflicting_id = conflicting_status['id']
+                    conflicting_order = conflicting_status['display_order']
+                    
+                    # Calculate new order for conflicting status
+                    # If moving forward, shift conflicting status forward
+                    # If moving backward, shift conflicting status backward
+                    if new_order > current_order:
+                        # Moving forward - shift conflicting status forward
+                        shift_to = conflicting_order + 1
+                    else:
+                        # Moving backward - shift conflicting status backward
+                        shift_to = conflicting_order - 1
+                    
+                    # Try to shift the conflicting status
                     try:
                         supabase.table("project_statuses")\
-                            .update({"display_order": status_data.display_order + 1})\
-                            .eq("id", conflicting_status['id'])\
+                            .update({"display_order": shift_to})\
+                            .eq("id", conflicting_id)\
                             .execute()
-                    except:
-                        # If shift fails, raise the original error
+                    except Exception as shift_error:
+                        # If shift fails, raise error
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Project status with display_order '{status_data.display_order}' already exists"
+                            detail=f"Cannot update display_order to {new_order}. Another status already uses this order and cannot be shifted."
                         )
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Project status with display_order '{status_data.display_order}' already exists"
-                    )
         
         # Build update data
         update_data = {}
@@ -662,14 +688,36 @@ async def delete_project_status(
                 detail="Cannot delete project status that is in use by projects"
             )
         
+        # Get the display_order of the status being deleted
+        deleted_order = existing.data[0].get('display_order')
+        
         # Hard delete - permanently remove from database
         result = supabase.table("project_statuses")\
             .delete()\
             .eq("id", status_id)\
             .execute()
         
-        if result.data:
-            return {"message": "Project status deleted successfully"}
+        if result.data and deleted_order is not None:
+            # Shift all statuses with display_order > deleted_order down by 1
+            statuses_to_shift = supabase.table("project_statuses")\
+                .select("id, display_order")\
+                .gt("display_order", deleted_order)\
+                .order("display_order", desc=False)\
+                .execute()
+            
+            if statuses_to_shift.data:
+                # Shift each status down by 1 (in ascending order)
+                for status_to_shift in statuses_to_shift.data:
+                    try:
+                        supabase.table("project_statuses")\
+                            .update({"display_order": status_to_shift["display_order"] - 1})\
+                            .eq("id", status_to_shift["id"])\
+                            .execute()
+                    except Exception as shift_error:
+                        # Log error but don't fail the delete operation
+                        print(f"Warning: Failed to shift status {status_to_shift['id']}: {str(shift_error)}")
+        
+        return {"message": "Project status deleted successfully"}
         
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

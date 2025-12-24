@@ -22,6 +22,7 @@ import {
 import { getApiEndpoint } from '@/lib/apiUrl'
 import ProjectTeam from './ProjectTeam'
 import ProjectTasksTab from './ProjectTasksTab'
+import ProjectStatusBar from './ProjectStatusBar'
 
 interface Project {
   id: string
@@ -37,6 +38,8 @@ interface Project {
   budget?: number
   actual_cost?: number
   status: 'planning' | 'active' | 'on_hold' | 'completed' | 'cancelled'
+  status_id?: string // ID của trạng thái từ bảng project_statuses
+  category_id?: string // ID của nhóm dự án
   priority: 'low' | 'medium' | 'high' | 'urgent'
   progress: number
   billing_type: 'fixed' | 'hourly' | 'milestone'
@@ -208,6 +211,20 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
                 <X className="h-6 w-6" />
               </button>
             </div>
+          </div>
+
+          {/* Project Status Bar */}
+          <div className="px-6 py-4 border-b border-gray-200 bg-white">
+            <ProjectStatusBar
+              projectId={project.id}
+              currentStatusId={project.status_id}
+              currentStatusName={project.status}
+              categoryId={project.category_id}
+              onStatusChange={(newStatus) => {
+                // Update local state if needed
+                console.log('Status changed to:', newStatus)
+              }}
+            />
           </div>
 
           {/* Main layout */}

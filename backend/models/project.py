@@ -39,6 +39,7 @@ class Project(BaseModel):
     budget: Optional[float] = None
     actual_cost: float = 0.0
     status: ProjectStatus = ProjectStatus.PLANNING
+    status_id: Optional[str] = None  # Reference to project_statuses table
     priority: ProjectPriority = ProjectPriority.MEDIUM
     progress: float = 0.0
     billing_type: str = "fixed"  # fixed, hourly, milestone

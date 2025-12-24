@@ -31,6 +31,12 @@ interface KanbanColumnProps {
   isDragOver?: boolean
   onAddStatus?: () => void
   statusId?: string
+  onStatusHeaderDragStart?: (e: React.DragEvent) => void
+  onStatusHeaderDragOver?: (e: React.DragEvent) => void
+  onStatusHeaderDragLeave?: () => void
+  onStatusHeaderDrop?: (e: React.DragEvent) => void
+  isStatusHeaderDragging?: boolean
+  isStatusHeaderDragOver?: boolean
 }
 
 export default function KanbanColumn({ 
@@ -46,7 +52,13 @@ export default function KanbanColumn({
   onDrop,
   isDragOver,
   onAddStatus,
-  statusId
+  statusId,
+  onStatusHeaderDragStart,
+  onStatusHeaderDragOver,
+  onStatusHeaderDragLeave,
+  onStatusHeaderDrop,
+  isStatusHeaderDragging,
+  isStatusHeaderDragOver
 }: KanbanColumnProps) {
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -66,8 +78,21 @@ export default function KanbanColumn({
       onDrop={onDrop}
     >
       <div className={`rounded-t-lg ${colorClass}`}>
-        <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold">
-          <span>{title}</span>
+        <div 
+          className={`flex items-center justify-between px-4 py-3 text-sm font-semibold cursor-move select-none ${
+            isStatusHeaderDragging ? 'opacity-50' : ''
+          } ${isStatusHeaderDragOver ? 'ring-2 ring-white ring-offset-2' : ''}`}
+          draggable={!!onStatusHeaderDragStart}
+          onDragStart={onStatusHeaderDragStart}
+          onDragOver={onStatusHeaderDragOver}
+          onDragLeave={onStatusHeaderDragLeave}
+          onDrop={onStatusHeaderDrop}
+          title={onStatusHeaderDragStart ? "Kéo để thay đổi vị trí trạng thái" : undefined}
+        >
+          <span className="flex items-center gap-2">
+            <span>⋮⋮</span>
+            <span>{title}</span>
+          </span>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs text-gray-700">{count}</span>
             {onAddStatus && (
