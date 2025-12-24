@@ -36,6 +36,7 @@ from models.task import (
     TaskChecklistItem,
     TaskChecklistItemCreate,
     TaskChecklistItemUpdate,
+    ChecklistItemAssignment,
     TaskTimeLog,
     TaskTimeLogStart,
     TaskTimeLogStop,
@@ -180,6 +181,49 @@ def _fetch_task_checklists(supabase, task_id: str) -> List[TaskChecklist]:
         enriched_checklists.append(checklist)
 
     return enriched_checklists
+
+
+def _build_valid_assignment_records(
+    supabase,
+    checklist_item_id: str,
+    assignments: List[ChecklistItemAssignment]
+) -> List[dict]:
+    """Skip assignments that point to employees which do not exist."""
+    if not assignments:
+        return []
+
+    unique_employee_ids = list({assignment.employee_id for assignment in assignments if assignment.employee_id})
+    if not unique_employee_ids:
+        return []
+
+    try:
+        employees_result = (
+            supabase.table("employees")
+            .select("id")
+            .in_("id", unique_employee_ids)
+            .execute()
+        )
+        valid_employee_ids = {row["id"] for row in (employees_result.data or [])}
+    except Exception as validation_error:
+        logger.error("Unable to validate checklist assignments: %s", validation_error)
+        return []
+
+    missing_ids = [emp_id for emp_id in unique_employee_ids if emp_id not in valid_employee_ids]
+    if missing_ids:
+        logger.warning(
+            "Skipping checklist assignments for unknown employee IDs: %s",
+            ", ".join(missing_ids)
+        )
+
+    return [
+        {
+            "checklist_item_id": checklist_item_id,
+            "employee_id": assignment.employee_id,
+            "responsibility_type": assignment.responsibility_type
+        }
+        for assignment in assignments
+        if assignment.employee_id in valid_employee_ids
+    ]
 
 
 def _fetch_task_time_logs(supabase, task_id: str) -> List[TaskTimeLog]:
@@ -2344,14 +2388,7 @@ async def create_checklist_item(
         # Handle assignments if provided
         assignments = item_data.assignments or []
         if assignments:
-            assignment_records = [
-                {
-                    "checklist_item_id": item_id,
-                    "employee_id": assignment.employee_id,
-                    "responsibility_type": assignment.responsibility_type
-                }
-                for assignment in assignments
-            ]
+            assignment_records = _build_valid_assignment_records(supabase, item_id, assignments)
             if assignment_records:
                 supabase.table("task_checklist_item_assignments").insert(assignment_records).execute()
         
@@ -2444,14 +2481,7 @@ async def update_checklist_item(
             
             # Insert new assignments
             if item_data.assignments:
-                assignment_records = [
-                    {
-                        "checklist_item_id": item_id,
-                        "employee_id": assignment.employee_id,
-                        "responsibility_type": assignment.responsibility_type
-                    }
-                    for assignment in item_data.assignments
-                ]
+                assignment_records = _build_valid_assignment_records(supabase, item_id, item_data.assignments)
                 if assignment_records:
                     supabase.table("task_checklist_item_assignments").insert(assignment_records).execute()
         
@@ -2859,6 +2889,8 @@ async def upload_task_attachment(
         sanitized_name = re.sub(r'[<>:"/\\|?*%]', '_', sanitized_name)
         # Remove multiple consecutive underscores
         sanitized_name = re.sub(r'_+', '_', sanitized_name).strip('_')
+        if not sanitized_name:
+            sanitized_name = f"file_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         
         # Create storage filename: keep original name (sanitized to ASCII) without adding task_id
         # File uniqueness is handled by folder structure (Groups/{group_id}/Tasks/{task_id})
@@ -2879,12 +2911,18 @@ async def upload_task_attachment(
             generate_unique_name=False,
             custom_filename=storage_filename
         )
+        stored_path = file_result.get("path")
+        stored_filename = storage_filename
+        if stored_path:
+            stored_filename = stored_path.split("/")[-1] or storage_filename
+        elif file_result.get("storage_name"):
+            stored_filename = file_result["storage_name"]
         
         # Create attachment record
         attachment_data = {
             "id": str(uuid.uuid4()),
             "task_id": task_id,
-            "file_name": storage_filename,  # Storage filename (sanitized original name, kept in task folder)
+            "file_name": stored_filename,  # Actual storage filename (with any dedup suffix applied)
             "original_file_name": original_filename,  # Original filename for display
             "file_url": file_result["url"],
             "file_type": file_result["content_type"],
@@ -2897,7 +2935,7 @@ async def upload_task_attachment(
         
         return {
             "id": attachment_data["id"],
-            "file_name": storage_filename,  # Storage filename (sanitized original name)
+            "file_name": stored_filename,  # Storage filename actually persisted
             "original_file_name": original_filename,  # Original filename for display
             "file_url": file_result["url"],
             "file_type": file_result["content_type"],

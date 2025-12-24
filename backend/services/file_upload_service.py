@@ -171,10 +171,10 @@ class FileUploadService:
                 base_name = ascii_name.replace(' ', '_')
                 base_name = re.sub(r'[<>:"/\\|?*%]', '_', base_name)
                 # Remove multiple consecutive underscores
-                base_name = re.sub(r'_+', '_', base_name).strip('_')
+                base_name = re.sub(r'_+', '_', base_name).strip('_') or 'file'
             else:
                 # For auto-generated names, replace spaces and slashes
-                base_name = base_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+                base_name = base_name.replace(' ', '_').replace('/', '_').replace('\\', '_') or 'file'
 
             # Nếu generate_unique_name=True thì vẫn ưu tiên UUID để tránh trùng tuyệt đối
             if generate_unique_name and not custom_filename:
@@ -185,12 +185,19 @@ class FileUploadService:
             upload_result = None
             public_url = None
             error_msg = None
+            stored_file_path = None
+            stored_candidate_name = None
 
-            # Thử nhiều lần với hậu tố (2), (3), ... khi gặp lỗi Duplicate
-            for attempt in range(5):
-                suffix = "" if attempt == 0 else f"({attempt + 1})"
-                candidate_filename = f"{base_name}{suffix}{file_ext}"
+            max_attempts = 8
+            for attempt in range(max_attempts):
+                if attempt < 5:
+                    suffix = "" if attempt == 0 else f"({attempt + 1})"
+                    candidate_filename = f"{base_name}{suffix}{file_ext}"
+                else:
+                    random_suffix = uuid.uuid4().hex[:6]
+                    candidate_filename = f"{base_name}_{random_suffix}{file_ext}" if base_name else f"{random_suffix}{file_ext}"
                 file_path = f"{folder_path}/{candidate_filename}".strip('/')
+                attempt_error = None
 
                 try:
                     # Strategy 1: Upload với content-type gốc, cho phép upsert
@@ -203,16 +210,14 @@ class FileUploadService:
                                 "upsert": "false"
                             }
                         )
-                        # Check for errors - handle both dict and object responses
                         if isinstance(upload_result, dict):
                             if upload_result.get('error'):
                                 raise Exception(str(upload_result.get('error')))
                         elif hasattr(upload_result, 'error') and upload_result.error:
                             raise Exception(str(upload_result.error))
-                        # If no error, consider it successful
                     except Exception as e1:
                         logger.warning(f"Upload with content-type failed (attempt {attempt}, name={candidate_filename}): {e1}")
-                        
+
                         # Strategy 2: Không truyền content-type
                         try:
                             upload_result = supabase.storage.from_(self.bucket_name).upload(
@@ -222,7 +227,6 @@ class FileUploadService:
                                     "upsert": "false"
                                 }
                             )
-                            # Check for errors - handle both dict and object responses
                             if isinstance(upload_result, dict):
                                 if upload_result.get('error'):
                                     raise Exception(str(upload_result.get('error')))
@@ -231,7 +235,7 @@ class FileUploadService:
                             logger.info(f"Uploaded {file.content_type} without content-type option as workaround")
                         except Exception as e2:
                             logger.warning(f"Upload without content-type failed (attempt {attempt}, name={candidate_filename}): {e2}")
-                            
+
                             # Strategy 3: Dùng application/octet-stream
                             restricted_types = [
                                 "application/pdf",
@@ -256,7 +260,6 @@ class FileUploadService:
                                             "upsert": "false"
                                         }
                                     )
-                                    # Check for errors - handle both dict and object responses
                                     if isinstance(upload_result, dict):
                                         if upload_result.get('error'):
                                             raise Exception(str(upload_result.get('error')))
@@ -265,23 +268,21 @@ class FileUploadService:
                                     logger.info(f"Uploaded {file.content_type} with generic content-type (application/octet-stream) as workaround")
                                 except Exception as e3:
                                     logger.warning(f"Upload with application/octet-stream also failed (attempt {attempt}, name={candidate_filename}): {e3}")
-                                    error_msg = str(e3)
+                                    attempt_error = str(e3)
                             else:
-                                error_msg = str(e2)
+                                attempt_error = str(e2)
 
-                    # Nếu tới đây không có lỗi, thoát vòng lặp
-                    if not error_msg:
+                    if attempt_error is None:
                         public_url = self._get_public_url(file_path)
-                        original_name_to_return = candidate_filename
+                        stored_candidate_name = candidate_filename
+                        stored_file_path = file_path
                         break
 
-                    # Nếu lỗi là Duplicate, thử tên khác với hậu tố (2), (3)...
-                    if "duplicate" in error_msg.lower() or "already exists" in error_msg.lower():
+                    if "duplicate" in attempt_error.lower() or "already exists" in attempt_error.lower():
                         logger.info(f"File exists, retrying with new name: {candidate_filename}")
-                        error_msg = None
                         continue
 
-                    # Các lỗi khác: dừng luôn
+                    error_msg = attempt_error
                     break
 
                 except HTTPException:
@@ -290,6 +291,9 @@ class FileUploadService:
                     logger.error(f"Upload error (attempt {attempt}, name={candidate_filename}): {str(upload_error)}")
                     error_msg = str(upload_error)
                     break
+
+            if not public_url and not error_msg:
+                error_msg = "Storage rejected filename after multiple auto-renaming attempts"
 
             # Sau khi thử hết mà vẫn không upload được
             if not public_url:
@@ -301,7 +305,7 @@ class FileUploadService:
                         detail_msg = f"Không thể upload file: Loại file '{file.content_type}' không được phép bởi cấu hình Supabase Storage bucket."
                         detail_msg += f"\n\n📋 CÁCH KHẮC PHỤC (BẮT BUỘC):"
                         detail_msg += f"\n\n1️⃣ Vào Supabase Dashboard:"
-                        detail_msg += f"\n   https://supabase.com/dashboard -> Chọn project -> Storage -> Buckets -> 'minhchung_chiphi'"
+                        detail_msg += f"\n   https://supabase.com/dashboard → Chọn project → Storage → Buckets → 'minhchung_chiphi'"
                         detail_msg += f"\n\n2️⃣ Vào tab 'Settings' (KHÔNG phải Policies)"
                         detail_msg += f"\n\n3️⃣ Tìm phần 'File type restrictions' hoặc 'Allowed MIME types'"
                         detail_msg += f"\n\n4️⃣ Chọn một trong hai cách:"
@@ -345,7 +349,8 @@ class FileUploadService:
                 "type": file_type,
                 "size": len(content),
                 "uploaded_at": datetime.now().isoformat(),
-                "path": file_path,
+                "path": stored_file_path,
+                "storage_name": stored_candidate_name,
                 "content_type": file.content_type
             }
             

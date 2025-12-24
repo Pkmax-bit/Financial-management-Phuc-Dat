@@ -548,25 +548,23 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
 
   const loadGroupMembers = async () => {
     try {
-      // Get project team members for mentions
+      // Get employees that can be assigned to tasks (only actual employees, not all team members)
       try {
-        const teamData = await apiGet(`/api/projects/${projectId}/team`)
-        const teamMembers = teamData?.team_members || []
+        const employeesData = await apiGet('/api/employees/public-list')
+        const employees = employeesData || []
 
-        // Convert to format expected by mentions
-        const members = teamMembers
-          .filter((member: any) => member.status === 'active')
-          .map((member: any) => ({
-            employee_id: member.user_id || member.id, // Use user_id if available, fallback to id
-            employee_name: member.name,
-            employee_email: member.email
-          }))
+        // Convert to format expected by mentions and assignments
+        const members = employees.map((emp: any) => ({
+          employee_id: emp.id, // Use actual employee ID from employees table
+          employee_name: `${emp.first_name} ${emp.last_name}`.trim(),
+          employee_email: emp.email
+        }))
 
         setGroupMembers(members)
-      } catch (teamErr) {
-        console.error('Error fetching project team members:', teamErr)
-        // Fallback: Get group members from all tasks
-        const groupIds = [...new Set(tasks.map(t => t.group_id).filter(Boolean))]
+      } catch (empErr) {
+        console.error('Error fetching employees:', empErr)
+        // Fallback: Get group members from all tasks (but this might still have issues)
+        const groupIds = [...new Set(tasks.map(t => t.group_id).filter(id => id && id !== 'null' && id !== 'undefined' && typeof id === 'string'))]
         if (groupIds.length === 0) {
           setGroupMembers([])
           return
@@ -574,6 +572,11 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
 
         const membersPromises = groupIds.map(async (groupId) => {
           try {
+            // Validate groupId before making API call
+            if (!groupId || groupId === 'null' || groupId === 'undefined') {
+              console.warn(`Skipping invalid groupId: ${groupId}`)
+              return []
+            }
             // Pass project_id to get project team information
             const members = await apiGet(`/api/tasks/groups/${groupId}/members?project_id=${projectId}`)
             return members || []
@@ -585,10 +588,10 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
 
         const membersArrays = await Promise.all(membersPromises)
         const allMembers = membersArrays.flat()
-        // Remove duplicates
+        // Remove duplicates and filter to only include members with valid employee IDs
         const uniqueMembers = Array.from(
           new Map(allMembers.map(m => [m.employee_id, m])).values()
-        )
+        ).filter((member: any) => member.employee_id) // Only include members with employee_id
         setGroupMembers(uniqueMembers)
       }
     } catch (err) {

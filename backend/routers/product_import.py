@@ -260,7 +260,7 @@ async def download_excel_template(
             ],
             'unit': [
                 'cái', 'cái', 'cái', 'cái', 'cái',
-                'cái', 'bộ', 'bộ', 'cái', 'm2'
+                'cái', 'bộ', 'bộ', 'cái', 'm²'
             ],
             'description': [
                 'Bàn gỗ sồi tự nhiên, chân sắt mạ chrome',
@@ -397,7 +397,7 @@ async def download_excel_template(
                     'Giá sản phẩm VND (BẮT BUỘC)',
                     'Đơn vị tính (BẮT BUỘC)',
                     'Mô tả chi tiết sản phẩm (TÙY CHỌN)',
-                    'Diện tích m2 (TÙY CHỌN)',
+                    'Diện tích m² (TÙY CHỌN)',
                     'Thể tích m³ (TÙY CHỌN)',
                     'Chiều cao mm (TÙY CHỌN)',
                     'Chiều dài mm (TÙY CHỌN)',
@@ -419,9 +419,9 @@ async def download_excel_template(
                 'Ghi chú': [
                     'Không được để trống',
                     'Phải > 0, không có dấu phẩy',
-                    'cái, kg, m, m2, bộ, thùng...',
+                    'cái, kg, m, m², bộ, thùng...',
                     'Mô tả chi tiết về sản phẩm',
-                    'Số thập phân, đơn vị m2',
+                    'Số thập phân, đơn vị m²',
                     'Số thập phân, đơn vị m³',
                     'Số nguyên, đơn vị mm (milimét)',
                     'Số nguyên, đơn vị mm (milimét)',

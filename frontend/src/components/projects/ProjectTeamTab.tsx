@@ -22,6 +22,7 @@ interface TeamMember {
   role: string;
   email?: string;
   phone?: string;
+  employee_id?: string;
   start_date: string;
   hourly_rate?: number;
   skills?: string[];

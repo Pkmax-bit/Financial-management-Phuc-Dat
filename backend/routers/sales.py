@@ -24,7 +24,9 @@ from utils.permissions import require_permission, Permission, PermissionChecker
 from services.supabase_client import get_supabase_client
 from services.journal_service import journal_service
 from services.project_validation_service import ProjectValidationService
-from services.email_service import email_service
+# Temporarily disabled email service
+# from services.email_service import email_service
+email_service = None  # Email service temporarily disabled
 from services.notification_service import notification_service
 from services.quote_service import quote_service
 from utils.file_utils import get_company_logo_path
@@ -961,6 +963,9 @@ async def create_invoice_from_quote(quote_id: str, quote: dict, approver_user_id
 async def send_quote_approved_email_background(quote_id: str, quote: dict, employee_email: str, employee_name: str):
     """Send quote approved email notification - runs in background"""
     try:
+        if not email_service:
+            print(f"⚠️ Email service disabled - skipping quote approved notification email")
+            return
         quote_items = await quote_service.get_quote_items_with_categories(quote_id)
         await email_service.send_quote_approved_notification_email(
             quote,
@@ -1375,6 +1380,11 @@ async def preview_quote_email(
             print(f"📝 Using raw_html from email_customizations table")
         else:
             # Generate HTML (will be updated to use company_info and bank_info)
+            if not email_service:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Email service is temporarily disabled"
+                )
             html_content = email_service.generate_quote_email_html(
                 quote_data=quote_data,
                 customer_name=customer_name,
@@ -1863,6 +1873,11 @@ async def send_quote_to_customer(
                             print(f"📝 Using raw_html from email_customizations table")
                         else:
                             # Generate HTML with customization data
+                            if not email_service:
+                                raise HTTPException(
+                                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                    detail="Email service is temporarily disabled"
+                                )
                             final_html = email_service.generate_quote_email_html(
                                 quote_data=quote_data_with_custom,
                                 customer_name=customer_name,
@@ -1890,20 +1905,23 @@ async def send_quote_to_customer(
                                 for att in request.attachments
                             ]
                         
-                        background_tasks.add_task(
-                            email_service.send_quote_email,
-                            quote_data_with_custom,
-                            customer_email,
-                            customer_name,
-                            quote_items,
-                            custom_payment_terms,
-                            additional_notes,
-                            final_html,
-                            company_info if company_info else None,
-                            bank_info if bank_info else None,
-                            default_notes,
-                            attachments_list
-                        )
+                        if email_service:
+                            background_tasks.add_task(
+                                email_service.send_quote_email,
+                                quote_data_with_custom,
+                                customer_email,
+                                customer_name,
+                                quote_items,
+                                custom_payment_terms,
+                                additional_notes,
+                                final_html,
+                                company_info if company_info else None,
+                                bank_info if bank_info else None,
+                                default_notes,
+                                attachments_list
+                            )
+                        else:
+                            print(f"⚠️ Email service disabled - skipping quote email to {customer_email}")
                         
                         # Save email log with custom content
                         try:
@@ -3387,6 +3405,12 @@ async def test_quote_email(
                 pass
         
         # Send test email via email service (will use n8n if configured)
+        if not email_service:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Email service is temporarily disabled"
+            )
+        
         email_sent = await email_service.send_quote_email(
             quote_data=quote_data,
             customer_email=customer_email,
@@ -3398,7 +3422,7 @@ async def test_quote_email(
             return {
                 "status": "success",
                 "message": f"Test quote email sent successfully to {customer_email}",
-                "email_provider": email_service.email_provider,
+                "email_provider": email_service.email_provider if email_service else "disabled",
                 "quote_number": quote.get('quote_number'),
                 "note": "This is a test email. Quote status was not changed."
             }
@@ -3924,8 +3948,8 @@ async def import_quotes_from_excel(
                 height = None
                 length = None
                 
-                # Try to get area from "Diện tích (m2)"
-                for area_col in ['Diện tích (m2)', 'Dien tich', 'Diện tích']:
+                # Try to get area from "Diện tích (m²)"
+                for area_col in ['Diện tích (m²)', 'Dien tich', 'Diện tích']:
                     if area_col in available_columns:
                         area_val = row.get(area_col, '')
                         if pd.notna(area_val) and str(area_val).strip():
@@ -4464,7 +4488,7 @@ async def import_quote_from_ai_analysis(
                 
                 # 1. Try exact match first (highest priority)
                 if exp_name == ten_san_pham or exp_name == search_text:
-                    print(f"✅ Exact match found: '{search_text[:50]}' -> '{exp_name}' (expense_object_id: {exp_obj['id']})")
+                    print(f"✅ Exact match found: '{search_text[:50]}' → '{exp_name}' (expense_object_id: {exp_obj['id']})")
                     return exp_obj['id']
                 
                 # 2. Try contains match (high priority)
@@ -4496,7 +4520,7 @@ async def import_quote_from_ai_analysis(
             if best_match:
                 matched_obj = next((eo for eo in expense_objects if eo['id'] == best_match), None)
                 matched_name = matched_obj.get('name', 'Unknown') if matched_obj else 'Unknown'
-                print(f"✅ Best match found: '{search_text[:50]}' -> '{matched_name}' (expense_object_id: {best_match}, score: {best_score:.2f})")
+                print(f"✅ Best match found: '{search_text[:50]}' → '{matched_name}' (expense_object_id: {best_match}, score: {best_score:.2f})")
             else:
                 print(f"❌ No match found for: '{search_text[:50]}'")
             
@@ -4544,7 +4568,7 @@ async def import_quote_from_ai_analysis(
                         'similarity': match.get('similarity'),
                         'match_type': match.get('match_type')
                     })
-                    print(f"✅ Matched product: '{product_name_short}' -> '{match['name']}' (similarity: {match.get('similarity')}%)")
+                    print(f"✅ Matched product: '{product_name_short}' → '{match['name']}' (similarity: {match.get('similarity')}%)")
                 else:
                     # Create new product
                     category_id = None
@@ -4556,7 +4580,7 @@ async def import_quote_from_ai_analysis(
                             cat_similarity = calculate_string_similarity(category_name, cat_name)
                             if cat_similarity >= 60:
                                 category_id = cat_id
-                                print(f"✅ Matched category: '{category_name}' -> '{cat_name}' (similarity: {cat_similarity}%)")
+                                print(f"✅ Matched category: '{category_name}' → '{cat_name}' (similarity: {cat_similarity}%)")
                                 break
                     
                     # If no match, use first category or None
@@ -4780,7 +4804,7 @@ async def import_quote_from_ai_analysis(
                         'expense_object_id': expense_object_id,
                         'cost': item_cost
                     })
-                    print(f"💰 Saved cost to product material components: {product_name_short} -> expense_object_id: {expense_object_id}, cost: {item_cost}, target_product_id: {target_product_id}")
+                    print(f"💰 Saved cost to product material components: {product_name_short} → expense_object_id: {expense_object_id}, cost: {item_cost}, target_product_id: {target_product_id}")
                 else:
                     print(f"⚠️ Cost item detected but no matching expense object found: {product_name_short}")
             
@@ -5117,7 +5141,7 @@ async def import_quote_from_ai_analysis(
             if item.get('cao'):
                 dim_parts.append(f"Cao: {item['cao']}m")
             if item.get('dien_tich'):
-                dim_parts.append(f"Diện tích: {item['dien_tich']}m2")
+                dim_parts.append(f"Diện tích: {item['dien_tich']}m²")
             if dim_parts:
                 description_parts.append(f"Quy cách: {', '.join(dim_parts)}")
             

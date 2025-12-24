@@ -2,7 +2,7 @@
 Task Management Models
 """
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional, List
 from datetime import datetime, date
 from enum import Enum
 
@@ -87,36 +87,10 @@ class TaskGroupMemberAdd(BaseModel):
     employee_id: str
     role: str = "member"
 
-class Task(BaseModel):
-    """Task model"""
-    id: str
-    title: str
-    description: Optional[str] = None
-    status: TaskStatus = TaskStatus.TODO
-    priority: TaskPriority = TaskPriority.MEDIUM
-    start_date: Optional[datetime] = None
-    due_date: Optional[datetime] = None
-    group_id: Optional[str] = None
-    created_by: Optional[str] = None
-    assigned_to: Optional[str] = None
-    accountable_person: Optional[str] = None
-    project_id: Optional[str] = None
-    completed_at: Optional[datetime] = None
-    completed_by: Optional[str] = None
-    estimated_time: int = 0  # minutes
-    time_spent: int = 0  # minutes cached
-    created_at: datetime
-    updated_at: datetime
-    # Computed fields
-    assigned_to_name: Optional[str] = None
-    created_by_name: Optional[str] = None
-    group_name: Optional[str] = None
-    project_name: Optional[str] = None
-    comment_count: Optional[int] = 0
-    attachment_count: Optional[int] = 0
-    parent_id: Optional[str] = None
-    # Use generic list to avoid forward-ref issues in Pydantic v2
-    checklists: Optional[List[dict]] = []
+class TaskParticipantCreate(BaseModel):
+    employee_id: str
+    role: TaskParticipantRole = TaskParticipantRole.PARTICIPANT
+
 
 class TaskCreate(BaseModel):
     """Task creation model"""
@@ -133,8 +107,7 @@ class TaskCreate(BaseModel):
     assignee_ids: Optional[List[str]] = []  # Multiple assignees
     estimated_time: Optional[int] = 0
     parent_id: Optional[str] = None
-    # Store participants as generic dicts to avoid forward-ref issues
-    participants: Optional[List[dict]] = []
+    participants: Optional[List[TaskParticipantCreate]] = []  # Detailed participants with roles
 
 class TaskUpdate(BaseModel):
     """Task update model"""
@@ -149,7 +122,7 @@ class TaskUpdate(BaseModel):
     accountable_person: Optional[str] = None
     project_id: Optional[str] = None
     estimated_time: Optional[int] = None
-    participants: Optional[List[dict]] = None  # Update participants list
+    participants: Optional[List[TaskParticipantCreate]] = None  # Update participants list
 
 class TaskAssignment(BaseModel):
     """Task Assignment model"""
@@ -232,6 +205,7 @@ class TaskChecklistItem(BaseModel):
     completed_at: Optional[datetime] = None
     created_at: datetime
     assignee_name: Optional[str] = None
+    assignments: Optional[List["ChecklistItemAssignment"]] = []
 
 
 class ChecklistItemAssignment(BaseModel):
@@ -261,7 +235,7 @@ class TaskChecklist(BaseModel):
     created_by: Optional[str] = None
     created_at: datetime
     progress: Optional[float] = None
-    items: List[TaskChecklistItem] = []
+    items: List["TaskChecklistItem"] = []
 
 
 class TaskChecklistCreate(BaseModel):
@@ -270,6 +244,37 @@ class TaskChecklistCreate(BaseModel):
 
 class TaskChecklistUpdate(BaseModel):
     title: Optional[str] = None
+
+
+class Task(BaseModel):
+    """Task model"""
+    id: str
+    title: str
+    description: Optional[str] = None
+    status: TaskStatus = TaskStatus.TODO
+    priority: TaskPriority = TaskPriority.MEDIUM
+    start_date: Optional[datetime] = None
+    due_date: Optional[datetime] = None
+    group_id: Optional[str] = None
+    created_by: Optional[str] = None
+    assigned_to: Optional[str] = None
+    accountable_person: Optional[str] = None
+    project_id: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    completed_by: Optional[str] = None
+    estimated_time: int = 0  # minutes
+    time_spent: int = 0  # minutes cached
+    created_at: datetime
+    updated_at: datetime
+    # Computed fields
+    assigned_to_name: Optional[str] = None
+    created_by_name: Optional[str] = None
+    group_name: Optional[str] = None
+    project_name: Optional[str] = None
+    comment_count: Optional[int] = 0
+    attachment_count: Optional[int] = 0
+    parent_id: Optional[str] = None
+    checklists: Optional[List["TaskChecklist"]] = []
 
 
 class TaskTimeLog(BaseModel):
@@ -300,11 +305,6 @@ class TaskParticipant(BaseModel):
     added_by: Optional[str] = None
     created_at: datetime
     employee_name: Optional[str] = None
-
-
-class TaskParticipantCreate(BaseModel):
-    employee_id: str
-    role: TaskParticipantRole = TaskParticipantRole.PARTICIPANT
 
 
 class TaskParticipantUpdate(BaseModel):
@@ -338,12 +338,13 @@ class TaskNoteUpdate(BaseModel):
 
 class TaskResponse(BaseModel):
     """Task response with related data"""
-    task: "Task"
+    task: Task
     assignments: List["TaskAssignment"] = []
     comments: List["TaskComment"] = []
     attachments: List["TaskAttachment"] = []
     checklists: List["TaskChecklist"] = []
     time_logs: List["TaskTimeLog"] = []
+    participants: List["TaskParticipant"] = []
     participants: List["TaskParticipant"] = []
     notes: List["TaskNote"] = []
     sub_tasks: List["Task"] = []

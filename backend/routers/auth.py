@@ -17,7 +17,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 from config import settings
 from services.supabase_client import get_supabase_client
-from services.email_service import email_service
+# Temporarily disabled email service
+# from services.email_service import email_service
+email_service = None  # Email service temporarily disabled
 from models.user import User, UserCreate, UserUpdate, UserLogin, UserResponse
 from utils.auth import (
     create_access_token,
@@ -90,20 +92,24 @@ async def _handle_password_reset_request(email: str):
         print(f"📧 Password reset link generated: {reset_link[:50]}... (truncated for security)")
         
         try:
-            email_sent = await email_service.send_password_reset_email(
-                user_email=user["email"],
-                user_name=user.get("full_name"),
-                reset_link=reset_link
-            )
-            
-            if not email_sent:
-                print(f"❌ Failed to send password reset email to {user['email']}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Không thể gửi email đặt lại mật khẩu. Vui lòng kiểm tra cấu hình email hoặc thử lại sau."
+            # Email service temporarily disabled
+            if email_service:
+                email_sent = await email_service.send_password_reset_email(
+                    user_email=user["email"],
+                    user_name=user.get("full_name"),
+                    reset_link=reset_link
                 )
-            
-            print(f"✅ Password reset email sent successfully to {user['email']}")
+                
+                if not email_sent:
+                    print(f"❌ Failed to send password reset email to {user['email']}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Không thể gửi email đặt lại mật khẩu. Vui lòng kiểm tra cấu hình email hoặc thử lại sau."
+                    )
+                
+                print(f"✅ Password reset email sent successfully to {user['email']}")
+            else:
+                print(f"⚠️ Email service disabled - skipping password reset email to {user['email']}")
         except Exception as email_error:
             print(f"❌ Error sending password reset email: {str(email_error)}")
             import traceback
@@ -338,11 +344,16 @@ async def change_password(
             "updated_at": datetime.utcnow().isoformat()
         }).eq("id", current_user.id).execute()
         
-        await email_service.send_password_change_confirmation(
-            user_email=current_user.email,
-            user_name=current_user.full_name,
-            via="manual"
-        )
+        # Email service temporarily disabled
+        if email_service:
+            try:
+                await email_service.send_password_change_confirmation(
+                    user_email=current_user.email,
+                    user_name=current_user.full_name,
+                    via="manual"
+                )
+            except Exception as e:
+                print(f"⚠️ Email service disabled - skipping password change confirmation: {e}")
         
         return {"message": "Mật khẩu đã được cập nhật thành công"}
         
@@ -421,11 +432,16 @@ async def reset_password(password_reset_confirm: PasswordResetConfirm):
         except Exception:
             pass
         
-        await email_service.send_password_change_confirmation(
-            user_email=user_email,
-            user_name=user_full_name,
-            via="reset"
-        )
+        # Email service temporarily disabled
+        if email_service:
+            try:
+                await email_service.send_password_change_confirmation(
+                    user_email=user_email,
+                    user_name=user_full_name,
+                    via="reset"
+                )
+            except Exception as e:
+                print(f"⚠️ Email service disabled - skipping password change confirmation: {e}")
         
         return {"message": "Mật khẩu đã được đặt lại thành công"}
         
@@ -561,6 +577,15 @@ async def get_email_config():
     """Get current email configuration (for debugging)"""
     import os
     
+    # Email service temporarily disabled
+    if not email_service:
+        return {
+            "email_provider": "disabled",
+            "daily_email_limit": "N/A",
+            "limit_details": {"note": "Email service is temporarily disabled"},
+            "status": "Email service is temporarily disabled"
+        }
+    
     # Determine daily email limit based on provider
     email_provider = email_service.email_provider
     daily_limit = "Unknown"
@@ -642,7 +667,10 @@ async def test_password_reset_email(request: TestPasswordResetEmail):
         print("=" * 60)
         print(f"📧 Email to: {email_to_test}")
         print(f"🔗 n8n Webhook URL: {n8n_webhook_url}")
-        print(f"⚙️  Current EMAIL_PROVIDER setting: {email_service.email_provider}")
+        if email_service:
+            print(f"⚙️  Current EMAIL_PROVIDER setting: {email_service.email_provider}")
+        else:
+            print(f"⚙️  Email service is temporarily disabled")
         print("=" * 60)
         
         # Generate a test reset link

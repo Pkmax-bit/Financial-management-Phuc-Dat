@@ -21,6 +21,7 @@ class TeamMember(BaseModel):
     responsibility_type: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    employee_id: Optional[str] = None
     start_date: str
     hourly_rate: Optional[float] = None
     status: str
@@ -65,12 +66,64 @@ async def get_project_team(
         supabase = get_supabase_client()
         
         result = supabase.table("project_team").select("*").eq("project_id", project_id).execute()
-        
-        if not result.data:
+        members_raw = result.data or []
+
+        if not members_raw:
             return {"team_members": []}
-        
+
+        # Preload employees to avoid N+1 queries when mapping user/email to employee_id
+        user_ids = list({member.get("user_id") for member in members_raw if member.get("user_id")})
+        emails = list({(member.get("email") or "").lower() for member in members_raw if member.get("email")})
+
+        employees_by_user_id = {}
+        employees_by_email = {}
+
+        if user_ids:
+            try:
+                employees_result = supabase.table("employees").select("id, user_id, email, first_name, last_name").in_("user_id", user_ids).execute()
+                for employee in employees_result.data or []:
+                    if employee.get("user_id"):
+                        employees_by_user_id[employee["user_id"]] = employee
+                    email_value = (employee.get("email") or "").lower()
+                    if email_value:
+                        employees_by_email[email_value] = employee
+            except Exception:
+                pass
+
+        if emails:
+            try:
+                email_employees_result = supabase.table("employees").select("id, email, first_name, last_name").in_("email", emails).execute()
+                for employee in email_employees_result.data or []:
+                    email_value = (employee.get("email") or "").lower()
+                    if email_value and email_value not in employees_by_email:
+                        employees_by_email[email_value] = employee
+            except Exception:
+                pass
+
+        def build_employee_name(employee: dict) -> str:
+            first_name = (employee or {}).get("first_name") or ""
+            last_name = (employee or {}).get("last_name") or ""
+            return f"{first_name} {last_name}".strip()
+
         team_members = []
-        for member in result.data:
+        for member in members_raw:
+            linked_employee = None
+
+            user_id = member.get("user_id")
+            email = (member.get("email") or "").lower() if member.get("email") else None
+
+            if user_id and user_id in employees_by_user_id:
+                linked_employee = employees_by_user_id[user_id]
+            elif email and email in employees_by_email:
+                linked_employee = employees_by_email[email]
+
+            if linked_employee:
+                member["employee_id"] = linked_employee.get("id")
+                if not member.get("name") or not member.get("name").strip():
+                    generated_name = build_employee_name(linked_employee)
+                    if generated_name:
+                        member["name"] = generated_name
+
             # Normalize nullable fields from DB
             if member.get("skills") is None:
                 member["skills"] = []

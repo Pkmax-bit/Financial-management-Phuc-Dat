@@ -282,7 +282,7 @@ async def submit_for_approval(
     claim_id: str,
     current_user: User = Depends(get_current_user)
 ):
-    """Submit expense claim for approval (Draft -> Submitted)"""
+    """Submit expense claim for approval (Draft → Submitted)"""
     try:
         supabase = get_supabase_client()
         

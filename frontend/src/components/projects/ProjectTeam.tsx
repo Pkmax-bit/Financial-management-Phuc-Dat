@@ -23,6 +23,7 @@ interface TeamMember {
   responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed'
   email?: string
   phone?: string
+  employee_id?: string
   start_date: string
   hourly_rate?: number
   status: 'active' | 'inactive'

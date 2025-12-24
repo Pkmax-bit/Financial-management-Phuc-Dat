@@ -28,6 +28,12 @@ export interface Task {
   parent_id?: string
 }
 
+export interface ChecklistItemAssignment {
+  employee_id: string
+  employee_name?: string
+  responsibility_type: 'accountable' | 'responsible' | 'consulted' | 'informed'
+}
+
 export interface TaskChecklistItem {
   id: string
   checklist_id: string
@@ -36,6 +42,7 @@ export interface TaskChecklistItem {
   assignee_id?: string
   assignee_name?: string
   sort_order: number
+  assignments?: ChecklistItemAssignment[]
 }
 
 export interface TaskChecklist {
