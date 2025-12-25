@@ -31,6 +31,9 @@ interface ProjectItem {
   manager_id?: string
   manager_name?: string
   manager_code?: string
+  manager_avatar?: string
+  creator_name?: string
+  creator_avatar?: string
   category_id?: string
   category_name?: string
   category_color?: string
@@ -245,6 +248,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           customer_id,
           manager_id,
           category_id,
+          created_by,
           start_date,
           end_date,
           budget,
@@ -258,7 +262,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             id,
             employee_code,
             first_name,
-            last_name
+            last_name,
+            avatar
+          ),
+          creator:users!created_by(
+            id,
+            first_name,
+            last_name,
+            avatar
           ),
           project_categories:category_id(
             id,
@@ -277,10 +288,16 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       if (error) throw error
 
       const mapped: ProjectItem[] = (data || []).map((p: any) => {
-        // Get manager name from employees table
+        // Get manager name and avatar from employees table
         const manager = p.employees
         const managerName = manager ? `${manager.first_name || ''} ${manager.last_name || ''}`.trim() : undefined
-        
+        const managerAvatar = manager?.avatar
+
+        // Get creator name and avatar from users table
+        const creator = p.creator
+        const creatorName = creator ? `${creator.first_name || ''} ${creator.last_name || ''}`.trim() : undefined
+        const creatorAvatar = creator?.avatar
+
         // Get status name from statuses array by matching status_id
         // Otherwise fallback to enum status mapping
         let statusName: string
@@ -305,6 +322,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           manager_id: p.manager_id,
           manager_name: managerName,
           manager_code: manager?.employee_code,
+          manager_avatar: managerAvatar,
+          creator_name: creatorName,
+          creator_avatar: creatorAvatar,
           category_id: p.category_id,
           category_name: p.project_categories?.name,
           category_color: p.project_categories?.color,

@@ -12,6 +12,9 @@ interface ProjectCardProps {
   categoryName?: string
   categoryColor?: string
   managerName?: string
+  creatorName?: string
+  creatorAvatar?: string
+  managerAvatar?: string
   onClick?: () => void
   onDragStart?: () => void
 }
@@ -33,6 +36,9 @@ export default function KanbanCard({
   categoryName,
   categoryColor,
   managerName,
+  creatorName,
+  creatorAvatar,
+  managerAvatar,
   onClick,
   onDragStart
 }: ProjectCardProps) {
@@ -80,13 +86,49 @@ export default function KanbanCard({
           <span className="font-semibold">{customerName}</span>
         </div>
       )}
-      {managerName && (
-        <div className="mt-2 text-xs font-medium text-gray-700 flex items-center gap-1.5">
-          <span className="text-blue-500">👤</span>
-          <span className="text-gray-600">Người chịu trách nhiệm:</span>
-          <span className="font-semibold text-gray-900">{managerName}</span>
+
+      {/* Avatar Section */}
+      <div className="mt-3 pt-2 border-t border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {creatorAvatar ? (
+              <div className="relative group/avatar">
+                <img
+                  src={creatorAvatar}
+                  alt={creatorName || 'Creator'}
+                  className="w-6 h-6 rounded-full border border-gray-300 hover:border-blue-400 transition-colors"
+                />
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-10">
+                  {creatorName || 'Người tạo'}
+                </div>
+              </div>
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs font-medium text-gray-600">
+                {(creatorName || 'N')[0]?.toUpperCase()}
+              </div>
+            )}
+
+            <span className="text-gray-400 text-xs">{'>'}</span>
+
+            {managerAvatar ? (
+              <div className="relative group/avatar">
+                <img
+                  src={managerAvatar}
+                  alt={managerName || 'Manager'}
+                  className="w-6 h-6 rounded-full border border-blue-300 hover:border-blue-500 transition-colors"
+                />
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-10">
+                  {managerName || 'Người chịu trách nhiệm'}
+                </div>
+              </div>
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium text-blue-600">
+                {(managerName || 'M')[0]?.toUpperCase()}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
       {typeof progress === 'number' && (
         <div className="mt-3 pt-3 border-t border-gray-200">
           <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1.5">

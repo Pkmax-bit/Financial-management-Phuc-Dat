@@ -15,6 +15,9 @@ interface ProjectItem {
   category_name?: string
   category_color?: string
   manager_name?: string
+  creator_name?: string
+  creator_avatar?: string
+  manager_avatar?: string
 }
 
 interface KanbanColumnProps {
@@ -137,6 +140,9 @@ export default function KanbanColumn({
             categoryName={p.category_name}
             categoryColor={p.category_color}
             managerName={p.manager_name}
+            creatorName={p.creator_name}
+            creatorAvatar={p.creator_avatar}
+            managerAvatar={p.manager_avatar}
             onClick={() => onCardClick?.(p.id)}
             onDragStart={() => onDragStart?.(p)}
           />

@@ -13,7 +13,9 @@ export const getFileIconPath = (iconName: string): string => {
   // In Next.js, files in public/ are served from root
   // Icons are stored in frontend/public/icon/ and accessed via /icon/
   // Use absolute path starting with /
-  return `/icon/${iconName}`
+  // Ensure icon name is lowercase for consistency
+  const normalizedName = iconName.toLowerCase()
+  return `/icon/${normalizedName}`
 }
 
 /**
@@ -42,7 +44,7 @@ export const getFileIconByType = (fileType: string, fileName?: string): string |
 
   // Excel files - check extension first
   if (['xls', 'xlsx', 'xlsm', 'xlsb'].includes(extension) || name.includes('.xls')) {
-    return getFileIconPath('Excel.png')
+    return getFileIconPath('excel.png')
   }
   // Then check MIME type
   if (
@@ -51,7 +53,7 @@ export const getFileIconByType = (fileType: string, fileName?: string): string |
     type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
     type === 'application/vnd.ms-excel.sheet.macroenabled.12'
   ) {
-    return getFileIconPath('Excel.png')
+    return getFileIconPath('excel.png')
   }
 
   // Word files - check extension first

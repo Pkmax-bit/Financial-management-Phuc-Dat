@@ -26,6 +26,7 @@ export default function FileIcon({
   fallback
 }: FileIconProps) {
   const [iconError, setIconError] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
 
   // Determine icon path
   let iconPath: string | null = null
@@ -35,8 +36,8 @@ export default function FileIcon({
     iconPath = getFileIconByType(fileType || '', fileName)
   }
 
-  // If no icon path or error loading, use fallback
-  if (!iconPath || iconError) {
+  // If no icon path or error loading (after retries), use fallback
+  if (!iconPath || (iconError && retryCount >= 2)) {
     if (fallback) {
       return <>{fallback}</>
     }
@@ -64,11 +65,22 @@ export default function FileIcon({
       alt={fileName || 'File icon'}
       className={className}
       style={size ? { width: size, height: size } : undefined}
+      key={`${iconPath}-${retryCount}`}
       onError={() => {
-        setIconError(true)
+        console.warn(`Failed to load icon: ${iconPath} (attempt ${retryCount + 1})`)
+        if (retryCount < 2) {
+          // Retry with a slight delay
+          setTimeout(() => {
+            setRetryCount(prev => prev + 1)
+            setIconError(false)
+          }, 100)
+        } else {
+          setIconError(true)
+        }
       }}
       onLoad={() => {
         setIconError(false)
+        setRetryCount(0)
       }}
     />
   )
