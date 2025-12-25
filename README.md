@@ -80,50 +80,7 @@ cd backend
 cp env.example .env
 ```
 
-Edit `.env` with your configuration:
-```env
-# Supabase Configuration
-SUPABASE_URL="https://.................supabase.co"
-SUPABASE_SERVICE_KEY="your_service_key_here"
-SUPABASE_ANON_KEY="your_anon_key_here"
 
-# Database connection details
-SUPABASE_DB_HOST="aws-1-ap-southeast-1.pooler.supabase.com"
-SUPABASE_DB_USER="postgres..............."
-SUPABASE_DB_PASSWORD="your_password_here"
-SUPABASE_DB_NAME="postgres"
-SUPABASE_DB_PORT="6543"
-
-# Dify API Configuration
-DIFY_API_BASE_URL="https://api.dify.ai/v1"
-DIFY_API_KEY="your_dify_api_key_here"
-
-# Email configuration
-SMTP_USER="your_email@gmail.com"
-SMTP_PASSWORD="your_app_password"
-SMTP_SERVER="smtp.gmail.com"
-SMTP_PORT="587"
-
-# JWT Configuration
-SECRET_KEY="your_secret_key_here"
-ALGORITHM="HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES="30"
-```
-
-#### Frontend Environment
-```bash
-cd frontend
-cp env.local.example .env.local
-```
-
-Edit `.env.local`:
-```env
-NEXT_PUBLIC_SUPABASE_URL="https://........supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your_anon_key_here"
-NEXT_PUBLIC_API_URL="http://localhost:8000"
-NEXT_PUBLIC_DIFY_API_BASE_URL="https://api.dify.ai/v1"
-NEXT_PUBLIC_DIFY_API_KEY="your_dify_api_key_here"
-```
 
 ## 🚀 Running the Application
 
