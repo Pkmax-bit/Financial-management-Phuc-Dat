@@ -58,9 +58,10 @@ interface CreateProjectExpenseDialogProps {
   category?: 'planned' | 'actual'
   mode?: 'create' | 'edit'
   editId?: string
+  initialProjectId?: string // Optional: if provided, pre-fill project_id
 }
 
-export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId }: CreateProjectExpenseDialogProps) {
+export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId, initialProjectId }: CreateProjectExpenseDialogProps) {
   const { hideSidebar } = useSidebar()
   
   // Hide sidebar when dialog opens/closes
@@ -1448,11 +1449,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }, [isOpen])
 
-  // Auto-fill project info from query params (separate effect to run after reset)
+  // Auto-fill project info from query params or initialProjectId prop (separate effect to run after reset)
   useEffect(() => {
-    if (isOpen && !isEdit && typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search)
-      const projectId = urlParams.get('project')
+    if (isOpen && !isEdit) {
+      // Priority: initialProjectId prop > URL param
+      const projectId = initialProjectId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('project') : null)
       
       if (projectId) {
         // Small delay to ensure form is reset first
@@ -1480,7 +1481,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         return () => clearTimeout(timer)
       }
     }
-  }, [isOpen, isEdit])
+  }, [isOpen, isEdit, initialProjectId])
 
   // Load user role and expense objects when dialog opens
   useEffect(() => {

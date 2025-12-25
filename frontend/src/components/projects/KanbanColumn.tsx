@@ -23,6 +23,8 @@ interface KanbanColumnProps {
   colorClass: string
   projects: ProjectItem[]
   totalInvoiceAmount?: number
+  totalQuoteAmount?: number
+  isQuoteStatus?: boolean
   onCardClick?: (id: string) => void
   onDragStart?: (project: ProjectItem) => void
   onDragOver?: (e: React.DragEvent) => void
@@ -45,6 +47,8 @@ export default function KanbanColumn({
   colorClass, 
   projects,
   totalInvoiceAmount = 0,
+  totalQuoteAmount = 0,
+  isQuoteStatus = false,
   onCardClick,
   onDragStart,
   onDragOver,
@@ -109,10 +113,14 @@ export default function KanbanColumn({
             )}
           </div>
         </div>
-        {totalInvoiceAmount > 0 && (
+        {(isQuoteStatus ? totalQuoteAmount : totalInvoiceAmount) > 0 && (
           <div className="px-4 pb-2 text-xs text-gray-600 border-t border-white/20">
-            <span className="font-medium">Tổng hóa đơn: </span>
-            <span className="font-semibold text-gray-800">{formatCurrency(totalInvoiceAmount)}</span>
+            <span className="font-medium">
+              {isQuoteStatus ? 'Tổng báo giá: ' : 'Tổng hóa đơn: '}
+            </span>
+            <span className="font-semibold text-gray-800">
+              {formatCurrency(isQuoteStatus ? totalQuoteAmount : totalInvoiceAmount)}
+            </span>
           </div>
         )}
       </div>
