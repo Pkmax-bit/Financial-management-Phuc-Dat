@@ -1471,11 +1471,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     if (isOpen && !isEdit) {
       // Priority: initialProjectId prop > URL param
       const projectId = initialProjectId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('project') : null)
-<<<<<<< HEAD
 
-=======
-      
->>>>>>> origin/main
       if (projectId) {
         // Small delay to ensure form is reset first
         const timer = setTimeout(() => {
