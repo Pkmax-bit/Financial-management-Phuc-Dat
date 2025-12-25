@@ -1,13 +1,13 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { 
-  X, 
-  Save, 
-  ChevronRight, 
-  ChevronDown, 
-  Plus, 
-  Trash2, 
+import {
+  X,
+  Save,
+  ChevronRight,
+  ChevronDown,
+  Plus,
+  Trash2,
   Calendar,
   User,
   DollarSign,
@@ -58,11 +58,12 @@ interface CreateProjectExpenseDialogProps {
   category?: 'planned' | 'actual'
   mode?: 'create' | 'edit'
   editId?: string
+  initialProjectId?: string // Optional: if provided, pre-fill project_id
 }
 
-export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId }: CreateProjectExpenseDialogProps) {
+export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess, category = 'planned', mode = 'create', editId, initialProjectId }: CreateProjectExpenseDialogProps) {
   const { hideSidebar } = useSidebar()
-  
+
   // Hide sidebar when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
@@ -75,42 +76,42 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       hideSidebar(false)
     }
   }, [isOpen, hideSidebar])
-  
+
   // Function hiển thị thông báo đẹp
   const showNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
     console.log('🔔 showNotification called:', { message, type })
-    
+
     try {
       const colors = {
-        success: { 
-          bg: 'rgba(16, 185, 129, 0.95)', 
-          border: '#10b981', 
+        success: {
+          bg: 'rgba(16, 185, 129, 0.95)',
+          border: '#10b981',
           shadow: 'rgba(16, 185, 129, 0.4)',
           text: '#ffffff'
         },
-        error: { 
-          bg: 'rgba(239, 68, 68, 0.95)', 
-          border: '#ef4444', 
+        error: {
+          bg: 'rgba(239, 68, 68, 0.95)',
+          border: '#ef4444',
           shadow: 'rgba(239, 68, 68, 0.4)',
           text: '#ffffff'
         },
-        warning: { 
-          bg: 'rgba(245, 158, 11, 0.95)', 
-          border: '#f59e0b', 
+        warning: {
+          bg: 'rgba(245, 158, 11, 0.95)',
+          border: '#f59e0b',
           shadow: 'rgba(245, 158, 11, 0.4)',
           text: '#ffffff'
         },
-        info: { 
-          bg: 'rgba(59, 130, 246, 0.95)', 
-          border: '#3b82f6', 
+        info: {
+          bg: 'rgba(59, 130, 246, 0.95)',
+          border: '#3b82f6',
           shadow: 'rgba(59, 130, 246, 0.4)',
           text: '#ffffff'
         }
       }
-      
+
       const color = colors[type]
       console.log('🎨 Using color:', color)
-      
+
       const notification = document.createElement('div')
       notification.style.cssText = `
         position: fixed;
@@ -137,7 +138,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       `
       notification.innerHTML = message.replace(/\n/g, '<br>')
       console.log('📝 Notification HTML:', notification.innerHTML)
-      
+
       // Thêm animation CSS nếu chưa có
       if (!document.querySelector('#notification-styles')) {
         console.log('🎬 Adding CSS animation styles')
@@ -167,10 +168,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         `
         document.head.appendChild(style)
       }
-      
+
       document.body.appendChild(notification)
       console.log('✅ Notification added to DOM')
-      
+
       // Tự động ẩn sau 6 giây
       setTimeout(() => {
         console.log('⏰ Auto-hiding notification after 6 seconds')
@@ -182,14 +183,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           }
         }, 300)
       }, 6000)
-      
+
     } catch (error) {
       console.error('❌ Error in showNotification:', error)
       // Fallback to alert if notification fails
       alert(message)
     }
   }
-  
+
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [userRole, setUserRole] = useState<string>('employee')
@@ -203,7 +204,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     amounts: true,
     additional: false
   })
-  
+
   // State for expense object selection visibility
   const [showExpenseObjectSelection, setShowExpenseObjectSelection] = useState(true)
 
@@ -230,34 +231,34 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // State for cost detail modal
   const [showCostDetailModal, setShowCostDetailModal] = useState(false)
   const [selectedExpenseObjectId, setSelectedExpenseObjectId] = useState<string>('')
-  
+
   // State for expense selector
   const [existingExpenses, setExistingExpenses] = useState<any[]>([])
   const [selectedExpenseToUpdate, setSelectedExpenseToUpdate] = useState<any>(null)
   const [showExpenseSelector, setShowExpenseSelector] = useState(false)
   const [isReplaceParentMode, setIsReplaceParentMode] = useState(false)
-  
+
   // State for expense dropdown
   const [expenseDropdownOptions, setExpenseDropdownOptions] = useState<any[]>([])
   const [selectedExpenseForUpdate, setSelectedExpenseForUpdate] = useState<string>('')
-  
+
   // State for direct cost input
   const [directProductCosts, setDirectProductCosts] = useState<Record<number, number>>({})
   const [directObjectCosts, setDirectObjectCosts] = useState<Record<string, number>>({})
   const [inputMode, setInputMode] = useState<'detailed' | 'product-total' | 'object-total'>('detailed')
-  
+
   // State for formatted unit price display
   const [formattedUnitPrices, setFormattedUnitPrices] = useState<Record<number, string>>({})
-  
+
   // State for formatted object amounts
   const [formattedObjectAmounts, setFormattedObjectAmounts] = useState<Record<string, Record<number, string>>>({})
-  
+
   // State for direct total inputs
   const [directObjectTotals, setDirectObjectTotals] = useState<Record<string, number>>({})
-  
+
   // State for toggle visibility
   const [showObjectTotalInputs, setShowObjectTotalInputs] = useState<boolean>(false)
-  
+
   // State for column visibility
   const [showColumnDialog, setShowColumnDialog] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
@@ -272,16 +273,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     expense_unit_price: true,
     expense_amount: true
   })
-  
+
   // State for workshop employee confirmation dialog
   const [showUpdateCreateDialog, setShowUpdateCreateDialog] = useState(false)
   const [pendingExpenseData, setPendingExpenseData] = useState<any>(null)
-  
+
   const [workshopParentObject, setWorkshopParentObject] = useState<SimpleExpenseObject | null>(null)
-  
+
   // Use expense object role filter hook
   const { processExpenseObjects, canAccessExpenseObject } = useExpenseObjectRoleFilter()
-  
+
   // Column visibility functions
   const toggleColumn = (column: string) => {
     setVisibleColumns(prev => ({
@@ -324,38 +325,40 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
   // Form validation
   const [errors, setErrors] = useState<Record<string, string>>({})
-  
+
   // System notification state
   const [systemNotification, setSystemNotification] = useState<string>('')
-  
+
   // Get validation status for button display
   const getValidationStatus = () => {
     if (!formData.description.trim()) {
-      return { 
-        message: '⚠️ Thiếu mô tả', 
+      return {
+        message: '⚠️ Thiếu mô tả',
         color: 'orange',
         details: 'Nhập mô tả chi phí'
       }
     }
     if (!formData.project_id) {
-      return { 
-        message: '⚠️ Thiếu dự án', 
+      return {
+        message: '⚠️ Thiếu dự án',
         color: 'orange',
         details: 'Chọn dự án'
       }
     }
     if (!formData.expense_date) {
-      return { 
-        message: '⚠️ Thiếu ngày', 
+      return {
+        message: '⚠️ Thiếu ngày',
         color: 'orange',
         details: 'Chọn ngày chi phí'
       }
     }
-    if ((Number(grandAllocationTotal) || 0) <= 0) {
-      return { 
-        message: '⚠️ Thiếu số tiền', 
+    // Kiểm tra tổng thành tiền (không phải chi phí đã phân bổ)
+    // Cho phép tạo chi phí mà không cần phân bổ vào đối tượng chi phí
+    if ((Number(plannedAmountComputed) || 0) <= 0) {
+      return {
+        message: '⚠️ Thiếu số tiền',
         color: 'orange',
-        details: 'Nhập số tiền kế hoạch'
+        details: 'Nhập ít nhất 1 dòng sản phẩm với số tiền > 0'
       }
     }
     return null
@@ -383,9 +386,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   }
 
   // Expense object columns
-  interface SimpleExpenseObject { 
-    id: string; 
-    name: string; 
+  interface SimpleExpenseObject {
+    id: string;
+    name: string;
     description?: string;
     is_active: boolean;
     parent_id?: string; // Added parent_id
@@ -429,59 +432,59 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Helper function to auto-calculate parent total from children in the same row
   const updateParentTotalFromChildren = (row: InvoiceItemRow): InvoiceItemRow => {
     const updated = { ...row }
-    
+
     // Find all parent objects that are selected
-    const parentObjects = expenseObjectsOptions.filter(obj => 
+    const parentObjects = expenseObjectsOptions.filter(obj =>
       obj.is_parent && selectedExpenseObjectIds.includes(obj.id)
     )
-    
+
     // For each parent, calculate total from its children
     parentObjects.forEach(parent => {
       // Find all children of this parent that are also selected
-      const children = expenseObjectsOptions.filter(obj => 
+      const children = expenseObjectsOptions.filter(obj =>
         obj.parent_id === parent.id && selectedExpenseObjectIds.includes(obj.id)
       )
-      
+
       if (children.length > 0) {
         // Calculate total from children - use the actual amount value
         // Priority: componentsAmt > (componentsQuantity * componentsUnitPrice) > (lineTotal * componentsPct / 100)
         let parentTotal = 0
         let parentQuantity = 0
         let parentUnitPrice = 0
-        
+
         children.forEach(child => {
           // Get child amount - prioritize direct amount input
           let childAmt = updated.componentsAmt[child.id]
-          
+
           // If no direct amount, calculate from quantity * unit price
           if (childAmt === undefined || childAmt === 0) {
             const childQty = updated.componentsQuantity[child.id] || 0
             const childUnitPrice = updated.componentsUnitPrice[child.id] || 0
             childAmt = childQty * childUnitPrice
           }
-          
+
           // If still no amount, calculate from percentage
           if (childAmt === 0 || childAmt === undefined) {
             const childPct = updated.componentsPct[child.id] || 0
             const lineTotal = updated.lineTotal || 0
             childAmt = Math.round((lineTotal * childPct) / 100)
           }
-          
+
           const childQty = updated.componentsQuantity[child.id] || 0
           const childUnitPrice = updated.componentsUnitPrice[child.id] || 0
-          
+
           parentTotal += (childAmt || 0)
           parentQuantity += childQty
         })
-        
+
         // Update parent values
         updated.componentsAmt[parent.id] = parentTotal
-        
+
         // Calculate parent percentage based on lineTotal
         const lineTotal = updated.lineTotal || 0
         const parentPct = lineTotal > 0 ? (parentTotal / lineTotal) * 100 : 0
         updated.componentsPct[parent.id] = Math.round(parentPct * 100) / 100
-        
+
         // Update parent quantity and unit price
         // Calculate average unit price if there are quantities
         if (parentQuantity > 0) {
@@ -491,7 +494,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           parentUnitPrice = parentTotal
           parentQuantity = 1
         }
-        
+
         updated.componentsQuantity[parent.id] = parentQuantity
         updated.componentsUnitPrice[parent.id] = Math.round(parentUnitPrice)
       } else {
@@ -502,7 +505,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         updated.componentsUnitPrice[parent.id] = 0
       }
     })
-    
+
     return updated
   }
 
@@ -510,13 +513,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     setInvoiceItems(prev => {
       const next = [...prev]
       let updated = updater(next[rowIndex])
-      
+
       // Recompute line total
       // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
       const unitPrice = Number(updated.unitPrice) || 0
       const quantity = Number(updated.quantity) || 0
       const areaVal = updated.area != null ? Number(updated.area) : null
-      
+
       if (areaVal != null && isFinite(areaVal) && areaVal > 0) {
         // Có diện tích: thành tiền = Đơn giá × Diện tích × Số lượng
         updated.lineTotal = Math.round(unitPrice * areaVal * quantity * 100) / 100
@@ -524,10 +527,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         // Không có diện tích: thành tiền = đơn giá × số lượng
         updated.lineTotal = Math.round(unitPrice * quantity * 100) / 100
       }
-      
+
       // Auto-calculate parent totals from children in the same row
       updated = updateParentTotalFromChildren(updated)
-      
+
       next[rowIndex] = updated
       return next
     })
@@ -587,8 +590,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     return totals
   }, [directObjectTotals, expenseObjectTotals, selectedExpenseObjectIds])
 
-  // Tổng chi phí đã phân bổ (nếu không có phân bổ thì dùng tổng thành tiền dòng)
+  // Tổng chi phí đã phân bổ
+  // CHỈ tính chi phí khi đã chọn đối tượng chi phí VÀ đã phân bổ
+  // Nếu chưa chọn đối tượng hoặc chưa phân bổ, chi phí = 0 (lợi nhuận = 100% doanh thu)
   const grandAllocationTotal = useMemo(() => {
+    // Nếu chưa chọn đối tượng chi phí nào, chi phí = 0
+    if (selectedExpenseObjectIds.length === 0) {
+      return 0
+    }
+
     const totalAllocated = invoiceItems.reduce((grand, row) => {
       const rowSum = selectedExpenseObjectIds.reduce((s, id) => {
         const pct = Number(row.componentsPct[id] ?? 0)
@@ -598,9 +608,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       }, 0)
       return grand + rowSum
     }, 0)
-    // Nếu chưa chọn đối tượng hoặc chưa nhập phân bổ, fallback dùng tổng thành tiền dòng
-    return totalAllocated > 0 ? totalAllocated : plannedAmountComputed
-  }, [invoiceItems, selectedExpenseObjectIds, plannedAmountComputed])
+
+    // Trả về tổng đã phân bổ (có thể là 0 nếu chưa nhập phân bổ)
+    return totalAllocated
+  }, [invoiceItems, selectedExpenseObjectIds])
 
   const profitComputed = useMemo(() => {
     return (Number(projectRevenueTotal) || 0) - (Number(grandAllocationTotal) || 0)
@@ -625,8 +636,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Auto-select expense objects from product_components when both are ready (for both planned and actual expenses)
   useEffect(() => {
     if (
-      quoteProductComponents.length > 0 && 
-      expenseObjectsOptions.length > 0 && 
+      quoteProductComponents.length > 0 &&
+      expenseObjectsOptions.length > 0 &&
       formData.project_id
     ) {
       // Extract unique expense_object_ids from quoteProductComponents (works for both planned and actual)
@@ -635,12 +646,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           .map(comp => comp.expense_object_id)
           .filter(id => !!id)
       ))
-      
+
       // Only select IDs that exist in expenseObjectsOptions
-      const validIds = expenseObjectIds.filter(id => 
+      const validIds = expenseObjectIds.filter(id =>
         expenseObjectsOptions.some(obj => obj.id === id)
       )
-      
+
       if (validIds.length > 0) {
         setSelectedExpenseObjectIds(validIds)
         const categoryText = category === 'planned' ? 'quote_items' : 'invoice_items'
@@ -675,9 +686,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       Object.keys(nextUnitPrice).forEach(id => {
         if (!selectedExpenseObjectIds.includes(id)) delete nextUnitPrice[id]
       })
-      return { 
-        ...row, 
-        componentsPct: nextPct, 
+      return {
+        ...row,
+        componentsPct: nextPct,
         componentsAmt: nextAmt,
         componentsQuantity: nextQuantity,
         componentsUnitPrice: nextUnitPrice
@@ -691,7 +702,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       console.log('⏳ Waiting for user role to load expense objects...')
       return
     }
-    
+
     try {
       // Step 1: Load data from API
       let data
@@ -704,11 +715,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         data = await apiGet(`${API_BASE_URL}/api/expense-objects/public?active_only=true`)
         console.log('✅ Public endpoint succeeded for options')
       }
-      
+
       // Step 2: Map data to ExpenseObject format
-      const allExpenseObjects = Array.isArray(data) ? data.map((o: any) => ({ 
-        id: o.id, 
-        name: o.name, 
+      const allExpenseObjects = Array.isArray(data) ? data.map((o: any) => ({
+        id: o.id,
+        name: o.name,
         description: o.description,
         is_active: o.is_active ?? true,
         parent_id: o.parent_id,
@@ -716,12 +727,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         role: o.role,
         level: o.level
       })) : []
-      
+
       console.log(`📊 Loaded ${allExpenseObjects.length} expense objects from API`)
-      
+
       // Step 3: Process expense objects using new role filter
       const result = processExpenseObjects(allExpenseObjects, userRole, category, isEdit)
-      
+
       // Step 4: Sort options by preferred order
       const normalizeLower = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
       const preferredOrder = [
@@ -732,7 +743,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         'lap dat',       // lắp đặt
         'nha dau tu'     // nhà đầu tư
       ]
-      
+
       const sortedOpts = [...result.filteredObjects].sort((a, b) => {
         const na = normalizeLower(a.name)
         const nb = normalizeLower(b.name)
@@ -743,20 +754,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         if (ra !== rb) return ra - rb
         return a.name.localeCompare(b.name, 'vi')
       })
-      
+
       // Step 5: Set state
       setExpenseObjectsOptions(sortedOpts)
-      
+
       // Step 6: Auto-select objects - DISABLED per requirement
       // Do not auto-select any objects; user will choose manually
       console.log('ℹ️ Auto-selection disabled: User must manually choose expense objects')
-      
+
       // Step 7: Set parent object
       if (result.parentObject) {
         setWorkshopParentObject(result.parentObject)
         console.log('🔧 Set parent object:', result.parentObject.name)
       }
-      
+
     } catch (e) {
       console.error('❌ Error loading expense object options:', e)
       setExpenseObjectsOptions([])
@@ -769,7 +780,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       // For planned expenses: load quote_items with product_components
       if (category === 'planned') {
         console.log('📋 Loading quote_items with product_components for planned expense, project:', projectId)
-        
+
         // Load revenue (invoices) for profit calculation in planned expenses
         // Use subtotal (before tax) to match with expense amounts (which are also before tax)
         try {
@@ -816,41 +827,41 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           console.warn('⚠️ Error loading revenue for planned expense:', e)
           setProjectRevenueTotal(0)
         }
-        
+
         // First, get quote IDs for this project
         const { data: quotesData, error: quotesError } = await supabase
           .from('quotes')
           .select('id')
           .eq('project_id', projectId)
-        
+
         if (quotesError) {
           console.error('❌ Error loading quotes:', quotesError)
           setInvoiceItems([])
           setQuoteProductComponents([])
           return
         }
-        
+
         if (!Array.isArray(quotesData) || quotesData.length === 0) {
           console.log('ℹ️ No quotes found for project')
           setInvoiceItems([])
           setQuoteProductComponents([])
           return
         }
-        
+
         const quoteIds = quotesData.map((q: any) => q.id)
-        
+
         // Load quote_items - try to get components column (product_components may not exist in quote_items)
         // First try with both columns, if fails, try only with components
         let quoteItemsData: any[] | null = null
         let quoteItemsError: any = null
-        
+
         // Try loading with both columns first
         const { data: quoteItemsDataWithBoth, error: errorWithBoth } = await supabase
           .from('quote_items')
           .select('*')
           .in('quote_id', quoteIds)
           .order('created_at', { ascending: true })
-        
+
         if (errorWithBoth) {
           console.warn('⚠️ Error loading quote_items with all columns, trying basic select:', errorWithBoth)
           // Try with minimal columns including product_components
@@ -859,7 +870,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             .select('id, quote_id, name_product, description, quantity, unit_price, unit, total_price, area, created_at, components, product_components')
             .in('quote_id', quoteIds)
             .order('created_at', { ascending: true })
-          
+
           if (basicError) {
             console.error('❌ Error loading quote_items:', basicError)
             quoteItemsError = basicError
@@ -869,21 +880,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         } else {
           quoteItemsData = quoteItemsDataWithBoth
         }
-        
+
         if (quoteItemsError) {
           console.error('❌ Error loading quote_items:', quoteItemsError)
           setInvoiceItems([])
           setQuoteProductComponents([])
           return
         }
-        
+
         if (!Array.isArray(quoteItemsData) || quoteItemsData.length === 0) {
           console.log('ℹ️ No quote_items found')
           setInvoiceItems([])
           setQuoteProductComponents([])
           return
         }
-        
+
         // Collect all product_components from all quote_items
         const allComponents: Array<{
           expense_object_id: string
@@ -893,15 +904,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           unit_price: number
           total_price?: number
         }> = []
-        
+
         // Extract expense_object_ids and create invoice items
         const expenseObjectIdsSet = new Set<string>()
-        
+
         const rows: InvoiceItemRow[] = []
         quoteItemsData.forEach((qi: any) => {
           // Use product_components from quote_items (may also have components as fallback)
           const productComponents = qi.product_components || qi.components || []
-          
+
           if (Array.isArray(productComponents) && productComponents.length > 0) {
             // Collect components for auto-selection and auto-fill
             productComponents.forEach((comp: any) => {
@@ -918,7 +929,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               }
             })
           }
-          
+
           // Create invoice item row from quote_item
           const unitPrice = Number(qi.unit_price ?? qi.price) || 0
           const quantity = Number(qi.quantity ?? qi.qty) || 0
@@ -932,13 +943,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               lineTotal = Math.round(unitPrice * quantity * 100) / 100
             }
           }
-          
+
           // Prepare components data for this row
           const componentsPct: Record<string, number> = {}
           const componentsAmt: Record<string, number> = {}
           const componentsQuantity: Record<string, number> = {}
           const componentsUnitPrice: Record<string, number> = {}
-          
+
           // Fill components data if product_components exists
           if (Array.isArray(productComponents) && productComponents.length > 0) {
             productComponents.forEach((comp: any) => {
@@ -947,12 +958,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 const compUnitPrice = Number(comp.unit_price) || 0
                 // Use total_price from product_components, or calculate from quantity * unit_price
                 const compTotal = Number(comp.total_price) || (compQty * compUnitPrice)
-                
+
                 // Fill the 4 columns: %, số lượng, đơn giá, thành tiền
                 componentsQuantity[comp.expense_object_id] = compQty
                 componentsUnitPrice[comp.expense_object_id] = compUnitPrice
                 componentsAmt[comp.expense_object_id] = compTotal
-                
+
                 // Calculate percentage: (component total / line total) * 100
                 if (lineTotal > 0 && compTotal > 0) {
                   const percentage = (compTotal / lineTotal) * 100
@@ -963,7 +974,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               }
             })
           }
-          
+
           rows.push({
             section: '',
             index: rows.length + 1,
@@ -981,38 +992,45 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             componentsUnitPrice
           })
         })
-        
+
         // Store components for auto-selection
         setQuoteProductComponents(allComponents)
-        
+
         // Store expense object IDs for auto-selection (will be handled by useEffect)
         if (expenseObjectIdsSet.size > 0) {
           const expenseObjectIds = Array.from(expenseObjectIdsSet)
           console.log(`✅ Found ${expenseObjectIds.length} expense objects from quote_items product_components:`, expenseObjectIds)
         }
-        
+
         if (rows.length > 0) {
           console.log(`✅ Loaded ${rows.length} quote_items with product_components`)
           setInvoiceItems(rows)
           return
         }
       }
-      
+
+      // Early return for planned expenses to prevent fallback logic from running
+      // This prevents revenue from being calculated twice (bug fix)
+      if (category === 'planned') {
+        console.log('✅ Planned expense processing complete, skipping fallback logic')
+        return
+      }
+
       // For actual expenses: load invoice_items with product_components
       if (category === 'actual') {
         console.log('💰 Loading invoice_items with product_components for actual expense, project:', projectId)
-        
+
         // First, get invoice IDs for this project
         const { data: invoicesData, error: invoicesError } = await supabase
           .from('invoices')
           .select('id, subtotal, total_amount, tax_rate, items')
           .eq('project_id', projectId)
-        
+
         if (invoicesError) {
           console.error('❌ Error loading invoices:', invoicesError)
           // Continue with fallback logic below
         }
-        
+
         // Load revenue for profit calculation - use subtotal (before tax) to match with expense amounts
         if (Array.isArray(invoicesData) && invoicesData.length > 0) {
           const sumRevenue = invoicesData.reduce((s: number, inv: any) => {
@@ -1046,20 +1064,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           }, 0)
           console.log(`✅ Calculated revenue (subtotal before tax) for actual expense (early load): ${sumRevenue}`)
           setProjectRevenueTotal(sumRevenue)
-          
+
           const invoiceIds = invoicesData.map((inv: any) => inv.id)
-          
+
           // Load invoice_items with product_components (or components column)
           let invoiceItemsData: any[] | null = null
           let invoiceItemsError: any = null
-          
+
           // Try loading with all columns first
           const { data: invoiceItemsWithAll, error: errorWithAll } = await supabase
             .from('invoice_items')
             .select('*')
             .in('invoice_id', invoiceIds)
             .order('created_at', { ascending: true })
-          
+
           if (errorWithAll) {
             console.warn('⚠️ Error loading invoice_items with all columns, trying basic select:', errorWithAll)
             // Try with minimal columns including product_components
@@ -1068,7 +1086,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               .select('id, invoice_id, name_product, description, quantity, unit_price, unit, total_price, area, created_at, components, product_components')
               .in('invoice_id', invoiceIds)
               .order('created_at', { ascending: true })
-            
+
             if (basicError) {
               console.error('❌ Error loading invoice_items:', basicError)
               invoiceItemsError = basicError
@@ -1078,7 +1096,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           } else {
             invoiceItemsData = invoiceItemsWithAll
           }
-          
+
           if (!invoiceItemsError && Array.isArray(invoiceItemsData) && invoiceItemsData.length > 0) {
             // ===== Chuẩn bị lấy chi phí vật tư thực tế từ sản phẩm =====
             const productIdSet = new Set<string>()
@@ -1118,10 +1136,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               unit_price: number
               total_price?: number
             }> = []
-            
+
             // Extract expense_object_ids and create invoice items
             const expenseObjectIdsSet = new Set<string>()
-            
+
             const rows: InvoiceItemRow[] = []
             invoiceItemsData.forEach((ii: any) => {
               // Với chi phí thực tế: ưu tiên lấy chi phí đối tượng thực tế từ sản phẩm
@@ -1133,7 +1151,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 // Fallback: dùng product_components / components từ invoice_items nếu không có dữ liệu thực tế
                 productComponents = ii.product_components || ii.components || []
               }
-              
+
               if (Array.isArray(productComponents) && productComponents.length > 0) {
                 // Collect components for auto-selection and auto-fill
                 productComponents.forEach((comp: any) => {
@@ -1150,7 +1168,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   }
                 })
               }
-              
+
               // Create invoice item row from invoice_item
               const unitPrice = Number(ii.unit_price ?? ii.price) || 0
               const quantity = Number(ii.quantity ?? ii.qty) || 0
@@ -1164,13 +1182,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   lineTotal = Math.round(unitPrice * quantity * 100) / 100
                 }
               }
-              
+
               // Prepare components data cho dòng này
               const componentsPct: Record<string, number> = {}
               const componentsAmt: Record<string, number> = {}
               const componentsQuantity: Record<string, number> = {}
               const componentsUnitPrice: Record<string, number> = {}
-              
+
               // Fill components data if product_components exists
               if (Array.isArray(productComponents) && productComponents.length > 0) {
                 productComponents.forEach((comp: any) => {
@@ -1179,12 +1197,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     const compUnitPrice = Number(comp.unit_price) || 0
                     // Use total_price from product_components, or calculate from quantity * unit_price
                     const compTotal = Number(comp.total_price) || (compQty * compUnitPrice)
-                    
+
                     // Fill the 4 columns: %, số lượng, đơn giá, thành tiền
                     componentsQuantity[comp.expense_object_id] = compQty
                     componentsUnitPrice[comp.expense_object_id] = compUnitPrice
                     componentsAmt[comp.expense_object_id] = compTotal
-                    
+
                     // Calculate percentage: (component total / line total) * 100
                     if (lineTotal > 0 && compTotal > 0) {
                       const percentage = (compTotal / lineTotal) * 100
@@ -1195,7 +1213,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   }
                 })
               }
-              
+
               rows.push({
                 section: '',
                 index: rows.length + 1,
@@ -1213,16 +1231,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 componentsUnitPrice
               })
             })
-            
+
             // Store components for auto-selection
             setQuoteProductComponents(allComponents)
-            
+
             // Store expense object IDs for auto-selection (will be handled by useEffect)
             if (expenseObjectIdsSet.size > 0) {
               const expenseObjectIds = Array.from(expenseObjectIdsSet)
               console.log(`✅ Found ${expenseObjectIds.length} expense objects from invoice_items product_components:`, expenseObjectIds)
             }
-            
+
             if (rows.length > 0) {
               console.log(`✅ Loaded ${rows.length} invoice_items with product_components`)
               setInvoiceItems(rows)
@@ -1231,7 +1249,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           }
         }
       }
-      
+
       // For actual expenses: load revenue and continue with fallback logic if no invoice_items with product_components found
       if (category === 'actual') {
         // Load revenue (invoices) to compute profit
@@ -1279,7 +1297,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         } catch (_re) {
           setProjectRevenueTotal(0)
         }
-        
+
         // Fallback for actual expenses: continue with existing logic
         try {
           // Try purchase orders first (have structured line_items)
@@ -1448,12 +1466,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
   }, [isOpen])
 
-  // Auto-fill project info from query params (separate effect to run after reset)
+  // Auto-fill project info from query params or initialProjectId prop (separate effect to run after reset)
   useEffect(() => {
-    if (isOpen && !isEdit && typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search)
-      const projectId = urlParams.get('project')
-      
+    if (isOpen && !isEdit) {
+      // Priority: initialProjectId prop > URL param
+      const projectId = initialProjectId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('project') : null)
+
       if (projectId) {
         // Small delay to ensure form is reset first
         const timer = setTimeout(() => {
@@ -1476,17 +1494,17 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               }
             })
         }, 200)
-        
+
         return () => clearTimeout(timer)
       }
     }
-  }, [isOpen, isEdit])
+  }, [isOpen, isEdit, initialProjectId])
 
   // Load user role and expense objects when dialog opens
   useEffect(() => {
     if (isOpen) {
       // Load user role and employee info first
-      ;(async () => {
+      ; (async () => {
         try {
           const { data: { session } } = await supabase.auth.getSession()
           if (session?.user?.id) {
@@ -1496,7 +1514,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               .select('role, full_name, email')
               .eq('id', session.user.id)
               .single()
-            
+
             if (!userError && userData) {
               // Map role cũ sang role mới
               let mappedRole = userData.role
@@ -1504,18 +1522,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 mappedRole = 'Supplier'
                 console.log('🔄 Mapped workshop_employee to Supplier')
               }
-              
+
               setUserRole(mappedRole)
               // Tự động điền role của user (đã được map)
               setSelectedRole(mappedRole)
-              
+
               // Kiểm tra xem user có tồn tại trong bảng employees không
               const { data: employeeData, error: employeeError } = await supabase
                 .from('employees')
                 .select('id')
                 .eq('id', session.user.id)
                 .single()
-              
+
               if (!employeeError && employeeData) {
                 // Tự động điền employee_id của user hiện tại
                 setFormData(prev => ({
@@ -1527,14 +1545,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 console.log('⚠️ User not found in employees table, employee_id will be empty')
                 // Không auto-fill employee_id nếu user không có trong bảng employees
               }
-              
+
               console.log('✅ Auto-filled user info:', {
                 original_role: userData.role,
                 mapped_role: mappedRole,
                 employee_id: employeeData ? session.user.id : 'not found in employees table',
                 full_name: userData.full_name
               })
-              
+
               // Expense objects will be loaded by the consolidated useEffect
             }
           }
@@ -1550,20 +1568,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const validateParentChildLogic = (directObjectTotals: Record<string, number>, parentAmount: number) => {
     const childrenTotal = Object.values(directObjectTotals).reduce((sum, amount) => sum + (amount || 0), 0)
     const isValid = Math.abs(childrenTotal - parentAmount) < 0.01 // Allow small floating point differences
-    
+
     console.log('🔍 Parent-Child Validation:')
     console.log('📊 Children total (tổng con):', childrenTotal)
     console.log('📊 Parent amount (cha):', parentAmount)
     console.log('📊 Difference:', Math.abs(childrenTotal - parentAmount))
     console.log('📊 Is valid (tổng con = cha):', isValid)
-    
+
     if (!isValid) {
       console.error('❌ Parent-Child Logic Violation: Tổng con ≠ cha')
       console.error('📊 Children total:', childrenTotal)
       console.error('📊 Parent amount:', parentAmount)
       console.error('📊 Difference:', Math.abs(childrenTotal - parentAmount))
     }
-    
+
     return isValid
   }
 
@@ -1572,38 +1590,38 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const deleteExpenseWithCascade = async (expenseId: string) => {
     try {
       console.log('🗑️ Deleting expense with cascade:', expenseId)
-      
+
       // First, delete all child expenses
       console.log('🔍 Step 1: Deleting child expenses...')
       const { error: deleteChildrenError } = await supabase
         .from('project_expenses')
         .delete()
         .eq('id_parent', expenseId)
-      
+
       if (deleteChildrenError) {
         console.error('❌ Error deleting child expenses:', deleteChildrenError)
         return false
       }
-      
+
       console.log('✅ Child expenses deleted successfully')
-      
+
       // Then, delete the parent expense
       console.log('🔍 Step 2: Deleting parent expense...')
       const { error: deleteParentError } = await supabase
         .from('project_expenses')
         .delete()
         .eq('id', expenseId)
-      
+
       if (deleteParentError) {
         console.error('❌ Error deleting parent expense:', deleteParentError)
         return false
       }
-      
+
       console.log('✅ Parent expense deleted successfully')
       console.log('✅ Cascade delete completed: Xóa cha thì con cũng bị xóa')
-      
+
       return true
-      
+
     } catch (error) {
       console.error('❌ Error in cascade delete:', error)
       return false
@@ -1618,7 +1636,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       // Only clear selection if not in update mode (not editing existing expense)
       if (!selectedExpenseToUpdate) {
         console.log('🔄 Clear current selection to trigger auto-selection with new category')
-      setSelectedExpenseObjectIds([])
+        setSelectedExpenseObjectIds([])
       } else {
         console.log('🔄 Preserving current selection for update mode')
       }
@@ -1635,7 +1653,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         // Logic này sẽ được xử lý trong useEffect riêng cho workshop employee
         return
       }
-      
+
       // Cho các role khác, không auto-select mặc định
       console.log(`📋 No auto-selection for ${userRole} - user needs to manually select expense objects`)
     }
@@ -1659,13 +1677,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
   // Set workshop parent object for all users when they select children objects
   useEffect(() => {
-    console.log('🔍 Debug parent object detection:', { 
+    console.log('🔍 Debug parent object detection:', {
       selectedExpenseObjectIds: selectedExpenseObjectIds.length,
       expenseObjectsOptions: expenseObjectsOptions.length,
       userRole,
       category
     })
-    
+
     // Debug: Hiển thị tất cả expense objects options
     console.log('🔍 All expense objects options:', expenseObjectsOptions.map(o => ({
       id: o.id,
@@ -1673,36 +1691,36 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       is_parent: o.is_parent,
       parent_id: o.parent_id
     })))
-    
+
     // Debug: Hiển thị selected expense object IDs
     console.log('🔍 Selected expense object IDs:', selectedExpenseObjectIds)
-    
+
     // Debug: Hiển thị workshop parent object hiện tại
     console.log('🔍 Current workshop parent object:', workshopParentObject?.name)
-    
+
     if (selectedExpenseObjectIds.length > 0 && expenseObjectsOptions.length > 0) {
       // Tìm parent object của các children được chọn
       const firstChild = expenseObjectsOptions.find(o => selectedExpenseObjectIds.includes(o.id))
       console.log('🔍 First child found:', firstChild?.name, 'parent_id:', firstChild?.parent_id)
-      
+
       if (firstChild && firstChild.parent_id) {
         const parentObject = expenseObjectsOptions.find(o => o.id === firstChild.parent_id)
         console.log('🔍 Parent object found:', parentObject?.name, 'is_parent:', parentObject?.is_parent)
-        
+
         if (parentObject && parentObject.is_parent) {
           setWorkshopParentObject(parentObject)
           console.log(`✅ Set parent object for children:`, parentObject.name)
         }
       } else {
         // Fallback: Tìm parent object theo tên pattern
-        const parentObject = expenseObjectsOptions.find(o => 
+        const parentObject = expenseObjectsOptions.find(o =>
           o.is_parent && (
             o.name.includes('Xưởng') || o.name.includes('xuong') || o.name.includes('sản xuất') ||
             o.name.includes('Nguyên vật liệu') || o.name.includes('nguyen vat lieu') ||
             o.name.includes('Vật liệu') || o.name.includes('vat lieu')
           )
         )
-        
+
         if (parentObject) {
           setWorkshopParentObject(parentObject)
           console.log(`✅ Set parent object by pattern:`, parentObject.name)
@@ -1762,25 +1780,25 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             const componentsAmt: Record<string, number> = {}
             const componentsQuantity: Record<string, number> = it.components_quantity || {}
             const componentsUnitPrice: Record<string, number> = it.components_unit_price || {}
-            
+
             // Load components quantity and unit price from invoice_items
             if (it.components_quantity) {
               Object.entries(it.components_quantity).forEach(([objectId, quantity]) => {
                 componentsQuantity[objectId] = Number(quantity) || 0
               })
             }
-            
+
             if (it.components_unit_price) {
               Object.entries(it.components_unit_price).forEach(([objectId, unitPrice]) => {
                 componentsUnitPrice[objectId] = Number(unitPrice) || 0
               })
             }
-            
+
             // Calculate lineTotal with area support - Always recalculate to ensure accuracy
             const unitPrice = Number(it.unit_price) || 0
             const quantity = Number(it.quantity) || 0
             let areaVal = it.area != null ? Number(it.area) : null
-            
+
             // If area is missing but we have line_total, try to calculate area backwards
             // This handles cases where area wasn't saved in older records
             if ((areaVal == null || areaVal === 0) && unitPrice > 0 && quantity > 0) {
@@ -1797,7 +1815,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 }
               }
             }
-            
+
             // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
             // Always recalculate lineTotal based on current values, don't trust stored value
             console.log('🔍 Loading invoice item for edit:', {
@@ -1816,13 +1834,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               lineTotal = Math.round(unitPrice * quantity * 100) / 100
               console.log('⚠️ Calculated lineTotal without area:', lineTotal, '= unitPrice', unitPrice, '× quantity', quantity, '(area:', areaVal, ')')
             }
-            
+
             // Calculate componentsAmt from componentsPct and lineTotal
             Object.keys(componentsPct).forEach(id => {
               const pct = Number(componentsPct[id]) || 0
               componentsAmt[id] = Math.round((lineTotal * pct) / 100)
             })
-            
+
             return {
               section: '',
               index: idx + 1,
@@ -1841,10 +1859,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             }
           })
           setInvoiceItems(rows)
-          console.log('✅ Loaded invoice items for edit:', rows.length, 'rows with components:', rows.map(r => ({ 
-            productName: r.productName, 
-            componentsPct: r.componentsPct, 
-            componentsAmt: r.componentsAmt 
+          console.log('✅ Loaded invoice items for edit:', rows.length, 'rows with components:', rows.map(r => ({
+            productName: r.productName,
+            componentsPct: r.componentsPct,
+            componentsAmt: r.componentsAmt
           })))
         }
         // Only load project invoice items if we don't have existing invoice_items data
@@ -1898,7 +1916,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
     loadParents()
   }, [formData.project_id, category])
-  
+
   // Load expenses for dropdown when project changes
   useEffect(() => {
     if (category === 'actual' && formData.project_id) {
@@ -1914,18 +1932,18 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     try {
       setLoading(true)
       console.log('🔍 Fetching projects from database...')
-      
+
       const { data, error } = await supabase
         .from('projects')
         .select('id, name, project_code, status, budget')
         .in('status', ['planning', 'active'])
         .order('name', { ascending: true })
-      
+
       if (error) {
         console.error('❌ Supabase error fetching projects:', error)
         throw error
       }
-      
+
       console.log('✅ Projects fetched successfully:', data?.length || 0)
       setProjects(data || [])
     } catch (error) {
@@ -1938,23 +1956,23 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const fetchEmployees = async () => {
     try {
       console.log('🔍 Fetching employees from database...')
-      
+
       const { data, error } = await supabase
         .from('employees')
         .select('id, user_id, first_name, last_name, email')
         .order('first_name', { ascending: true })
-      
+
       if (error) {
         console.error('❌ Supabase error fetching employees:', error)
         throw error
       }
-      
+
       const mapped: Employee[] = (data || []).map((e: any) => ({
         id: e.id,
         full_name: ((e.first_name || '') + ' ' + (e.last_name || '')).trim() || e.email || e.id,
         email: e.email
       }))
-      
+
       console.log('✅ Employees fetched successfully:', mapped.length)
       setEmployees(mapped)
 
@@ -1982,21 +2000,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         console.log('❌ No project selected')
         return
       }
-      
+
       console.log('🔍 Loading existing actual expenses for project:', formData.project_id)
-      
+
       const { data, error } = await supabase
         .from('project_expenses')
         .select('*')
         .eq('project_id', formData.project_id)
         .is('id_parent', null) // Only load parent expenses
         .order('created_at', { ascending: false })
-      
+
       if (error) {
         console.error('❌ Error loading existing expenses:', error)
         return
       }
-      
+
       console.log('✅ Loaded existing expenses:', data?.length || 0)
       setExistingExpenses(data || [])
       setShowExpenseSelector(true)
@@ -2004,7 +2022,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       console.error('❌ Error in loadExistingExpenses:', error)
     }
   }
-  
+
   // Load expenses for dropdown
   const loadExpensesForDropdown = async (projectId: string) => {
     try {
@@ -2012,28 +2030,28 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         setExpenseDropdownOptions([])
         return
       }
-      
+
       console.log('🔍 Loading expenses for dropdown, project:', projectId)
-      
+
       const { data, error } = await supabase
         .from('project_expenses')
         .select('*')
         .eq('project_id', projectId)
         .is('id_parent', null) // Only load parent expenses
         .order('created_at', { ascending: false })
-      
+
       if (error) {
         console.error('❌ Error loading expenses for dropdown:', error)
         return
       }
-      
+
       console.log('✅ Loaded expenses for dropdown:', data?.length || 0)
       setExpenseDropdownOptions(data || [])
     } catch (error) {
       console.error('❌ Error in loadExpensesForDropdown:', error)
     }
   }
-  
+
   // Handle expense selection from dropdown
   const handleExpenseSelection = async (expenseId: string) => {
     try {
@@ -2042,57 +2060,57 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         setSelectedExpenseToUpdate(null)
         return
       }
-      
+
       console.log('🔍 Handling expense selection:', expenseId)
-      
+
       const selectedExpense = expenseDropdownOptions.find(exp => exp.id === expenseId)
       if (!selectedExpense) {
         console.error('❌ Selected expense not found')
         return
       }
-      
+
       console.log('✅ Selected expense:', selectedExpense)
-      
+
       // Load expense data for update
       await loadExpenseDataForUpdate(selectedExpense)
-      
+
       setSelectedExpenseForUpdate(expenseId)
     } catch (error) {
       console.error('❌ Error in handleExpenseSelection:', error)
     }
   }
-  
+
   // Load expense data for update
   const loadExpenseDataForUpdate = async (expense: any) => {
     try {
       console.log('🔍 Loading expense data for update:', expense.id)
-      
+
       // Load parent expense
       const { data: parentData, error: parentError } = await supabase
         .from('project_expenses')
         .select('*')
         .eq('id', expense.id)
         .single()
-      
+
       if (parentError) {
         console.error('❌ Error loading parent expense:', parentError)
         return
       }
-      
+
       // Load child expenses
       const { data: childData, error: childError } = await supabase
         .from('project_expenses')
         .select('*')
         .eq('id_parent', expense.id)
-      
+
       if (childError) {
         console.error('❌ Error loading child expenses:', childError)
         return
       }
-      
+
       console.log('✅ Loaded parent expense:', parentData)
       console.log('✅ Loaded child expenses:', childData?.length || 0)
-      
+
       // Populate form with expense data
       setFormData({
         ...formData,
@@ -2110,21 +2128,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         currency: parentData.currency || 'VND',
         id_parent: parentData.id_parent || ''
       })
-      
+
       // Preserve current expense object selections based on user role
       // Don't reset selectedExpenseObjectIds - let role-based filtering handle display
       console.log('🔍 Preserving current expense object selections for role-based display')
       console.log('📊 Current selectedExpenseObjectIds:', selectedExpenseObjectIds)
       console.log('📊 User role:', userRole)
       console.log('📊 Saved expense_object_columns:', parentData.expense_object_columns)
-      
+
       // Trigger role-based filtering to update display without changing selections
       if (expenseObjectsOptions.length > 0) {
         console.log('🔄 Triggering role-based filtering for expense objects display')
         // The role-based filtering will be handled by the existing useEffect
         // that watches userRole, category, and isOpen
       }
-      
+
       // Populate invoice items
       if (Array.isArray(parentData.invoice_items) && parentData.invoice_items.length > 0) {
         const rows: InvoiceItemRow[] = parentData.invoice_items.map((it: any, idx: number) => {
@@ -2132,25 +2150,25 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           const componentsAmt: Record<string, number> = {}
           const componentsQuantity: Record<string, number> = it.components_quantity || {}
           const componentsUnitPrice: Record<string, number> = it.components_unit_price || {}
-          
+
           // Load components quantity and unit price from invoice_items
           if (it.components_quantity) {
             Object.entries(it.components_quantity).forEach(([objectId, quantity]) => {
               componentsQuantity[objectId] = Number(quantity as any) || 0
             })
           }
-          
+
           if (it.components_unit_price) {
             Object.entries(it.components_unit_price).forEach(([objectId, unitPrice]) => {
               componentsUnitPrice[objectId] = Number(unitPrice as any) || 0
             })
           }
-          
+
           // Calculate lineTotal with area support - Always recalculate to ensure accuracy
           const unitPrice = Number(it.unit_price) || 0
           const quantity = Number(it.quantity) || 0
           let areaVal = it.area != null ? Number(it.area) : null
-          
+
           // If area is missing but we have line_total, try to calculate area backwards
           // This handles cases where area wasn't saved in older records
           if ((areaVal == null || areaVal === 0) && unitPrice > 0 && quantity > 0) {
@@ -2167,7 +2185,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               }
             }
           }
-          
+
           // Thành tiền = Đơn giá × Diện tích × Số lượng (nếu có diện tích), nếu không thì đơn giá × số lượng
           // Always recalculate lineTotal based on current values, don't trust stored value
           let lineTotal: number
@@ -2176,12 +2194,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           } else {
             lineTotal = Math.round(unitPrice * quantity * 100) / 100
           }
-          
+
           Object.keys(componentsPct).forEach((key: string) => {
             const pct = Number(componentsPct[key]) || 0
             componentsAmt[key] = Math.round((lineTotal * pct) / 100)
           })
-          
+
           return {
             section: '',
             index: idx + 1,
@@ -2202,43 +2220,43 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         })
         setInvoiceItems(rows)
       }
-      
+
       setSelectedExpenseToUpdate(expense)
       setShowExpenseSelector(false)
-      
+
       console.log('✅ Form populated with expense data')
     } catch (error) {
       console.error('❌ Error in loadExpenseDataForUpdate:', error)
     }
   }
-  
+
   // Update selected expense directly (fallback when no matching parent found)
   const updateSelectedExpenseDirectly = async (expenseData: any) => {
     try {
       console.log('🔍 Updating selected expense directly:', selectedExpenseToUpdate?.id)
-      
+
       if (!selectedExpenseToUpdate) {
         console.error('❌ No expense selected for direct update')
         return false
       }
-      
+
       const dataToUse = expenseData || pendingExpenseData
-      
+
       if (!dataToUse || !dataToUse.formData) {
         console.error('❌ Missing required data in updateSelectedExpenseDirectly')
         return false
       }
-      
+
       // Calculate total amount
       const totalAmount = Object.values(dataToUse.directObjectTotals || {}).reduce((sum: number, amount: any) => sum + (Number(amount) || 0), 0)
-      
+
       if (totalAmount <= 0) {
         console.error('❌ Total amount must be greater than 0')
         return false
       }
-      
+
       console.log('💰 Total amount to update:', totalAmount)
-      
+
       // Load current parent to merge (avoid overwriting existing data)
       const { data: currentParentArr, error: loadParentErr } = await supabase
         .from('project_expenses')
@@ -2278,49 +2296,49 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         })),
         updated_at: new Date().toISOString()
       }
-      
+
       console.log('🔄 Updating selected expense directly (additive):', selectedExpenseToUpdate.id)
-      
+
       const { error: parentError } = await supabase
         .from('project_expenses')
         .update(parentExpenseData)
         .eq('id', selectedExpenseToUpdate.id)
-      
+
       if (parentError) {
         console.error('❌ Error updating selected expense:', parentError)
         return false
       }
-      
+
       console.log('✅ Selected expense updated successfully')
-      
+
       // Kiểm tra có đối tượng bên trong chi phí được chọn không
       const newParentObjectId = dataToUse.workshopParentObject?.id
-      
+
       // Lấy danh sách children hiện tại của expense được chọn
       const { data: existingChildren, error: fetchChildrenError } = await supabase
         .from('project_expenses')
         .select('*')
         .eq('id_parent', selectedExpenseToUpdate.id)
-      
+
       if (fetchChildrenError) {
         console.error('❌ Error fetching existing children:', fetchChildrenError)
         return false
       }
-      
+
       console.log('📊 Existing children count:', existingChildren?.length || 0)
-      
+
       // Kiểm tra xem có children với đối tượng cha mới không
-      const hasExistingObject = existingChildren?.some(child => 
+      const hasExistingObject = existingChildren?.some(child =>
         child.expense_object_id === newParentObjectId
       ) || false
-      
+
       console.log('🔍 Has existing object in children:', hasExistingObject)
       console.log('🎯 New parent object ID:', newParentObjectId)
-      
+
       if (hasExistingObject) {
         // Trường hợp 2: Nếu có thì chỉ thêm vào (không xóa gì)
         console.log('🔄 Case 2: Object exists, adding new children while keeping old ones')
-        
+
         // Tạo children mới cho đối tượng cha này (không xóa children cũ)
         const childExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
           id: crypto.randomUUID(),
@@ -2341,23 +2359,23 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             components_amount: item.componentsAmt || {}
           })) || []
         }))
-        
+
         if (childExpenses.length > 0) {
           const { error: childError } = await supabase
             .from('project_expenses')
             .insert(childExpenses)
-          
+
           if (childError) {
             console.error('❌ Error creating new children for existing object:', childError)
             return false
           }
-          
+
           console.log('✅ New children created for existing object successfully')
         }
       } else {
         // Trường hợp 1: Nếu không có thì thêm vào và giữ nguyên các chi phí cũ
         console.log('🔄 Case 1: Object does not exist, adding new children while keeping old ones')
-        
+
         // Tạo children mới cho đối tượng cha mới (không xóa children cũ)
         const childExpenses = Object.entries(dataToUse.directObjectTotals || {}).map(([objectId, amount]) => ({
           id: crypto.randomUUID(),
@@ -2378,21 +2396,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             components_amount: item.componentsAmt || {}
           })) || []
         }))
-        
+
         if (childExpenses.length > 0) {
           const { error: childError } = await supabase
             .from('project_expenses')
             .insert(childExpenses)
-          
+
           if (childError) {
             console.error('❌ Error creating new children for new object:', childError)
             return false
           }
-          
+
           console.log('✅ New children created for new object successfully')
         }
       }
-      
+
       console.log('✅ Selected expense updated successfully - direct update')
       return true
     } catch (error) {
@@ -2469,7 +2487,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const handleSubmit = async () => {
     // Clear previous system notification
     setSystemNotification('')
-    
+
     if (!validateForm()) {
       // Thông báo hệ thống nếu chưa nhập mô tả
       if (!formData.description.trim()) {
@@ -2480,15 +2498,15 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     }
 
     // Kiểm tra nếu có parent object và children được chọn
-    console.log('🔍 Debug dialog trigger:', { 
-      workshopParentObject: workshopParentObject?.name, 
+    console.log('🔍 Debug dialog trigger:', {
+      workshopParentObject: workshopParentObject?.name,
       selectedExpenseObjectIds: selectedExpenseObjectIds.length,
       category,
       userRole,
       isUpdating: !!selectedExpenseToUpdate
     })
-    
-    
+
+
     if (workshopParentObject && selectedExpenseObjectIds.length > 0 && category === 'actual') {
       console.log(selectedExpenseToUpdate ? '🔄 Updating existing expense' : '✅ Creating new expense directly')
       console.log('📊 Form data from inputs:', {
@@ -2502,29 +2520,29 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       console.log('📊 Invoice items:', invoiceItems)
       console.log('📊 Direct object totals (before calculation):', directObjectTotals)
       console.log('📊 Grand allocation total:', grandAllocationTotal)
-      
+
       // Calculate directObjectTotals from invoiceItems if not already set
       let calculatedDirectObjectTotals = { ...directObjectTotals }
-      
+
       if (Object.keys(calculatedDirectObjectTotals).length === 0 && invoiceItems && invoiceItems.length > 0) {
         console.log('🔍 Calculating directObjectTotals from invoiceItems...')
         calculatedDirectObjectTotals = {}
-        
+
         for (const item of invoiceItems) {
           // Calculate totals from componentsAmt for each expense object
           if (item.componentsAmt) {
             for (const [expenseObjectId, amount] of Object.entries(item.componentsAmt)) {
               if (amount > 0) {
-                calculatedDirectObjectTotals[expenseObjectId] = 
+                calculatedDirectObjectTotals[expenseObjectId] =
                   (calculatedDirectObjectTotals[expenseObjectId] || 0) + amount
               }
             }
           }
         }
-        
+
         console.log('📊 Calculated directObjectTotals from invoiceItems:', calculatedDirectObjectTotals)
       }
-      
+
       const expenseData = {
         formData,
         selectedExpenseObjectIds,
@@ -2533,10 +2551,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         grandAllocationTotal,
         workshopParentObject
       }
-      
+
       console.log('📊 Setting pending expense data:', expenseData)
       setPendingExpenseData(expenseData)
-      
+
       // Check if updating or creating
       if (selectedExpenseToUpdate) {
         const success = await updateExistingExpense(expenseData)
@@ -2570,23 +2588,23 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     console.log('📊 Category:', category)
     console.log('📊 Selected expense object IDs:', selectedExpenseObjectIds)
     console.log('📊 Direct object totals:', directObjectTotals)
-    
+
     setSubmitting(true)
-    
+
     try {
       // ===== VALIDATION =====
       console.log('🔍 Step 1: Validation...')
-      
+
       if (!formData.project_id) {
         console.error('❌ Missing project_id')
         return
       }
-      
+
       if (!formData.description?.trim()) {
         console.error('❌ Missing description')
         return
       }
-      
+
       if (selectedExpenseObjectIds.length === 0) {
         console.error('❌ No expense objects selected')
         return
@@ -2604,44 +2622,44 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         console.log('💰 Routing to actual expense creation')
         await createActualExpense()
       }
-      
+
       console.log('✅ Create expense completed successfully')
-      
+
     } catch (error) {
       console.error('❌ Error in createExpense:', error)
     } finally {
       setSubmitting(false)
     }
   }
-  
+
   // ========================================
   // FUNCTION TẠO CHI PHÍ KẾ HOẠCH (PLANNED)
   // ========================================
   const createPlannedExpense = async () => {
     console.log('📋 ===== CREATING PLANNED EXPENSE =====')
-    
+
     try {
       const primaryExpenseObjectId = formData.expense_object_id || selectedExpenseObjectIds[0]
       const totalAmount = Object.values(directObjectTotals).some(val => val > 0)
         ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
         : (Number(grandAllocationTotal) || 0)
-      
+
       console.log('📊 Primary expense object ID:', primaryExpenseObjectId)
       console.log('📊 Total amount:', totalAmount)
-      
-            const expenseData = {
-            project_id: formData.project_id,
-            employee_id: formData.employee_id || null,
-            description: formData.description,
-            expense_object_id: primaryExpenseObjectId,
+
+      const expenseData = {
+        project_id: formData.project_id,
+        employee_id: formData.employee_id || null,
+        description: formData.description,
+        expense_object_id: primaryExpenseObjectId,
         amount: totalAmount,
-            currency: formData.currency,
-            expense_date: formData.expense_date,
-            status: 'pending',
-            notes: formData.notes || null,
-            receipt_url: formData.receipt_url || null,
-            id_parent: formData.id_parent || null,
-            expense_object_columns: selectedExpenseObjectIds,
+        currency: formData.currency,
+        expense_date: formData.expense_date,
+        status: 'pending',
+        notes: formData.notes || null,
+        receipt_url: formData.receipt_url || null,
+        id_parent: formData.id_parent || null,
+        expense_object_columns: selectedExpenseObjectIds,
         expense_object_totals: Object.values(directObjectTotals).some(val => val > 0) ? directObjectTotals : undefined,
         invoice_items: getInvoiceItems().map((item: any) => ({
           ...item,
@@ -2654,32 +2672,32 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
 
       console.log('📤 Expense data prepared:', expenseData)
 
-          if (isEdit && editId) {
+      if (isEdit && editId) {
         console.log('📤 Updating planned expense:', editId)
-            const { error } = await supabase
-              .from('project_expenses_quote')
-              .update(expenseData)
-              .eq('id', editId)
+        const { error } = await supabase
+          .from('project_expenses_quote')
+          .update(expenseData)
+          .eq('id', editId)
         if (error) {
           console.error('❌ Error updating planned expense:', error)
           throw error
         }
         console.log('✅ Planned expense updated successfully')
-          } else {
+      } else {
         console.log('📤 Creating new planned expense...')
-            const result = await apiPost(getApiEndpoint('/api/project-expenses/quotes'), expenseData)
+        const result = await apiPost(getApiEndpoint('/api/project-expenses/quotes'), expenseData)
         console.log('✅ Planned expense created:', result)
       }
-      
+
       // Update parent if exists
       if (expenseData.id_parent) {
         console.log('🔄 Updating parent expense amount...')
         await updateParentExpenseAmount(expenseData.id_parent, 'project_expenses_quote')
       }
-      
+
       // Reset form
-          setDirectObjectTotals({})
-          
+      setDirectObjectTotals({})
+
       // Show success notification and close dialog
       alert('Tạo chi phí dự kiến thành công!')
       hideSidebar(true) // Ensure sidebar is hidden
@@ -3358,25 +3376,25 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       actualExpenseTourAutoStartAttemptedRef.current = false
     }
   }, [isOpen])
-  
+
   // ========================================
   // FUNCTION TẠO CHI PHÍ THỰC TẾ (ACTUAL)
   // ========================================
   const createActualExpense = async () => {
     console.log('💰 ===== CREATING ACTUAL EXPENSE (SIMPLIFIED) =====')
-    
+
     try {
       // Validate basic requirements first
       if (!formData.project_id) {
         alert('Vui lòng chọn dự án!')
         return
       }
-      
+
       if (!formData.description || formData.description.trim() === '') {
         alert('Vui lòng nhập mô tả chi phí!')
         return
       }
-      
+
       if (selectedExpenseObjectIds.length === 0) {
         alert('Vui lòng chọn ít nhất một đối tượng chi phí!')
         return
@@ -3385,12 +3403,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       // Handle update if in edit mode (similar to planned expense)
       if (isEdit && editId) {
         console.log('📤 Updating actual expense:', editId)
-        
+
         const primaryExpenseObjectId = formData.expense_object_id || selectedExpenseObjectIds[0]
         const totalAmount = Object.values(directObjectTotals).some(val => val > 0)
           ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
           : (Number(grandAllocationTotal) || 0)
-        
+
         // Do NOT include status in update - preserve current status from database
         // Status should only be changed through approval/rejection actions, not through edit
         const expenseData = {
@@ -3419,7 +3437,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         // CRITICAL: Remove status from expenseData if it exists to prevent auto-approval
         const { status: _, ...expenseDataWithoutStatus } = expenseData as any
         const finalExpenseData = expenseDataWithoutStatus
-        
+
         console.log('📤 Expense data prepared for update (status explicitly excluded):', finalExpenseData)
         console.log('⚠️ CRITICAL: Status field has been explicitly removed from update payload')
         console.log('📊 Original expenseData had status?', 'status' in expenseData)
@@ -3430,20 +3448,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           .from('project_expenses')
           .update(finalExpenseData)
           .eq('id', editId)
-        
+
         if (error) {
           console.error('❌ Error updating actual expense:', error)
           throw error
         }
-        
+
         console.log('✅ Actual expense updated successfully')
-        
+
         // Update parent if exists
         if (expenseData.id_parent) {
           console.log('🔄 Updating parent expense amount...')
           await updateParentExpenseAmount(expenseData.id_parent, 'project_expenses')
         }
-        
+
         alert('Cập nhật chi phí thực tế thành công!')
         hideSidebar(true)
         onSuccess()
@@ -3451,9 +3469,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         resetForm()
         return
       }
-      
+
       const createdExpenses = []
-      
+
       // If we have invoice_items, save ONE combined expense with allocations
       let builtInvoiceItems: any[] = []
       try {
@@ -3480,10 +3498,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         const combinedId = (globalThis as any)?.crypto?.randomUUID
           ? (globalThis as any).crypto.randomUUID()
           : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-              const r = Math.random() * 16 | 0
-              const v = c === 'x' ? r : (r & 0x3 | 0x8)
-              return v.toString(16)
-            })
+            const r = Math.random() * 16 | 0
+            const v = c === 'x' ? r : (r & 0x3 | 0x8)
+            return v.toString(16)
+          })
 
         const combinedExpense: any = {
           id: combinedId,
@@ -3539,30 +3557,30 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       }
 
       console.log('🔄 Processing', selectedExpenseObjectIds.length, 'expense objects')
-      
+
       for (let i = 0; i < selectedExpenseObjectIds.length; i++) {
         const expenseObjectId = selectedExpenseObjectIds[i]
         console.log(`🔄 Processing expense object ${i + 1}/${selectedExpenseObjectIds.length}:`, expenseObjectId)
-        
+
         // Calculate amount
         const amount = Object.values(directObjectTotals).some(val => val > 0)
           ? (directObjectTotals[expenseObjectId] || 0)
           : (expenseObjectTotals[expenseObjectId] || 0)
-        
+
         if (amount <= 0) {
           console.log('⚠️ Skipping expense object with zero amount:', expenseObjectId)
           continue
         }
-        
+
         // Generate UUID for primary key id (DB has no default)
         const newId = (globalThis as any)?.crypto?.randomUUID
           ? (globalThis as any).crypto.randomUUID()
           : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-              const r = Math.random() * 16 | 0
-              const v = c === 'x' ? r : (r & 0x3 | 0x8)
-              return v.toString(16)
-            })
-        
+            const r = Math.random() * 16 | 0
+            const v = c === 'x' ? r : (r & 0x3 | 0x8)
+            return v.toString(16)
+          })
+
         // Create simple expense data - only essential fields
         const expenseData: any = {
           id: newId,
@@ -3575,7 +3593,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           status: 'pending',
           expense_code: `EXP-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 6)}`
         }
-            
+
         // Add optional fields only if they exist
         if (formData.employee_id) {
           expenseData.employee_id = formData.employee_id
@@ -3589,7 +3607,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         if (formData.id_parent) {
           expenseData.id_parent = formData.id_parent
         }
-        
+
         // Attach invoice_items (JSONB) if available
         try {
           const items = getInvoiceItems()
@@ -3599,12 +3617,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         } catch (e) {
           console.warn('⚠️ Could not build invoice_items, skipping. Error:', e)
         }
-        
+
         // Attach expense_object_columns (JSONB) as selected IDs if present
         if (Array.isArray(selectedExpenseObjectIds) && selectedExpenseObjectIds.length > 0) {
           expenseData.expense_object_columns = selectedExpenseObjectIds
         }
-            
+
         console.log('📤 Creating expense with data:', {
           id: expenseData.id,
           project_id: expenseData.project_id,
@@ -3616,29 +3634,29 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           status: expenseData.status,
           expense_code: expenseData.expense_code
         })
-            
+
         try {
           const { data, error } = await supabase
             .from('project_expenses')
             .insert(expenseData)
             .select()
-          
+
           if (error) {
             console.error('❌ Error creating expense:', error)
             console.error('❌ Error message:', error.message)
             console.error('❌ Error details:', error.details)
             console.error('❌ Error hint:', error.hint)
             console.error('❌ Error code:', error.code)
-            
+
             // Try with even simpler data
             const simpleData = {
               id: (globalThis as any)?.crypto?.randomUUID
                 ? (globalThis as any).crypto.randomUUID()
                 : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-                    const r = Math.random() * 16 | 0
-                    const v = c === 'x' ? r : (r & 0x3 | 0x8)
-                    return v.toString(16)
-                  }),
+                  const r = Math.random() * 16 | 0
+                  const v = c === 'x' ? r : (r & 0x3 | 0x8)
+                  return v.toString(16)
+                }),
               project_id: formData.project_id,
               description: formData.description,
               expense_object_id: expenseObjectId,
@@ -3647,14 +3665,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               expense_date: new Date().toISOString().split('T')[0],
               status: 'pending'
             }
-            
+
             console.log('🔄 Trying with minimal data:', simpleData)
-            
+
             const { data: simpleResult, error: simpleError } = await supabase
               .from('project_expenses')
               .insert(simpleData)
               .select()
-            
+
             if (simpleError) {
               console.error('❌ Even minimal data failed:', simpleError)
               throw new Error(`Failed to create expense: ${simpleError.message}`)
@@ -3671,30 +3689,30 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           throw insertError
         }
       }
-      
+
       console.log('📊 Total created expenses:', createdExpenses.length)
-      
+
       if (createdExpenses.length === 0) {
         alert('Không có chi phí nào được tạo! Vui lòng kiểm tra lại dữ liệu.')
         return
       }
-      
+
       // Reset form
       setDirectObjectTotals({})
-      
+
       // Show success notification and close dialog
       alert(`Tạo thành công ${createdExpenses.length} chi phí thực tế!`)
       hideSidebar(true) // Ensure sidebar is hidden
       onSuccess()
       onClose()
       resetForm()
-      
+
     } catch (error: any) {
       console.error('❌ Error in createActualExpense:', error)
       alert(`Lỗi khi tạo chi phí thực tế: ${error?.message || 'Unknown error'}`)
     }
   }
-  
+
   // ========================================
   // TEST FUNCTION: KIỂM TRA DỮ LIỆU CÓ LƯU ĐƯỢC KHÔNG
   // ========================================
@@ -3703,13 +3721,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     const testId = (globalThis as any)?.crypto?.randomUUID
       ? (globalThis as any).crypto.randomUUID()
       : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-          const r = Math.random() * 16 | 0
-          const v = c === 'x' ? r : (r & 0x3 | 0x8)
-          return v.toString(16)
-        })
+        const r = Math.random() * 16 | 0
+        const v = c === 'x' ? r : (r & 0x3 | 0x8)
+        return v.toString(16)
+      })
     console.log('🔑 Generated unique expense code:', uniqueCode)
     console.log('🆔 Generated test id:', testId)
-    
+
     const testData = {
       "id": testId,
       "project_id": "1623f25e-8f63-4525-abcd-219b993e9f1b",
@@ -3767,30 +3785,30 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         "198ecff2-1cd9-416e-acae-07b918eb5f43"
       ]
     }
-    
+
     console.log('🧪 Testing save data:', testData)
-    
+
     try {
       // Test Supabase connection first
       const { data: testData, error: testError } = await supabase
         .from('project_expenses')
         .select('id')
         .limit(1)
-      
+
       if (testError) {
         console.error('❌ Supabase connection test failed:', testError)
         return false
       }
-      
+
       console.log('✅ Supabase connection test passed')
-      
+
       // Try to insert the test data
       console.log('📤 Inserting test data:', JSON.stringify(testData, null, 2))
       const { data, error } = await supabase
         .from('project_expenses')
         .insert(testData)
         .select()
-      
+
       if (error) {
         console.error('❌ Test data insert failed:', error)
         console.error('❌ Error details:', {
@@ -3804,10 +3822,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         console.error('❌ Error keys:', Object.keys(error || {}))
         return false
       }
-      
+
       console.log('✅ Test data inserted successfully:', data)
       return true
-      
+
     } catch (error) {
       console.error('❌ Test save error:', error)
       return false
@@ -3819,14 +3837,14 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // ========================================
   const getInvoiceItems = () => {
     const hasDirectObjectInputs = directObjectTotals && Object.values(directObjectTotals).some(val => val > 0)
-    const hasProductDetails = invoiceItems && invoiceItems.some(row => 
+    const hasProductDetails = invoiceItems && invoiceItems.some(row =>
       row.productName.trim() !== '' || row.unitPrice > 0 || row.quantity > 0
     )
-    
+
     if (hasDirectObjectInputs && !hasProductDetails) {
       return []
     }
-    
+
     return Array.isArray(invoiceItems) ? invoiceItems.map((r: any) => {
       const components_pct: Record<string, number> = {}
       const components_quantity: Record<string, number> = {}
@@ -3855,27 +3873,27 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       }
     }) : []
   }
-  
+
   // ========================================
   // HELPER FUNCTION: CẬP NHẬT TỔNG CHI PHÍ PARENT
   // ========================================
   const updateParentExpenseAmount = async (parentId: string, tableName: string) => {
     try {
       console.log('🔄 Updating parent expense amount:', parentId, 'in table:', tableName)
-            const { data: children } = await supabase
+      const { data: children } = await supabase
         .from(tableName)
-              .select('amount')
-              .eq('id_parent', parentId)
-            const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
-            await supabase
+        .select('amount')
+        .eq('id_parent', parentId)
+      const total = (children || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
+      await supabase
         .from(tableName)
-              .update({ amount: total, updated_at: new Date().toISOString() })
-              .eq('id', parentId)
+        .update({ amount: total, updated_at: new Date().toISOString() })
+        .eq('id', parentId)
       console.log('✅ Parent expense amount updated:', total)
-          } catch (e) {
-            console.error('❌ Error updating parent expense amount:', e)
-          }
-        }
+    } catch (e) {
+      console.error('❌ Error updating parent expense amount:', e)
+    }
+  }
 
   // ========================================
   // FUNCTION CẬP NHẬT CHI PHÍ PARENT - VIẾT LẠI HOÀN TOÀN
@@ -3885,105 +3903,105 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     console.log('📊 workshopParentObject:', workshopParentObject)
     console.log('📊 pendingExpenseData:', pendingExpenseData)
     console.log('📊 expenseData parameter:', expenseData)
-    
+
     setSubmitting(true)
-    
+
     try {
       // ===== VALIDATION =====
       console.log('🔍 Step 1: Validation...')
-      
+
       // Use expenseData parameter if available, otherwise use pendingExpenseData
       const dataToUse = expenseData || pendingExpenseData
       console.log('📊 Using data:', dataToUse)
-      
+
       if (!workshopParentObject || !dataToUse) {
         console.error('❌ Missing required data:', { workshopParentObject, pendingExpenseData, expenseData })
         return
       }
-      
+
       if (!dataToUse.formData.project_id) {
         console.error('❌ Missing project_id')
         return
       }
-      
+
       if (!dataToUse.directObjectTotals || Object.keys(dataToUse.directObjectTotals).length === 0) {
         console.error('❌ No directObjectTotals data')
         return
       }
-      
+
       console.log('✅ Validation passed')
-      
+
       // ===== TÌM CHI PHÍ PARENT HIỆN TẠI =====
       console.log('🔍 Step 2: Searching for existing parent expenses...')
-      
+
       const { data: existingParents, error: searchError } = await supabase
         .from('project_expenses')
         .select('*')
         .eq('expense_object_id', workshopParentObject.id)
         .eq('project_id', dataToUse.formData.project_id)
         .order('created_at', { ascending: false })
-      
+
       if (searchError) {
         console.error('❌ Error searching for existing parents:', searchError)
         return
       }
-      
+
       console.log('📊 Found existing parents:', existingParents)
-      
+
       if (!existingParents || existingParents.length === 0) {
         console.log('❌ No existing parent found')
         return
       }
-      
+
       // ===== CẬP NHẬT CHI PHÍ PARENT =====
       console.log('🔍 Step 3: Updating parent expense...')
-      
+
       const existingParent = existingParents[0]
       console.log('📊 Using parent expense:', existingParent)
-      
+
       const totalAmount = (Object.values(dataToUse.directObjectTotals) as number[]).reduce((sum: number, val: number) => sum + val, 0)
       console.log('💰 Total amount calculated:', totalAmount)
       console.log('📊 directObjectTotals:', dataToUse.directObjectTotals)
-      
+
       if (totalAmount <= 0) {
         console.error('❌ Total amount must be greater than 0')
         return
       }
-      
+
       const { error: updateError } = await supabase
-          .from('project_expenses')
-          .update({
-            amount: totalAmount,
+        .from('project_expenses')
+        .update({
+          amount: totalAmount,
           description: dataToUse.formData.description || existingParent.description,
-            updated_at: new Date().toISOString(),
-            role: selectedRole,
+          updated_at: new Date().toISOString(),
+          role: selectedRole,
           expense_object_breakdown: dataToUse.directObjectTotals
-          })
-          .eq('id', existingParent.id)
-        
+        })
+        .eq('id', existingParent.id)
+
       if (updateError) {
         console.error('❌ Error updating parent expense:', updateError)
         return
       }
-      
+
       console.log('✅ Updated parent expense:', existingParent.id, 'with amount:', totalAmount)
-      
+
       // ===== CẬP NHẬT CHI PHÍ CON =====
       console.log('🔍 Step 4: Updating child expenses...')
       await updateChildExpenses(existingParent.id, dataToUse.directObjectTotals, dataToUse)
-      
+
       // ===== HOÀN THÀNH =====
       console.log('🔍 Step 5: Completing update...')
-      
+
       // Removed success notification
-      
+
       console.log('🔄 Calling onSuccess callback...')
       hideSidebar(true) // Ensure sidebar is hidden
       onSuccess()
       onClose()
       resetForm()
       console.log('✅ Update completed successfully')
-      
+
     } catch (error) {
       console.error('❌ Error updating parent expense:', error)
     } finally {
@@ -3995,24 +4013,24 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const updateChildExpenses = async (parentId: string, directObjectTotals: Record<string, number>, expenseData?: any) => {
     try {
       console.log('🔄 Updating child expenses for parent:', parentId)
-      
+
       // Use expenseData parameter if available, otherwise use pendingExpenseData
       const dataToUse = expenseData || pendingExpenseData
       console.log('📊 Using data in updateChildExpenses:', dataToUse)
-      
+
       // Xóa tất cả chi phí con cũ
       const { error: deleteError } = await supabase
         .from('project_expenses')
         .delete()
         .eq('id_parent', parentId)
-      
+
       if (deleteError) {
         console.error('❌ Error deleting old child expenses:', deleteError)
         return
       }
-      
+
       console.log('✅ Deleted old child expenses')
-      
+
       // Tạo chi phí con mới
       for (const [childObjectId, amount] of Object.entries(directObjectTotals)) {
         if (amount > 0) {
@@ -4031,11 +4049,11 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             updated_at: new Date().toISOString(),
             id_parent: parentId
           }
-          
+
           const { error: insertError } = await supabase
             .from('project_expenses')
             .insert(childExpenseData)
-          
+
           if (insertError) {
             console.error('❌ Error creating child expense:', insertError)
           } else {
@@ -4043,9 +4061,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           }
         }
       }
-      
+
       console.log('✅ All child expenses updated')
-      
+
     } catch (error) {
       console.error('❌ Error updating child expenses:', error)
     }
@@ -4063,24 +4081,24 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     console.log('📊 Selected expense object IDs from pendingExpenseData:', pendingExpenseData?.selectedExpenseObjectIds)
     console.log('📊 Invoice items from pendingExpenseData:', pendingExpenseData?.invoiceItems)
     console.log('📊 Direct object totals from pendingExpenseData:', pendingExpenseData?.directObjectTotals)
-    
-      setSubmitting(true)
-      
+
+    setSubmitting(true)
+
     try {
       // ===== VALIDATION =====
       console.log('🔍 Step 1: Validation...')
-      
+
       // Use expenseData parameter if available, otherwise use pendingExpenseData
       const dataToUse = expenseData || pendingExpenseData
       console.log('📊 Using data:', dataToUse)
-      
+
       if (!workshopParentObject || !dataToUse) {
         console.error('❌ Missing required data in createNewExpense:', { workshopParentObject, pendingExpenseData, expenseData })
         return
       }
-      
+
       console.log('✅ Validation passed')
-      
+
       // ===== TÍNH TỔNG CHI PHÍ =====
       console.log('🔍 Step 2: Calculating total amount...')
       console.log('📊 directObjectTotals:', dataToUse.directObjectTotals)
@@ -4090,20 +4108,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       console.log('📊 invoiceItems:', dataToUse.invoiceItems)
       console.log('📊 invoiceItems length:', dataToUse.invoiceItems?.length)
       console.log('📊 grandAllocationTotal:', dataToUse.grandAllocationTotal)
-      
+
       // Calculate total amount from direct object totals (tổng con = cha)
       let totalAmount = (Object.values(dataToUse.directObjectTotals || {}) as number[]).reduce((sum: number, val: number) => sum + (val || 0), 0)
       console.log('💰 Total amount calculated from directObjectTotals (tổng con = cha):', totalAmount)
       console.log('📊 Parent-Child Logic: Tổng con = cha')
       console.log('📊 Direct object totals (con):', dataToUse.directObjectTotals)
       console.log('📊 Calculated total amount (cha):', totalAmount)
-      
+
       // Validate parent-child logic
       if (!validateParentChildLogic(dataToUse.directObjectTotals, totalAmount)) {
         console.error('❌ Parent-Child Logic Violation: Cannot create expense')
         return
       }
-      
+
       if (totalAmount <= 0) {
         console.error('❌ Total amount must be greater than 0')
         console.error('📊 Debug directObjectTotals:', {
@@ -4112,29 +4130,29 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           values: Object.values(dataToUse.directObjectTotals || {}),
           totalAmount
         })
-        
+
         // Try to calculate from invoice items if directObjectTotals is empty
         console.log('🔍 Trying to calculate from invoice items...')
         console.log('📊 Invoice items structure:', dataToUse.invoiceItems)
-        
+
         const invoiceTotal = dataToUse.invoiceItems?.reduce((sum: number, item: any) => {
           console.log('📊 Processing invoice item:', item)
           const itemTotal = item.total || item.amount || 0
           console.log('📊 Item total:', itemTotal)
           return sum + itemTotal
         }, 0) || 0
-        
+
         console.log('💰 Invoice total calculated:', invoiceTotal)
-        
+
         if (invoiceTotal > 0) {
           console.log('✅ Using invoice total as fallback')
           totalAmount = invoiceTotal
           console.log('💰 Using fallback total:', totalAmount)
-          
+
           // Also try to populate directObjectTotals from invoiceItems
           console.log('🔍 Trying to populate directObjectTotals from invoiceItems...')
           const calculatedDirectObjectTotals: Record<string, number> = {}
-          
+
           if (dataToUse.invoiceItems && dataToUse.invoiceItems.length > 0) {
             // Calculate totals for each expense object from invoice items
             for (const item of dataToUse.invoiceItems) {
@@ -4142,9 +4160,9 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 calculatedDirectObjectTotals[item.expense_object_id] = (calculatedDirectObjectTotals[item.expense_object_id] || 0) + item.total
               }
             }
-            
+
             console.log('📊 Calculated directObjectTotals from invoiceItems:', calculatedDirectObjectTotals)
-            
+
             // Update dataToUse with calculated directObjectTotals
             dataToUse.directObjectTotals = calculatedDirectObjectTotals
           }
@@ -4154,31 +4172,31 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           return
         }
       }
-      
+
       // ===== TẠO CHI PHÍ PARENT =====
       console.log('🔍 Step 3: Creating parent expense...')
-      
+
       // Validate required fields
       if (!dataToUse.formData.project_id) {
         console.error('❌ Missing project_id')
         throw new Error('Missing project_id')
       }
-      
+
       if (!dataToUse.formData.description?.trim()) {
         console.error('❌ Missing description')
         throw new Error('Missing description')
       }
-      
+
       if (!workshopParentObject?.id) {
         console.error('❌ Missing workshopParentObject.id')
         throw new Error('Missing workshopParentObject.id')
       }
-      
+
       if (totalAmount <= 0) {
         console.error('❌ Invalid totalAmount:', totalAmount)
         throw new Error('Invalid totalAmount')
       }
-      
+
       const parentExpenseData = {
         id: crypto.randomUUID(),
         project_id: dataToUse.formData.project_id,
@@ -4199,7 +4217,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           components_unit_price: item.componentsUnitPrice || {}
         })) || []
       }
-      
+
       console.log('📤 Parent expense data:', parentExpenseData)
       console.log('📊 Parent expense data validation:', {
         hasId: !!parentExpenseData.id,
@@ -4211,7 +4229,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         hasExpenseDate: !!parentExpenseData.expense_date,
         hasStatus: !!parentExpenseData.status
       })
-      
+
       // Debug: Check if data is actually populated
       console.log('🔍 Debug dataToUse:', {
         formData: dataToUse.formData,
@@ -4219,7 +4237,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         invoiceItems: dataToUse.invoiceItems,
         workshopParentObject: workshopParentObject
       })
-      
+
       // Debug: Check individual fields
       console.log('🔍 Debug individual fields:', {
         project_id: dataToUse.formData?.project_id,
@@ -4229,13 +4247,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         workshopParentObject_id: workshopParentObject?.id,
         totalAmount: totalAmount
       })
-      
+
       const { data: createdParent, error: parentError } = await supabase
         .from('project_expenses')
         .insert(parentExpenseData)
         .select()
         .single()
-      
+
       if (parentError) {
         console.error('❌ Error creating parent expense:', parentError)
         console.error('📊 Error details:', {
@@ -4247,21 +4265,21 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         console.error('📊 Data that failed:', parentExpenseData)
         throw parentError
       }
-      
+
       console.log('✅ Created parent expense:', createdParent)
-      
+
       // ===== TẠO CHI PHÍ CON =====
       console.log('🔍 Step 4: Creating child expenses...')
-      
+
       const childExpenses = []
-      
+
       for (const [childObjectId, amount] of Object.entries(dataToUse.directObjectTotals)) {
         const amountValue = Number(amount)
         if (amountValue <= 0) {
           console.log('⚠️ Skipping child with zero amount:', childObjectId)
           continue
         }
-        
+
         const childObjectName = expenseObjectsOptions.find(o => o.id === childObjectId)?.name || 'Đối tượng'
         const childExpenseData = {
           id: crypto.randomUUID(),
@@ -4279,39 +4297,39 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
           expense_object_columns: [childObjectId],
           invoice_items: []
         }
-        
+
         console.log('📤 Creating child expense:', childObjectName, 'amount:', amountValue)
-        
+
         const { data: createdChild, error: childError } = await supabase
           .from('project_expenses')
           .insert(childExpenseData)
           .select()
           .single()
-        
+
         if (childError) {
           console.error('❌ Error creating child expense:', childError)
           throw childError
         }
-        
+
         console.log('✅ Created child expense:', childObjectName, 'with amount:', amountValue)
         childExpenses.push(createdChild)
       }
-      
+
       console.log('📊 Total child expenses created:', childExpenses.length)
-      
+
       // ===== HOÀN THÀNH =====
       console.log('🔍 Step 5: Completing creation...')
-      
+
       // Show success notification and close dialog
       alert('Tạo chi phí đối tượng thành công!')
-      
+
       console.log('🔄 Calling onSuccess callback...')
       hideSidebar(true) // Ensure sidebar is hidden
       onSuccess()
       onClose()
       resetForm()
       console.log('✅ Create new expense completed successfully')
-      
+
     } catch (error) {
       console.error('❌ Error creating new expense:', error)
       alert('Lỗi khi tạo chi phí đối tượng!')
@@ -4373,12 +4391,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   const getExpenseObjectDetail = (expenseObjectId: string) => {
     const expenseObject = expenseObjectsOptions.find(obj => obj.id === expenseObjectId)
     const totalAmount = expenseObjectTotals[expenseObjectId] || 0
-    
+
     const breakdown = invoiceItems.map((row, index) => {
       const percentage = Number(row.componentsPct[expenseObjectId] ?? 0)
       const amount = row.componentsAmt[expenseObjectId]
       const calculatedAmount = amount !== undefined ? Number(amount) : Math.round(((row.lineTotal || 0) * percentage) / 100)
-      
+
       return {
         rowIndex: index + 1,
         section: row.section,
@@ -4402,7 +4420,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       ...prev,
       [rowIndex]: value
     }))
-    
+
     // Update the invoice item's line total
     updateRow(rowIndex, (row) => ({
       ...row,
@@ -4416,16 +4434,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       ...prev,
       [objectId]: value
     }))
-    
+
     // Auto-calculate breakdown for all products
     const totalObjectCost = value
     const totalProductCost = invoiceItems.reduce((sum, row) => sum + row.lineTotal, 0)
-    
+
     if (totalProductCost > 0) {
       invoiceItems.forEach((row, index) => {
         const productPercentage = (row.lineTotal / totalProductCost) * 100
         const objectAmount = (totalObjectCost * productPercentage) / 100
-        
+
         updateRow(index, (updatedRow) => ({
           ...updatedRow,
           componentsPct: {
@@ -4444,7 +4462,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Switch input mode
   const switchInputMode = (mode: 'detailed' | 'product-total' | 'object-total') => {
     setInputMode(mode)
-    
+
     if (mode === 'product-total') {
       // Clear object costs when switching to product mode
       setDirectObjectCosts({})
@@ -4470,16 +4488,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Handle unit price change with formatting
   const handleUnitPriceChange = (rowIndex: number, inputValue: string) => {
     const numericValue = parseCurrency(inputValue)
-    
+
     // Update the actual value
     updateRow(rowIndex, (row) => ({
       ...row,
       unitPrice: numericValue
     }))
-    
+
     // Format the display value if it's a valid number
     const formattedValue = numericValue > 0 ? formatNumber(numericValue) : inputValue
-    
+
     // Update formatted display value
     setFormattedUnitPrices(prev => ({
       ...prev,
@@ -4490,7 +4508,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
   // Handle object amount change with formatting
   const handleObjectAmountChange = (objectId: string, rowIndex: number, inputValue: string) => {
     const numericValue = parseCurrency(inputValue)
-    
+
     // Update the actual value
     updateRow(rowIndex, (row) => {
       const next = { ...row }
@@ -4498,10 +4516,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       next.componentsPct[objectId] = (next.lineTotal || 0) > 0 ? (numericValue * 100) / (next.lineTotal || 1) : 0
       return next
     })
-    
+
     // Format the display value if it's a valid number
     const formattedValue = numericValue > 0 ? formatNumber(numericValue) : inputValue
-    
+
     // Update formatted display value
     setFormattedObjectAmounts(prev => ({
       ...prev,
@@ -4528,7 +4546,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
       ...prev,
       [objectId]: value
     }))
-    
+
     // Only store the total, don't calculate breakdown
     // The total will be used directly in the summary display
   }
@@ -4547,34 +4565,33 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">
-                {isEdit 
+                {isEdit
                   ? (category === 'actual' ? 'Chỉnh sửa chi phí thực tế' : 'Chỉnh sửa chi phí kế hoạch')
                   : (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch')}
               </h2>
               <p className="text-sm text-black mt-1">
-                {category === 'actual' 
+                {category === 'actual'
                   ? (isEdit ? 'Chỉnh sửa chi phí thực tế đã phát sinh cho dự án' : 'Tạo chi phí thực tế đã phát sinh cho dự án')
                   : (isEdit ? 'Chỉnh sửa chi phí dự kiến cho dự án' : 'Tạo chi phí dự kiến cho dự án')}
               </p>
-              
+
               {/* Show selected expense info */}
               {selectedExpenseToUpdate && (
                 <div className="mt-2 text-sm text-blue-600">
                   Đang cập nhật: {selectedExpenseToUpdate.description}
-            </div>
+                </div>
               )}
-          </div>
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             {category === 'planned' && (
               <button
                 onClick={() => startPlannedExpenseTour()}
                 disabled={isPlannedExpenseTourRunning || submitting}
-                className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                  isPlannedExpenseTourRunning || submitting
-                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                    : 'text-white bg-blue-600 hover:bg-blue-700'
-                }`}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${isPlannedExpenseTourRunning || submitting
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+                  }`}
                 title="Bắt đầu hướng dẫn tạo chi phí kế hoạch"
               >
                 <CircleHelp className="h-4 w-4" />
@@ -4584,11 +4601,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               <button
                 onClick={() => startActualExpenseTour()}
                 disabled={isActualExpenseTourRunning || submitting}
-                className={`flex items-center justify-center w-9 h-9 text-sm font-semibold rounded-lg transition-colors ${
-                  isActualExpenseTourRunning || submitting
-                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                    : 'text-white bg-green-600 hover:bg-green-700'
-                }`}
+                className={`flex items-center justify-center w-9 h-9 text-sm font-semibold rounded-lg transition-colors ${isActualExpenseTourRunning || submitting
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                  : 'text-white bg-green-600 hover:bg-green-700'
+                  }`}
                 title="Bắt đầu hướng dẫn tạo chi phí thực tế"
               >
                 <CircleHelp className="h-4 w-4" />
@@ -4604,12 +4620,12 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 🔄 Cập nhật chi phí đã có
               </button>
             )}
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
@@ -4632,7 +4648,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   <ChevronRight className="h-4 w-4 text-gray-400" />
                 )}
               </button>
-              
+
               {expandedSections.basic && (
                 <div className="px-4 pb-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4671,9 +4687,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               setSelectedExpenseObjectIds([])
                             }
                           }}
-                          className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                            errors.project_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                          }`}
+                          className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${errors.project_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                            }`}
                         >
                           <option value="">Chọn dự án</option>
                           {projects.map((project) => (
@@ -4699,9 +4714,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         value={formData.employee_id}
                         onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
                         disabled={!!formData.employee_id} // Disable khi đã auto-fill
-                        className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                          formData.employee_id ? 'bg-gray-100 cursor-not-allowed' : ''
-                        }`}
+                        className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${formData.employee_id ? 'bg-gray-100 cursor-not-allowed' : ''
+                          }`}
                       >
                         <option value="">Chọn nhân viên (tùy chọn)</option>
                         {employees.map((employee) => (
@@ -4731,9 +4745,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     <select
                       value={formData.id_parent}
                       onChange={(e) => setFormData({ ...formData, id_parent: e.target.value })}
-                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 text-gray-900 ${
-                        category === 'actual' ? 'focus:ring-green-500 border-gray-300' : 'focus:ring-blue-500 border-gray-300'
-                      }`}
+                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 text-gray-900 ${category === 'actual' ? 'focus:ring-green-500 border-gray-300' : 'focus:ring-blue-500 border-gray-300'
+                        }`}
                     >
                       <option value="">Không chọn chi phí cha</option>
                       {(category === 'planned' ? parentQuotes : parentExpenses).map((parent) => (
@@ -4744,7 +4757,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     </select>
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-gray-500">
-                        {category === 'planned' 
+                        {category === 'planned'
                           ? 'Chọn chi phí kế hoạch làm cha (từ project_expenses_quote)'
                           : 'Chọn chi phí thực tế làm cha (từ project_expenses)'}
                       </p>
@@ -4759,7 +4772,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Restore Button - Show when parent is selected */}
                     {formData.id_parent && (
                       <div className="mt-3">
@@ -4821,7 +4834,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       <p className="text-xs text-gray-500 mt-1">
                         Chọn chi phí thực tế đã có để cập nhật thông tin
                       </p>
-                      
+
                       {/* Hiển thị thông tin chi phí đã chọn */}
                       {selectedExpenseToUpdate && (
                         <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -4832,8 +4845,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                             </span>
                           </div>
                           <div className="mt-2 text-xs text-blue-700">
-                            Số tiền: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedExpenseToUpdate.amount || 0)} | 
-                            Ngày: {new Date(selectedExpenseToUpdate.expense_date).toLocaleDateString('vi-VN')} | 
+                            Số tiền: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedExpenseToUpdate.amount || 0)} |
+                            Ngày: {new Date(selectedExpenseToUpdate.expense_date).toLocaleDateString('vi-VN')} |
                             Trạng thái: {selectedExpenseToUpdate.status === 'approved' ? 'Đã duyệt' : selectedExpenseToUpdate.status === 'rejected' ? 'Từ chối' : 'Chờ duyệt'}
                           </div>
                         </div>
@@ -4848,9 +4861,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       </label>
                       <select
                         value={category}
-                        className={`w-full border rounded-md px-3 py-2 text-sm bg-gray-50 cursor-not-allowed ${
-                          category === 'actual' ? 'text-green-700 border-green-300' : 'text-blue-700 border-blue-300'
-                        }`}
+                        className={`w-full border rounded-md px-3 py-2 text-sm bg-gray-50 cursor-not-allowed ${category === 'actual' ? 'text-green-700 border-green-300' : 'text-blue-700 border-blue-300'
+                          }`}
                         disabled
                       >
                         <option value="planned">Kế hoạch</option>
@@ -4866,9 +4878,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         type="date"
                         value={formData.expense_date}
                         onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
-                        className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                          errors.expense_date ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                        }`}
+                        className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${errors.expense_date ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                          }`}
                       />
                       {errors.expense_date && (
                         <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -4929,7 +4940,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         Chọn các đối tượng chi phí để phân bổ ngân sách dự án
                       </div>
                     </label>
-                    
+
                     {showExpenseObjectSelection && (
                       <div className="space-y-3">
                         {/* Expense Object Tree View */}
@@ -4945,7 +4956,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                             lineTotal: item.lineTotal || 0
                           }))}
                         />
-                        
+
                         {/* Selected Objects Summary */}
                         {selectedExpenseObjectIds.length > 0 && (
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -4973,7 +4984,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               )}
             </div>
 
-                </div>
+          </div>
 
           {/* Split area: Left invoice details, Right amount/additional sections */}
           <div className="flex-1 overflow-hidden mt-6">
@@ -5037,8 +5048,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       </button>
                     </div>
                   </div>
-                  
-                  
+
+
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm text-gray-900" style={{ minWidth: '1200px' }}>
@@ -5062,17 +5073,17 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           </th>
                         ))}
                         {selectedExpenseObjectIds.length > 0 && (
-                        <th rowSpan={2} className="px-3 py-2 text-right font-semibold" style={{ minWidth: '120px' }}>Tổng phân bổ</th>
+                          <th rowSpan={2} className="px-3 py-2 text-right font-semibold" style={{ minWidth: '120px' }}>Tổng phân bổ</th>
                         )}
                         <th rowSpan={2} className="px-3 py-2 text-right font-semibold" style={{ minWidth: '80px' }}></th>
                       </tr>
                       <tr>
                         {selectedExpenseObjectIds.length > 0 && selectedExpenseObjectIds.map((id) => (
                           <React.Fragment key={`${id}-header`}>
-                        {visibleColumns.expense_percentage && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '60px' }}>%</th>}
-                        {visibleColumns.expense_quantity && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '80px' }}>Đơn vị</th>}
-                        {visibleColumns.expense_unit_price && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '100px' }}>Đơn giá</th>}
-                        {visibleColumns.expense_amount && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '120px' }}>VND</th>}
+                            {visibleColumns.expense_percentage && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '60px' }}>%</th>}
+                            {visibleColumns.expense_quantity && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '80px' }}>Đơn vị</th>}
+                            {visibleColumns.expense_unit_price && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '100px' }}>Đơn giá</th>}
+                            {visibleColumns.expense_amount && <th className="px-3 py-2 text-right font-semibold" style={{ minWidth: '120px' }}>VND</th>}
                           </React.Fragment>
                         ))}
                       </tr>
@@ -5185,7 +5196,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                       const amount = quantity * unitPrice
                                       const lineTotal = row.lineTotal || 0
                                       const percentage = lineTotal > 0 ? (amount / lineTotal) * 100 : 0
-                                      
+
                                       updateRow(i, r => {
                                         const next = { ...r }
                                         next.componentsQuantity[id] = quantity
@@ -5212,7 +5223,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                                       const amount = quantity * unitPrice
                                       const lineTotal = row.lineTotal || 0
                                       const percentage = lineTotal > 0 ? (amount / lineTotal) * 100 : 0
-                                      
+
                                       updateRow(i, r => {
                                         const next = { ...r }
                                         next.componentsUnitPrice[id] = unitPrice
@@ -5255,16 +5266,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           ))}
                           {/* Tổng phân bổ theo dòng */}
                           {selectedExpenseObjectIds.length > 0 && (
-                          <td className="px-3 py-2 text-right font-medium">
-                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                              selectedExpenseObjectIds.reduce((s, id) => {
-                                const pct = Number(row.componentsPct[id] ?? 0)
-                                const amt = row.componentsAmt[id]
-                                const value = amt !== undefined ? Number(amt) : Math.round(((row.lineTotal || 0) * pct) / 100)
-                                return s + (value || 0)
-                              }, 0)
-                            )}
-                          </td>
+                            <td className="px-3 py-2 text-right font-medium">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                                selectedExpenseObjectIds.reduce((s, id) => {
+                                  const pct = Number(row.componentsPct[id] ?? 0)
+                                  const amt = row.componentsAmt[id]
+                                  const value = amt !== undefined ? Number(amt) : Math.round(((row.lineTotal || 0) * pct) / 100)
+                                  return s + (value || 0)
+                                }, 0)
+                              )}
+                            </td>
                           )}
                           <td className="px-3 py-2 text-right">
                             <button onClick={() => removeRow(i)} className="text-red-600 hover:underline text-xs">Xóa</button>
@@ -5283,16 +5294,16 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           visibleColumns.unit,
                           visibleColumns.total_price
                         ].filter(Boolean).length
-                        
+
                         const visibleExpenseColumns = [
                           visibleColumns.expense_percentage,
                           visibleColumns.expense_quantity,
                           visibleColumns.expense_unit_price,
                           visibleColumns.expense_amount
                         ].filter(Boolean).length
-                        
+
                         const totalColSpan = 1 + visibleBasicColumns + (selectedExpenseObjectIds.length * visibleExpenseColumns) + (selectedExpenseObjectIds.length > 0 ? 1 : 0)
-                        
+
                         return (
                           <>
                             <tr className="bg-gray-50 border-t border-gray-200">
@@ -5303,37 +5314,37 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               <td className="px-3 py-2"></td>
                             </tr>
                             {selectedExpenseObjectIds.length > 0 && (
-                            <tr className="bg-gray-50">
-                              <td className="px-3 py-1.5 text-left text-xs font-medium bg-gray-50 sticky left-0 z-10" colSpan={totalColSpan}>Tổng chi phí</td>
-                              <td className={`px-3 py-1.5 text-right text-xs font-medium ${getCostPercentageColor(grandAllocationTotal, plannedAmountComputed)}`}>
-                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
-                                {plannedAmountComputed > 0 && (
-                                  <span className="ml-2 text-xs">
-                                    ({(grandAllocationTotal / plannedAmountComputed * 100).toFixed(1)}%)
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-1.5"></td>
-                            </tr>
+                              <tr className="bg-gray-50">
+                                <td className="px-3 py-1.5 text-left text-xs font-medium bg-gray-50 sticky left-0 z-10" colSpan={totalColSpan}>Tổng chi phí</td>
+                                <td className={`px-3 py-1.5 text-right text-xs font-medium ${getCostPercentageColor(grandAllocationTotal, plannedAmountComputed)}`}>
+                                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}
+                                  {plannedAmountComputed > 0 && (
+                                    <span className="ml-2 text-xs">
+                                      ({(grandAllocationTotal / plannedAmountComputed * 100).toFixed(1)}%)
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-1.5"></td>
+                              </tr>
                             )}
                             {selectedExpenseObjectIds.length > 0 && (
-                            <tr className="bg-gray-100">
-                              <td className="px-3 py-2 text-left font-bold bg-gray-100 sticky left-0 z-10" colSpan={totalColSpan}>Lợi nhuận</td>
-                              <td className="px-3 py-2 text-right font-bold">
-                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(profitComputed)}
-                              </td>
-                              <td className="px-3 py-2"></td>
-                            </tr>
+                              <tr className="bg-gray-100">
+                                <td className="px-3 py-2 text-left font-bold bg-gray-100 sticky left-0 z-10" colSpan={totalColSpan}>Lợi nhuận</td>
+                                <td className="px-3 py-2 text-right font-bold">
+                                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(profitComputed)}
+                                </td>
+                                <td className="px-3 py-2"></td>
+                              </tr>
                             )}
                           </>
                         )
                       })()}
                     </tfoot>
                   </table>
-                  </div>
+                </div>
                 <div className="p-4 border-t border-gray-200">
                   <div className="flex items-center justify-between mb-2">
-                  <button onClick={addRow} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Thêm dòng</button>
+                    <button onClick={addRow} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Thêm dòng</button>
                     <div className="flex flex-col items-end gap-1">
                       {selectedExpenseObjectIds.length > 0 && (
                         <div className="text-sm text-gray-700">
@@ -5359,9 +5370,8 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                       )}
                       {plannedAmountComputed > 0 && (
                         <div className="text-sm text-gray-700">
-                          Lợi nhuận: <span className={`font-semibold ${
-                            (plannedAmountComputed - grandAllocationTotal) > 0 ? 'text-green-600' : (plannedAmountComputed - grandAllocationTotal) < 0 ? 'text-red-600' : 'text-gray-600'
-                          }`}>
+                          Lợi nhuận: <span className={`font-semibold ${(plannedAmountComputed - grandAllocationTotal) > 0 ? 'text-green-600' : (plannedAmountComputed - grandAllocationTotal) < 0 ? 'text-red-600' : 'text-gray-600'
+                            }`}>
                             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}
                             {plannedAmountComputed > 0 && (
                               <span className="ml-2">
@@ -5371,361 +5381,388 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                           </span>
                         </div>
                       )}
-                  <div className="text-sm text-gray-700">
-                    Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
+                      <div className="text-sm text-gray-700">
+                        Tổng thành tiền: <span className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
                       </div>
                     </div>
+                  </div>
                 </div>
-                </div>
-            </div>
-
-            {/* Cost Warning Box */}
-            {selectedExpenseObjectIds.length > 0 && plannedAmountComputed > 0 && (
-              <div className="mt-4">
-                {(() => {
-                  const costPercentage = (grandAllocationTotal / plannedAmountComputed) * 100
-                  const isOverTotal = grandAllocationTotal > plannedAmountComputed
-                  const isNearTotal = grandAllocationTotal > plannedAmountComputed * 0.9 && grandAllocationTotal <= plannedAmountComputed
-                  
-                  if (isOverTotal) {
-                    return (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                        <div className="flex items-start">
-                          <svg className="h-5 w-5 text-red-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                          <div className="flex-1">
-                            <h3 className="text-sm font-medium text-red-800">
-                              Cảnh báo: Chi phí vượt quá thành tiền
-                            </h3>
-                            <div className="mt-1 text-sm text-red-700">
-                              <p>
-                                Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
-                              </p>
-                              <p className="mt-1">
-                                Tổng chi phí: <strong className="text-red-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
-                              </p>
-                              <p className="mt-1">
-                                Lợi nhuận: <strong className="text-red-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
-                                <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
-                              </p>
-                              <p className="mt-1 text-red-600 font-medium">
-                                ⚠️ Chi phí vượt quá thành tiền {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal - plannedAmountComputed)} ({costPercentage.toFixed(1)}%)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  } else if (isNearTotal) {
-                    return (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                        <div className="flex items-start">
-                          <svg className="h-5 w-5 text-yellow-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          <div className="flex-1">
-                            <h3 className="text-sm font-medium text-yellow-800">
-                              Cảnh báo: Chi phí gần bằng thành tiền
-                            </h3>
-                            <div className="mt-1 text-sm text-yellow-700">
-                              <p>
-                                Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
-                              </p>
-                              <p className="mt-1">
-                                Tổng chi phí: <strong className="text-yellow-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
-                              </p>
-                              <p className="mt-1">
-                                Lợi nhuận: <strong className="text-yellow-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
-                                <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
-                              </p>
-                              <p className="mt-1 text-yellow-600 font-medium">
-                                ⚠️ Chi phí đã đạt {costPercentage.toFixed(1)}% thành tiền, cần kiểm tra lại!
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  } else {
-                    return (
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                        <div className="flex items-start">
-                          <svg className="h-5 w-5 text-green-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <div className="flex-1">
-                            <h3 className="text-sm font-medium text-green-800">
-                              Tình trạng: Chi phí trong phạm vi an toàn
-                            </h3>
-                            <div className="mt-1 text-sm text-green-700">
-                              <p>
-                                Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
-                              </p>
-                              <p className="mt-1">
-                                Tổng chi phí: <strong className="text-green-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
-                                <span className="ml-2">({costPercentage.toFixed(1)}%)</span>
-                              </p>
-                              <p className="mt-1">
-                                Lợi nhuận: <strong className="text-green-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
-                                <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  }
-                })()}
               </div>
-            )}
+
+              {/* Cost Warning Box */}
+              {selectedExpenseObjectIds.length > 0 && plannedAmountComputed > 0 && (
+                <div className="mt-4">
+                  {(() => {
+                    const costPercentage = (grandAllocationTotal / plannedAmountComputed) * 100
+                    const isOverTotal = grandAllocationTotal > plannedAmountComputed
+                    const isNearTotal = grandAllocationTotal > plannedAmountComputed * 0.9 && grandAllocationTotal <= plannedAmountComputed
+
+                    if (isOverTotal) {
+                      return (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                          <div className="flex items-start">
+                            <svg className="h-5 w-5 text-red-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                            <div className="flex-1">
+                              <h3 className="text-sm font-medium text-red-800">
+                                Cảnh báo: Chi phí vượt quá thành tiền
+                              </h3>
+                              <div className="mt-1 text-sm text-red-700">
+                                <p>
+                                  Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
+                                </p>
+                                <p className="mt-1">
+                                  Tổng chi phí: <strong className="text-red-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
+                                </p>
+                                <p className="mt-1">
+                                  Lợi nhuận: <strong className="text-red-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
+                                  <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
+                                </p>
+                                <p className="mt-1 text-red-600 font-medium">
+                                  ⚠️ Chi phí vượt quá thành tiền {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal - plannedAmountComputed)} ({costPercentage.toFixed(1)}%)
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    } else if (isNearTotal) {
+                      return (
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                          <div className="flex items-start">
+                            <svg className="h-5 w-5 text-yellow-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <div className="flex-1">
+                              <h3 className="text-sm font-medium text-yellow-800">
+                                Cảnh báo: Chi phí gần bằng thành tiền
+                              </h3>
+                              <div className="mt-1 text-sm text-yellow-700">
+                                <p>
+                                  Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
+                                </p>
+                                <p className="mt-1">
+                                  Tổng chi phí: <strong className="text-yellow-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
+                                </p>
+                                <p className="mt-1">
+                                  Lợi nhuận: <strong className="text-yellow-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
+                                  <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
+                                </p>
+                                <p className="mt-1 text-yellow-600 font-medium">
+                                  ⚠️ Chi phí đã đạt {costPercentage.toFixed(1)}% thành tiền, cần kiểm tra lại!
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    } else {
+                      return (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                          <div className="flex items-start">
+                            <svg className="h-5 w-5 text-green-400 mt-0.5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <div className="flex-1">
+                              <h3 className="text-sm font-medium text-green-800">
+                                Tình trạng: Chi phí trong phạm vi an toàn
+                              </h3>
+                              <div className="mt-1 text-sm text-green-700">
+                                <p>
+                                  Tổng thành tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</strong>
+                                </p>
+                                <p className="mt-1">
+                                  Tổng chi phí: <strong className="text-green-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(grandAllocationTotal)}</strong>
+                                  <span className="ml-2">({costPercentage.toFixed(1)}%)</span>
+                                </p>
+                                <p className="mt-1">
+                                  Lợi nhuận: <strong className="text-green-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed - grandAllocationTotal)}</strong>
+                                  <span className="ml-2">({(((plannedAmountComputed - grandAllocationTotal) / plannedAmountComputed) * 100).toFixed(1)}%)</span>
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    }
+                  })()}
+                </div>
+              )}
 
               {/* Right panel removed for full-width invoice table */}
+            </div>
+          </div>
+        </div>
+
+        {/* Expense Summary Display - Enhanced with hierarchical totals */}
+        {selectedExpenseObjectIds.length > 0 && (
+          <div key={`expense-summary-${selectedExpenseObjectIds.join('-')}`} className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+              <BarChart3 className="w-5 h-5 text-blue-600" />
+              <span>Tóm tắt chi phí theo cấp độ</span>
+            </h3>
+            <ExpenseSummaryDisplay
+              key={`expense-summary-display-${selectedExpenseObjectIds.join('-')}-${JSON.stringify(combinedExpenseObjectTotals)}`}
+              selectedObjectIds={selectedExpenseObjectIds}
+              expenseObjects={expenseObjectsOptions}
+              expenseAmounts={combinedExpenseObjectTotals}
+            />
+          </div>
+        )}
+
+        {/* Total Cost Breakdown Section - Always visible */}
+        {/* Hiển thị chi phí đối tượng cha khi có parent object và children được chọn */}
+        {workshopParentObject && selectedExpenseObjectIds.length > 0 && (
+          <div className="mt-4 bg-gray-50 border border-gray-300 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <div className="p-2 bg-gray-200 rounded-lg">
+                <BarChart3 className="h-5 w-5 text-gray-700" />
+              </div>
+              <div>
+                <span className="text-lg font-bold text-black">📊 Tổng kết chi phí đối tượng</span>
+                <div className="text-sm text-gray-700">Mối quan hệ cha-con trong chi phí</div>
+                <div className="flex items-center space-x-4 text-xs mt-1">
+                  <div className="flex items-center space-x-1 text-blue-600">
+                    <span>🏢</span>
+                    <span>Cấp cha: {workshopParentObject?.name} ({workshopParentObject?.level || 1})</span>
+                  </div>
+                  <div className="flex items-center space-x-1 text-green-600">
+                    <span>📋</span>
+                    <span>Cấp con: {selectedExpenseObjectIds.length} đối tượng (2+)</span>
                   </div>
                 </div>
+                <div className="text-xs text-blue-600 mt-1">
+                  🔗 Logic: Tổng con = cha | Xóa cha → Xóa con
+                </div>
+              </div>
             </div>
 
-            {/* Expense Summary Display - Enhanced with hierarchical totals */}
-            {selectedExpenseObjectIds.length > 0 && (
-              <div key={`expense-summary-${selectedExpenseObjectIds.join('-')}`} className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
-                  <span>Tóm tắt chi phí theo cấp độ</span>
-                </h3>
-                <ExpenseSummaryDisplay
-                  key={`expense-summary-display-${selectedExpenseObjectIds.join('-')}-${JSON.stringify(combinedExpenseObjectTotals)}`}
-                  selectedObjectIds={selectedExpenseObjectIds}
-                  expenseObjects={expenseObjectsOptions}
-                  expenseAmounts={combinedExpenseObjectTotals}
-                />
-              </div>
-            )}
-
-            {/* Total Cost Breakdown Section - Always visible */}
-            {/* Hiển thị chi phí đối tượng cha khi có parent object và children được chọn */}
-            {workshopParentObject && selectedExpenseObjectIds.length > 0 && (
-              <div className="mt-4 bg-gray-50 border border-gray-300 rounded-lg p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <div className="p-2 bg-gray-200 rounded-lg">
-                    <BarChart3 className="h-5 w-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <span className="text-lg font-bold text-black">📊 Tổng kết chi phí đối tượng</span>
-                    <div className="text-sm text-gray-700">Mối quan hệ cha-con trong chi phí</div>
-                    <div className="flex items-center space-x-4 text-xs mt-1">
-                      <div className="flex items-center space-x-1 text-blue-600">
-                        <span>🏢</span>
-                        <span>Cấp cha: {workshopParentObject?.name} ({workshopParentObject?.level || 1})</span>
-                      </div>
-                      <div className="flex items-center space-x-1 text-green-600">
-                        <span>📋</span>
-                        <span>Cấp con: {selectedExpenseObjectIds.length} đối tượng (2+)</span>
-                      </div>
-                    </div>
-                    <div className="text-xs text-blue-600 mt-1">
-                      🔗 Logic: Tổng con = cha | Xóa cha → Xóa con
-                    </div>
-                  </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-4 h-4 rounded-full bg-gray-600"></div>
+                  <span className="text-black font-bold text-lg">{workshopParentObject.name}</span>
                 </div>
-                
-                <div className="bg-white border border-gray-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-4 h-4 rounded-full bg-gray-600"></div>
-                      <span className="text-black font-bold text-lg">{workshopParentObject.name}</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-black">
-                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                          (() => {
-                            const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-                            return hasDirectObjectInputs 
-                              ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
-                              : grandAllocationTotal
-                          })()
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-600">Tổng chi phí</div>
-                    </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-black">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                      (() => {
+                        const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                        return hasDirectObjectInputs
+                          ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                          : grandAllocationTotal
+                      })()
+                    )}
                   </div>
-                  
-                  {/* Breakdown chi tiết các đối tượng con */}
-                  {selectedExpenseObjectIds.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-300">
-                      <div className="text-xs text-black font-medium mb-1.5">📋 Chi tiết các đối tượng chi phí con:</div>
-                      <div className="space-y-1.5">
-                        {selectedExpenseObjectIds.map((id) => {
-                          const expenseObject = expenseObjectsOptions.find(o => o.id === id)
-                          const totalAmount = combinedExpenseObjectTotals[id] || 0
-                          const parentTotal = (() => {
-                            const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-                            return hasDirectObjectInputs 
-                              ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
-                              : grandAllocationTotal
-                          })()
-                          const percentage = parentTotal > 0 ? (totalAmount / parentTotal * 100) : 0
-                          
-                          return (
-                            <div key={id} className="flex items-center justify-between text-xs py-1.5 px-2 bg-gray-50 rounded border border-gray-200">
-                              <div className="flex items-center space-x-2">
-                                <div className="w-2 h-2 rounded-full bg-gray-600"></div>
-                                <div className="flex items-center space-x-1.5">
-                                  <span className="text-black font-medium text-xs">{expenseObject?.name || 'Đối tượng'}</span>
-                                  <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
-                                    {expenseObject?.level || 2}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-3">
-                                <div className="text-right">
-                                  <div className="text-gray-600 text-xs">Tỷ lệ</div>
-                                  <div className="font-medium text-black text-xs">{percentage.toFixed(1)}%</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-gray-600 text-xs">Số tiền</div>
-                                  <div className="font-medium text-black text-xs">
-                                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  <div className="text-xs text-gray-600">Tổng chi phí</div>
                 </div>
               </div>
-            )}
 
-            {selectedExpenseObjectIds.length > 0 && (
-              <div key={`expense-object-totals-${selectedExpenseObjectIds.join('-')}`} className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center space-x-2 mb-3">
-                  <BarChart3 className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm font-medium text-black">Tổng chi phí theo đối tượng</span>
-                </div>
+              {/* Breakdown chi tiết các đối tượng con */}
+              {selectedExpenseObjectIds.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-300">
+                  <div className="text-xs text-black font-medium mb-1.5">📋 Chi tiết các đối tượng chi phí con:</div>
+                  <div className="space-y-1.5">
+                    {selectedExpenseObjectIds.map((id) => {
+                      const expenseObject = expenseObjectsOptions.find(o => o.id === id)
+                      const totalAmount = combinedExpenseObjectTotals[id] || 0
+                      const parentTotal = (() => {
+                        const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                        return hasDirectObjectInputs
+                          ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                          : grandAllocationTotal
+                      })()
+                      const percentage = parentTotal > 0 ? (totalAmount / parentTotal * 100) : 0
 
-                {/* Direct Input Section */}
-                <div className="mb-4 space-y-3">
-                  {/* Toggle Buttons */}
-                  <div className="flex space-x-2 mb-3">
-                    <button
-                      onClick={() => setShowObjectTotalInputs(!showObjectTotalInputs)}
-                      className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                        showObjectTotalInputs
-                          ? 'bg-gray-600 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      {showObjectTotalInputs ? 'Ẩn' : 'Hiện'} Tổng chi phí đối tượng
-                    </button>
-                  </div>
-
-
-                  {/* Direct Object Totals Input */}
-                  {showObjectTotalInputs && (
-                    <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-black font-semibold text-sm">Tổng chi phí từng đối tượng:</span>
-                      {selectedExpenseObjectIds.map((id) => {
-                        const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
-                        return (
-                          <div key={id} className="flex items-center justify-between text-sm">
-                            <span className="text-black text-sm">{ExpenseObjectDisplayUtils.formatName(expenseObject)}:</span>
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="number"
-                                value={directObjectTotals[id] || 0}
-                                onChange={(e) => handleDirectObjectTotalChange(id, parseFloat(e.target.value) || 0)}
-                                className="w-32 border-2 border-gray-400 rounded px-2 py-1 text-sm text-right text-black font-medium focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                                placeholder="0"
-                                step="1000"
-                                min="0"
-                              />
-                              <span className="text-xs text-gray-600">VND</span>
+                      return (
+                        <div key={id} className="flex items-center justify-between text-xs py-1.5 px-2 bg-gray-50 rounded border border-gray-200">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 rounded-full bg-gray-600"></div>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-black font-medium text-xs">{expenseObject?.name || 'Đối tượng'}</span>
+                              <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
+                                {expenseObject?.level || 2}
+                              </span>
                             </div>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                          <div className="flex items-center space-x-3">
+                            <div className="text-right">
+                              <div className="text-gray-600 text-xs">Tỷ lệ</div>
+                              <div className="font-medium text-black text-xs">{percentage.toFixed(1)}%</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-gray-600 text-xs">Số tiền</div>
+                              <div className="font-medium text-black text-xs">
+                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
+              )}
+            </div>
+          </div>
+        )}
 
-                {/* Current Breakdown Display */}
-                <div className="space-y-1">
+        {selectedExpenseObjectIds.length > 0 && (
+          <div key={`expense-object-totals-${selectedExpenseObjectIds.join('-')}`} className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div className="flex items-center space-x-2 mb-3">
+              <BarChart3 className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-medium text-black">Tổng chi phí theo đối tượng</span>
+            </div>
+
+            {/* Direct Input Section */}
+            <div className="mb-4 space-y-3">
+              {/* Toggle Buttons */}
+              <div className="flex space-x-2 mb-3">
+                <button
+                  onClick={() => setShowObjectTotalInputs(!showObjectTotalInputs)}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${showObjectTotalInputs
+                    ? 'bg-gray-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                >
+                  {showObjectTotalInputs ? 'Ẩn' : 'Hiện'} Tổng chi phí đối tượng
+                </button>
+              </div>
+
+
+              {/* Direct Object Totals Input */}
+              {showObjectTotalInputs && (
+                <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <span className="text-black font-semibold text-sm">Tổng chi phí từng đối tượng:</span>
                   {selectedExpenseObjectIds.map((id) => {
                     const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
-                    // Use combined totals (direct input takes priority, then calculated)
-                    const totalAmount = combinedExpenseObjectTotals[id] || 0
-                    
-                    // Calculate total allocation: sum of all direct object totals or use grandAllocationTotal
-                    const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-                    const totalAllocation = hasDirectObjectInputs 
-                      ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
-                      : grandAllocationTotal
-                    
-                    const percentage = totalAllocation > 0 ? (totalAmount / totalAllocation * 100) : 0
-                    
                     return (
-                      <div key={id} className="flex items-center justify-between text-sm py-1">
+                      <div key={id} className="flex items-center justify-between text-sm">
+                        <span className="text-black text-sm">{ExpenseObjectDisplayUtils.formatName(expenseObject)}:</span>
                         <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 rounded-full bg-gray-600"></div>
-                          <span className="text-black font-medium">{ExpenseObjectDisplayUtils.formatName(expenseObject)}</span>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <span className="text-black font-medium">{percentage.toFixed(1)}%</span>
-                          <span className="font-semibold text-black">
-                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}
-                          </span>
+                          <input
+                            type="number"
+                            value={directObjectTotals[id] || 0}
+                            onChange={(e) => handleDirectObjectTotalChange(id, parseFloat(e.target.value) || 0)}
+                            className="w-32 border-2 border-gray-400 rounded px-2 py-1 text-sm text-right text-black font-medium focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                            placeholder="0"
+                            step="1000"
+                            min="0"
+                          />
+                          <span className="text-xs text-gray-600">VND</span>
                         </div>
                       </div>
                     )
                   })}
-                  
-                  {/* Hiển thị chi phí đối tượng cha cho Supplier */}
-                  {userRole === 'Supplier' && category === 'actual' && workshopParentObject && (
-                    <div className="border-t border-gray-300 pt-2 mt-2 bg-gray-50 rounded-lg p-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center space-x-1.5">
-                          <div className="w-2 h-2 rounded-full bg-gray-600"></div>
-                          <span className="text-black font-medium text-xs">{workshopParentObject.name} (Tổng)</span>
-                          <span className="text-xs text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded-full">
-                            Cha = Tổng các con
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-black text-xs">100.0%</span>
-                          <span className="font-medium text-black text-sm">
-                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                              (() => {
-                                const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-                                return hasDirectObjectInputs 
-                                  ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
-                                  : grandAllocationTotal
-                              })()
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5 italic">
-                        Tổng chi phí đối tượng cha = Tổng các chi phí đối tượng con
-                      </div>
+                </div>
+              )}
+            </div>
+
+            {/* Current Breakdown Display */}
+            <div className="space-y-1">
+              {selectedExpenseObjectIds.map((id) => {
+                const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
+                // Use combined totals (direct input takes priority, then calculated)
+                const totalAmount = combinedExpenseObjectTotals[id] || 0
+
+                // Calculate total allocation: sum of all direct object totals or use grandAllocationTotal
+                const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                const totalAllocation = hasDirectObjectInputs
+                  ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                  : grandAllocationTotal
+
+                const percentage = totalAllocation > 0 ? (totalAmount / totalAllocation * 100) : 0
+
+                return (
+                  <div key={id} className="flex items-center justify-between text-sm py-1">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 rounded-full bg-gray-600"></div>
+                      <span className="text-black font-medium">{ExpenseObjectDisplayUtils.formatName(expenseObject)}</span>
                     </div>
-                  )}
-                  
-                  {/* Total Summary */}
-                  <div className="border-t border-gray-300 pt-1 mt-1.5">
-                    <div className="flex items-center justify-between text-xs font-medium">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-black font-medium">{percentage.toFixed(1)}%</span>
+                      <span className="font-semibold text-black">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Hiển thị chi phí đối tượng cha cho Supplier */}
+              {userRole === 'Supplier' && category === 'actual' && workshopParentObject && (
+                <div className="border-t border-gray-300 pt-2 mt-2 bg-gray-50 rounded-lg p-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-1.5">
+                      <div className="w-2 h-2 rounded-full bg-gray-600"></div>
+                      <span className="text-black font-medium text-xs">{workshopParentObject.name} (Tổng)</span>
+                      <span className="text-xs text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded-full">
+                        Cha = Tổng các con
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-black text-xs">100.0%</span>
+                      <span className="font-medium text-black text-sm">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                          (() => {
+                            const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                            return hasDirectObjectInputs
+                              ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                              : grandAllocationTotal
+                          })()
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5 italic">
+                    Tổng chi phí đối tượng cha = Tổng các chi phí đối tượng con
+                  </div>
+                </div>
+              )}
+
+              {/* Total Summary */}
+              <div className="border-t border-gray-300 pt-1 mt-1.5">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <div className="flex items-center space-x-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
+                    <span className="text-black text-xs">Tổng cộng</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-black text-xs">100.0%</span>
+                    <span className="font-medium text-black text-sm">
+                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                        (() => {
+                          const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
+                          return hasDirectObjectInputs
+                            ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
+                            : grandAllocationTotal
+                        })()
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Hiển thị tổng đối tượng cha = tổng đối tượng con */}
+                {workshopParentObject && selectedExpenseObjectIds.length > 0 && (
+                  <div className="mt-1.5 pt-1.5 border-t border-gray-200">
+                    <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center space-x-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
-                        <span className="text-black text-xs">Tổng cộng</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                        <span className="text-black text-xs">🏢 Tổng cấp cha = 📋 Tổng cấp con</span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span className="text-black text-xs">100.0%</span>
-                        <span className="font-medium text-black text-sm">
+                        <div className="flex items-center space-x-1 text-xs">
+                          <span className="text-blue-600">🏢</span>
+                          <span className="text-gray-600">Cha =</span>
+                          <span className="text-green-600">📋</span>
+                          <span className="text-gray-600">Con</span>
+                        </div>
+                        <span className="font-medium text-black text-xs">
                           {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
                             (() => {
                               const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-                              return hasDirectObjectInputs 
+                              return hasDirectObjectInputs
                                 ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
                                 : grandAllocationTotal
                             })()
@@ -5733,103 +5770,75 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                         </span>
                       </div>
                     </div>
-                    
-                    {/* Hiển thị tổng đối tượng cha = tổng đối tượng con */}
-                    {workshopParentObject && selectedExpenseObjectIds.length > 0 && (
-                      <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center space-x-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                            <span className="text-black text-xs">🏢 Tổng cấp cha = 📋 Tổng cấp con</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <div className="flex items-center space-x-1 text-xs">
-                              <span className="text-blue-600">🏢</span>
-                              <span className="text-gray-600">Cha =</span>
-                              <span className="text-green-600">📋</span>
-                              <span className="text-gray-600">Con</span>
-                            </div>
-                            <span className="font-medium text-black text-xs">
-                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                                (() => {
-                                  const hasDirectObjectInputs = Object.values(directObjectTotals).some(val => val > 0)
-                                  return hasDirectObjectInputs 
-                                    ? Object.values(directObjectTotals).reduce((sum, val) => sum + val, 0)
-                                    : grandAllocationTotal
-                                })()
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="mt-0.5 text-xs text-gray-500">
-                          <span className="font-medium text-black">{workshopParentObject.name}</span> = Tổng các đối tượng con
-                        </div>
-                      </div>
-                    )}
+                    <div className="mt-0.5 text-xs text-gray-500">
+                      <span className="font-medium text-black">{workshopParentObject.name}</span> = Tổng các đối tượng con
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Direct Cost Input Sections */}
+        {inputMode === 'product-total' && (
+          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center space-x-2 mb-3">
+              <Target className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-700">Nhập tổng chi phí cho từng sản phẩm</span>
+            </div>
+            <div className="space-y-2">
+              {invoiceItems.map((row, index) => (
+                <div key={index} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">{row.productName || `Sản phẩm ${index + 1}`}</span>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      value={directProductCosts[index] || row.lineTotal}
+                      onChange={(e) => handleDirectProductCostChange(index, parseFloat(e.target.value) || 0)}
+                      className="w-32 border border-blue-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
+                      placeholder="0"
+                      step="1000"
+                      min="0"
+                    />
+                    <span className="text-xs text-gray-500">VND</span>
                   </div>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
+          </div>
+        )}
 
-            {/* Direct Cost Input Sections */}
-            {inputMode === 'product-total' && (
-              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="flex items-center space-x-2 mb-3">
-                  <Target className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-700">Nhập tổng chi phí cho từng sản phẩm</span>
-                </div>
-                <div className="space-y-2">
-                  {invoiceItems.map((row, index) => (
-                    <div key={index} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700">{row.productName || `Sản phẩm ${index + 1}`}</span>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          value={directProductCosts[index] || row.lineTotal}
-                          onChange={(e) => handleDirectProductCostChange(index, parseFloat(e.target.value) || 0)}
-                          className="w-32 border border-blue-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-blue-500"
-                          placeholder="0"
-                          step="1000"
-                          min="0"
-                        />
-                        <span className="text-xs text-gray-500">VND</span>
-                      </div>
+        {inputMode === 'object-total' && (
+          <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-center space-x-2 mb-3">
+              <BarChart3 className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-medium text-green-700">Nhập tổng chi phí cho từng đối tượng</span>
+            </div>
+            <div className="space-y-2">
+              {selectedExpenseObjectIds.map((id) => {
+                const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
+                return (
+                  <div key={id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700">{ExpenseObjectDisplayUtils.formatName(expenseObject)}</span>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        value={directObjectCosts[id] || 0}
+                        onChange={(e) => handleDirectObjectCostChange(id, parseFloat(e.target.value) || 0)}
+                        className="w-32 border border-green-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-green-500"
+                        placeholder="0"
+                        step="1000"
+                        min="0"
+                      />
+                      <span className="text-xs text-gray-500">VND</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {inputMode === 'object-total' && (
-              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
-                <div className="flex items-center space-x-2 mb-3">
-                  <BarChart3 className="h-4 w-4 text-green-600" />
-                  <span className="text-sm font-medium text-green-700">Nhập tổng chi phí cho từng đối tượng</span>
-                </div>
-                <div className="space-y-2">
-                  {selectedExpenseObjectIds.map((id) => {
-                    const expenseObject = ExpenseObjectDisplayUtils.getById(expenseObjectsOptions, id)
-                    return (
-                      <div key={id} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700">{ExpenseObjectDisplayUtils.formatName(expenseObject)}</span>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="number"
-                            value={directObjectCosts[id] || 0}
-                            onChange={(e) => handleDirectObjectCostChange(id, parseFloat(e.target.value) || 0)}
-                            className="w-32 border border-green-300 rounded px-2 py-1 text-sm text-right focus:ring-2 focus:ring-green-500"
-                            placeholder="0"
-                            step="1000"
-                            min="0"
-                          />
-                          <span className="text-xs text-gray-500">VND</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="border-t border-gray-200 bg-gray-50 p-6 space-y-6">
@@ -5842,7 +5851,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               </div>
             </div>
           </div>
-          
+
           {/* Total Summary with Profit Percentage */}
           {projectRevenueTotal > 0 && (
             <div className="bg-white border border-green-200 rounded-lg p-4 space-y-3">
@@ -5870,14 +5879,13 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                 </div>
                 <div className="flex items-center justify-between border-t border-gray-200 pt-2">
                   <div className="text-sm font-medium text-gray-900">% Lợi nhuận</div>
-                  <div className={`text-lg font-bold ${
-                    projectRevenueTotal > 0 && (profitComputed / projectRevenueTotal) * 100 > 0 
-                      ? 'text-green-600' 
-                      : (profitComputed / projectRevenueTotal) * 100 < 0 
-                        ? 'text-red-600' 
-                        : 'text-gray-600'
-                  }`}>
-                    {projectRevenueTotal > 0 
+                  <div className={`text-lg font-bold ${projectRevenueTotal > 0 && (profitComputed / projectRevenueTotal) * 100 > 0
+                    ? 'text-green-600'
+                    : (profitComputed / projectRevenueTotal) * 100 < 0
+                      ? 'text-red-600'
+                      : 'text-gray-600'
+                    }`}>
+                    {projectRevenueTotal > 0
                       ? `${((profitComputed / projectRevenueTotal) * 100).toFixed(2)}%`
                       : '0.00%'
                     }
@@ -5887,132 +5895,131 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             </div>
           )}
           {/* Additional Information Section moved to bottom */}
-            <div className="bg-white border border-gray-200 rounded-lg">
-              <button
-                onClick={() => toggleSection('additional')}
-                className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-              >
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-4 w-4 text-purple-600" />
-                  <span className="font-medium text-gray-900">Thông tin bổ sung</span>
-                </div>
-                {expandedSections.additional ? (
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                )}
-              </button>
-              
-              {expandedSections.additional && (
-                <div className="px-4 pb-4 space-y-4">
-                  {/* Tổng chi phí theo đối tượng chi phí */}
-                  <div>
-                    <div className="text-sm font-semibold text-gray-900 mb-2">Tổng theo đối tượng</div>
-                    {selectedExpenseObjectIds.length === 0 ? (
-                      <div className="text-sm text-gray-600">Chưa chọn đối tượng chi phí</div>
-                    ) : (
-                      <div className="space-y-1">
-                        {selectedExpenseObjectIds.map(id => (
-                          <div key={`obj-total-${id}`} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-700">{(expenseObjectsOptions.find(o => o.id === id)?.name) || 'Đối tượng'}</span>
-                            <button
-                              onClick={() => handleExpenseObjectTotalClick(id)}
-                              className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
-                              title="Nhấp để xem chi tiết"
-                            >
-                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expenseObjectTotals[id] || 0)}
-                            </button>
-                          </div>
-                        ))}
-                        <div className="pt-2 mt-1 border-t border-gray-200 flex items-center justify-between text-sm">
-                          <span className="text-gray-700">Tổng kế hoạch</span>
-                          <span className="font-semibold text-blue-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Trạng thái
-                      </label>
-                      <input
-                        value="Chờ duyệt"
-                        readOnly
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-900"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Đơn vị tiền tệ
-                      </label>
-                      <select
-                        value={formData.currency}
-                        onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      >
-                        <option value="VND">VND (Việt Nam Đồng)</option>
-                        <option value="USD">USD (US Dollar)</option>
-                        <option value="EUR">EUR (Euro)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Ghi chú
-                    </label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      rows={3}
-                      placeholder="Ghi chú thêm về chi phí dự án..."
-                    />
-                  </div>
-
-                  {/* Mô tả - di chuyển xuống cuối */}
-                  <div data-tour-id={category === 'planned' ? 'planned-expense-field-description' : 'actual-expense-field-description'}>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Mô tả <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => {
-                        setFormData({ ...formData, description: e.target.value })
-                        // Đánh dấu là người dùng đã chỉnh sửa thủ công
-                        setDescriptionIsManual(true)
-                        // Clear system notification when user starts typing
-                        if (systemNotification && e.target.value.trim()) {
-                          setSystemNotification('')
-                        }
-                      }}
-                      className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                        errors.description ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                      }`}
-                      rows={3}
-                      placeholder="Mô tả chi tiết về chi phí dự án..."
-                    />
-                    {errors.description && (
-                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="flex items-start">
-                          <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
-                          <div>
-                            <p className="text-red-700 text-sm font-medium">
-                              {errors.description}
-                            </p>
-                            <p className="text-red-600 text-xs mt-1">
-                              Mô tả chi phí giúp quản lý và theo dõi ngân sách dự án hiệu quả hơn.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+          <div className="bg-white border border-gray-200 rounded-lg">
+            <button
+              onClick={() => toggleSection('additional')}
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+            >
+              <div className="flex items-center space-x-2">
+                <FileText className="h-4 w-4 text-purple-600" />
+                <span className="font-medium text-gray-900">Thông tin bổ sung</span>
+              </div>
+              {expandedSections.additional ? (
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-gray-400" />
               )}
-        </div>
+            </button>
+
+            {expandedSections.additional && (
+              <div className="px-4 pb-4 space-y-4">
+                {/* Tổng chi phí theo đối tượng chi phí */}
+                <div>
+                  <div className="text-sm font-semibold text-gray-900 mb-2">Tổng theo đối tượng</div>
+                  {selectedExpenseObjectIds.length === 0 ? (
+                    <div className="text-sm text-gray-600">Chưa chọn đối tượng chi phí</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {selectedExpenseObjectIds.map(id => (
+                        <div key={`obj-total-${id}`} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700">{(expenseObjectsOptions.find(o => o.id === id)?.name) || 'Đối tượng'}</span>
+                          <button
+                            onClick={() => handleExpenseObjectTotalClick(id)}
+                            className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                            title="Nhấp để xem chi tiết"
+                          >
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expenseObjectTotals[id] || 0)}
+                          </button>
+                        </div>
+                      ))}
+                      <div className="pt-2 mt-1 border-t border-gray-200 flex items-center justify-between text-sm">
+                        <span className="text-gray-700">Tổng kế hoạch</span>
+                        <span className="font-semibold text-blue-700">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(plannedAmountComputed)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Trạng thái
+                    </label>
+                    <input
+                      value="Chờ duyệt"
+                      readOnly
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Đơn vị tiền tệ
+                    </label>
+                    <select
+                      value={formData.currency}
+                      onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    >
+                      <option value="VND">VND (Việt Nam Đồng)</option>
+                      <option value="USD">USD (US Dollar)</option>
+                      <option value="EUR">EUR (Euro)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Ghi chú
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    rows={3}
+                    placeholder="Ghi chú thêm về chi phí dự án..."
+                  />
+                </div>
+
+                {/* Mô tả - di chuyển xuống cuối */}
+                <div data-tour-id={category === 'planned' ? 'planned-expense-field-description' : 'actual-expense-field-description'}>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Mô tả <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => {
+                      setFormData({ ...formData, description: e.target.value })
+                      // Đánh dấu là người dùng đã chỉnh sửa thủ công
+                      setDescriptionIsManual(true)
+                      // Clear system notification when user starts typing
+                      if (systemNotification && e.target.value.trim()) {
+                        setSystemNotification('')
+                      }
+                    }}
+                    className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${errors.description ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                    rows={3}
+                    placeholder="Mô tả chi tiết về chi phí dự án..."
+                  />
+                  {errors.description && (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-start">
+                        <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                        <div>
+                          <p className="text-red-700 text-sm font-medium">
+                            {errors.description}
+                          </p>
+                          <p className="text-red-600 text-xs mt-1">
+                            Mô tả chi phí giúp quản lý và theo dõi ngân sách dự án hiệu quả hơn.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-end space-x-3">
             <button
@@ -6024,11 +6031,10 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 flex items-center space-x-2 ${
-                getValidationStatus() 
-                  ? 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-500' 
-                  : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-              }`}
+              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 flex items-center space-x-2 ${getValidationStatus()
+                ? 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-500'
+                : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+                }`}
               title={getValidationStatus()?.details || ''}
             >
               <Save className="h-4 w-4" />
@@ -6039,21 +6045,20 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 flex items-center space-x-2 ${
-                getValidationStatus() 
-                  ? 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-500' 
-                  : category === 'actual' 
-                    ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
-                    : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-              }`}
+              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 flex items-center space-x-2 ${getValidationStatus()
+                ? 'bg-orange-500 hover:bg-orange-600 focus:ring-orange-500'
+                : category === 'actual'
+                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                  : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+                }`}
               title={getValidationStatus()?.details || ''}
               data-tour-id={category === 'planned' ? 'planned-expense-submit' : 'actual-expense-submit'}
             >
               <Save className="h-4 w-4" />
               <span>
-                {submitting 
-                  ? 'Đang lưu...' 
-                  : getValidationStatus()?.message || (isEdit 
+                {submitting
+                  ? 'Đang lưu...'
+                  : getValidationStatus()?.message || (isEdit
                     ? (category === 'actual' ? 'Cập nhật chi phí thực tế' : 'Cập nhật chi phí kế hoạch')
                     : (category === 'actual' ? 'Tạo chi phí thực tế' : 'Tạo chi phí kế hoạch'))
                 }
@@ -6068,7 +6073,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         <div className="fixed inset-0 z-60 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={() => setShowCostDetailModal(false)}></div>
-            
+
             <div className="inline-block w-full max-w-4xl px-4 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
@@ -6108,7 +6113,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-900">Chi tiết phân bổ</h4>
                   </div>
-                  
+
                   {getExpenseObjectDetail(selectedExpenseObjectId).breakdown.length === 0 ? (
                     <div className="p-4 text-center text-gray-500">
                       Không có chi phí được phân bổ cho đối tượng này
@@ -6178,7 +6183,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
         <div className="fixed inset-0 z-[9999] overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity bg-black bg-opacity-50" onClick={() => setShowExpenseSelector(false)}></div>
-            
+
             <div className="inline-block w-full max-w-4xl px-6 pt-6 pb-6 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-xl shadow-2xl sm:my-8 sm:align-middle">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
@@ -6190,19 +6195,19 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                     <p className="text-sm text-gray-600">Chọn một chi phí thực tế đã có để cập nhật thông tin</p>
                   </div>
                 </div>
-                    <button
+                <button
                   onClick={() => setShowExpenseSelector(false)}
                   className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                  
+                </button>
+              </div>
+
               <div className="mt-4">
                 {existingExpenses.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <p>Không có chi phí thực tế nào cho dự án này</p>
-                    </div>
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -6228,23 +6233,22 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
                               {new Date(expense.expense_date).toLocaleDateString('vi-VN')}
                             </td>
                             <td className="px-4 py-3 text-center">
-                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                expense.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${expense.status === 'approved' ? 'bg-green-100 text-green-800' :
                                 expense.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
                                 {expense.status === 'approved' ? 'Đã duyệt' :
-                                 expense.status === 'rejected' ? 'Từ chối' :
-                                 'Chờ duyệt'}
+                                  expense.status === 'rejected' ? 'Từ chối' :
+                                    'Chờ duyệt'}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center">
-                    <button
+                              <button
                                 onClick={() => loadExpenseDataForUpdate(expense)}
                                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                               >
                                 Chọn
-                    </button>
+                              </button>
                             </td>
                           </tr>
                         ))}
