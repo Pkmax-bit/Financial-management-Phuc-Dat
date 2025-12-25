@@ -162,4 +162,3 @@ COMMENT ON FUNCTION sync_delete_project_team_on_task_group_member_delete() IS 'T
 
 
 
-

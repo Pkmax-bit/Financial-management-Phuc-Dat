@@ -25,7 +25,6 @@ import {
   Send,
   X,
   Trash2,
-  Edit,
   Plus,
   ExternalLink,
   ChevronLeft,
@@ -190,14 +189,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   const [selectedChecklistAssigneeId, setSelectedChecklistAssigneeId] = useState<string | null>(null)
   const checklistItemFileInputRef = useRef<HTMLInputElement | null>(null)
   const [showCreateTodoModal, setShowCreateTodoModal] = useState(false)
-  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null)
-  const [editingChecklistItemContent, setEditingChecklistItemContent] = useState<string>('')
-  const [editingChecklistItemFiles, setEditingChecklistItemFiles] = useState<File[]>([])
-  const [editingChecklistItemExistingFileUrls, setEditingChecklistItemExistingFileUrls] = useState<string[]>([])
-  const [editingChecklistItemAssigneeId, setEditingChecklistItemAssigneeId] = useState<string | null>(null)
-  const [editingChecklistItemAssignments, setEditingChecklistItemAssignments] = useState<Array<{ employee_id: string; responsibility_type: 'accountable' | 'responsible' | 'consulted' | 'informed' }>>([])
-  const [showEditingAssignmentDropdown, setShowEditingAssignmentDropdown] = useState<boolean>(false)
-  const editingChecklistItemFileInputRef = useRef<HTMLInputElement | null>(null)
   
   // Multi-assignment states for checklist items
   const [checklistItemAssignments, setChecklistItemAssignments] = useState<Record<string, Array<{ employee_id: string; responsibility_type: 'accountable' | 'responsible' | 'consulted' | 'informed' }>>>({})
@@ -983,226 +974,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     }
   }
 
-  const deleteChecklistItemAssignment = async (itemId: string, employeeId: string, taskId: string) => {
-    try {
-      // Tìm item để lấy danh sách assignments hiện tại
-      const task = tasks.find(t => t.id === taskId)
-      const checklist = task?.checklists?.find(c => c.items?.some(i => i.id === itemId))
-      const item = checklist?.items?.find(i => i.id === itemId)
-      
-      if (!item) {
-        alert('Không tìm thấy việc cần làm')
-        return
-      }
-
-      // Lọc bỏ assignment cần xóa
-      const updatedAssignments = (item.assignments || []).filter(
-        (assignment: any) => assignment.employee_id !== employeeId
-      )
-
-      // Gọi API để cập nhật assignments
-      const updatedItem = await apiPut(`/api/tasks/checklist-items/${itemId}`, {
-        assignments: updatedAssignments.map((a: any) => ({
-          employee_id: a.employee_id,
-          responsibility_type: a.responsibility_type
-        }))
-      })
-
-      // Update tasks state
-      setTasks(prev => prev.map(task => {
-        if (task.id === taskId) {
-          return {
-            ...task,
-            checklists: task.checklists?.map(checklist => ({
-              ...checklist,
-              items: checklist.items?.map(item =>
-                item.id === itemId ? { ...item, assignments: updatedItem.assignments || [] } : item
-              )
-            }))
-          }
-        }
-        return task
-      }))
-    } catch (error) {
-      console.error('Error deleting checklist item assignment:', error)
-      alert('Không thể xóa phân công nhiệm vụ')
-    }
-  }
-
-  const updateChecklistItemAssignment = async (itemId: string, employeeId: string, newResponsibilityType: string, taskId: string) => {
-    try {
-      // Tìm item để lấy danh sách assignments hiện tại
-      const task = tasks.find(t => t.id === taskId)
-      const checklist = task?.checklists?.find(c => c.items?.some(i => i.id === itemId))
-      const item = checklist?.items?.find(i => i.id === itemId)
-      
-      if (!item) {
-        alert('Không tìm thấy việc cần làm')
-        return
-      }
-
-      // Cập nhật responsibility_type của assignment
-      const updatedAssignments = (item.assignments || []).map((assignment: any) => {
-        if (assignment.employee_id === employeeId) {
-          return {
-            ...assignment,
-            responsibility_type: newResponsibilityType
-          }
-        }
-        return assignment
-      })
-
-      // Gọi API để cập nhật assignments
-      const updatedItem = await apiPut(`/api/tasks/checklist-items/${itemId}`, {
-        assignments: updatedAssignments.map((a: any) => ({
-          employee_id: a.employee_id,
-          responsibility_type: a.responsibility_type
-        }))
-      })
-
-      // Update tasks state
-      setTasks(prev => prev.map(task => {
-        if (task.id === taskId) {
-          return {
-            ...task,
-            checklists: task.checklists?.map(checklist => ({
-              ...checklist,
-              items: checklist.items?.map(item =>
-                item.id === itemId ? { ...item, assignments: updatedItem.assignments || [] } : item
-              )
-            }))
-          }
-        }
-        return task
-      }))
-    } catch (error) {
-      console.error('Error updating checklist item assignment:', error)
-      alert('Không thể cập nhật phân công nhiệm vụ')
-    }
-  }
-
-  const deleteChecklistItem = async (itemId: string, taskId: string) => {
-    try {
-      await apiDelete(`/api/tasks/checklist-items/${itemId}`)
-
-      // Update tasks state - xóa item khỏi checklist
-      setTasks(prev => prev.map(task => {
-        if (task.id === taskId) {
-          return {
-            ...task,
-            checklists: task.checklists?.map(checklist => ({
-              ...checklist,
-              items: checklist.items?.filter(item => item.id !== itemId)
-            }))
-          }
-        }
-        return task
-      }))
-    } catch (error) {
-      console.error('Error deleting checklist item:', error)
-      alert('Không thể xóa việc cần làm')
-    }
-  }
-
-  const updateChecklistItemContent = async (itemId: string, newContent: string, taskId: string, files?: File[], existingFileUrls?: string[], assigneeId?: string | null, assignments?: Array<{ employee_id: string; responsibility_type: 'accountable' | 'responsible' | 'consulted' | 'informed' }>) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) {
-        throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
-      }
-
-      // Upload files if any
-      let fileUrls: string[] = []
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const formData = new FormData()
-          formData.append('file', file)
-
-          const response = await fetch(`/api/tasks/${taskId}/attachments`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            },
-            body: formData
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
-            throw new Error(errorData.detail || errorData.message || 'Không thể upload file')
-          }
-
-          const data = await response.json()
-          fileUrls.push(data.file_url || data.url)
-        }
-      }
-
-      // Combine existing file URLs (that weren't deleted) with new file URLs
-      const allFileUrls = [...(existingFileUrls || []), ...fileUrls]
-
-      // Append file URLs to content
-      let itemContent = newContent.trim() || ''
-      if (allFileUrls.length > 0) {
-        const fileUrlsText = allFileUrls.join(' ')
-        itemContent = itemContent
-          ? `${itemContent} [FILE_URLS: ${fileUrlsText}]`
-          : `📎 ${allFileUrls.length} file(s) [FILE_URLS: ${fileUrlsText}]`
-      }
-
-      // Prepare update payload
-      const updatePayload: any = {
-        content: itemContent
-      }
-
-      // Luôn dùng assignments (không dùng assignee_id nữa)
-      // Nếu assignments được truyền vào (undefined hoặc array), luôn cập nhật
-      if (assignments !== undefined) {
-        updatePayload.assignments = assignments // Có thể là mảng rỗng để xóa assignments
-        // Luôn xóa assignee_id khi dùng assignments
-        updatePayload.assignee_id = null
-      }
-
-      const updatedItem = await apiPut(`/api/tasks/checklist-items/${itemId}`, updatePayload)
-
-      // Update tasks state
-      setTasks(prev => prev.map(task => {
-        if (task.id === taskId) {
-          return {
-            ...task,
-            checklists: task.checklists?.map(checklist => ({
-              ...checklist,
-              items: checklist.items?.map(item =>
-                item.id === itemId ? {
-                  ...item,
-                  content: updatedItem.content,
-                  assignee_id: updatedItem.assignee_id,
-                  assignee_name: updatedItem.assignee_name,
-                  assignments: updatedItem.assignments || []
-                } : item
-              )
-            }))
-          }
-        }
-        return task
-      }))
-
-      // Reset editing states
-      setEditingChecklistItemId(null)
-      setEditingChecklistItemContent('')
-      setEditingChecklistItemFiles([])
-      setEditingChecklistItemExistingFileUrls([])
-      setEditingChecklistItemAssigneeId(null)
-      setEditingChecklistItemAssignments([])
-      setShowEditingAssignmentDropdown(false)
-      if (editingChecklistItemFileInputRef.current) {
-        editingChecklistItemFileInputRef.current.value = ''
-      }
-    } catch (error) {
-      console.error('Error updating checklist item:', error)
-      alert('Không thể cập nhật việc cần làm')
-    }
-  }
-
   const toggleChecklistItem = async (itemId: string, isCompleted: boolean) => {
     try {
       // Optimistic update
@@ -1424,13 +1195,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     const role = user.role?.toLowerCase()
     const isModerator = role && ['admin', 'sales', 'accountant'].includes(role)
     return comment.user_id === user.id || isModerator
-  }
-
-  // Check if user is admin or manager
-  const isAdminOrManager = () => {
-    if (!user) return false
-    const role = user.role?.toLowerCase()
-    return role && ['admin', 'manager'].includes(role)
   }
 
   if (loading) {
@@ -1738,7 +1502,8 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
             return (
               <div
                 key={task.id}
-                className="bg-white rounded-xl shadow-sm border p-6 hover:shadow-md transition-shadow"
+                onClick={() => handleTaskClick(task.id)}
+                className="bg-white rounded-xl shadow-sm border p-6 hover:shadow-md transition-shadow cursor-pointer"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -2175,321 +1940,39 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                           {item.is_completed && <Check className="h-3 w-3 text-white" />}
                                         </button>
                                         <div className="flex-1 space-y-2 min-w-0">
-                                          {/* Content text - Edit mode or Display mode */}
-                                          {editingChecklistItemId === item.id ? (
-                                            <div className="space-y-3">
-                                              {/* Nội dung */}
-                                              <div className="flex items-center gap-2">
-                                                <input
-                                                  type="text"
-                                                  value={editingChecklistItemContent}
-                                                  onChange={(e) => setEditingChecklistItemContent(e.target.value)}
-                                                  onClick={(e) => e.stopPropagation()}
-                                                  className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-black"
-                                                  placeholder="Nội dung việc cần làm"
-                                                  autoFocus
-                                                />
-                                              </div>
+                                          {/* Content text */}
+                                          <div className="flex items-center justify-between gap-2">
+                                            {displayContent && (
+                                              <span className={`text-sm leading-snug flex-1 ${item.is_completed
+                                                ? 'text-gray-400 line-through'
+                                                : 'text-gray-700'
+                                                }`}>
+                                                {displayContent}
+                                              </span>
+                                            )}
 
-                                              {/* File management */}
-                                              <div className="space-y-2">
-                                                <label className="text-xs font-medium text-gray-700">File đính kèm:</label>
-                                                
-                                                {/* File hiện có */}
-                                                {editingChecklistItemExistingFileUrls.length > 0 && (
-                                                  <div className="flex flex-wrap gap-2">
-                                                    {editingChecklistItemExistingFileUrls.map((url, idx) => {
-                                                      const fileName = getFileNameFromUrl(url)
-                                                      return (
-                                                        <div
-                                                          key={idx}
-                                                          className="flex items-center gap-1 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-xs"
-                                                        >
-                                                          <File className="h-3 w-3 text-gray-600" />
-                                                          <span className="max-w-[120px] truncate text-black">{fileName}</span>
-                                                          <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                              e.stopPropagation()
-                                                              setEditingChecklistItemExistingFileUrls(prev => prev.filter((_, i) => i !== idx))
-                                                            }}
-                                                            className="ml-1 text-gray-500 hover:text-red-600"
-                                                            title="Xóa file"
-                                                          >
-                                                            <X className="h-3 w-3" />
-                                                          </button>
-                                                        </div>
-                                                      )
-                                                    })}
-                                                  </div>
-                                                )}
-
-                                                {/* Thêm file mới */}
-                                                <div className="flex items-center gap-2">
-                                                  <input
-                                                    ref={editingChecklistItemFileInputRef}
-                                                    type="file"
-                                                    multiple
-                                                    onChange={(e) => {
-                                                      const files = Array.from(e.target.files || [])
-                                                      setEditingChecklistItemFiles(prev => [...prev, ...files])
-                                                    }}
-                                                    className="hidden"
-                                                    id={`edit-checklist-item-file-${item.id}`}
-                                                  />
-                                                  <label
-                                                    htmlFor={`edit-checklist-item-file-${item.id}`}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer text-gray-700"
-                                                  >
-                                                    <Plus className="h-3 w-3" />
-                                                    <span>Thêm file</span>
-                                                  </label>
-                                                  {editingChecklistItemFiles.length > 0 && (
-                                                    <div className="flex-1 flex items-center gap-1 flex-wrap">
-                                                      {editingChecklistItemFiles.map((file, idx) => (
-                                                        <div
-                                                          key={idx}
-                                                          className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs"
-                                                        >
-                                                          <File className="h-3 w-3" />
-                                                          <span className="max-w-[100px] truncate">{file.name}</span>
-                                                          <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                              e.stopPropagation()
-                                                              setEditingChecklistItemFiles(prev => prev.filter((_, i) => i !== idx))
-                                                            }}
-                                                            className="ml-1 text-blue-700 hover:text-blue-900"
-                                                          >
-                                                            <X className="h-3 w-3" />
-                                                          </button>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </div>
-
-                                              {/* Phân công nhiệm vụ */}
-                                              <div className="space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                  <label className="text-xs font-medium text-gray-700">Phân công nhiệm vụ:</label>
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation()
-                                                      setShowEditingAssignmentDropdown(!showEditingAssignmentDropdown)
-                                                    }}
-                                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
-                                                  >
-                                                    <Plus className="h-3 w-3" />
-                                                    <span>Thêm</span>
-                                                  </button>
-                                                </div>
-
-                                                {/* Dropdown thêm assignment */}
-                                                {showEditingAssignmentDropdown && (
-                                                  <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
-                                                    <select
-                                                      onChange={(e) => {
-                                                        const employeeId = e.target.value
-                                                        if (employeeId && !editingChecklistItemAssignments.find(a => a.employee_id === employeeId)) {
-                                                          setEditingChecklistItemAssignments(prev => [...prev, { employee_id: employeeId, responsibility_type: 'responsible' }])
-                                                          e.target.value = ''
-                                                          setShowEditingAssignmentDropdown(false)
-                                                        }
-                                                      }}
-                                                      onClick={(e) => e.stopPropagation()}
-                                                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-black bg-white"
-                                                    >
-                                                      <option value="">-- Chọn nhân viên --</option>
-                                                      {groupMembers.map((member) => (
-                                                        <option key={member.employee_id} value={member.employee_id}>
-                                                          {member.employee_name}
-                                                        </option>
-                                                      ))}
-                                                    </select>
-                                                  </div>
-                                                )}
-
-                                                {/* Danh sách assignments */}
-                                                {editingChecklistItemAssignments.length > 0 && (
-                                                  <div className="space-y-2">
-                                                    {editingChecklistItemAssignments.map((assignment, idx) => {
-                                                      const member = groupMembers.find(m => m.employee_id === assignment.employee_id)
-                                                      const responsibilityLabels: Record<string, string> = {
-                                                        accountable: 'Chịu trách nhiệm',
-                                                        responsible: 'Thực hiện',
-                                                        consulted: 'Tư vấn',
-                                                        informed: 'Thông báo'
-                                                      }
-                                                      return (
-                                                        <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200">
-                                                          <span className="flex-1 text-xs text-black font-medium">{member?.employee_name || 'Nhân viên'}</span>
-                                                          <select
-                                                            value={assignment.responsibility_type}
-                                                            onChange={(e) => {
-                                                              const newAssignments = [...editingChecklistItemAssignments]
-                                                              newAssignments[idx].responsibility_type = e.target.value as 'accountable' | 'responsible' | 'consulted' | 'informed'
-                                                              setEditingChecklistItemAssignments(newAssignments)
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-black bg-white"
-                                                          >
-                                                            <option value="accountable">Chịu trách nhiệm</option>
-                                                            <option value="responsible">Thực hiện</option>
-                                                            <option value="consulted">Tư vấn</option>
-                                                            <option value="informed">Thông báo</option>
-                                                          </select>
-                                                          <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                              e.stopPropagation()
-                                                              setEditingChecklistItemAssignments(prev => prev.filter((_, i) => i !== idx))
-                                                            }}
-                                                            className="p-1 text-gray-400 hover:text-red-600"
-                                                            title="Xóa"
-                                                          >
-                                                            <X className="h-3 w-3" />
-                                                          </button>
-                                                        </div>
-                                                      )
-                                                    })}
-                                                  </div>
-                                                )}
-                                              </div>
-
-                                              {/* Nút lưu và hủy */}
-                                              <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    setEditingChecklistItemId(null)
-                                                    setEditingChecklistItemContent('')
-                                                    setEditingChecklistItemFiles([])
-                                                    setEditingChecklistItemExistingFileUrls([])
-                                                    setEditingChecklistItemAssigneeId(null)
-                                                    setEditingChecklistItemAssignments([])
-                                                    setShowEditingAssignmentDropdown(false)
-                                                    if (editingChecklistItemFileInputRef.current) {
-                                                      editingChecklistItemFileInputRef.current.value = ''
-                                                    }
-                                                  }}
-                                                  className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-                                                >
-                                                  Hủy
-                                                </button>
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    updateChecklistItemContent(
-                                                      item.id,
-                                                      editingChecklistItemContent,
-                                                      task.id,
-                                                      editingChecklistItemFiles.length > 0 ? editingChecklistItemFiles : undefined,
-                                                      editingChecklistItemExistingFileUrls.length > 0 ? editingChecklistItemExistingFileUrls : undefined,
-                                                      undefined, // Không dùng assignee_id nữa, chỉ dùng assignments
-                                                      editingChecklistItemAssignments // Luôn truyền assignments (có thể là mảng rỗng để xóa)
-                                                    )
-                                                  }}
-                                                  className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                                                >
-                                                  Lưu
-                                                </button>
-                                              </div>
+                                            <div className="flex-shrink-0 relative group/assignee">
+                                              <select
+                                                value={item.assignee_id || ''}
+                                                onChange={(e) => updateChecklistItemAssignee(item.id, e.target.value || null, task.id)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className={`
+                                                  appearance-none bg-transparent pl-6 pr-2 py-0.5 text-[11px] rounded border transition-all cursor-pointer outline-none
+                                                  ${item.assignee_id
+                                                    ? 'text-blue-600 border-blue-200 bg-blue-50/50 hover:bg-blue-50'
+                                                    : 'text-gray-400 border-transparent hover:border-gray-200 hover:text-gray-600'}
+                                                `}
+                                              >
+                                                <option value="">Chưa gán</option>
+                                                {groupMembers.map((member) => (
+                                                  <option key={member.employee_id} value={member.employee_id}>
+                                                    {member.employee_name}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                              <UserIcon className={`absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 ${item.assignee_id ? 'text-blue-500' : 'text-gray-400'}`} />
                                             </div>
-                                          ) : (
-                                            <div className="flex items-center justify-between gap-2">
-                                              {displayContent && (
-                                                <span className={`text-sm leading-snug flex-1 ${item.is_completed
-                                                  ? 'text-gray-400 line-through'
-                                                  : 'text-gray-700'
-                                                  }`}>
-                                                  {displayContent}
-                                                </span>
-                                              )}
-
-                                              {/* Chỉ hiển thị select khi chưa gán nhân viên */}
-                                              {!item.assignee_id && (
-                                                <div className="flex-shrink-0 relative group/assignee">
-                                                  <select
-                                                    value={item.assignee_id || ''}
-                                                    onChange={(e) => updateChecklistItemAssignee(item.id, e.target.value || null, task.id)}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="appearance-none bg-transparent pl-6 pr-2 py-0.5 text-[11px] rounded border transition-all cursor-pointer outline-none text-gray-400 border-transparent hover:border-gray-200 hover:text-gray-600"
-                                                  >
-                                                    <option value="">Chưa gán</option>
-                                                    {groupMembers.map((member) => (
-                                                      <option key={member.employee_id} value={member.employee_id}>
-                                                        {member.employee_name}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                  <UserIcon className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
-                                                </div>
-                                              )}
-
-                                              {/* Nút chỉnh sửa và xóa */}
-                                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    // Parse content để loại bỏ file URLs
-                                                    let content = item.content || ''
-                                                    const fileUrls: string[] = []
-                                                    const fileUrlsMatch = content.match(/\[FILE_URLS:\s*([^\]]+)\]/)
-                                                    if (fileUrlsMatch) {
-                                                      const urlsText = fileUrlsMatch[1].trim()
-                                                      const urls = urlsText.split(/\s+/).filter(url =>
-                                                        url.length > 0 && (url.startsWith('http://') || url.startsWith('https://'))
-                                                      )
-                                                      fileUrls.push(...urls)
-                                                      content = content.replace(/\[FILE_URLS:[^\]]+\]/g, '').trim()
-                                                      content = content.replace(/^📎 \d+ file\(s\)\s*$/g, '').trim()
-                                                    }
-                                                    
-                                                    setEditingChecklistItemId(item.id)
-                                                    setEditingChecklistItemContent(content)
-                                                    setEditingChecklistItemFiles([])
-                                                    setEditingChecklistItemExistingFileUrls(fileUrls)
-                                                    // Nếu có assignments thì dùng assignments, nếu không thì convert assignee_id thành assignment
-                                                    if (item.assignments && item.assignments.length > 0) {
-                                                      setEditingChecklistItemAssignments(item.assignments.map((a: any) => ({
-                                                        employee_id: a.employee_id,
-                                                        responsibility_type: a.responsibility_type
-                                                      })))
-                                                    } else if (item.assignee_id) {
-                                                      // Convert assignee_id thành assignment với vai trò "responsible"
-                                                      setEditingChecklistItemAssignments([{
-                                                        employee_id: item.assignee_id,
-                                                        responsibility_type: 'responsible'
-                                                      }])
-                                                    } else {
-                                                      setEditingChecklistItemAssignments([])
-                                                    }
-                                                    setShowEditingAssignmentDropdown(false)
-                                                  }}
-                                                  className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                                  title="Chỉnh sửa"
-                                                >
-                                                  <Edit className="h-3 w-3" />
-                                                </button>
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    if (confirm('Bạn có chắc muốn xóa việc cần làm này?')) {
-                                                      deleteChecklistItem(item.id, task.id)
-                                                    }
-                                                  }}
-                                                  className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                                                  title="Xóa"
-                                                >
-                                                  <Trash2 className="h-3 w-3" />
-                                                </button>
-                                              </div>
-                                            </div>
-                                          )}
+                                          </div>
 
                                           {/* Display files/images */}
                                           {fileUrls.length > 0 && (
@@ -2545,67 +2028,22 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                                   informed: 'Thông báo'
                                                 }
                                                 
-                                                // Tìm employee_name từ groupMembers nếu không có trong assignment
-                                                const employeeName = assignment.employee_name || 
-                                                  (assignment.employee_id 
-                                                    ? groupMembers.find(m => m.employee_id === assignment.employee_id)?.employee_name 
-                                                    : null) || 
-                                                  'Nhân viên'
-                                                
-                                                // Chỉ hiển thị nút xóa cho vai trò "accountable" (Chịu trách nhiệm)
-                                                const isAccountable = assignment.responsibility_type === 'accountable'
-                                                // Admin và manager có thể xóa và sửa tất cả assignments
-                                                const canEdit = isAdminOrManager()
-                                                
                                                 return (
                                                   <div 
                                                     key={`${item.id}-assignment-${idx}`}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-xs group/assignment"
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-xs"
                                                   >
                                                     <UserIcon className="h-3 w-3 text-blue-600 flex-shrink-0" />
                                                     <span className="text-gray-700 font-medium">
-                                                      {employeeName}
+                                                      {assignment.employee_name || 'Nhân viên'}
                                                     </span>
                                                     {assignment.responsibility_type && (
                                                       <>
                                                         <span className="text-gray-400">•</span>
-                                                        {canEdit ? (
-                                                          <select
-                                                            value={assignment.responsibility_type}
-                                                            onChange={(e) => {
-                                                              e.stopPropagation()
-                                                              updateChecklistItemAssignment(item.id, assignment.employee_id, e.target.value, task.id)
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="text-gray-600 bg-transparent border-none outline-none cursor-pointer text-xs py-0 px-1 rounded hover:bg-blue-100 transition-colors"
-                                                            title="Sửa vai trò"
-                                                          >
-                                                            <option value="accountable">Chịu trách nhiệm</option>
-                                                            <option value="responsible">Thực hiện</option>
-                                                            <option value="consulted">Tư vấn</option>
-                                                            <option value="informed">Thông báo</option>
-                                                          </select>
-                                                        ) : (
-                                                          <span className="text-gray-600">
-                                                            {responsibilityLabels[assignment.responsibility_type] || assignment.responsibility_type}
-                                                          </span>
-                                                        )}
+                                                        <span className="text-gray-600">
+                                                          {responsibilityLabels[assignment.responsibility_type] || assignment.responsibility_type}
+                                                        </span>
                                                       </>
-                                                    )}
-                                                    {/* Hiển thị nút xóa cho accountable hoặc admin/manager */}
-                                                    {(isAccountable || canEdit) && assignment.employee_id && (
-                                                      <button
-                                                        onClick={(e) => {
-                                                          e.stopPropagation()
-                                                          if (confirm('Bạn có chắc muốn xóa phân công nhiệm vụ này?')) {
-                                                            deleteChecklistItemAssignment(item.id, assignment.employee_id, task.id)
-                                                          }
-                                                        }}
-                                                        className="ml-1 text-gray-400 hover:text-red-600 transition-colors opacity-0 group-hover/assignment:opacity-100"
-                                                        title="Xóa phân công"
-                                                      >
-                                                        <X className="h-3 w-3" />
-                                                      </button>
                                                     )}
                                                   </div>
                                                 )
@@ -2665,16 +2103,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleTaskClick(task.id)
-                    }}
-                    className="ml-4 p-1 hover:bg-gray-100 rounded transition-colors"
-                    title="Xem chi tiết nhiệm vụ"
-                  >
-                    <ArrowRight className="h-5 w-5 text-gray-400 hover:text-blue-600" />
-                  </button>
+                  <ArrowRight className="h-5 w-5 text-gray-400 ml-4" />
                 </div>
               </div>
             )

@@ -115,7 +115,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [isDeletingStatus, setIsDeletingStatus] = useState(false)
   const [deletingStatusId, setDeletingStatusId] = useState<string | null>(null)
   const [projectInvoiceTotals, setProjectInvoiceTotals] = useState<Record<string, number>>({})
-  const [projectQuoteTotals, setProjectQuoteTotals] = useState<Record<string, number>>({})
   const [showCategoriesManager, setShowCategoriesManager] = useState(false)
   const [categoriesManagerInitialTab, setCategoriesManagerInitialTab] = useState<'categories' | 'flow-rules'>('categories')
   const [userRole, setUserRole] = useState<string>('')
@@ -341,10 +340,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       setProjects(mapped)
 
-      // Fetch invoices and quotes for all projects to calculate totals
+      // Fetch invoices for all projects to calculate totals
       const projectIds = mapped.map(p => p.id)
       if (projectIds.length > 0) {
-        // Fetch invoices
         const { data: invoicesData, error: invoicesError } = await supabase
           .from('invoices')
           .select('project_id, total_amount')
@@ -359,23 +357,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             totals[projectId] = (totals[projectId] || 0) + amount
           })
           setProjectInvoiceTotals(totals)
-        }
-
-        // Fetch quotes
-        const { data: quotesData, error: quotesError } = await supabase
-          .from('quotes')
-          .select('project_id, total_amount')
-          .in('project_id', projectIds)
-
-        if (!quotesError && quotesData) {
-          // Calculate total quote amount for each project
-          const quoteTotals: Record<string, number> = {}
-          quotesData.forEach((quote: any) => {
-            const projectId = quote.project_id
-            const amount = Number(quote.total_amount) || 0
-            quoteTotals[projectId] = (quoteTotals[projectId] || 0) + amount
-          })
-          setProjectQuoteTotals(quoteTotals)
         }
       }
     } catch (e: any) {
@@ -1221,10 +1202,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                     totalInvoiceAmount={statusProjects.reduce((sum, p) => {
                       return sum + (projectInvoiceTotals[p.id] || 0)
                     }, 0)}
-                    totalQuoteAmount={statusProjects.reduce((sum, p) => {
-                      return sum + (projectQuoteTotals[p.id] || 0)
-                    }, 0)}
-                    isQuoteStatus={statusMeta.title.toLowerCase().includes('báo giá') || statusMeta.title.toLowerCase().includes('lên kế hoạch')}
             onCardClick={(id) => {
               const project = projects.find(p => p.id === id)
               if (project && onViewProject) {

@@ -116,4 +116,3 @@ fetch('/api/projects/categories?is_active=true', {
 
 
 
-

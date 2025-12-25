@@ -18,19 +18,11 @@ import {
   TrendingUp,
   Users,
   X,
-  FileText,
-  Plus,
-  ChevronDown,
-  ChevronRight,
 } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import ProjectTeam from './ProjectTeam'
 import ProjectTasksTab from './ProjectTasksTab'
 import ProjectStatusBar from './ProjectStatusBar'
-import CreateQuoteSidebarFullscreen from '@/components/sales/CreateQuoteSidebarFullscreen'
-import CreateProjectExpenseDialog from '@/components/expenses/CreateProjectExpenseDialog'
-import { apiGet } from '@/lib/api'
-import { supabase } from '@/lib/supabase'
 
 interface Project {
   id: string
@@ -87,31 +79,9 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
     timeline: false,
     team: false,
     tasks: false,
-    quotes: false,
-    expenses: false,
   })
   const [financialData, setFinancialData] = useState<any>(null)
   const [responsibleName, setResponsibleName] = useState<string | null>(null)
-  const [quotes, setQuotes] = useState<any[]>([])
-  const [loadingQuotes, setLoadingQuotes] = useState(false)
-  const [showCreateQuote, setShowCreateQuote] = useState(false)
-  const [showCreateExpense, setShowCreateExpense] = useState(false)
-  const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null)
-  const [quoteDetails, setQuoteDetails] = useState<Record<string, any>>({})
-  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(50) // Percentage
-  const [isResizing, setIsResizing] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(false)
-
-  // Check if desktop on mount and resize
-  useEffect(() => {
-    const checkDesktop = () => {
-      setIsDesktop(window.innerWidth >= 1024)
-    }
-    
-    checkDesktop()
-    window.addEventListener('resize', checkDesktop)
-    return () => window.removeEventListener('resize', checkDesktop)
-  }, [])
 
   useEffect(() => {
     if (!isOpen || !project) return
@@ -150,62 +120,7 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
 
     fetchFinancial()
     fetchResponsible()
-    fetchQuotes()
   }, [isOpen, project])
-
-  const fetchQuotes = async () => {
-    if (!project?.id) return
-    try {
-      setLoadingQuotes(true)
-      // Fetch quotes directly from Supabase filtered by project_id
-      const { data, error } = await supabase
-        .from('quotes')
-        .select('*')
-        .eq('project_id', project.id)
-        .order('created_at', { ascending: false })
-      
-      if (error) throw error
-      setQuotes(data || [])
-    } catch (e) {
-      console.error('Failed to fetch project quotes', e)
-      setQuotes([])
-    } finally {
-      setLoadingQuotes(false)
-    }
-  }
-
-  const fetchQuoteDetails = async (quoteId: string) => {
-    if (quoteDetails[quoteId]) return // Already fetched
-    
-    try {
-      const { data, error } = await supabase
-        .from('quote_items')
-        .select('*')
-        .eq('quote_id', quoteId)
-        .order('created_at', { ascending: true })
-      
-      if (error) throw error
-      setQuoteDetails(prev => ({
-        ...prev,
-        [quoteId]: data || []
-      }))
-    } catch (e) {
-      console.error('Failed to fetch quote details', e)
-      setQuoteDetails(prev => ({
-        ...prev,
-        [quoteId]: []
-      }))
-    }
-  }
-
-  const handleQuoteClick = (quoteId: string) => {
-    if (expandedQuoteId === quoteId) {
-      setExpandedQuoteId(null)
-    } else {
-      setExpandedQuoteId(quoteId)
-      fetchQuoteDetails(quoteId)
-    }
-  }
 
   useEffect(() => {
     const handleClose = () => {
@@ -215,41 +130,6 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
     window.addEventListener('closeProjectDetailSidebar', handleClose)
     return () => window.removeEventListener('closeProjectDetailSidebar', handleClose)
   }, [isOpen, onClose])
-
-  // Handle resizing
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return
-      
-      const sidebar = document.querySelector('[data-sidebar-container]') as HTMLElement
-      if (!sidebar) return
-      
-      const rect = sidebar.getBoundingClientRect()
-      const newWidth = ((e.clientX - rect.left) / rect.width) * 100
-      
-      // Limit between 30% and 70%
-      const clampedWidth = Math.max(30, Math.min(70, newWidth))
-      setLeftPanelWidth(clampedWidth)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-    }
-
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isResizing])
 
   if (!isOpen || !project) return null
 
@@ -299,12 +179,9 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
       {/* Backdrop */}
       <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
 
-      {/* Panel bên phải: có thể resize */}
+      {/* Panel bên phải: 50% info + 50% chat */}
       <div className="fixed inset-y-0 right-0 z-50 flex max-w-full items-stretch">
-        <div 
-          className="h-full w-screen max-w-7xl bg-white shadow-2xl rounded-l-lg overflow-hidden flex flex-col"
-          data-sidebar-container
-        >
+        <div className="h-full w-screen max-w-7xl bg-white shadow-2xl rounded-l-lg overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex-1 min-w-0">
@@ -351,15 +228,9 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
           </div>
 
           {/* Main layout */}
-          <div className="flex-1 flex flex-col lg:flex-row min-h-0 border-t border-gray-200 relative">
-            {/* LEFT Panel: Thông tin dự án (có thể resize) */}
-            <div 
-              className="flex flex-col min-h-0 bg-gray-50/40 transition-all"
-              style={{ 
-                width: isDesktop ? `${leftPanelWidth}%` : '100%',
-                borderRight: isDesktop ? '1px solid #e5e7eb' : 'none'
-              }}
-            >
+          <div className="flex-1 flex flex-col lg:flex-row min-h-0 border-t border-gray-200">
+            {/* LEFT 50%: Thông tin dự án (gộp tất cả tab) */}
+            <div className="w-full lg:w-1/2 flex flex-col min-h-0 border-r border-gray-200 bg-gray-50/40">
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Tổng quan */}
                 <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -433,20 +304,11 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
                         </p>
                       </div>
 
-                      {/* Mô tả - chỉ hiển thị khi hover */}
+                      {/* Mô tả */}
                       {project.description && (
-                        <div className="group relative bg-white rounded-lg border border-gray-200 p-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
                           <h3 className="text-sm font-semibold text-gray-900 mb-2">Mô tả dự án</h3>
-                          <div className="relative">
-                            <p className="text-sm text-gray-600 break-words line-clamp-2 group-hover:line-clamp-none group-hover:max-h-none max-h-[3rem] overflow-hidden transition-all duration-200">
-                              {project.description}
-                            </p>
-                            {project.description.length > 100 && (
-                              <div className="absolute bottom-0 right-0 bg-gradient-to-l from-white via-white to-transparent px-2 text-xs text-gray-500 opacity-0 group-hover:opacity-0 transition-opacity pointer-events-none">
-                                Hover để xem đầy đủ
-                              </div>
-                            )}
-                          </div>
+                          <p className="text-sm text-gray-600 break-words">{project.description}</p>
                         </div>
                       )}
 
@@ -645,345 +507,11 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
                     </div>
                   )}
                 </section>
-
-                {/* Báo giá */}
-                <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <button
-                    onClick={() => setCollapsed(prev => ({ ...prev, quotes: !prev.quotes }))}
-                    className="w-full flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-purple-600" />
-                      <span className="text-sm font-semibold text-gray-900">Báo giá</span>
-                      {quotes.length > 0 && (
-                        <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                          {quotes.length}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-500">
-                      {collapsed.quotes ? 'Hiển thị' : 'Ẩn bớt'}
-                    </span>
-                  </button>
-                  {!collapsed.quotes && project && (
-                    <div className="p-4 space-y-4">
-                      {/* Nút tạo báo giá */}
-                      <button
-                        onClick={() => setShowCreateQuote(true)}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                      >
-                        <Plus className="h-4 w-4" />
-                        <span>Tạo báo giá mới</span>
-                      </button>
-
-                      {/* Danh sách báo giá */}
-                      {loadingQuotes ? (
-                        <div className="text-center py-4 text-sm text-gray-500">Đang tải...</div>
-                      ) : quotes.length === 0 ? (
-                        <div className="text-center py-8 text-sm text-gray-500">
-                          <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                          <p>Chưa có báo giá nào</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {quotes.map((quote) => {
-                            const isExpanded = expandedQuoteId === quote.id
-                            const items = quoteDetails[quote.id] || []
-                            
-                            return (
-                              <div
-                                key={quote.id}
-                                className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
-                              >
-                                {/* Quote Header - Clickable */}
-                                <div
-                                  onClick={() => handleQuoteClick(quote.id)}
-                                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                                >
-                                  <div className="flex items-start justify-between mb-2">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <button className="p-0.5 hover:bg-gray-200 rounded transition-colors">
-                                          {isExpanded ? (
-                                            <ChevronDown className="h-4 w-4 text-gray-600" />
-                                          ) : (
-                                            <ChevronRight className="h-4 w-4 text-gray-600" />
-                                          )}
-                                        </button>
-                                        <span className="font-semibold text-gray-900">
-                                          #{quote.quote_number}
-                                        </span>
-                                        <span
-                                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                            quote.status === 'accepted'
-                                              ? 'bg-green-100 text-green-700'
-                                              : quote.status === 'sent'
-                                                ? 'bg-blue-100 text-blue-700'
-                                                : quote.status === 'declined'
-                                                  ? 'bg-red-100 text-red-700'
-                                                  : 'bg-gray-100 text-gray-700'
-                                          }`}
-                                        >
-                                          {quote.status === 'accepted'
-                                            ? 'Đã chấp nhận'
-                                            : quote.status === 'sent'
-                                              ? 'Đã gửi'
-                                              : quote.status === 'declined'
-                                                ? 'Đã từ chối'
-                                                : quote.status === 'draft'
-                                                  ? 'Nháp'
-                                                  : quote.status}
-                                        </span>
-                                      </div>
-                                      <div className="text-xs text-gray-600 space-y-1 ml-6">
-                                        <div className="flex items-center gap-2">
-                                          <Calendar className="h-3 w-3" />
-                                          <span>
-                                            Ngày phát hành: {formatDate(quote.issue_date)}
-                                          </span>
-                                        </div>
-                                        {quote.valid_until && (
-                                          <div className="flex items-center gap-2">
-                                            <Clock className="h-3 w-3" />
-                                            <span>
-                                              Có hiệu lực đến: {formatDate(quote.valid_until)}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="text-lg font-bold text-purple-600">
-                                        {formatCurrency(quote.total_amount)}
-                                      </div>
-                                      {quote.subtotal && quote.total_amount !== quote.subtotal && (
-                                        <div className="text-xs text-gray-500 line-through">
-                                          {formatCurrency(quote.subtotal)}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {quote.notes && (
-                                    <div className="mt-2 pt-2 border-t border-gray-100 ml-6">
-                                      <p className="text-xs text-gray-600 line-clamp-2">{quote.notes}</p>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Quote Details - Expandable */}
-                                {isExpanded && (
-                                  <div className="border-t border-gray-200 bg-gray-50 p-4">
-                                    {items.length === 0 ? (
-                                      <div className="text-center py-4 text-sm text-gray-500">
-                                        Đang tải chi tiết...
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-4">
-                                        {/* Items Table */}
-                                        <div className="overflow-x-auto">
-                                          <table className="w-full text-sm">
-                                            <thead>
-                                              <tr className="border-b border-gray-300">
-                                                <th className="text-left py-2 px-2 font-semibold text-gray-700">Sản phẩm</th>
-                                                <th className="text-left py-2 px-2 font-semibold text-gray-700">Kích thước</th>
-                                                <th className="text-right py-2 px-2 font-semibold text-gray-700">Số lượng</th>
-                                                <th className="text-right py-2 px-2 font-semibold text-gray-700">Đơn giá</th>
-                                                <th className="text-right py-2 px-2 font-semibold text-gray-700">Thành tiền</th>
-                                                <th className="text-center py-2 px-2 font-semibold text-gray-700">Thuế</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {items.map((item: any, index: number) => {
-                                                // Format số với dấu phẩy phân cách hàng nghìn
-                                                const formatNumber = (num: number | null | undefined) => {
-                                                  if (!num) return ''
-                                                  return new Intl.NumberFormat('vi-VN', {
-                                                    minimumFractionDigits: 0,
-                                                    maximumFractionDigits: 2
-                                                  }).format(num)
-                                                }
-                                                
-                                                const dimensions = []
-                                                if (item.length) {
-                                                  dimensions.push({ label: 'Ngang', value: formatNumber(item.length), unit: 'mm' })
-                                                }
-                                                if (item.height) {
-                                                  dimensions.push({ label: 'Cao', value: formatNumber(item.height), unit: 'mm' })
-                                                }
-                                                if (item.depth) {
-                                                  dimensions.push({ label: 'Sâu', value: formatNumber(item.depth), unit: 'mm' })
-                                                }
-                                                if (item.area) {
-                                                  dimensions.push({ label: 'Diện tích', value: formatNumber(item.area), unit: 'm²' })
-                                                }
-                                                if (item.volume) {
-                                                  dimensions.push({ label: 'Thể tích', value: formatNumber(item.volume), unit: 'm³' })
-                                                }
-                                                
-                                                return (
-                                                  <tr key={item.id || index} className="border-b border-gray-200">
-                                                    <td className="py-2 px-2">
-                                                      <div>
-                                                        <div className="font-medium text-gray-900">
-                                                          {item.name_product || item.description || 'Không có tên'}
-                                                        </div>
-                                                        {item.description && item.description !== item.name_product && (
-                                                          <div className="text-xs text-gray-500 mt-0.5">
-                                                            {item.description}
-                                                          </div>
-                                                        )}
-                                                      </div>
-                                                    </td>
-                                                    <td className="py-2 px-2 text-gray-700">
-                                                      {dimensions.length > 0 ? (
-                                                        <div className="text-xs space-y-1">
-                                                          {dimensions.map((dim, i) => (
-                                                            <div key={i} className="flex items-center gap-1">
-                                                              <span className="font-medium text-gray-700">{dim.label}:</span>
-                                                              <span className="text-gray-900">{dim.value}</span>
-                                                              <span className="text-gray-500">{dim.unit}</span>
-                                                            </div>
-                                                          ))}
-                                                        </div>
-                                                      ) : (
-                                                        <span className="text-gray-400">—</span>
-                                                      )}
-                                                    </td>
-                                                    <td className="py-2 px-2 text-right text-gray-700">
-                                                      {item.quantity || 0} {item.unit || ''}
-                                                    </td>
-                                                    <td className="py-2 px-2 text-right text-gray-700">
-                                                      {formatCurrency(item.unit_price || 0)}
-                                                    </td>
-                                                    <td className="py-2 px-2 text-right font-medium text-gray-900">
-                                                      {formatCurrency(item.total_price || 0)}
-                                                    </td>
-                                                    <td className="py-2 px-2 text-center">
-                                                      {item.tax_rate ? (
-                                                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                                                          {item.tax_rate}%
-                                                        </span>
-                                                      ) : (
-                                                        <span className="text-xs text-gray-400">Không</span>
-                                                      )}
-                                                    </td>
-                                                  </tr>
-                                                )
-                                              })}
-                                            </tbody>
-                                          </table>
-                                        </div>
-
-                                        {/* Summary */}
-                                        <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-2">
-                                          <div className="flex justify-between text-sm">
-                                            <span className="text-gray-600">Tổng tiền hàng:</span>
-                                            <span className="font-medium text-gray-900">
-                                              {formatCurrency(quote.subtotal || 0)}
-                                            </span>
-                                          </div>
-                                          {quote.tax_rate && quote.tax_rate > 0 && (
-                                            <div className="flex justify-between text-sm">
-                                              <span className="text-gray-600">
-                                                Thuế:
-                                              </span>
-                                              <span className="font-medium text-gray-900">
-                                                {formatCurrency(quote.tax_amount || 0)}
-                                              </span>
-                                            </div>
-                                          )}
-                                          {quote.discount_amount && quote.discount_amount > 0 && (
-                                            <div className="flex justify-between text-sm">
-                                              <span className="text-gray-600">Giảm giá:</span>
-                                              <span className="font-medium text-red-600">
-                                                -{formatCurrency(quote.discount_amount)}
-                                              </span>
-                                            </div>
-                                          )}
-                                          <div className="flex justify-between pt-2 border-t border-gray-200">
-                                            <span className="font-semibold text-gray-900">Tổng cộng:</span>
-                                            <span className="text-lg font-bold text-purple-600">
-                                              {formatCurrency(quote.total_amount || 0)}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                {/* Chi phí dự án kế hoạch */}
-                <section className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <button
-                    onClick={() => setCollapsed(prev => ({ ...prev, expenses: !prev.expenses }))}
-                    className="w-full flex items-center justify-between px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-green-600" />
-                      <span className="text-sm font-semibold text-gray-900">Chi phí dự án kế hoạch</span>
-                    </div>
-                    <span className="text-xs text-gray-500">
-                      {collapsed.expenses ? 'Hiển thị' : 'Ẩn bớt'}
-                    </span>
-                  </button>
-                  {!collapsed.expenses && project && (
-                    <div className="p-4 space-y-4">
-                      {/* Hiển thị chi phí dự án kế hoạch */}
-                      {project.budget && (
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <DollarSign className="h-5 w-5 text-green-600" />
-                              <span className="text-sm font-semibold text-gray-900">Tổng chi phí kế hoạch</span>
-                            </div>
-                            <span className="text-lg font-bold text-green-700">
-                              {formatCurrency(project.budget)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Nút tạo chi phí dự án kế hoạch */}
-                      <button
-                        onClick={() => setShowCreateExpense(true)}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                      >
-                        <Plus className="h-4 w-4" />
-                        <span>Tạo chi phí dự án kế hoạch</span>
-                      </button>
-                    </div>
-                  )}
-                </section>
               </div>
             </div>
 
-            {/* Resizer Bar */}
-            {isDesktop && (
-              <div
-                className="absolute top-0 bottom-0 w-1 bg-gray-300 hover:bg-blue-500 cursor-col-resize z-10 transition-colors"
-                style={{ left: `${leftPanelWidth}%`, transform: 'translateX(-50%)' }}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  setIsResizing(true)
-                }}
-              />
-            )}
-
-            {/* RIGHT Panel: Chat - Zalo style (có thể resize) */}
-            <aside 
-              className="flex flex-col min-h-0 bg-[#e5ddd5] transition-all"
-              style={{ 
-                width: isDesktop ? `${100 - leftPanelWidth}%` : '100%'
-              }}
-            >
+            {/* RIGHT 50%: Chat - Zalo style */}
+            <aside className="w-full lg:w-1/2 flex flex-col min-h-0 bg-[#e5ddd5]">
               {/* Zalo-style header */}
               <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -1007,62 +535,6 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
           </div>
         </div>
       </div>
-
-      {/* Create Quote Modal */}
-      {showCreateQuote && project && (
-        <CreateQuoteSidebarFullscreen
-          isOpen={showCreateQuote}
-          onClose={() => {
-            setShowCreateQuote(false)
-            fetchQuotes() // Refresh quotes after closing
-          }}
-          onSuccess={() => {
-            setShowCreateQuote(false)
-            fetchQuotes() // Refresh quotes after success
-          }}
-          initialProjectId={project.id}
-          initialCustomerId={project.customer_id}
-        />
-      )}
-
-      {/* Create Project Expense Dialog */}
-      {showCreateExpense && project && (
-        <CreateProjectExpenseDialog
-          isOpen={showCreateExpense}
-          onClose={() => {
-            setShowCreateExpense(false)
-            // Refresh project data to get updated budget
-            if (isOpen && project) {
-              fetch(getApiEndpoint(`/api/projects/${project.id}`))
-                .then(res => res.json())
-                .then(data => {
-                  // Update project budget if available
-                  if (data && data.budget) {
-                    // Trigger re-render by updating state if needed
-                  }
-                })
-                .catch(err => console.error('Failed to refresh project data', err))
-            }
-          }}
-          onSuccess={() => {
-            setShowCreateExpense(false)
-            // Refresh project data to get updated budget
-            if (isOpen && project) {
-              fetch(getApiEndpoint(`/api/projects/${project.id}`))
-                .then(res => res.json())
-                .then(data => {
-                  // Update project budget if available
-                  if (data && data.budget) {
-                    // Trigger re-render by updating state if needed
-                  }
-                })
-                .catch(err => console.error('Failed to refresh project data', err))
-            }
-          }}
-          category="planned"
-          initialProjectId={project.id}
-        />
-      )}
     </div>
   )
 }

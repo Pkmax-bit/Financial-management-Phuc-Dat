@@ -6,12 +6,9 @@
 /**
  * Get the path to a file icon
  * Uses absolute path from public folder for Next.js
- * Icons are located in: frontend/public/icon/
- * In Next.js, files in public/ are served from root, so /icon/ maps to public/icon/
  */
 export const getFileIconPath = (iconName: string): string => {
   // In Next.js, files in public/ are served from root
-  // Icons are stored in frontend/public/icon/ and accessed via /icon/
   // Use absolute path starting with /
   // Ensure icon name is lowercase for consistency
   const normalizedName = iconName.toLowerCase()
@@ -100,5 +97,4 @@ export const getFileIconFromUrl = (url: string): string | null => {
     return getFileIconByType('', fileName)
   }
 }
-
 

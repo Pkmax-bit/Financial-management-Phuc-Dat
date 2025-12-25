@@ -103,8 +103,6 @@ interface CreateQuoteSidebarProps {
   onClose: () => void
   onSuccess: () => void
   quoteId?: string // Optional: if provided, load and edit existing quote
-  initialProjectId?: string // Optional: if provided, pre-fill project_id
-  initialCustomerId?: string // Optional: if provided, pre-fill customer_id
 }
 
 // Helper function to convert category names to Vietnamese with diacritics
@@ -122,7 +120,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
   return categoryMap[categoryName] || categoryName
 }
 
-export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess, quoteId, initialProjectId, initialCustomerId }: CreateQuoteSidebarProps) {
+export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSuccess, quoteId }: CreateQuoteSidebarProps) {
   const { hideSidebar } = useSidebar()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -479,8 +477,12 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const itemsRef = useRef<QuoteItem[]>([])
   useEffect(() => { itemsRef.current = items }, [items])
 
-  // Note: Removed auto-close ProjectDetailSidebar to allow both to be visible
-  // CreateQuoteSidebarFullscreen will display on top with z-[60]
+  // Dispatch event when dialog opens to close project detail sidebar
+  useEffect(() => {
+    if (isOpen) {
+      window.dispatchEvent(new CustomEvent('closeProjectDetailSidebar'))
+    }
+  }, [isOpen])
 
   // Hide sidebar when modal opens/closes
   useEffect(() => {
@@ -585,11 +587,11 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     calculateSubtotal()
   }, [items])
 
-  // Auto-fill project info when modal opens with project from query params or props
+  // Auto-fill project info when modal opens with project from query params
   useEffect(() => {
-    if (isOpen && !quoteId) {
-      // Priority: initialProjectId prop > URL param
-      const projectId = initialProjectId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('project') : null)
+    if (isOpen && !quoteId && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const projectId = urlParams.get('project')
       
       if (projectId && !formData.project_id) {
         // Fetch project details
@@ -602,32 +604,23 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
             if (!error && project) {
               console.log('✅ Auto-filling project info:', project)
               // Auto-fill customer and project
-              // Use initialCustomerId if provided, otherwise use project's customer_id
-              const customerId = initialCustomerId || project.customer_id
               setFormData(prev => ({
                 ...prev,
-                customer_id: customerId || prev.customer_id,
+                customer_id: project.customer_id || prev.customer_id,
                 project_id: project.id,
                 issue_date: project.start_date ? normalizeDateInput(project.start_date) || new Date().toISOString().split('T')[0] : prev.issue_date,
                 valid_until: project.end_date ? normalizeDateInput(project.end_date) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : prev.valid_until
               }))
               
               // Fetch projects for this customer
-              if (customerId) {
-                fetchProjectsByCustomer(customerId)
+              if (project.customer_id) {
+                fetchProjectsByCustomer(project.customer_id)
               }
             }
           })
-      } else if (initialCustomerId && !formData.customer_id) {
-        // If only customer_id is provided (no project_id)
-        setFormData(prev => ({
-          ...prev,
-          customer_id: initialCustomerId
-        }))
-        fetchProjectsByCustomer(initialCustomerId)
       }
     }
-  }, [isOpen, quoteId, formData.project_id, initialProjectId, initialCustomerId])
+  }, [isOpen, quoteId, formData.project_id])
 
   // Fetch projects when customer changes
   useEffect(() => {
@@ -2956,7 +2949,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black bg-opacity-50">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50">
       {/* Full screen container */}
       <div className="fixed inset-0 bg-white flex flex-col">
         {/* Header */}
