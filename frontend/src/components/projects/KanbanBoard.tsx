@@ -95,7 +95,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [showHoldDialog, setShowHoldDialog] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false)
-  const [pendingDrop, setPendingDrop] = useState<{project: ProjectItem, status: ProjectStatus} | null>(null)
+  const [pendingDrop, setPendingDrop] = useState<{ project: ProjectItem, status: ProjectStatus } | null>(null)
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [draggedStatusId, setDraggedStatusId] = useState<string | null>(null)
   const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null)
@@ -110,11 +110,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [selectedColor, setSelectedColor] = useState('#6b7280') // Default gray color
   const [showOrderConflictDialog, setShowOrderConflictDialog] = useState(false)
   const [conflictingStatus, setConflictingStatus] = useState<ProjectStatusItem | null>(null)
-  const [pendingStatusData, setPendingStatusData] = useState<{isEdit: boolean, data: any} | null>(null)
+  const [pendingStatusData, setPendingStatusData] = useState<{ isEdit: boolean, data: any } | null>(null)
   const [isShiftingStatuses, setIsShiftingStatuses] = useState(false)
   const [isDeletingStatus, setIsDeletingStatus] = useState(false)
   const [deletingStatusId, setDeletingStatusId] = useState<string | null>(null)
   const [projectInvoiceTotals, setProjectInvoiceTotals] = useState<Record<string, number>>({})
+  const [projectQuoteTotals, setProjectQuoteTotals] = useState<Record<string, number>>({})
   const [showCategoriesManager, setShowCategoriesManager] = useState(false)
   const [categoriesManagerInitialTab, setCategoriesManagerInitialTab] = useState<'categories' | 'flow-rules'>('categories')
   const [userRole, setUserRole] = useState<string>('')
@@ -154,7 +155,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     { name: 'Xám xanh', bg: 'bg-slate-100', text: 'text-slate-800', hex: '#475569' },
     { name: 'Xám đá', bg: 'bg-stone-100', text: 'text-stone-800', hex: '#57534e' },
     { name: 'Xám kẽm', bg: 'bg-zinc-100', text: 'text-zinc-800', hex: '#52525b' },
-    
+
     // Blue colors
     { name: 'Xanh dương', bg: 'bg-blue-100', text: 'text-blue-800', hex: '#3b82f6' },
     { name: 'Xanh dương đậm', bg: 'bg-blue-200', text: 'text-blue-900', hex: '#2563eb' },
@@ -162,7 +163,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     { name: 'Xanh ngọc đậm', bg: 'bg-cyan-200', text: 'text-cyan-900', hex: '#0891b2' },
     { name: 'Xanh bầu trời', bg: 'bg-sky-100', text: 'text-sky-800', hex: '#0ea5e9' },
     { name: 'Xanh indigo', bg: 'bg-indigo-100', text: 'text-indigo-800', hex: '#6366f1' },
-    
+
     // Green colors
     { name: 'Xanh lá', bg: 'bg-green-100', text: 'text-green-800', hex: '#10b981' },
     { name: 'Xanh lá đậm', bg: 'bg-green-200', text: 'text-green-900', hex: '#059669' },
@@ -171,21 +172,21 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     { name: 'Xanh rêu', bg: 'bg-teal-100', text: 'text-teal-800', hex: '#14b8a6' },
     { name: 'Xanh rêu đậm', bg: 'bg-teal-200', text: 'text-teal-900', hex: '#0d9488' },
     { name: 'Xanh lá mạ', bg: 'bg-lime-100', text: 'text-lime-800', hex: '#84cc16' },
-    
+
     // Yellow & Orange colors
     { name: 'Vàng', bg: 'bg-yellow-100', text: 'text-yellow-800', hex: '#f59e0b' },
     { name: 'Vàng đậm', bg: 'bg-yellow-200', text: 'text-yellow-900', hex: '#d97706' },
     { name: 'Vàng chanh', bg: 'bg-amber-100', text: 'text-amber-800', hex: '#f59e0b' },
     { name: 'Cam', bg: 'bg-orange-100', text: 'text-orange-800', hex: '#f97316' },
     { name: 'Cam đậm', bg: 'bg-orange-200', text: 'text-orange-900', hex: '#ea580c' },
-    
+
     // Red & Pink colors
     { name: 'Đỏ', bg: 'bg-red-100', text: 'text-red-800', hex: '#ef4444' },
     { name: 'Đỏ đậm', bg: 'bg-red-200', text: 'text-red-900', hex: '#dc2626' },
     { name: 'Hồng', bg: 'bg-pink-100', text: 'text-pink-800', hex: '#ec4899' },
     { name: 'Hồng đậm', bg: 'bg-pink-200', text: 'text-pink-900', hex: '#db2777' },
     { name: 'Hồng đào', bg: 'bg-rose-100', text: 'text-rose-800', hex: '#f43f5e' },
-    
+
     // Purple & Violet colors
     { name: 'Tím', bg: 'bg-purple-100', text: 'text-purple-800', hex: '#a855f7' },
     { name: 'Tím đậm', bg: 'bg-purple-200', text: 'text-purple-900', hex: '#9333ea' },
@@ -206,7 +207,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const fetchData = async () => {
     try {
       setLoading(true)
-      
+
       // Get current user role
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser) {
@@ -219,7 +220,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           setUserRole(userData.role)
         }
       }
-      
+
       // Fetch statuses - will be filtered by category if needed (handled in separate useEffect)
       // Get statuses data for mapping projects
       let statusesDataForMapping = statuses
@@ -247,7 +248,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           customer_id,
           manager_id,
           category_id,
-          created_by,
           start_date,
           end_date,
           budget,
@@ -262,13 +262,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             employee_code,
             first_name,
             last_name,
-            avatar
-          ),
-          creator:users!created_by(
-            id,
-            first_name,
-            last_name,
-            avatar
+            user_id,
+            users!user_id(avatar_url)
           ),
           project_categories:category_id(
             id,
@@ -287,15 +282,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       if (error) throw error
 
       const mapped: ProjectItem[] = (data || []).map((p: any) => {
-        // Get manager name and avatar from employees table
+        // Get manager name and avatar from employees table and linked users table
         const manager = p.employees
         const managerName = manager ? `${manager.first_name || ''} ${manager.last_name || ''}`.trim() : undefined
-        const managerAvatar = manager?.avatar
-
-        // Get creator name and avatar from users table
-        const creator = p.creator
-        const creatorName = creator ? `${creator.first_name || ''} ${creator.last_name || ''}`.trim() : undefined
-        const creatorAvatar = creator?.avatar
+        const managerAvatar = manager?.users?.avatar_url
 
         // Get status name from statuses array by matching status_id
         // Otherwise fallback to enum status mapping
@@ -306,7 +296,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         } else {
           statusName = enumToStatusName[p.status] || p.status
         }
-        
+
         return {
           id: p.id,
           name: p.name,
@@ -322,8 +312,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           manager_name: managerName,
           manager_code: manager?.employee_code,
           manager_avatar: managerAvatar,
-          creator_name: creatorName,
-          creator_avatar: creatorAvatar,
+          creator_name: undefined, // Creator info not available from this query
+          creator_avatar: undefined, // Creator info not available from this query
           category_id: p.category_id,
           category_name: p.project_categories?.name,
           category_color: p.project_categories?.color,
@@ -340,9 +330,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       setProjects(mapped)
 
-      // Fetch invoices for all projects to calculate totals
+      // Fetch invoices and quotes for all projects to calculate totals
       const projectIds = mapped.map(p => p.id)
       if (projectIds.length > 0) {
+        // Fetch invoices
         const { data: invoicesData, error: invoicesError } = await supabase
           .from('invoices')
           .select('project_id, total_amount')
@@ -357,6 +348,23 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             totals[projectId] = (totals[projectId] || 0) + amount
           })
           setProjectInvoiceTotals(totals)
+        }
+
+        // Fetch quotes
+        const { data: quotesData, error: quotesError } = await supabase
+          .from('quotes')
+          .select('project_id, total_amount')
+          .in('project_id', projectIds)
+
+        if (!quotesError && quotesData) {
+          // Calculate total quote amount for each project
+          const quoteTotals: Record<string, number> = {}
+          quotesData.forEach((quote: any) => {
+            const projectId = quote.project_id
+            const amount = Number(quote.total_amount) || 0
+            quoteTotals[projectId] = (quoteTotals[projectId] || 0) + amount
+          })
+          setProjectQuoteTotals(quoteTotals)
         }
       }
     } catch (e: any) {
@@ -511,7 +519,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
   const handleDrop = async (e: React.DragEvent, newStatusName: string) => {
     e.preventDefault()
-    
+
     if (!draggedProject || draggedProject.status === newStatusName) {
       setDraggedProject(null)
       setDragOverColumn(null)
@@ -529,14 +537,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     try {
       // Find the status_id from the statuses array by matching the name
       const targetStatus = statuses.find(s => s.name === newStatusName)
-      
+
       if (!targetStatus) {
         throw new Error(`Không tìm thấy trạng thái: ${newStatusName}`)
       }
 
       // Prepare update data - use status_id instead of status enum
       const updateData: any = { status_id: targetStatus.id }
-      
+
       // Auto-set progress to 100% when moving to completed
       if (newStatusName === 'Hoàn thành' || newStatusName === 'completed') {
         updateData.progress = 100
@@ -550,20 +558,20 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       await apiPut(`/api/projects/${project.id}`, updateData)
 
       // Update local state
-      setProjects(prev => 
-        prev.map(p => 
-          p.id === project.id 
-            ? { 
-                ...p, 
-                status: newStatusName,
-                status_id: targetStatus.id,
-                progress: newStatusName === 'Hoàn thành' || newStatusName === 'completed' ? 100 : 
-                         newStatusName === 'Lập kế hoạch' || newStatusName === 'planning' ? 0 : p.progress
-              }
+      setProjects(prev =>
+        prev.map(p =>
+          p.id === project.id
+            ? {
+              ...p,
+              status: newStatusName,
+              status_id: targetStatus.id,
+              progress: newStatusName === 'Hoàn thành' || newStatusName === 'completed' ? 100 :
+                newStatusName === 'Lập kế hoạch' || newStatusName === 'planning' ? 0 : p.progress
+            }
             : p
         )
       )
-      
+
       // Clear any error state on success
       setError(null)
 
@@ -634,7 +642,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     'Hoàn thành': 'completed',
     'Đã hủy': 'cancelled'
   }
-  
+
   const enumToStatusName: Record<string, string> = {
     'planning': 'Lập kế hoạch',
     'active': 'Đang thực hiện',
@@ -687,8 +695,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Check if display_order already exists (excluding current editing status)
       const existingStatus = statuses.find(
-        s => s.display_order === statusForm.display_order && 
-        (!editingStatus || s.id !== editingStatus.id)
+        s => s.display_order === statusForm.display_order &&
+          (!editingStatus || s.id !== editingStatus.id)
       )
 
       if (existingStatus) {
@@ -720,7 +728,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       if (!editingStatus && categoryFilter && categoryFilter !== 'all') {
         statusData.category_id = categoryFilter
       }
-      
+
       if (pendingStatusData?.isEdit && editingStatus) {
         await apiPut(`/api/projects/statuses/${editingStatus.id}`, pendingStatusData.data)
       } else if (pendingStatusData) {
@@ -733,7 +741,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Refresh statuses with current category filter
       await fetchStatuses()
-      
+
       setShowStatusModal(false)
       setShowOrderConflictDialog(false)
       setEditingStatus(null)
@@ -764,7 +772,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       const statusesToShift = statuses
         .filter(
           s => s.display_order >= pendingStatusData.data.display_order &&
-          (!editingStatus || s.id !== editingStatus.id)
+            (!editingStatus || s.id !== editingStatus.id)
         )
         .sort((a, b) => b.display_order - a.display_order) // Sort descending
         .map(status => ({
@@ -860,7 +868,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const handleStatusDrop = async (e: React.DragEvent, targetStatusId: string) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
     if (!draggedStatusId || draggedStatusId === targetStatusId) {
       setDraggedStatusId(null)
       setDragOverStatusId(null)
@@ -869,10 +877,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
     try {
       setIsReorderingStatuses(true)
-      
+
       const draggedStatus = statuses.find(s => s.id === draggedStatusId)
       const targetStatus = statuses.find(s => s.id === targetStatusId)
-      
+
       if (!draggedStatus || !targetStatus) {
         return
       }
@@ -885,7 +893,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Get all statuses that need to be shifted
       const statusesToShift: Array<{ id: string; newOrder: number }> = []
-      
+
       if (draggedOrder < targetOrder) {
         // Moving forward: shift statuses between dragged and target backward
         statuses.forEach(s => {
@@ -947,7 +955,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Delete the status
       await apiDelete(`/api/projects/statuses/${statusId}`)
-      
+
       // Get all statuses that need to be shifted down (display_order > deleted order)
       const statusesToShift = statuses
         .filter(s => s.display_order > deletedOrder && s.id !== statusId)
@@ -1026,11 +1034,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                showAdvancedFilters
-                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${showAdvancedFilters
+                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                }`}
               title={showAdvancedFilters ? 'Ẩn bộ lọc nâng cao' : 'Hiện bộ lọc nâng cao'}
             >
               <Filter className="h-4 w-4" />
@@ -1163,10 +1170,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             .map((status) => {
               const statusMeta = getStatusMeta(status.name)
               const statusProjects = grouped[status.name] || []
-              
+
               return (
-                <div 
-                  key={status.id} 
+                <div
+                  key={status.id}
                   className={`flex-shrink-0 transition-all ${draggedStatusId === status.id ? 'opacity-50' : ''} ${dragOverStatusId === status.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
                   style={{ width: '320px' }}
                 >
@@ -1194,7 +1201,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                       </button>
                     </div>
                   </div>
-          <KanbanColumn
+                  <KanbanColumn
                     title={statusMeta.title}
                     colorClass={statusMeta.colorClass}
                     count={statusProjects.length}
@@ -1202,19 +1209,23 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                     totalInvoiceAmount={statusProjects.reduce((sum, p) => {
                       return sum + (projectInvoiceTotals[p.id] || 0)
                     }, 0)}
-            onCardClick={(id) => {
-              const project = projects.find(p => p.id === id)
-              if (project && onViewProject) {
-                onViewProject(project)
-              } else {
-                router.push(`/projects/${id}/detail`)
-              }
-            }}
-            onDragStart={handleDragStart}
+                    totalQuoteAmount={statusProjects.reduce((sum, p) => {
+                      return sum + (projectQuoteTotals[p.id] || 0)
+                    }, 0)}
+                    isQuoteStatus={statusMeta.title.toLowerCase().includes('báo giá') || statusMeta.title.toLowerCase().includes('lên kế hoạch')}
+                    onCardClick={(id) => {
+                      const project = projects.find(p => p.id === id)
+                      if (project && onViewProject) {
+                        onViewProject(project)
+                      } else {
+                        router.push(`/projects/${id}/detail`)
+                      }
+                    }}
+                    onDragStart={handleDragStart}
                     onDragOver={(e) => {
                       handleDragOver(e, status.name as ProjectStatus)
                     }}
-            onDragLeave={handleDragLeave}
+                    onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, status.name)}
                     isDragOver={dragOverColumn === status.name}
                     statusId={status.id}
@@ -1227,13 +1238,13 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                     onAddStatus={async () => {
                       // Set display_order = current status's display_order
                       const newDisplayOrder = status.display_order
-                      
+
                       // Shift all statuses with display_order >= newDisplayOrder up by 1
                       const statusesToShift = statuses
                         .filter(s => s.display_order >= newDisplayOrder)
                         .sort((a, b) => b.display_order - a.display_order) // Sort descending to avoid conflicts
                         .map(s => ({ ...s, originalOrder: s.display_order })) // Store original order
-                      
+
                       if (statusesToShift.length > 0) {
                         try {
                           // Step 1: Move to temporary high values
@@ -1243,20 +1254,20 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                               display_order: s.originalOrder + tempOffset
                             })
                           }
-                          
+
                           // Step 2: Wait a bit
                           await new Promise(resolve => setTimeout(resolve, 200))
-                          
+
                           // Step 3: Move to final positions (original + 1)
                           for (const s of statusesToShift) {
                             await apiPut(`/api/projects/statuses/${s.id}`, {
                               display_order: s.originalOrder + 1
                             })
                           }
-                          
+
                           // Step 4: Wait again
                           await new Promise(resolve => setTimeout(resolve, 200))
-                          
+
                           // Step 5: Refresh statuses
                           await fetchStatuses()
                         } catch (e: any) {
@@ -1265,7 +1276,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                           return
                         }
                       }
-                      
+
                       // Set form with new display_order
                       setStatusForm({
                         name: '',
@@ -1325,7 +1336,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                 <h2 className="mb-4 text-xl font-semibold text-black">
                   Vị trí đã được sử dụng
                 </h2>
-                
+
                 <div className="mb-6">
                   <p className="text-sm text-gray-700 mb-3">
                     Vị trí <strong>{pendingStatusData.data.display_order}</strong> đã được sử dụng bởi trạng thái:
@@ -1380,7 +1391,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                 </p>
               </div>
             )}
-            
+
             <div className="space-y-4">
               <div>
                 <label className="mt-1 text-xs text-black">Tên trạng thái *</label>
@@ -1427,17 +1438,16 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                           setSelectedColor(color.hex)
                           setStatusForm({ ...statusForm, color_class: `${color.bg} ${color.text}` })
                         }}
-                        className={`h-10 w-full rounded-lg border-2 transition-all ${
-                          selectedColor === color.hex
-                            ? 'border-gray-900 ring-2 ring-gray-500'
-                            : 'border-gray-200 hover:border-gray-400'
-                        } ${color.bg} ${color.text} flex items-center justify-center text-xs font-medium`}
+                        className={`h-10 w-full rounded-lg border-2 transition-all ${selectedColor === color.hex
+                          ? 'border-gray-900 ring-2 ring-gray-500'
+                          : 'border-gray-200 hover:border-gray-400'
+                          } ${color.bg} ${color.text} flex items-center justify-center text-xs font-medium`}
                         title={color.name}
                       >
                         {selectedColor === color.hex && '✓'}
                       </button>
-        ))}
-      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -1484,11 +1494,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
               <button
                 onClick={handleCreateStatus}
                 disabled={!isFormValid}
-                className={`flex-1 rounded-lg px-4 py-2 font-medium transition-colors ${
-                  isFormValid
-                    ? 'bg-black text-white hover:bg-gray-500'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
+                className={`flex-1 rounded-lg px-4 py-2 font-medium transition-colors ${isFormValid
+                  ? 'bg-black text-white hover:bg-gray-500'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
               >
                 {editingStatus ? 'Cập nhật' : 'Tạo mới'}
               </button>
@@ -1510,7 +1519,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   Xác nhận hoàn thành dự án
                 </h3>
               </div>
-              
+
               <div className="mb-6">
                 <p className="text-gray-600 mb-2">
                   Bạn có chắc chắn muốn hoàn thành dự án này không?
@@ -1563,7 +1572,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   Xác nhận tạm dừng dự án
                 </h3>
               </div>
-              
+
               <div className="mb-6">
                 <p className="text-gray-600 mb-2">
                   Bạn có chắc chắn muốn tạm dừng dự án này không?
@@ -1616,7 +1625,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   Xác nhận hủy dự án
                 </h3>
               </div>
-              
+
               <div className="mb-6">
                 <p className="text-gray-600 mb-2">
                   Bạn có chắc chắn muốn hủy dự án này không?
@@ -1669,7 +1678,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   Xác nhận thay đổi trạng thái
                 </h3>
               </div>
-              
+
               <div className="mb-6">
                 <p className="text-gray-600 mb-2">
                   Bạn có chắc chắn muốn thay đổi trạng thái dự án này không?
