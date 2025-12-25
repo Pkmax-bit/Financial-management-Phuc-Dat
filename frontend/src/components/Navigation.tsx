@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
-import { 
+import {
   Home,
   Users,
   Building2,
@@ -21,7 +21,8 @@ import {
   Camera,
   Lock,
   CheckSquare,
-  MessageSquare
+  MessageSquare,
+  Wrench
 } from 'lucide-react'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'

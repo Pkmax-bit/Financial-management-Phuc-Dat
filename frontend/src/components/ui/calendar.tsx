@@ -4,6 +4,12 @@ import { DayPicker } from "react-day-picker"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
+// DatePicker component that combines Calendar with Popover
+import { format } from "date-fns"
+import { Calendar as CalendarIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
 function Calendar({
@@ -60,4 +66,48 @@ function Calendar({
 }
 Calendar.displayName = "Calendar"
 
-export { Calendar }
+interface DatePickerProps {
+  date?: Date
+  onSelect?: (date: Date | undefined) => void
+  placeholder?: string
+  className?: string
+}
+
+function DatePicker({
+  date,
+  onSelect,
+  placeholder = "Chọn ngày",
+  className
+}: DatePickerProps) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "w-full h-10 px-3 py-2 text-left bg-white border border-gray-300 rounded-md text-gray-900 hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors flex items-center",
+            !date && "text-gray-500",
+            className
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 text-gray-500 flex-shrink-0" />
+          <span className="truncate">
+            {date ? format(date, "dd/MM/yyyy") : placeholder}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 z-[100]">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={onSelect}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+DatePicker.displayName = "DatePicker"
+
+export { DatePicker }

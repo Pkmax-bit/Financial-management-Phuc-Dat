@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import {
   FileText,
   Plus,
@@ -30,14 +31,14 @@ import ProductCategoriesTab from '@/components/sales/ProductCategoriesTab'
 import ProductCreateModal from '@/components/sales/ProductCreateModal'
 import ProductExcelUpload from '@/components/sales/ProductExcelUpload'
 import QuoteExcelUploadAI from '@/components/sales/QuoteExcelUploadAI'
-import AllSalesTab from '@/components/sales/AllSalesTab'
+// import AllSalesTab from '@/components/sales/AllSalesTab' // Tạm thời ẩn
 import QuotesTab from '@/components/sales/QuotesTab'
 import InvoicesTab from '@/components/sales/InvoicesTab'
 import PaymentsTab from '@/components/sales/PaymentsTab'
 import PaymentMethodsTab from '@/components/sales/PaymentMethodsTab'
-import CustomersTab from '@/components/sales/CustomersTab'
-import SalesReceiptsTab from '@/components/sales/SalesReceiptsTab'
-import VarianceTab from '@/components/sales/VarianceTab'
+// import CustomersTab from '@/components/sales/CustomersTab' // Tạm thời ẩn
+// import SalesReceiptsTab from '@/components/sales/SalesReceiptsTab' // Tạm thời ẩn
+// // import VarianceTab from '@/components/sales/VarianceTab' // Tạm thời ẩn
 import CreateSalesReceiptModal from '@/components/sales/CreateSalesReceiptModal'
 import QuickGuideModal from '@/components/sales/QuickGuideModal'
 import MaterialAdjustmentRulesTab from '@/components/sales/MaterialAdjustmentRulesTab'
@@ -73,7 +74,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
     const tab = searchParams.get('tab')
 
     // If tab is specified in URL, set it first
-    if (tab && ['overview', 'all-sales', 'quotes', 'invoices', 'receipts', 'payments', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments', 'upload-quote'].includes(tab)) {
+    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'payment-methods', 'products', 'product-categories', 'adjustments', 'upload-quote'].includes(tab)) {
       setActiveTab(tab)
     }
 
@@ -308,7 +309,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                 </button>
                 {activeTab !== 'overview' && (
                   <>
-                    {(activeTab === 'quotes' || activeTab === 'all-sales') && (
+                    {activeTab === 'quotes' && (
                       <button
                         onClick={handleCreateQuote}
                         className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -317,7 +318,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                         Tạo báo giá
                       </button>
                     )}
-                    {(activeTab === 'invoices' || activeTab === 'all-sales') && (
+                    {activeTab === 'invoices' && (
                       <button
                         onClick={handleCreateInvoice}
                         className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
@@ -345,13 +346,22 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                       </button>
                     )}
                     {activeTab === 'products' && (
-                      <button
-                        onClick={() => setShowCreateProductModal(true)}
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Thêm sản phẩm
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setShowCreateProductModal(true)}
+                          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Thêm sản phẩm
+                        </button>
+                        <Link
+                          href="/sales/custom-products"
+                          className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Tùy chỉnh sản phẩm
+                        </Link>
+                      </>
                     )}
                   </>
                 )}
@@ -475,7 +485,8 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                 >
                   Tổng quan
                 </button>
-                <button
+                {/* Tạm thời ẩn nút Tất cả giao dịch */}
+                {/* <button
                   onClick={() => setActiveTab('all-sales')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'all-sales'
                       ? 'border-blue-500 text-blue-600'
@@ -483,7 +494,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                     }`}
                 >
                   Tất cả giao dịch
-                </button>
+                </button> */}
                 <button
                   onClick={() => setActiveTab('invoices')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'invoices'
@@ -502,7 +513,8 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                 >
                   Báo giá ({String(Object.values((quotesStats as Record<string, unknown>).by_status || {}).reduce((a: unknown, b: unknown) => (a as number) + (b as number), 0))})
                 </button>
-                <button
+                {/* Tạm thời ẩn nút Phiếu Thu */}
+                {/* <button
                   onClick={() => setActiveTab('receipts')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'receipts'
                       ? 'border-blue-500 text-blue-600'
@@ -510,7 +522,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                     }`}
                 >
                   Phiếu Thu
-                </button>
+                </button> */}
                 <button
                   onClick={() => setActiveTab('payment-methods')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'payment-methods'
@@ -520,7 +532,8 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                 >
                   Phương thức thanh toán
                 </button>
-                <button
+                {/* Tạm thời ẩn nút Khách hàng */}
+                {/* <button
                   onClick={() => setActiveTab('customers')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'customers'
                       ? 'border-blue-500 text-blue-600'
@@ -528,8 +541,9 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                     }`}
                 >
                   Khách hàng
-                </button>
-                <button
+                </button> */}
+                {/* Tạm thời ẩn nút Chênh lệch trước hóa đơn */}
+                {/* <button
                   onClick={() => setActiveTab('variance')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'variance'
                       ? 'border-blue-500 text-blue-600'
@@ -537,7 +551,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                     }`}
                 >
                   Chênh lệch trước hóa đơn
-                </button>
+                </button> */}
                 <button
                   onClick={() => setActiveTab('products')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'products'
@@ -587,12 +601,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   </div>
                   <input
                     type="text"
-                    placeholder={
-                      activeTab === 'all-sales' ? 'Tìm kiếm tất cả giao dịch...' :
-                        activeTab === 'customers' ? 'Tìm kiếm khách hàng...' :
-                          activeTab === 'variance' ? 'Tìm kiếm dự án chênh lệch...' :
-                            'Tìm kiếm...'
-                    }
+                    placeholder='Tìm kiếm...'
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
@@ -610,11 +619,12 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   revenue={revenue}
                 />
               )}
-              {activeTab === 'all-sales' && (
+              {/* Tạm thời ẩn tab Tất cả giao dịch */}
+              {/* {activeTab === 'all-sales' && (
                 <AllSalesTab
                   searchTerm={searchTerm}
                 />
-              )}
+              )} */}
               {activeTab === 'invoices' && (
                 <InvoicesTab
                   searchTerm={searchTerm}
@@ -629,28 +639,31 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   shouldOpenCreateModal={shouldOpenCreateModal}
                 />
               )}
-              {activeTab === 'receipts' && (
+              {/* Tạm thời ẩn tab Phiếu Thu */}
+              {/* {activeTab === 'receipts' && (
                 <SalesReceiptsTab
                   onShowCreateModal={() => setShowCreateReceiptModal(true)}
                   onShowEditModal={(receipt) => console.log('Edit receipt:', receipt)}
                   onShowDetailModal={(receipt) => console.log('Detail receipt:', receipt)}
                 />
-              )}
+              )} */}
               {activeTab === 'payment-methods' && (
                 <PaymentMethodsTab
                   searchTerm={searchTerm}
                 />
               )}
-              {activeTab === 'customers' && (
+              {/* Tạm thời ẩn tab Khách hàng */}
+              {/* {activeTab === 'customers' && (
                 <CustomersTab
                   searchTerm={searchTerm}
                 />
-              )}
-              {activeTab === 'variance' && (
+              )} */}
+              {/* Tạm thời ẩn tab Chênh lệch trước hóa đơn */}
+              {/* {activeTab === 'variance' && (
                 <VarianceTab
                   searchTerm={searchTerm}
                 />
-              )}
+              )} */}
               {activeTab === 'products' && (
                 <div>
                   <div className="mb-4">
@@ -737,7 +750,7 @@ function SalesPageWithParams() {
   useEffect(() => {
     // Extract tab immediately to avoid searchParams enumeration
     const tab = searchParams.get('tab')
-    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'receipts', 'payment-methods', 'customers', 'variance', 'products', 'product-categories', 'adjustments', 'all-sales'].includes(tab)) {
+    if (tab && ['overview', 'quotes', 'invoices', 'payments', 'payment-methods', 'products', 'product-categories', 'adjustments'].includes(tab)) {
       setActiveTab(tab)
     }
   }, [searchParams])

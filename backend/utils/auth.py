@@ -91,9 +91,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     """Get current authenticated user using Supabase token"""
     try:
         token = credentials.credentials
-        # Only log in debug mode or on errors
-        # print(f"[AUTH] Received token: {token[:30]}..." if token and len(token) > 30 else f"[AUTH] Token: {token}")
-        
+        print(f"[AUTH] Processing authentication request")
+        print(f"[AUTH] Token present: {bool(token)}")
+
         if not token:
             print("[AUTH] ERROR: No token provided")
             raise HTTPException(
@@ -113,14 +113,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         # Use anon client to verify JWT tokens from frontend
         from services.supabase_client import get_supabase_anon_client
         supabase = get_supabase_anon_client()
-        
+
+        print(f"[AUTH] Verifying token with Supabase...")
         try:
-            # Only log in debug mode
-            # print("[AUTH] Verifying token with Supabase...")
             # Get the user from Supabase using the JWT token
             user_response = supabase.auth.get_user(token)
-            # Only log in debug mode
-            # print(f"[AUTH] Token verified successfully for user: {user_response.user.email if user_response and user_response.user else 'unknown'}")
+            print(f"[AUTH] Supabase response: {user_response}")
+            print(f"[AUTH] User found: {bool(user_response and user_response.user)}")
+            if user_response and user_response.user:
+                print(f"[AUTH] User email: {user_response.user.email}")
+                print(f"[AUTH] User ID: {user_response.user.id}")
 
             if not user_response or not hasattr(user_response, 'user') or not user_response.user:
                 raise HTTPException(

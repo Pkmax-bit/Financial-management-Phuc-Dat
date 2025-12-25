@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Calendar, DollarSign, Users, Target, Clock, AlertCircle, Save } from 'lucide-react'
+import { X, DollarSign, Users, Target, Clock, AlertCircle, Save } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectApi, customerApi, employeeApi } from '@/lib/api'
+import { DatePicker } from '@/components/ui/calendar'
 
 interface Project {
   id: string
@@ -14,6 +15,7 @@ interface Project {
   customer_name?: string
   manager_id: string
   manager_name?: string
+  created_by?: string
   start_date: string
   end_date?: string
   budget?: number
@@ -37,6 +39,7 @@ interface Employee {
   id: string
   name: string
   email: string
+  user_id?: string
 }
 
 interface EditProjectSidebarProps {
@@ -53,8 +56,8 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
     description: '',
     customer_id: '',
     manager_id: '',
-    start_date: '',
-    end_date: '',
+    start_date: null as Date | null,
+    end_date: null as Date | null,
     budget: '',
     status: 'planning' as const,
     priority: 'medium' as const,
@@ -71,14 +74,19 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
   useEffect(() => {
     if (isOpen && project) {
       console.log('📝 Loading project data into form:', project)
+      console.log('👤 Project manager_id:', project.manager_id)
+      console.log('👤 Project created_by:', project.created_by)
+
+      // Initialize form data
+      const initialManagerId = project.manager_id ? String(project.manager_id) : ''
       setFormData({
         project_code: project.project_code || '',
         name: project.name || '',
         description: project.description || '',
         customer_id: project.customer_id || '',
-        manager_id: project.manager_id || '',
-        start_date: project.start_date || '',
-        end_date: project.end_date || '',
+        manager_id: initialManagerId,
+        start_date: project.start_date ? new Date(project.start_date) : null,
+        end_date: project.end_date ? new Date(project.end_date) : null,
         budget: project.budget?.toString() || '',
         status: project.status || 'planning',
         priority: project.priority || 'medium',
@@ -87,6 +95,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
         hourly_rate: project.hourly_rate?.toString() || ''
       })
       console.log('✅ Form data set successfully')
+      console.log('👤 Initial form manager_id:', initialManagerId)
     }
   }, [isOpen, project])
 
@@ -125,13 +134,20 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
       try {
         const data = await employeeApi.getEmployees()
         console.log('📋 Employees from API:', data)
-        setEmployees(data || [])
+        // Map API response to Employee interface format
+        const mappedApiEmployees = (data || []).map((emp: any) => ({
+          id: emp.id,
+          name: emp.full_name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+          email: emp.email || '',
+          user_id: emp.user_id
+        }))
+        setEmployees(mappedApiEmployees)
       } catch (apiError) {
         console.log('API failed, falling back to Supabase:', apiError)
         
         const { data, error } = await supabase
           .from('employees')
-          .select('id, first_name, last_name, email, employee_code')
+          .select('id, first_name, last_name, email, employee_code, user_id')
           .order('first_name')
 
         if (error) throw error
@@ -141,11 +157,27 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
           id: emp.id,
           name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
           email: emp.email || '',
-          employee_code: emp.employee_code
+          employee_code: emp.employee_code,
+          user_id: emp.user_id
         }))
         
         console.log('📋 Employees from Supabase:', mappedEmployees)
+        console.log('🔍 Employee IDs:', mappedEmployees.map(emp => emp.id))
         setEmployees(mappedEmployees)
+
+        // If no manager is set and we have project data with created_by, try to find the creator's employee
+        if (project && !formData.manager_id && project.created_by && mappedEmployees.length > 0) {
+          const creatorEmployee = mappedEmployees.find(emp => emp.user_id === project.created_by)
+          if (creatorEmployee) {
+            console.log('👤 Found creator employee:', creatorEmployee.name, 'Setting as default manager')
+            setFormData(prev => ({
+              ...prev,
+              manager_id: creatorEmployee.id
+            }))
+          } else {
+            console.log('⚠️ Creator employee not found for user_id:', project.created_by)
+          }
+        }
       }
     } catch (error) {
       console.error('❌ Error fetching employees:', error)
@@ -170,6 +202,8 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
     try {
       const updateData = {
         ...formData,
+        start_date: formData.start_date ? formData.start_date.toISOString().split('T')[0] : null,
+        end_date: formData.end_date ? formData.end_date.toISOString().split('T')[0] : null,
         budget: formData.budget ? parseFloat(formData.budget) : null,
         hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
         progress: Number(formData.progress)
@@ -184,7 +218,36 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
       onClose()
     } catch (error: any) {
       console.error('Error updating project:', error)
-      setError(error.message || 'Có lỗi xảy ra khi cập nhật dự án')
+
+      // Better error handling for validation errors
+      let errorMessage = 'Có lỗi xảy ra khi cập nhật dự án'
+      if (error?.response?.data) {
+        const errorData = error.response.data
+        if (Array.isArray(errorData)) {
+          // Handle array of errors
+          errorMessage = errorData.map(err =>
+            typeof err === 'string' ? err : (err.message || err.detail || JSON.stringify(err))
+          ).join(', ')
+        } else if (typeof errorData === 'object') {
+          if (errorData.detail) {
+            errorMessage = errorData.detail
+          } else if (errorData.message) {
+            errorMessage = errorData.message
+          } else if (errorData.errors) {
+            // Handle nested errors object
+            errorMessage = Object.values(errorData.errors).flat().join(', ')
+          } else {
+            // Fallback for other object structures
+            errorMessage = Object.values(errorData).map(val =>
+              typeof val === 'string' ? val : JSON.stringify(val)
+            ).join(', ')
+          }
+        }
+      } else if (error?.message) {
+        errorMessage = error.message
+      }
+
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -194,8 +257,11 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
 
   return (
     <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
+
       {/* Sidebar */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out">
+      <div className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white shadow-xl z-[60] transform transition-transform duration-300 ease-in-out">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center space-x-3">
@@ -309,6 +375,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
                   Nhân viên * {employees.length > 0 && `(${employees.length} nhân viên)`}
                 </label>
                 <select
+                  key={`manager-${formData.manager_id}-${employees.length}`}
                   name="manager_id"
                   value={formData.manager_id}
                   onChange={handleChange}
@@ -320,7 +387,7 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
                   </option>
                   {employees.map((employee) => (
                     <option key={employee.id} value={employee.id}>
-                      {employee.name} {employee.email ? `(${employee.email})` : ''}
+                      {employee.name}
                     </option>
                   ))}
                 </select>
@@ -335,33 +402,24 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
                 <label className="block text-sm font-semibold text-black mb-2">
                   Ngày bắt đầu *
                 </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
-                  <input
-                    type="date"
-                    name="start_date"
-                    value={formData.start_date}
-                    onChange={handleChange}
-                    required
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                  />
-                </div>
+                <DatePicker
+                  date={formData.start_date}
+                  onSelect={(date) => setFormData(prev => ({ ...prev, start_date: date || null }))}
+                  placeholder="Chọn ngày bắt đầu"
+                  className="w-full"
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-black mb-2">
                   Ngày kết thúc
                 </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-black" />
-                  <input
-                    type="date"
-                    name="end_date"
-                    value={formData.end_date}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                  />
-                </div>
+                <DatePicker
+                  date={formData.end_date}
+                  onSelect={(date) => setFormData(prev => ({ ...prev, end_date: date || null }))}
+                  placeholder="Chọn ngày kết thúc"
+                  className="w-full"
+                />
               </div>
 
               <div>

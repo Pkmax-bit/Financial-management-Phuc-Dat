@@ -11,6 +11,7 @@ import { ArrowLeft, Edit, DollarSign, Clock, Users, TrendingUp, Calendar, Target
 import { format } from 'date-fns';
 import { getApiEndpoint } from '@/lib/apiUrl'
 import ProjectTasksTab from '@/components/projects/ProjectTasksTab'
+import EditProjectModal from '@/components/projects/EditProjectModal';
 
 interface Project {
   id: string;
@@ -107,10 +108,12 @@ export default function ProjectDetailPage() {
   // Extract projectId immediately to avoid direct params access - destructure to prevent enumeration
   const { id: paramId } = params || {}
   const projectId = (paramId ?? '') as string;
-  
+
   const [project, setProject] = useState<Project | null>(null);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     if (projectId) {
@@ -145,6 +148,11 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleEditSuccess = () => {
+    fetchProject();
+    setIsEditModalOpen(false);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -173,7 +181,7 @@ export default function ProjectDetailPage() {
           <p className="text-black">{project.project_code}</p>
         </div>
         <div className="ml-auto flex gap-2">
-          <Button>
+          <Button onClick={() => setIsEditModalOpen(true)}>
             <Edit className="w-4 h-4 mr-2" />
             Edit Project
           </Button>
@@ -302,7 +310,7 @@ export default function ProjectDetailPage() {
           </div>
         </TabsContent>
 
-        
+
 
         <TabsContent value="timeline" className="space-y-6">
           <Card>
@@ -329,6 +337,15 @@ export default function ProjectDetailPage() {
         <TabsContent value="tasks" className="space-y-6">
           <ProjectTasksTab projectId={projectId} projectName={project?.name} />
         </TabsContent>
+
+        {project && (
+          <EditProjectModal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            project={project}
+            onSuccess={handleEditSuccess}
+          />
+        )}
       </Tabs>
     </div>
   );

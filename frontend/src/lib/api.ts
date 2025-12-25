@@ -576,6 +576,11 @@ export const detailedCostApi = {
 
 // Project API functions
 export const projectApi = {
+  // Get current user authentication info
+  getCurrentUser: () => {
+    return apiGet('/api/projects/auth/me')
+  },
+
   // Get all projects
   getProjects: (params?: {
     skip?: number
@@ -590,7 +595,7 @@ export const projectApi = {
     if (params?.search) searchParams.append('search', params.search)
     if (params?.status) searchParams.append('status', params.status)
     if (params?.customer_id) searchParams.append('customer_id', params.customer_id)
-    
+
     const url = `/api/projects${searchParams.toString() ? '?' + searchParams.toString() : ''}`
     return apiGet(url)
   },
@@ -1072,6 +1077,72 @@ export const budgetingApi = {
   }
 }
 
+// Authentication helpers
+export const authApi = {
+  // Check current authentication status
+  checkAuth: async () => {
+    try {
+      const result = await apiGet('/api/projects/auth/me')
+      return {
+        authenticated: true,
+        user: result
+      }
+    } catch (error: any) {
+      return {
+        authenticated: false,
+        error: error?.message || 'Not authenticated'
+      }
+    }
+  },
+
+  // Get current session info from Supabase
+  getSession: async () => {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    return {
+      session: session,
+      error: error,
+      hasToken: !!session?.access_token
+    }
+  },
+
+  // Test progress update permissions
+  testProgressUpdate: async () => {
+    try {
+      const result = await apiPost('/api/projects/auth/test-progress-update', {})
+      return {
+        success: true,
+        data: result
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error?.message || 'Test failed',
+        details: error
+      }
+    }
+  },
+
+  // Test actual project update
+  testProjectUpdate: async (projectId: string, data: any) => {
+    try {
+      console.log('Testing project update with data:', data)
+      const result = await apiPut(`/api/projects/${projectId}`, data)
+      return {
+        success: true,
+        data: result
+      }
+    } catch (error: any) {
+      console.error('Project update failed:', error)
+      return {
+        success: false,
+        error: error?.message || 'Update failed',
+        status: error?.status,
+        details: error
+      }
+    }
+  }
+}
+
 // Export all APIs
 export default {
   employeeApi,
@@ -1092,6 +1163,7 @@ export default {
   purchaseOrdersApi,
   expenseClaimsApi,
   budgetingApi,
+  authApi,
   apiGet,
   apiPost,
   apiPut,

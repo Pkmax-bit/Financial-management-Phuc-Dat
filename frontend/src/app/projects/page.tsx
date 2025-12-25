@@ -595,7 +595,34 @@ export default function ProjectsPage() {
   useEffect(() => {
     checkUser()
     fetchStats()
-  }, [])
+
+    // Listen for project updates from sidebar components
+    const handleProjectUpdate = (event: any) => {
+      if (event.detail?.projectId) {
+        // Refresh the project data if it's the currently selected project
+        if (selectedProject && selectedProject.id === event.detail.projectId) {
+          // Re-fetch the project data
+          const fetchUpdatedProject = async () => {
+            try {
+              const response = await fetch(`/api/projects/${event.detail.projectId}`)
+              if (response.ok) {
+                const updatedProject = await response.json()
+                setSelectedProject(updatedProject)
+              }
+            } catch (error) {
+              console.error('Failed to refresh project data:', error)
+            }
+          }
+          fetchUpdatedProject()
+        }
+        // Also refresh the projects list
+        fetchProjects()
+      }
+    }
+
+    window.addEventListener('projectUpdated', handleProjectUpdate)
+    return () => window.removeEventListener('projectUpdated', handleProjectUpdate)
+  }, [selectedProject])
 
   // Handle action=create and customer_id from query parameters
   useEffect(() => {
@@ -719,6 +746,7 @@ export default function ProjectsPage() {
   const handleEditProject = (project: Project) => {
     setSelectedProject(project)
     setShowEditSidebar(true)
+    setShowDetailSidebar(false) // Close detail sidebar when opening edit sidebar
   }
 
   const handleViewProject = (project: Project) => {

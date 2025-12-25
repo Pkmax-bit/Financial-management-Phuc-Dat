@@ -6,6 +6,53 @@ Tài liệu này mô tả **khi nào** và **ở đâu** trạng thái của d�
 
 ---
 
+## ⚡ Tự Động Tính % Tiến Độ
+
+Khi trạng thái dự án được thay đổi, hệ thống **tự động tính toán và cập nhật** % tiến độ dựa trên vị trí trạng thái:
+
+**Công thức:** `(vị_trí_trạng_thái_hiện_tại / tổng_số_trạng_thái) × 100%`
+
+- **Vị trí trạng thái hiện tại:** Thứ tự hiển thị của trạng thái hiện tại + 1 (đánh số từ 1)
+- **Tổng số trạng thái:** Số lượng trạng thái đang hoạt động cho nhóm dự án (hoặc trạng thái toàn cục nếu không có nhóm)
+
+### Ví dụ:
+- Dự án có 4 trạng thái, trạng thái hiện tại ở vị trí 2 → Tiến độ = (2/4) × 100% = **50%**
+- Dự án có 5 trạng thái, trạng thái hiện tại ở vị trí 4 → Tiến độ = (4/5) × 100% = **80%**
+- Dự án có 3 trạng thái, trạng thái hiện tại ở vị trí 3 → Tiến độ = (3/3) × 100% = **100%**
+
+### Chi tiết triển khai:
+- Tiến độ được tính tự động khi `status_id` thay đổi trong endpoint `update_project`
+- Tiến độ được tính tự động khi trạng thái thay đổi qua endpoint `update_project_status`
+- Việc tính toán xem xét nhóm dự án để sử dụng trạng thái theo nhóm
+- Tiến độ được giới hạn ở mức 100% và làm tròn đến 2 chữ số thập phân
+
+---
+
+## 🔐 Quyền cập nhật tiến độ
+
+### Quyền cập nhật tiến độ (Progress Update Permissions)
+
+Thành viên đội ngũ dự án có thể cập nhật tiến độ dự án của họ:
+
+#### ✅ Được phép cập nhật tiến độ:
+- **Admin**: Toàn quyền cập nhật tất cả dự án
+- **Manager**: Toàn quyền cập nhật dự án họ quản lý
+- **Tất cả thành viên đội ngũ dự án**: Bất kỳ ai là thành viên của đội ngũ dự án (active status)
+
+#### ❌ Không được phép cập nhật tiến độ:
+- Người dùng bên ngoài đội ngũ dự án
+
+### Endpoints bị ảnh hưởng:
+- `PUT /api/projects/{project_id}` - khi cập nhật trường `progress`
+- `PUT /api/projects/{project_id}/status` - tự động cập nhật tiến độ khi chuyển trạng thái
+
+### Kiểm tra quyền:
+Hệ thống kiểm tra quyền dựa trên:
+1. **Vai trò người dùng** (role)
+2. **Trách nhiệm trong đội ngũ dự án** (responsibility_type trong project_team)
+
+---
+
 ## 🔄 Các Trạng Thái Dự Án
 
 Hệ thống có **5 trạng thái** dự án:

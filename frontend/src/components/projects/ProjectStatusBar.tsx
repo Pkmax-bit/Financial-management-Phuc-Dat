@@ -158,9 +158,6 @@ export default function ProjectStatusBar({
   const currentOrder = currentStatus?.display_order || 0
 
   const handleStatusClick = async (status: DatabaseProjectStatus) => {
-    // TẠM THỜI VÔ HIỆU HÓA: Không cho phép chuyển trạng thái
-    return
-    
     // Cho phép chuyển đến bất kỳ trạng thái nào (không giới hạn)
     if (updating || status.id === currentStatusId) {
       return // Không cho phép click vào trạng thái hiện tại hoặc khi đang update
@@ -180,8 +177,6 @@ export default function ProjectStatusBar({
       if (onStatusChange) {
         onStatusChange(status.name)
       }
-      // Reload page để cập nhật UI
-      window.location.reload()
     } catch (error: any) {
       console.error('Failed to update project status:', error)
       const errorMessage =
@@ -234,13 +229,13 @@ export default function ProjectStatusBar({
               {/* Status Segment */}
               <button
                 onClick={() => handleStatusClick(status)}
-                disabled={true}
+                disabled={isUpdating}
                 className={`
                   relative px-4 py-2.5 rounded-lg font-semibold text-sm
                   transition-all duration-200 min-w-[120px] text-center
                   ${isCurrent ? 'ring-2 ring-offset-2' : ''}
-                  cursor-not-allowed opacity-60
-                  ${isUpdating ? 'opacity-50' : ''}
+                  ${isClickable ? 'cursor-pointer hover:scale-105 hover:shadow-md' : 'cursor-not-allowed opacity-60'}
+                  ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''}
                 `}
                 style={{
                   backgroundColor: isCompleted ? completedBgColor : '#e5e7eb',
@@ -248,9 +243,11 @@ export default function ProjectStatusBar({
                   borderColor: isCurrent ? completedBgColor : 'transparent',
                 }}
                 title={
-                  isCurrent
-                    ? 'Trạng thái hiện tại'
-                    : 'Chức năng chuyển trạng thái đang tạm thời vô hiệu hóa'
+                  isUpdating
+                    ? 'Đang cập nhật...'
+                    : isCurrent
+                      ? 'Trạng thái hiện tại'
+                      : `Chuyển sang trạng thái: ${status.name}`
                 }
               >
                 {/* Check icon for completed statuses */}

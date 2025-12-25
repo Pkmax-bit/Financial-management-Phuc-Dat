@@ -153,7 +153,7 @@ async def get_employees(
             *,
             departments:department_id(id, name, code),
             positions:position_id(id, name, code),
-            users:user_id(full_name)
+            users:user_id(id, full_name)
         """)
         
         # Apply filters
@@ -191,11 +191,13 @@ async def get_employees(
             else:
                 emp_data['position_name'] = None
                 
-            # Handle full_name from users table
+            # Handle full_name and user_id from users table
             users = emp.get('users')
-            if users and isinstance(users, dict) and users.get('full_name'):
-                emp_data['full_name'] = users.get('full_name')
-                # Optional: Update first/last name if needed, but full_name is safer
+            if users and isinstance(users, dict):
+                if users.get('full_name'):
+                    emp_data['full_name'] = users.get('full_name')
+                if users.get('id'):
+                    emp_data['user_id'] = users.get('id')
             else:
                 # Fallback to constructing from first/last name
                 emp_data['full_name'] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()

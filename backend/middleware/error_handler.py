@@ -32,7 +32,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                 content={
                     "detail": "Internal server error. Please try again later.",
                     "error_type": error_type,
-                    "message": error_message if "development" in str(request.url).lower() else "An error occurred"
+                    "message": error_message  # Always show error message for debugging
                 }
             )
 

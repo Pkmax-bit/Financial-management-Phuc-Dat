@@ -11,6 +11,7 @@ import {
   Clock,
   DollarSign,
   Edit,
+  Edit2,
   MessageSquare,
   Pause,
   Target,
@@ -22,6 +23,7 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  Check,
 } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import ProjectTeam from './ProjectTeam'
@@ -84,8 +86,8 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
 
   const [collapsed, setCollapsed] = useState({
     overview: false,
-    timeline: false,
-    team: false,
+    timeline: true, // Ẩn timeline mặc định
+    team: true,     // Ẩn đội ngũ mặc định
     tasks: false,
     quotes: false,
     expenses: false,
@@ -101,6 +103,8 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(50) // Percentage
   const [isResizing, setIsResizing] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
+  const [editingProgress, setEditingProgress] = useState(false)
+  const [progressValue, setProgressValue] = useState('')
 
   // Check if desktop on mount and resize
   useEffect(() => {
@@ -294,6 +298,56 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
     }
   }
 
+  const handleStartProgressEdit = () => {
+    setProgressValue(project.progress.toString())
+    setEditingProgress(true)
+  }
+
+  const handleCancelProgressEdit = () => {
+    setEditingProgress(false)
+    setProgressValue('')
+  }
+
+  const handleSaveProgress = async () => {
+    const newProgress = parseInt(progressValue)
+    if (isNaN(newProgress) || newProgress < 0 || newProgress > 100) {
+      alert('Tiến độ phải là số từ 0 đến 100')
+      return
+    }
+
+    try {
+      const res = await fetch(getApiEndpoint(`/api/projects/${project.id}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          progress: newProgress
+        })
+      })
+
+      if (res.ok) {
+        setEditingProgress(false)
+        setProgressValue('')
+        // Dispatch custom event to refresh project data
+        window.dispatchEvent(new CustomEvent('projectUpdated', { detail: { projectId: project.id } }))
+      } else {
+        alert('Không thể cập nhật tiến độ')
+      }
+    } catch (error) {
+      console.error('Error updating progress:', error)
+      alert('Không thể cập nhật tiến độ. Vui lòng thử lại.')
+    }
+  }
+
+  const handleProgressKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveProgress()
+    } else if (e.key === 'Escape') {
+      handleCancelProgressEdit()
+    }
+  }
+
   return (
     <div>
       {/* Backdrop */}
@@ -343,9 +397,19 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
               currentStatusId={project.status_id}
               currentStatusName={project.status}
               categoryId={project.category_id}
-              onStatusChange={(newStatus) => {
-                // Update local state if needed
+              onStatusChange={async (newStatus) => {
                 console.log('Status changed to:', newStatus)
+                // Refresh project data to show updated status and progress
+                try {
+                  const updatedProject = await apiGet(`/api/projects/${project.id}`)
+                  // Update the project prop if the parent component supports it
+                  // For now, we'll reload the page to ensure all data is updated
+                  window.location.reload()
+                } catch (error) {
+                  console.error('Failed to refresh project data:', error)
+                  // Fallback to page reload
+                  window.location.reload()
+                }
               }}
             />
           </div>
@@ -402,7 +466,47 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
                             <TrendingUp className="h-5 w-5 text-gray-600" />
                             <h3 className="text-sm font-medium text-gray-700">Tiến độ</h3>
                           </div>
-                          <span className="text-2xl font-bold text-blue-600">{project.progress}%</span>
+                          <div className="flex items-center gap-2">
+                            {editingProgress ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={progressValue}
+                                  onChange={(e) => setProgressValue(e.target.value)}
+                                  onKeyPress={handleProgressKeyPress}
+                                  className="w-16 px-2 py-1 text-sm !text-black border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={handleSaveProgress}
+                                  className="p-1 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
+                                  title="Lưu"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={handleCancelProgressEdit}
+                                  className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                                  title="Hủy"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="text-2xl font-bold text-blue-600">{project.progress}%</span>
+                                <button
+                                  onClick={handleStartProgressEdit}
+                                  className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="Chỉnh sửa tiến độ"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -410,7 +514,18 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
                       <div className="bg-white rounded-lg border border-gray-200 p-4">
                         <div className="flex items-center justify-between text-sm mb-2">
                           <span className="text-gray-700">Tiến độ dự án</span>
-                          <span className="font-medium text-gray-900">{project.progress}%</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">{project.progress}%</span>
+                            {!editingProgress && (
+                              <button
+                                onClick={handleStartProgressEdit}
+                                className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                title="Chỉnh sửa tiến độ"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
                           <div
@@ -431,6 +546,11 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
                                     ? 'Gần hoàn thành'
                                     : 'Đã hoàn thành'}
                         </p>
+                        {editingProgress && (
+                          <div className="mt-2 text-xs text-gray-500">
+                            Nhấn Enter để lưu, Escape để hủy
+                          </div>
+                        )}
                       </div>
 
                       {/* Mô tả - chỉ hiển thị khi hover */}

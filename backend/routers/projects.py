@@ -309,13 +309,88 @@ async def debug_auth(credentials: HTTPAuthorizationCredentials = Depends(securit
     """Debug authentication"""
     try:
         token = credentials.credentials
+        print(f"[DEBUG] Debug auth endpoint called with token: {bool(token)}")
         return {
             "success": True,
             "token_length": len(token),
             "token_preview": token[:20] + "..." if len(token) > 20 else token
         }
     except Exception as e:
+        print(f"[DEBUG] Debug auth error: {str(e)}")
         return {"error": str(e)}
+
+@router.get("/auth/me", response_model=dict)
+async def get_current_user_info(request: Request, current_user: User = Depends(get_current_user)):
+    """Get current authenticated user information"""
+    auth_header = request.headers.get("authorization", "")
+    return {
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+        "is_active": current_user.is_active,
+        "authenticated": True,
+        "auth_header_present": bool(auth_header),
+        "auth_header_preview": auth_header[:20] + "..." if auth_header else None,
+        "request_headers": dict(request.headers)
+    }
+
+@router.post("/auth/test-progress-update")
+async def test_progress_update(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Test the exact same logic as progress update"""
+    project_id = "6bf71318-f57f-405f-b137-f6770c99cd01"
+
+    print("=== TESTING PROGRESS UPDATE ===")
+    print(f"User: {current_user.email} (ID: {current_user.id})")
+    print(f"Project ID: {project_id}")
+    print(f"Request headers: {dict(request.headers)}")
+
+    # Check project access
+    from services.supabase_client import get_supabase_client
+    supabase = get_supabase_client()
+
+    has_project_access = check_user_has_project_access(supabase, current_user, project_id)
+    print(f"Has project access: {has_project_access}")
+
+    # Check progress permission
+    has_progress_permission = check_user_can_update_progress(supabase, current_user, project_id)
+    print(f"Has progress permission: {has_progress_permission}")
+
+    # Check if project exists
+    try:
+        existing = supabase.table("projects").select("id, name").eq("id", project_id).execute()
+        project_exists = len(existing.data) > 0
+        project_name = existing.data[0]["name"] if project_exists else "Unknown"
+        print(f"Project exists: {project_exists} (Name: {project_name})")
+    except Exception as e:
+        print(f"Error checking project: {e}")
+        project_exists = False
+
+    result = {
+        "test_passed": has_project_access and has_progress_permission and project_exists,
+        "user_info": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+        },
+        "permissions": {
+            "project_access": has_project_access,
+            "progress_permission": has_progress_permission,
+            "project_exists": project_exists,
+        },
+        "debug": {
+            "project_id": project_id,
+            "auth_header": request.headers.get("authorization", "")[:20] + "..." if request.headers.get("authorization") else None,
+        }
+    }
+
+    print(f"Test result: {'PASSED' if result['test_passed'] else 'FAILED'}")
+    print("===============================")
+
+    return result
 
 @router.get("/debug/auth-optional")
 async def debug_auth_optional(request: Request):
@@ -736,21 +811,21 @@ def check_user_has_project_access(supabase, current_user: User, project_id: Opti
     """Check if user has access to a specific project"""
     if not project_id:
         return True  # No project_id means no restriction
-    
+
     # Admin and accountant have access to all projects
     if current_user.role in ["admin", "accountant"]:
         return True
-    
+
     # Check if user is in project_team for this project
     team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
-    
+
     # Match by user_id or email
     or_conditions = []
     if current_user.id:
         or_conditions.append(f"user_id.eq.{current_user.id}")
     if current_user.email:
         or_conditions.append(f"email.eq.{current_user.email}")
-    
+
     if or_conditions:
         if len(or_conditions) > 1:
             team_query = team_query.or_(",".join(or_conditions))
@@ -760,11 +835,97 @@ def check_user_has_project_access(supabase, current_user: User, project_id: Opti
                 team_query = team_query.eq("user_id", current_user.id)
             elif condition.startswith("email.eq."):
                 team_query = team_query.eq("email", current_user.email)
-        
+
         team_result = team_query.execute()
         return len(team_result.data) > 0
-    
+
     return False
+
+def check_user_can_update_progress(supabase, current_user: User, project_id: str) -> bool:
+    """Check if user can update project progress - allows all project team members"""
+    # Admin and manager roles can always update progress
+    role_value = current_user.role.value if isinstance(current_user.role, UserRole) else str(current_user.role)
+    role_value = role_value.lower()
+
+    if role_value in ["admin", "manager"]:
+        return True
+
+    # For other roles, check if user is any member of the project team (not just accountable/responsible)
+    try:
+        team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
+
+        # Match by user_id or email
+        or_conditions = []
+        if current_user.id:
+            or_conditions.append(f"user_id.eq.{current_user.id}")
+        if current_user.email:
+            or_conditions.append(f"email.eq.{current_user.email}")
+
+        if or_conditions:
+            if len(or_conditions) > 1:
+                team_query = team_query.or_(",".join(or_conditions))
+            else:
+                condition = or_conditions[0]
+                if condition.startswith("user_id.eq."):
+                    team_query = team_query.eq("user_id", current_user.id)
+                elif condition.startswith("email.eq."):
+                    team_query = team_query.eq("email", current_user.email)
+
+            team_result = team_query.execute()
+
+            # If user is found in the project team, they can update progress
+            return len(team_result.data) > 0
+
+        return False
+    except Exception as e:
+        print(f"Error checking progress update permissions: {str(e)}")
+        return False
+
+def calculate_progress_from_status(supabase, project_id: str, new_status_id: str) -> float:
+    """
+    Calculate automatic progress based on status position
+    Formula: (current_status_order / total_statuses) * 100
+    """
+    try:
+        # Get project category
+        project_data = supabase.table("projects").select("category_id").eq("id", project_id).execute()
+        category_id = project_data.data[0].get('category_id') if project_data.data else None
+
+        # Get all active statuses for this category (or global statuses if no category)
+        status_query = supabase.table("project_statuses").select("id, display_order").eq("is_active", True)
+        if category_id:
+            status_query = status_query.eq("category_id", category_id)
+        else:
+            # If no category, get global statuses (category_id IS NULL)
+            status_query = status_query.is_("category_id", "null")
+
+        all_statuses = status_query.order("display_order", desc=False).execute()
+
+        if not all_statuses.data or len(all_statuses.data) == 0:
+            return 0.0
+
+        total_statuses = len(all_statuses.data)
+
+        # Find current status order
+        current_status_order = None
+        for status in all_statuses.data:
+            if status['id'] == new_status_id:
+                current_status_order = status.get('display_order', 0)
+                break
+
+        if current_status_order is None:
+            return 0.0
+
+        # Calculate progress: (current_position / total_statuses) * 100
+        # display_order starts from 0, so we add 1 to get 1-based position
+        progress = ((current_status_order + 1) / total_statuses) * 100
+
+        # Round to 2 decimal places and ensure it's not over 100%
+        return min(round(progress, 2), 100.0)
+
+    except Exception as e:
+        print(f"Error calculating progress from status: {str(e)}")
+        return 0.0
 
 # ============================================================================
 # Project Categories Routes - Must be defined BEFORE /{project_id} route
@@ -1199,12 +1360,22 @@ async def create_project(
 async def update_project(
     project_id: str,
     project_update: ProjectUpdate,
-    current_user: User = Depends(require_manager_or_admin)
+    request: Request,
+    current_user: User = Depends(get_current_user)
 ):
+    # Debug authentication - comprehensive logging
+    print("=== PROJECT UPDATE DEBUG ===")
+    print(f"Project ID: {project_id}")
+    print(f"Update data: {project_update.dict(exclude_unset=True)}")
+    print(f"User ID: {current_user.id}")
+    print(f"User email: {current_user.email}")
+    print(f"User role: {current_user.role}")
+    print(f"Request headers: {dict(request.headers)}")
+    print("===========================")
     """Update project information"""
     try:
         supabase = get_supabase_client()
-        
+
         # Check if project exists
         existing = supabase.table("projects").select("id").eq("id", project_id).execute()
         if not existing.data:
@@ -1212,7 +1383,22 @@ async def update_project(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found"
             )
-        
+
+        # Check if user has access to this project (project team member or admin/manager)
+        if not check_user_has_project_access(supabase, current_user, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to update this project"
+            )
+
+        # Additional validation for progress updates - allows all project team members
+        if 'progress' in project_update.dict(exclude_unset=True):
+            if not check_user_can_update_progress(supabase, current_user, project_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to update project progress. Only project team members can update progress."
+                )
+
         # Update project
         update_data = project_update.dict(exclude_unset=True)
         update_data["updated_at"] = datetime.utcnow().isoformat()
@@ -1237,7 +1423,7 @@ async def update_project(
             current_project = supabase.table("projects").select("status, status_id").eq("id", project_id).execute()
             current_status = current_project.data[0]['status'] if current_project.data else 'planning'
             old_status_id = current_project.data[0].get('status_id') if current_project.data else None
-            
+
             # Auto-change status based on progress (only for legacy status enum)
             if progress > 0 and current_status == 'planning':
                 update_data['status'] = 'active'
@@ -1250,9 +1436,15 @@ async def update_project(
         
         result = supabase.table("projects").update(update_data).eq("id", project_id).execute()
         
-        # Apply flow rules if status_id changed
+        # Apply flow rules and auto-calculate progress if status_id changed
         new_status_id = update_data.get('status_id')
         if new_status_id and new_status_id != old_status_id:
+            # Auto-calculate progress based on new status position
+            auto_progress = calculate_progress_from_status(supabase, project_id, new_status_id)
+            if auto_progress > 0:
+                update_data['progress'] = auto_progress
+                print(f"Auto-updating progress to {auto_progress}% based on status change")
+
             # Get active flow rules for the new status
             flow_rules = supabase.table("project_status_flow_rules")\
                 .select("category_id, action_type, priority")\
@@ -1260,12 +1452,12 @@ async def update_project(
                 .eq("is_active", True)\
                 .order("priority", desc=True)\
                 .execute()
-            
+
             if flow_rules.data:
                 for rule in flow_rules.data:
                     category_id = rule.get('category_id')
                     action_type = rule.get('action_type', 'add')
-                    
+
                     if action_type == 'add':
                         # Check if already in category
                         existing_member = supabase.table("project_category_members")\
@@ -1273,7 +1465,7 @@ async def update_project(
                             .eq("project_id", project_id)\
                             .eq("category_id", category_id)\
                             .execute()
-                        
+
                         if not existing_member.data:
                             supabase.table("project_category_members")\
                                 .insert({
@@ -1289,7 +1481,7 @@ async def update_project(
                             .eq("project_id", project_id)\
                             .eq("category_id", category_id)\
                             .execute()
-            
+
             # Also check for rules on old status (to handle remove actions)
             if old_status_id:
                 old_flow_rules = supabase.table("project_status_flow_rules")\
@@ -1298,12 +1490,12 @@ async def update_project(
                     .eq("is_active", True)\
                     .eq("action_type", "add")\
                     .execute()
-                
+
                 # If old status had "add" rules, check if we should remove from those categories
                 # (only if new status doesn't have "add" rule for same category)
                 if old_flow_rules.data:
                     new_category_ids = {r.get('category_id') for r in flow_rules.data if r.get('action_type') == 'add'} if flow_rules.data else set()
-                    
+
                     for old_rule in old_flow_rules.data:
                         old_category_id = old_rule.get('category_id')
                         # Only remove if new status doesn't add to same category
@@ -2052,7 +2244,7 @@ async def get_project_dashboard(
 async def update_project_status(
     project_id: str,
     status: str,
-    current_user: User = Depends(require_manager_or_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Update project status"""
     try:
@@ -2065,7 +2257,14 @@ async def update_project_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found"
             )
-        
+
+        # Check if user can update progress (since status changes automatically update progress)
+        if not check_user_can_update_progress(supabase, current_user, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to update project status. Only project team members can change status."
+            )
+
         old_status_id = existing.data[0].get('status_id')
         
         # Get status_id from status name if needed
@@ -2087,7 +2286,25 @@ async def update_project_status(
         
         # Update project status
         result = supabase.table("projects").update(update_dict).eq("id", project_id).execute()
-        
+
+        # Auto-calculate and update progress based on new status position
+        if new_status_id and new_status_id != old_status_id:
+            try:
+                # Calculate automatic progress based on status position
+                auto_progress = calculate_progress_from_status(supabase, project_id, new_status_id)
+
+                if auto_progress >= 0:
+                    # Update progress in the database
+                    supabase.table("projects").update({
+                        "progress": auto_progress,
+                        "updated_at": datetime.utcnow().isoformat()
+                    }).eq("id", project_id).execute()
+                    print(f"Auto-updated project {project_id} progress to {auto_progress}% based on status change to {new_status_id}")
+
+            except Exception as e:
+                print(f"Error auto-calculating progress for project {project_id}: {str(e)}")
+                # Don't fail the status update if progress calculation fails
+
         # Apply flow rules if status_id changed (trigger will also handle this, but we do it here for immediate effect)
         if new_status_id and new_status_id != old_status_id:
             # Get active flow rules for the new status

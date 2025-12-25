@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { 
+import { Edit2, Check, X } from 'lucide-react'
+import {
   ArrowLeft,
   Edit,
   Settings,
@@ -61,33 +62,33 @@ interface User {
 }
 
 const statusConfig = {
-  planning: { 
-    label: 'Lập kế hoạch', 
-    color: 'bg-blue-100 text-blue-800', 
+  planning: {
+    label: 'Lập kế hoạch',
+    color: 'bg-blue-100 text-blue-800',
     icon: Target,
     bgColor: 'bg-blue-50'
   },
-  active: { 
-    label: 'Đang thực hiện', 
-    color: 'bg-green-100 text-green-800', 
+  active: {
+    label: 'Đang thực hiện',
+    color: 'bg-green-100 text-green-800',
     icon: Activity,
     bgColor: 'bg-green-50'
   },
-  on_hold: { 
-    label: 'Tạm dừng', 
-    color: 'bg-yellow-100 text-yellow-800', 
+  on_hold: {
+    label: 'Tạm dừng',
+    color: 'bg-yellow-100 text-yellow-800',
     icon: Pause,
     bgColor: 'bg-yellow-50'
   },
-  completed: { 
-    label: 'Hoàn thành', 
-    color: 'bg-gray-100 text-gray-800', 
+  completed: {
+    label: 'Hoàn thành',
+    color: 'bg-gray-100 text-gray-800',
     icon: CheckCircle,
     bgColor: 'bg-gray-50'
   },
-  cancelled: { 
-    label: 'Đã hủy', 
-    color: 'bg-red-100 text-red-800', 
+  cancelled: {
+    label: 'Đã hủy',
+    color: 'bg-red-100 text-red-800',
     icon: XCircle,
     bgColor: 'bg-red-50'
   }
@@ -114,6 +115,8 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'team' | 'documents' | 'tasks'>('overview')
   const [showEditSidebar, setShowEditSidebar] = useState(false)
+  const [editingProgress, setEditingProgress] = useState(false)
+  const [progressValue, setProgressValue] = useState('')
 
   useEffect(() => {
     checkUser()
@@ -123,14 +126,14 @@ export default function ProjectDetailPage() {
   const checkUser = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
-      
+
       if (authUser) {
         const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('id', authUser.id)
           .single()
-        
+
         if (userData) {
           setUser(userData)
         } else {
@@ -149,7 +152,7 @@ export default function ProjectDetailPage() {
     try {
       setLoading(true)
       const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`))
-      
+
       if (response.ok) {
         const data = await response.json()
         setProject(data)
@@ -195,6 +198,51 @@ export default function ProjectDetailPage() {
   const handleEditSuccess = () => {
     setShowEditSidebar(false)
     fetchProject() // Refresh project data
+  }
+
+  const handleStartProgressEdit = () => {
+    setProgressValue(project.progress.toString())
+    setEditingProgress(true)
+  }
+
+  const handleCancelProgressEdit = () => {
+    setEditingProgress(false)
+    setProgressValue('')
+  }
+
+  const handleSaveProgress = async () => {
+    const newProgress = parseInt(progressValue)
+    if (isNaN(newProgress) || newProgress < 0 || newProgress > 100) {
+      alert('Tiến độ phải là số từ 0 đến 100')
+      return
+    }
+
+    try {
+      await fetch(getApiEndpoint(`/api/projects/${projectId}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          progress: newProgress
+        })
+      })
+
+      setEditingProgress(false)
+      setProgressValue('')
+      fetchProject() // Refresh project data
+    } catch (error) {
+      console.error('Error updating progress:', error)
+      alert('Không thể cập nhật tiến độ. Vui lòng thử lại.')
+    }
+  }
+
+  const handleProgressKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveProgress()
+    } else if (e.key === 'Escape') {
+      handleCancelProgressEdit()
+    }
   }
 
   if (loading) {
@@ -269,7 +317,7 @@ export default function ProjectDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={handleEditProject}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -288,21 +336,66 @@ export default function ProjectDetailPage() {
             <div className="bg-white rounded-xl shadow-sm border p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Tiến độ</h3>
-                <span className="text-2xl font-bold text-blue-600">{project.progress}%</span>
+                <div className="flex items-center gap-2">
+                  {editingProgress ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={progressValue}
+                        onChange={(e) => setProgressValue(e.target.value)}
+                        onKeyPress={handleProgressKeyPress}
+                        className="w-16 px-2 py-1 text-sm !text-black border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleSaveProgress}
+                        className="p-1 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
+                        title="Lưu"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={handleCancelProgressEdit}
+                        className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                        title="Hủy"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-2xl font-bold text-blue-600">{project.progress}%</span>
+                      <button
+                        onClick={handleStartProgressEdit}
+                        className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Chỉnh sửa tiến độ"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-                <div 
+                <div
                   className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
                   style={{ width: `${project.progress}%` }}
                 ></div>
               </div>
               <p className="text-sm text-gray-600">
                 {project.progress === 0 ? 'Dự án mới bắt đầu - Có thể nhập % để thay đổi tiến độ nhanh' :
-                 project.progress < 25 ? 'Dự án mới bắt đầu' :
-                 project.progress < 50 ? 'Đang triển khai' :
-                 project.progress < 75 ? 'Tiến triển tốt' :
-                 project.progress < 100 ? 'Gần hoàn thành' : 'Đã hoàn thành'}
+                  project.progress < 25 ? 'Dự án mới bắt đầu' :
+                    project.progress < 50 ? 'Đang triển khai' :
+                      project.progress < 75 ? 'Tiến triển tốt' :
+                        project.progress < 100 ? 'Gần hoàn thành' : 'Đã hoàn thành'}
               </p>
+              {editingProgress && (
+                <div className="mt-2 text-xs text-gray-500">
+                  Nhấn Enter để lưu, Escape để hủy
+                </div>
+              )}
             </div>
 
             {/* Priority Card */}
@@ -320,8 +413,8 @@ export default function ProjectDetailPage() {
               </div>
               <p className="text-sm text-gray-600">
                 {project.priority === 'urgent' ? 'Cần xử lý ngay lập tức' :
-                 project.priority === 'high' ? 'Ưu tiên cao' :
-                 project.priority === 'medium' ? 'Ưu tiên trung bình' : 'Ưu tiên thấp'}
+                  project.priority === 'high' ? 'Ưu tiên cao' :
+                    project.priority === 'medium' ? 'Ưu tiên trung bình' : 'Ưu tiên thấp'}
               </p>
             </div>
 
@@ -383,11 +476,10 @@ export default function ProjectDetailPage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
-                      isActive
+                    className={`flex items-center gap-2 px-4 py-3 rounded-lg transition-all duration-200 font-medium ${isActive
                         ? `bg-${tab.color}-50 text-${tab.color}-700 border border-${tab.color}-200 shadow-sm`
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     <Icon className={`h-4 w-4 ${isActive ? `text-${tab.color}-600` : ''}`} />
                     <span className="whitespace-nowrap">{tab.label}</span>
@@ -436,8 +528,8 @@ export default function ProjectDetailPage() {
                           <span className="font-medium text-gray-900">Loại thanh toán</span>
                         </div>
                         <p className="text-lg font-semibold text-gray-800">
-                          {project.billing_type === 'fixed' ? 'Cố định' : 
-                           project.billing_type === 'hourly' ? 'Theo giờ' : 'Theo milestone'}
+                          {project.billing_type === 'fixed' ? 'Cố định' :
+                            project.billing_type === 'hourly' ? 'Theo giờ' : 'Theo milestone'}
                         </p>
                       </div>
                       {project.hourly_rate && (
@@ -545,15 +637,24 @@ export default function ProjectDetailPage() {
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-600">Tiến độ</span>
-                        <span className="text-lg font-bold text-blue-600">{project.progress}%</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-blue-600">{project.progress}%</span>
+                          <button
+                            onClick={handleStartProgressEdit}
+                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Chỉnh sửa tiến độ"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-600">Loại thanh toán</span>
                         <span className="text-sm font-semibold text-gray-800">
-                          {project.billing_type === 'fixed' ? 'Cố định' : 
-                           project.billing_type === 'hourly' ? 'Theo giờ' : 'Theo milestone'}
+                          {project.billing_type === 'fixed' ? 'Cố định' :
+                            project.billing_type === 'hourly' ? 'Theo giờ' : 'Theo milestone'}
                         </span>
                       </div>
                     </div>
@@ -588,7 +689,7 @@ export default function ProjectDetailPage() {
                     <h3 className="text-xl font-semibold text-gray-900">Hành động</h3>
                   </div>
                   <div className="space-y-3">
-                    <button 
+                    <button
                       onClick={handleEditProject}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-blue-50 rounded-lg transition-colors group"
                     >
@@ -601,7 +702,7 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          
+
 
           {/* Timeline Tab */}
           {activeTab === 'timeline' && (

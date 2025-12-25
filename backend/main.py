@@ -109,9 +109,9 @@ app.add_middleware(
     max_age=3600,  # Cache preflight requests for 1 hour
 )
 
-# Request Signing Middleware (add after security headers, will execute before)
-from middleware.request_signing import RequestSigningMiddleware
-app.add_middleware(RequestSigningMiddleware, environment=ENVIRONMENT)
+# Request Signing Middleware (temporarily disabled for debugging)
+# from middleware.request_signing import RequestSigningMiddleware
+# app.add_middleware(RequestSigningMiddleware, environment=ENVIRONMENT)
 
 # Request ID Middleware (add after CORS, will execute before CORS)
 from middleware.request_id import RequestIDMiddleware
@@ -202,7 +202,7 @@ async def health_check():
     }
 
 # Import routers
-from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks, products, product_categories, chat, app_updates, qr_login, project_categories, project_category_members
+from routers import auth, employees, employee_excel, customers, sales, expenses, projects, reports, notifications, dashboard, sales_receipts, credit_memos, purchase_orders, expense_claims, budgeting, pl_report, balance_sheet, drill_down, cash_flow, cash_flow_vietnamese, sales_customer, expenses_vendor, general_ledger, project_reports, projects_financial, project_team, project_timeline, customer_view, project_expenses, emotions_comments, journal, expense_objects, expense_snapshots, expense_restore, system_feedback, product_import, material_adjustment_rules, file_upload, tasks, products, product_categories, custom_products, chat, app_updates, qr_login, project_categories, project_category_members
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -216,6 +216,7 @@ app.include_router(products.router, prefix="/api/sales", tags=["Products"])
 # Alias endpoint for mobile app compatibility (/api/products-services)
 app.include_router(products.router, prefix="/api", tags=["Products"])
 app.include_router(product_categories.router, prefix="/api/sales", tags=["Product Categories"])
+app.include_router(custom_products.router, prefix="/api/custom-products", tags=["Custom Products"])
 app.include_router(sales_receipts.router, prefix="/api/sales", tags=["Sales Receipts"])
 app.include_router(credit_memos.router, tags=["Credit Memos"])
 app.include_router(expenses.router, prefix="/api/expenses", tags=["Expenses"])
@@ -258,7 +259,7 @@ app.include_router(app_updates.router, prefix="/api/app-updates", tags=["App Upd
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="10.0.2.15",
+        host="localhost",
         port=8000,
         reload=True,
         log_level="info"

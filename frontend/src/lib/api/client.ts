@@ -39,13 +39,13 @@ class ApiClient {
   private pendingRequests: Map<string, Promise<any>>
   private defaultCacheTTL: number = 30000 // 30 seconds
   private defaultRetries: number = 3
-  
+
   // Token refresh state
   private refreshPromise: Promise<any> | null = null
   private refreshThreshold: number = 5 * 60 * 1000 // 5 minutes in milliseconds
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    this.baseUrl = baseUrl || process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? '' : 'http://localhost:8000')
     this.cache = new Map()
     this.pendingRequests = new Map()
   }
@@ -57,7 +57,7 @@ class ApiClient {
     if (!session?.access_token) {
       return false
     }
-    
+
     try {
       // Supabase JWT tokens contain expiration in 'exp' claim
       // Parse JWT to get expiration (without verification, just for expiration check)
@@ -65,22 +65,22 @@ class ApiClient {
       if (tokenParts.length !== 3) {
         return false
       }
-      
+
       // Decode JWT payload (base64url)
       const payload = JSON.parse(
         atob(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/'))
       )
-      
+
       // Check expiration
       if (!payload.exp) {
         return false
       }
-      
+
       // exp is Unix timestamp in seconds
       const expiresAt = payload.exp * 1000
       const now = Date.now()
       const timeUntilExpiry = expiresAt - now
-      
+
       // Return true if token expires within threshold (5 minutes)
       return timeUntilExpiry > 0 && timeUntilExpiry < this.refreshThreshold
     } catch (error) {
@@ -98,24 +98,24 @@ class ApiClient {
     if (this.refreshPromise) {
       return this.refreshPromise
     }
-    
+
     // Create refresh promise
     this.refreshPromise = (async () => {
       try {
         const { data, error } = await supabase.auth.refreshSession()
-        
+
         if (error) {
           console.warn('Failed to refresh session:', error)
           throw error
         }
-        
+
         return data
       } finally {
         // Clear refresh promise after completion
         this.refreshPromise = null
       }
     })()
-    
+
     return this.refreshPromise
   }
 
@@ -124,15 +124,20 @@ class ApiClient {
    */
   private async getAuthHeaders(): Promise<Record<string, string>> {
     try {
+      console.log('[API] Getting auth headers...')
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
+
+      console.log('[API] Session error:', sessionError)
+      console.log('[API] Session exists:', !!session)
+      console.log('[API] Access token exists:', !!session?.access_token)
+
       if (sessionError) {
         console.warn('Failed to get session:', sessionError)
         return {
           'Content-Type': 'application/json',
         }
       }
-      
+
       // Check if token needs refresh
       if (session && this.isTokenExpiringSoon(session)) {
         try {
@@ -149,7 +154,7 @@ class ApiClient {
           // Fall through to use current token
         }
       }
-      
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       }
@@ -177,16 +182,16 @@ class ApiClient {
   ): Promise<Record<string, string>> {
     // Get base auth headers
     const authHeaders = await this.getAuthHeaders()
-    
+
     // Add request signing headers if enabled
     // In development, this can be disabled
     const enableSigning = process.env.NEXT_PUBLIC_ENABLE_REQUEST_SIGNING !== 'false'
-    
+
     if (enableSigning) {
       try {
         const secureHeaders = await getSecureHeaders(method, path, body)
         const requestId = generateRequestId()
-        
+
         return {
           ...authHeaders,
           ...secureHeaders,
@@ -201,7 +206,7 @@ class ApiClient {
         }
       }
     }
-    
+
     // Return auth headers with request ID
     return {
       ...authHeaders,
@@ -215,7 +220,7 @@ class ApiClient {
   private isCacheValid(key: string, ttl: number): boolean {
     const cached = this.cache.get(key)
     if (!cached) return false
-    
+
     return Date.now() - cached.timestamp < ttl
   }
 
@@ -225,7 +230,7 @@ class ApiClient {
   private getCached<T>(key: string): T | null {
     const cached = this.cache.get(key)
     if (!cached) return null
-    
+
     return cached.data as T
   }
 
@@ -256,19 +261,34 @@ class ApiClient {
     options: RequestOptions = {}
   ): Promise<T> {
     // Check if endpoint is already a full URL
-    const url = endpoint.startsWith('http://') || endpoint.startsWith('https://')
-      ? endpoint
-      : `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`
+    let url: string
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      url = endpoint
+    } else {
+      // Handle Next.js API routes locally (don't add baseUrl)
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint
+      if (cleanEndpoint.startsWith('/api/')) {
+        // Next.js API routes should be handled by Next.js server directly
+        url = cleanEndpoint
+      } else {
+        // Other endpoints use the backend API server
+        url = `${this.baseUrl}${cleanEndpoint}`
+      }
+    }
     const retries = options.retries ?? this.defaultRetries
     let lastError: Error | null = null
 
     // Get secure headers with request signing
-    const path = endpoint.startsWith('http://') || endpoint.startsWith('https://')
-      ? new URL(endpoint).pathname
-      : endpoint.startsWith('/') ? endpoint : '/' + endpoint
+    let path: string
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      path = new URL(endpoint).pathname
+    } else {
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint
+      path = cleanEndpoint
+    }
     const method = options.method || 'GET'
     const bodyString = options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
-    
+
     const headers = await this.getSecureHeaders(method, path, bodyString)
     if (options.headers) {
       Object.assign(headers, options.headers)
@@ -297,7 +317,7 @@ class ApiClient {
                   Object.assign(newHeaders, options.headers)
                 }
                 requestOptions.headers = newHeaders
-                
+
                 // Retry with refreshed token
                 if (attempt < retries - 1) {
                   await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
