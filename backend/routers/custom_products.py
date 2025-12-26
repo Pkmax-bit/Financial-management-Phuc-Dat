@@ -303,6 +303,99 @@ async def delete_option(
         return {"message": "Option deleted successfully", "id": option_id}
     raise HTTPException(status_code=400, detail="Failed to delete option")
 
+# ========== STRUCTURES ==========
+
+@router.get("/structures", response_model=List[CustomProductStructure])
+async def get_structures(
+    category_id: Optional[str] = Query(None),
+    active_only: bool = Query(True),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all structures"""
+    supabase = get_supabase_client()
+    query = supabase.table("custom_product_structures").select("*").order("created_at", desc=True)
+
+    if category_id:
+        query = query.eq("category_id", category_id)
+    if active_only:
+        query = query.eq("is_active", True)
+
+    result = query.execute()
+    return result.data if result.data else []
+
+@router.post("/structures", response_model=CustomProductStructure)
+async def create_structure(
+    structure_data: CustomProductStructureCreate,
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new structure"""
+    supabase = get_supabase_client()
+
+    # If setting as default, unset other defaults for this category
+    if structure_data.is_default:
+        supabase.table("custom_product_structures").update({"is_default": False}).eq("category_id", structure_data.category_id).execute()
+
+    data = structure_data.dict()
+    data["id"] = str(uuid.uuid4())
+    data["created_at"] = datetime.utcnow().isoformat()
+    data["updated_at"] = datetime.utcnow().isoformat()
+
+    result = supabase.table("custom_product_structures").insert(data).execute()
+    if result.data:
+        return result.data[0]
+    raise HTTPException(status_code=400, detail="Failed to create structure")
+
+@router.put("/structures/{structure_id}", response_model=CustomProductStructure)
+async def update_structure(
+    structure_id: str,
+    structure_data: CustomProductStructureUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Update a structure"""
+    supabase = get_supabase_client()
+
+    # Check if structure exists
+    check_result = supabase.table("custom_product_structures").select("*").eq("id", structure_id).execute()
+    if not check_result.data:
+        raise HTTPException(status_code=404, detail="Structure not found")
+
+    existing_structure = check_result.data[0]
+
+    update_data = structure_data.dict(exclude_unset=True)
+
+    # If setting as default, unset other defaults for this category
+    if update_data.get("is_default", False):
+        supabase.table("custom_product_structures").update({"is_default": False}).eq("category_id", existing_structure["category_id"]).execute()
+
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+
+    result = supabase.table("custom_product_structures").update(update_data).eq("id", structure_id).execute()
+    if result.data:
+        return result.data[0]
+    raise HTTPException(status_code=400, detail="Failed to update structure")
+
+@router.delete("/structures/{structure_id}")
+async def delete_structure(
+    structure_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Soft delete a structure"""
+    supabase = get_supabase_client()
+
+    # Check if structure exists
+    check_result = supabase.table("custom_product_structures").select("id").eq("id", structure_id).execute()
+    if not check_result.data:
+        raise HTTPException(status_code=404, detail="Structure not found")
+
+    result = supabase.table("custom_product_structures").update({
+        "is_active": False,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", structure_id).execute()
+
+    if result.data:
+        return {"message": "Structure deleted successfully", "id": structure_id}
+    raise HTTPException(status_code=400, detail="Failed to delete structure")
+
 # ========== COMBINED PRODUCTS ==========
 
 @router.get("/", response_model=List[CustomProduct])
@@ -404,99 +497,6 @@ async def delete_combined_product(
         return {"message": "Product deleted successfully", "id": product_id}
     raise HTTPException(status_code=400, detail="Failed to delete product")
 
-# ========== STRUCTURES ==========
-
-@router.get("/structures", response_model=List[CustomProductStructure])
-async def get_structures(
-    category_id: Optional[str] = Query(None),
-    active_only: bool = Query(True),
-    current_user: User = Depends(get_current_user)
-):
-    """Get all structures"""
-    supabase = get_supabase_client()
-    query = supabase.table("custom_product_structures").select("*").order("created_at", desc=True)
-
-    if category_id:
-        query = query.eq("category_id", category_id)
-    if active_only:
-        query = query.eq("is_active", True)
-
-    result = query.execute()
-    return result.data if result.data else []
-
-@router.post("/structures", response_model=CustomProductStructure)
-async def create_structure(
-    structure_data: CustomProductStructureCreate,
-    current_user: User = Depends(get_current_user)
-):
-    """Create a new structure"""
-    supabase = get_supabase_client()
-
-    # If setting as default, unset other defaults for this category
-    if structure_data.is_default:
-        supabase.table("custom_product_structures").update({"is_default": False}).eq("category_id", structure_data.category_id).execute()
-
-    data = structure_data.dict()
-    data["id"] = str(uuid.uuid4())
-    data["created_at"] = datetime.utcnow().isoformat()
-    data["updated_at"] = datetime.utcnow().isoformat()
-
-    result = supabase.table("custom_product_structures").insert(data).execute()
-    if result.data:
-        return result.data[0]
-    raise HTTPException(status_code=400, detail="Failed to create structure")
-
-@router.put("/structures/{structure_id}", response_model=CustomProductStructure)
-async def update_structure(
-    structure_id: str,
-    structure_data: CustomProductStructureUpdate,
-    current_user: User = Depends(get_current_user)
-):
-    """Update a structure"""
-    supabase = get_supabase_client()
-
-    # Check if structure exists
-    check_result = supabase.table("custom_product_structures").select("*").eq("id", structure_id).execute()
-    if not check_result.data:
-        raise HTTPException(status_code=404, detail="Structure not found")
-
-    existing_structure = check_result.data[0]
-
-    update_data = structure_data.dict(exclude_unset=True)
-
-    # If setting as default, unset other defaults for this category
-    if update_data.get("is_default", False):
-        supabase.table("custom_product_structures").update({"is_default": False}).eq("category_id", existing_structure["category_id"]).execute()
-
-    update_data["updated_at"] = datetime.utcnow().isoformat()
-
-    result = supabase.table("custom_product_structures").update(update_data).eq("id", structure_id).execute()
-    if result.data:
-        return result.data[0]
-    raise HTTPException(status_code=400, detail="Failed to update structure")
-
-@router.delete("/structures/{structure_id}")
-async def delete_structure(
-    structure_id: str,
-    current_user: User = Depends(get_current_user)
-):
-    """Soft delete a structure"""
-    supabase = get_supabase_client()
-
-    # Check if structure exists
-    check_result = supabase.table("custom_product_structures").select("id").eq("id", structure_id).execute()
-    if not check_result.data:
-        raise HTTPException(status_code=404, detail="Structure not found")
-
-    result = supabase.table("custom_product_structures").update({
-        "is_active": False,
-        "updated_at": datetime.utcnow().isoformat()
-    }).eq("id", structure_id).execute()
-
-    if result.data:
-        return {"message": "Structure deleted successfully", "id": structure_id}
-    raise HTTPException(status_code=400, detail="Failed to delete structure")
-
 # ========== UTILITY ENDPOINTS ==========
 
 @router.post("/columns/reorder")
@@ -560,3 +560,5 @@ async def generate_product_name(
         "option_names": option_names,
         "separator": separator
     }
+
+

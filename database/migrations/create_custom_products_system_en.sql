@@ -245,3 +245,6 @@ INSERT INTO custom_product_categories (name, description, order_index) VALUES
     ('Electronics', 'Electronic products and devices', 2),
     ('Construction Materials', 'Building and construction materials', 3)
 ON CONFLICT DO NOTHING;
+
+
+

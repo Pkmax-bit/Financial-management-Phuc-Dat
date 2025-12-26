@@ -189,3 +189,6 @@ class CustomProductStructureUpdate(BaseModel):
     separator: Optional[str] = None
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
+
+
+

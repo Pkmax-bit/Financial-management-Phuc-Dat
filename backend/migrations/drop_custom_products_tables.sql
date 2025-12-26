@@ -12,3 +12,6 @@ DROP TABLE IF EXISTS custom_products;
 DROP TABLE IF EXISTS custom_product_options;
 DROP TABLE IF EXISTS custom_product_columns;
 DROP TABLE IF EXISTS custom_product_categories;
+
+
+

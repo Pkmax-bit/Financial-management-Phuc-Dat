@@ -8,7 +8,7 @@ import {
     CustomProductColumn,
     CustomProductOption
 } from '@/types/customProduct'
-import { customProductService } from '@/services/customProductService'
+import { supabase } from '@/lib/supabase'
 
 export default function CustomProductConfig() {
     // Data states
@@ -21,29 +21,95 @@ export default function CustomProductConfig() {
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
     const [expandedColumns, setExpandedColumns] = useState<Set<string>>(new Set())
 
+    // Loading states for individual operations
+    const [loadingStates, setLoadingStates] = useState<{
+        categories: Record<string, boolean>
+        columns: Record<string, boolean>
+        options: Record<string, boolean>
+    }>({
+        categories: {},
+        columns: {},
+        options: {}
+    })
+
     // Form states - Categories
     const [isAddingCategory, setIsAddingCategory] = useState(false)
     const [newCategoryName, setNewCategoryName] = useState('')
     const [newCategoryDesc, setNewCategoryDesc] = useState('')
-    const [editingCategory, setEditingCategory] = useState<string | null>(null)
-    const [editCategoryName, setEditCategoryName] = useState('')
-    const [editCategoryDesc, setEditCategoryDesc] = useState('')
+    const [newCategoryIsPrimary, setNewCategoryIsPrimary] = useState(false)
+    const [submitting, setSubmitting] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
+
+    // Edit state
+    const [editingId, setEditingId] = useState<string | null>(null)
+    const [editName, setEditName] = useState('')
+    const [editDescription, setEditDescription] = useState('')
+    const [editIsPrimary, setEditIsPrimary] = useState(false)
+    const [deletingId, setDeletingId] = useState<string | null>(null)
 
     // Form states - Columns
     const [isAddingColumn, setIsAddingColumn] = useState<string | null>(null)
+    const [addingColumnCategory, setAddingColumnCategory] = useState<CustomProductCategory | null>(null)
     const [newColName, setNewColName] = useState('')
     const [newColDesc, setNewColDesc] = useState('')
+    const [newColIsPrimary, setNewColIsPrimary] = useState(false)
+
+    // Auto-detect if column should be primary based on category and name
+    const updatePrimaryStatus = (name: string, categoryName?: string) => {
+        // Check name keywords
+        const primaryKeywords = ['kích thước', 'size', 'dimension', 'kich thuoc', 'kich thước']
+        const nameIndicatesPrimary = primaryKeywords.some(keyword =>
+            name.toLowerCase().includes(keyword.toLowerCase())
+        )
+
+        // Check category keywords (materials that typically have dimensions)
+        const primaryCategoryKeywords = ['nhôm', 'nhom', 'aluminum', 'alum', 'kinh', 'glass', 'kính']
+        const categoryIndicatesPrimary = categoryName && primaryCategoryKeywords.some(keyword =>
+            categoryName.toLowerCase().includes(keyword.toLowerCase())
+        )
+
+        const shouldBePrimary = nameIndicatesPrimary || categoryIndicatesPrimary || false
+        setNewColIsPrimary(shouldBePrimary)
+    }
+
+    // Check if primary status is auto-detected based on name only
+    const isAutoDetectedFromName = () => {
+        const primaryKeywords = ['kích thước', 'size', 'dimension', 'kich thuoc', 'kich thước']
+        return newColName && primaryKeywords.some(keyword =>
+            newColName.toLowerCase().includes(keyword.toLowerCase())
+        )
+    }
+
+    // Check if primary status is auto-detected based on category
+    const isAutoDetectedFromCategory = () => {
+        const primaryCategoryKeywords = ['nhôm', 'nhom', 'aluminum', 'alum', 'kinh', 'glass', 'kính']
+        return addingColumnCategory?.name && primaryCategoryKeywords.some(keyword =>
+            addingColumnCategory.name.toLowerCase().includes(keyword.toLowerCase())
+        )
+    }
     const [editingColumn, setEditingColumn] = useState<string | null>(null)
     const [editColName, setEditColName] = useState('')
     const [editColDesc, setEditColDesc] = useState('')
+    const [editColIsPrimary, setEditColIsPrimary] = useState(false)
 
     // Form states - Options
     const [addingOptionToCol, setAddingOptionToCol] = useState<string | null>(null)
     const [newOptName, setNewOptName] = useState('')
+    const [newOptDesc, setNewOptDesc] = useState('')
     const [newOptPrice, setNewOptPrice] = useState('')
     const [newOptWidth, setNewOptWidth] = useState('')
     const [newOptHeight, setNewOptHeight] = useState('')
     const [newOptDepth, setNewOptDepth] = useState('')
+
+    // Edit option states
+    const [editingOption, setEditingOption] = useState<string | null>(null)
+    const [editOptName, setEditOptName] = useState('')
+    const [editOptDesc, setEditOptDesc] = useState('')
+    const [editOptPrice, setEditOptPrice] = useState('')
+    const [editOptWidth, setEditOptWidth] = useState('')
+    const [editOptHeight, setEditOptHeight] = useState('')
+    const [editOptDepth, setEditOptDepth] = useState('')
 
     // Drag & Drop states
     const [draggedItem, setDraggedItem] = useState<{
@@ -51,6 +117,137 @@ export default function CustomProductConfig() {
         id: string
         categoryId?: string
     } | null>(null)
+
+    // Notification helpers
+    const showError = (message: string) => {
+        alert(`Lỗi: ${message}`)
+    }
+
+    const showSuccess = (message: string) => {
+        alert(message)
+    }
+
+    // Edit helpers
+    const startEdit = (category: CustomProductCategory) => {
+        setEditingId(category.id)
+        setEditName(category.name)
+        setEditDescription(category.description || '')
+        setEditIsPrimary(category.is_primary || false)
+        setError(null)
+    }
+
+    const startEditColumn = (column: CustomProductColumn) => {
+        setEditingColumn(column.id)
+        setEditColName(column.name)
+        setEditColDesc(column.description || '')
+        setEditColIsPrimary(column.is_primary || false)
+    }
+
+    const cancelEdit = () => {
+        setEditingId(null)
+        setEditName('')
+        setEditDescription('')
+        setEditIsPrimary(false)
+        setError(null)
+    }
+
+    // Toggle primary category
+    const handleToggleCategoryPrimary = async (categoryId: string, currentIsPrimary: boolean) => {
+        try {
+            setLoadingStates(prev => ({ ...prev, categories: { ...prev.categories, [categoryId]: true } }))
+
+            const { error } = await supabase
+                .from('custom_product_categories')
+                .update({ is_primary: !currentIsPrimary })
+                .eq('id', categoryId)
+
+            if (error) throw error
+
+            // Update local state
+            setCategories(prev => prev.map(cat =>
+                cat.id === categoryId ? { ...cat, is_primary: !currentIsPrimary } : cat
+            ))
+
+            showSuccess(`Danh mục đã được ${!currentIsPrimary ? 'đánh dấu là chính' : 'bỏ đánh dấu chính'} thành công!`)
+        } catch (error: any) {
+            console.error('Failed to toggle category primary status', error)
+            showError(`Lỗi: ${error.message || 'Không thể cập nhật trạng thái danh mục'}`)
+        } finally {
+            setLoadingStates(prev => ({ ...prev, categories: { ...prev.categories, [categoryId]: false } }))
+        }
+    }
+
+    // Helper functions for calculations
+    // Kích thước theo mm, diện tích m², thể tích m³
+    const calculateArea = (width: number, height: number): number => {
+        // width, height theo mm, area theo m²
+        return (width * height) / 1000000 // mm² to m²
+    }
+
+    const calculateVolume = (width: number, height: number, depth: number): number => {
+        // width, height, depth theo mm, volume theo m³
+        return (width * height * depth) / 1000000000 // mm³ to m³
+    }
+
+    const calculateTotalPrice = (areaOrVolume: number, unitPrice: number): number => {
+        return areaOrVolume * unitPrice
+    }
+
+    const startEditOption = (option: CustomProductOption) => {
+        setEditingOption(option.id)
+        setEditOptName(option.name)
+        setEditOptDesc(option.description || '')
+        setEditOptPrice(option.unit_price?.toString() || '')
+        setEditOptWidth(option.width?.toString() || '')
+        setEditOptHeight(option.height?.toString() || '')
+        setEditOptDepth(option.depth?.toString() || '')
+    }
+
+    const cancelEditOption = () => {
+        setEditingOption(null)
+        setEditOptName('')
+        setEditOptDesc('')
+        setEditOptPrice('')
+        setEditOptWidth('')
+        setEditOptHeight('')
+        setEditOptDepth('')
+    }
+
+    const handleUpdate = async (id: string) => {
+        if (!editName.trim()) {
+            setError('Tên danh mục không được để trống')
+            return
+        }
+
+        try {
+            setSubmitting(true)
+            setError(null)
+            setSuccess(null)
+
+            const { error } = await supabase
+                .from('custom_product_categories')
+                .update({
+                    name: editName.trim(),
+                    description: editDescription.trim() || null,
+                    is_primary: editIsPrimary
+                })
+                .eq('id', id)
+
+            if (error) throw error
+
+            setSuccess(`Danh mục "${editName.trim()}" đã được cập nhật thành công!`)
+            await fetchData()
+            cancelEdit()
+
+            setTimeout(() => {
+                setSuccess(null)
+            }, 3000)
+        } catch (e: any) {
+            setError(e.message || 'Không thể cập nhật danh mục')
+        } finally {
+            setSubmitting(false)
+        }
+    }
 
     // Drag & Drop handlers
     const handleDragStart = (e: React.DragEvent, type: 'category' | 'column', id: string, categoryId?: string) => {
@@ -146,20 +343,48 @@ export default function CustomProductConfig() {
             setLoading(true)
 
             // Fetch categories
-            const cats = await customProductService.getCategories(false)
-            setCategories(cats)
+            const { data: cats, error: catsError } = await supabase
+                .from('custom_product_categories')
+                .select('*, is_primary')
+                .eq('is_active', true)
+                .order('order_index', { ascending: true })
+
+            if (catsError) throw catsError
+            setCategories((cats || []) as CustomProductCategory[])
 
             // Fetch columns and options for each category
             const colsByCat: Record<string, CustomProductColumn[]> = {}
             const optsByCol: Record<string, CustomProductOption[]> = {}
 
-            for (const cat of cats) {
-                const catColumns = await customProductService.getColumnsByCategory(cat.id, false)
-                colsByCat[cat.id] = catColumns
+            for (const cat of cats || []) {
+                const { data: catColumns, error: colsError } = await supabase
+                    .from('custom_product_columns')
+                    .select('*, is_primary')
+                    .eq('category_id', cat.id)
+                    .eq('is_active', true)
+                    .order('order_index', { ascending: true })
 
-                for (const col of catColumns) {
-                    const colOptions = await customProductService.getOptions(col.id, false)
-                    optsByCol[col.id] = colOptions
+                if (colsError) {
+                    console.error('Error fetching columns for category', cat.id, colsError)
+                    continue
+                }
+
+                colsByCat[cat.id] = (catColumns || []) as CustomProductColumn[]
+
+                for (const col of catColumns || []) {
+                    const { data: colOptions, error: optsError } = await supabase
+                        .from('custom_product_options')
+                        .select('*, width, height, depth, area, volume, total_price, description')
+                        .eq('column_id', col.id)
+                        .eq('is_active', true)
+                        .order('order_index', { ascending: true })
+
+                    if (optsError) {
+                        console.error('Error fetching options for column', col.id, optsError)
+                        continue
+                    }
+
+                    optsByCol[col.id] = (colOptions || []) as CustomProductOption[]
                 }
             }
 
@@ -167,139 +392,362 @@ export default function CustomProductConfig() {
             setOptions(optsByCol)
         } catch (error) {
             console.error('Failed to load config', error)
+            alert('Lỗi: Không thể tải dữ liệu cấu hình sản phẩm')
         } finally {
             setLoading(false)
         }
     }
 
     // Category handlers
-    const handleAddCategory = async () => {
-        if (!newCategoryName) return
+    const handleAddCategory = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newCategoryName.trim()) return
+
         try {
-            await customProductService.createCategory({
-                name: newCategoryName,
-                description: newCategoryDesc
-            })
+            setSubmitting(true)
+
+            // Get the highest order_index
+            const { data: maxOrder } = await supabase
+                .from('custom_product_categories')
+                .select('order_index')
+                .order('order_index', { ascending: false })
+                .limit(1)
+
+            const nextOrderIndex = maxOrder && maxOrder.length > 0 ? maxOrder[0].order_index + 1 : 0
+
+            const { data: newCategory, error } = await supabase
+                .from('custom_product_categories')
+                .insert({
+                    name: newCategoryName.trim(),
+                    description: newCategoryDesc.trim() || null,
+                    order_index: nextOrderIndex,
+                    is_primary: newCategoryIsPrimary,
+                    is_active: true
+                })
+                .select()
+                .single()
+
+            if (error) throw error
+
+            setCategories(prev => [...prev, newCategory as CustomProductCategory])
+            setColumns(prev => ({ ...prev, [newCategory.id]: [] }))
+
             setNewCategoryName('')
             setNewCategoryDesc('')
+            setNewCategoryIsPrimary(false)
             setIsAddingCategory(false)
-            fetchData()
-        } catch (error) {
+            alert('Đã thêm danh mục thành công!')
+            await fetchData()
+        } catch (error: any) {
             console.error('Failed to add category', error)
+            alert(`Lỗi: ${error.message || 'Không thể thêm danh mục. Vui lòng thử lại.'}`)
+        } finally {
+            setSubmitting(false)
         }
     }
 
-    const handleEditCategory = async (categoryId: string) => {
-        if (!editCategoryName) return
-        try {
-            await customProductService.updateCategory(categoryId, {
-                name: editCategoryName,
-                description: editCategoryDesc
-            })
-            setEditingCategory(null)
-            setEditCategoryName('')
-            setEditCategoryDesc('')
-            fetchData()
-        } catch (error) {
-            console.error('Failed to edit category', error)
-        }
-    }
+    // This function is no longer used - edit is handled inline now
 
-    const handleDeleteCategory = async (categoryId: string) => {
-        if (!confirm('Bạn có chắc muốn xóa danh mục này? Tất cả cột và tùy chọn bên trong sẽ bị xóa.')) return
+    const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+        if (!confirm(`Bạn có chắc chắn muốn xóa danh mục "${categoryName}"?\n\nLưu ý: Tất cả thuộc tính và tùy chọn bên trong sẽ bị xóa và không thể khôi phục.`)) {
+            return
+        }
+
         try {
-            await customProductService.deleteCategory(categoryId)
-            fetchData()
-        } catch (error) {
+            setDeletingId(categoryId)
+
+            // Check if there are products using this category
+            const { data: products } = await supabase
+                .from('custom_products')
+                .select('id')
+                .eq('category_id', categoryId)
+                .limit(1)
+
+            if (products && products.length > 0) {
+                alert(`Không thể xóa danh mục "${categoryName}" vì còn sản phẩm đang sử dụng. Vui lòng chuyển các sản phẩm sang danh mục khác trước.`)
+                setDeletingId(null)
+                return
+            }
+
+            // Delete all options first
+            const { data: columns } = await supabase
+                .from('custom_product_columns')
+                .select('id')
+                .eq('category_id', categoryId)
+
+            if (columns && columns.length > 0) {
+                const columnIds = columns.map(col => col.id)
+                await supabase
+                    .from('custom_product_options')
+                    .delete()
+                    .in('column_id', columnIds)
+            }
+
+            // Delete all columns
+            await supabase
+                .from('custom_product_columns')
+                .delete()
+                .eq('category_id', categoryId)
+
+            // Delete category
+            const { error } = await supabase
+                .from('custom_product_categories')
+                .delete()
+                .eq('id', categoryId)
+
+            if (error) throw error
+
+            alert(`Danh mục "${categoryName}" đã được xóa thành công!`)
+            await fetchData()
+        } catch (error: any) {
             console.error('Failed to delete category', error)
+            alert(`Lỗi: ${error.message || 'Không thể xóa danh mục. Vui lòng thử lại.'}`)
+        } finally {
+            setDeletingId(null)
         }
     }
 
     // Column handlers
     const handleAddColumn = async (categoryId: string) => {
-        if (!newColName) return
+        if (!newColName.trim()) return
+
         try {
-            await fetch('/api/custom-products/columns', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            setSubmitting(true)
+
+            // Get current user
+            const { data: { user }, error: userError } = await supabase.auth.getUser()
+            if (userError || !user) {
+                throw new Error('User not authenticated')
+            }
+
+            // Get the highest order_index for this category
+            const { data: maxOrder } = await supabase
+                .from('custom_product_columns')
+                .select('order_index')
+                .eq('category_id', categoryId)
+                .order('order_index', { ascending: false })
+                .limit(1)
+
+            const nextOrderIndex = maxOrder && maxOrder.length > 0 ? maxOrder[0].order_index + 1 : 0
+
+            const { data: newColumn, error } = await supabase
+                .from('custom_product_columns')
+                .insert({
                     category_id: categoryId,
-                    name: newColName,
-                    description: newColDesc,
-                    order_index: (columns[categoryId] || []).length
+                    name: newColName.trim(),
+                    description: newColDesc.trim() || null,
+                    order_index: nextOrderIndex,
+                    is_primary: newColIsPrimary,
+                    user_id: user.id,
+                    is_active: true
                 })
-            })
+                .select()
+                .single()
+
+            if (error) throw error
+
+            // Update local state
+            setColumns(prev => ({
+                ...prev,
+                [categoryId]: [...(prev[categoryId] || []), newColumn as CustomProductColumn]
+            }))
+            setOptions(prev => ({ ...prev, [newColumn.id]: [] }))
+
             setNewColName('')
             setNewColDesc('')
+            setNewColIsPrimary(false)
             setIsAddingColumn(null)
-            fetchData()
-        } catch (error) {
+            alert('Đã thêm thuộc tính thành công!')
+            await fetchData()
+        } catch (error: any) {
             console.error('Failed to add column', error)
+            alert(`Lỗi: ${error.message || 'Không thể thêm thuộc tính. Vui lòng thử lại.'}`)
+        } finally {
+            setSubmitting(false)
         }
     }
 
     const handleEditColumn = async (columnId: string, categoryId: string) => {
-        if (!editColName) return
+        if (!editColName.trim()) return
+
         try {
-            await fetch(`/api/custom-products/columns/${columnId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: editColName,
-                    description: editColDesc
+            setSubmitting(true)
+
+            const { error } = await supabase
+                .from('custom_product_columns')
+                .update({
+                    name: editColName.trim(),
+                    description: editColDesc.trim() || null,
+                    is_primary: editColIsPrimary
                 })
-            })
+                .eq('id', columnId)
+
+            if (error) throw error
+
+            alert('Đã cập nhật thuộc tính thành công!')
+            await fetchData()
             setEditingColumn(null)
             setEditColName('')
             setEditColDesc('')
-            fetchData()
-        } catch (error) {
+            setEditColIsPrimary(false)
+        } catch (error: any) {
             console.error('Failed to edit column', error)
+            alert(`Lỗi: ${error.message || 'Không thể cập nhật thuộc tính. Vui lòng thử lại.'}`)
+        } finally {
+            setSubmitting(false)
         }
     }
 
-    const handleDeleteColumn = async (columnId: string) => {
-        if (!confirm('Bạn có chắc muốn xóa thuộc tính này? Tất cả tùy chọn bên trong sẽ bị xóa.')) return
+    const handleDeleteColumn = async (columnId: string, columnName: string) => {
+        if (!confirm(`Bạn có chắc chắn muốn xóa thuộc tính "${columnName}"?\n\nLưu ý: Tất cả tùy chọn thuộc thuộc tính này sẽ bị xóa và không thể khôi phục.`)) {
+            return
+        }
+
         try {
-            await fetch(`/api/custom-products/columns/${columnId}`, { method: 'DELETE' })
-            fetchData()
-        } catch (error) {
+            setDeletingId(columnId)
+
+            // Check if there are products using this column (through options)
+            const { data: options } = await supabase
+                .from('custom_product_options')
+                .select('id')
+                .eq('column_id', columnId)
+                .limit(1)
+
+            if (options && options.length > 0) {
+                alert(`Không thể xóa thuộc tính "${columnName}" vì còn tùy chọn đang được sử dụng. Vui lòng xóa tất cả tùy chọn trước.`)
+                setDeletingId(null)
+                return
+            }
+
+            // Delete all options for this column first
+            await supabase
+                .from('custom_product_options')
+                .delete()
+                .eq('column_id', columnId)
+
+            // Delete column
+            const { error } = await supabase
+                .from('custom_product_columns')
+                .delete()
+                .eq('id', columnId)
+
+            if (error) throw error
+
+            alert(`Thuộc tính "${columnName}" đã được xóa thành công!`)
+            await fetchData()
+        } catch (error: any) {
             console.error('Failed to delete column', error)
+            alert(`Lỗi: ${error.message || 'Không thể xóa thuộc tính. Vui lòng thử lại.'}`)
+        } finally {
+            setDeletingId(null)
         }
     }
 
     const handleAddOption = async (columnId: string) => {
-        if (!newOptName) return
-        try {
-            const payload = {
-                column_id: columnId,
-                name: newOptName,
-                unit_price: parseFloat(newOptPrice) || 0,
-                order_index: (options[columnId] || []).length
-            }
+        if (!newOptName.trim()) return
 
-            await fetch('/api/custom-products/options', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
+        try {
+            setSubmitting(true)
+
+            // Get the highest order_index for this column
+            const { data: maxOrder } = await supabase
+                .from('custom_product_options')
+                .select('order_index')
+                .eq('column_id', columnId)
+                .order('order_index', { ascending: false })
+                .limit(1)
+
+            const nextOrderIndex = maxOrder && maxOrder.length > 0 ? maxOrder[0].order_index + 1 : 0
+
+            // Parse dimensions
+            const width = parseFloat(newOptWidth) || 0
+            const height = parseFloat(newOptHeight) || 0
+            const depth = parseFloat(newOptDepth) || 0
+            const unitPrice = parseFloat(newOptPrice) || 0
+
+            // Calculate area and volume
+            const area = calculateArea(width, height)
+            const volume = calculateVolume(width, height, depth)
+
+            const { data: newOption, error } = await supabase
+                .from('custom_product_options')
+                .insert({
+                    column_id: columnId,
+                    name: newOptName.trim(),
+                    description: newOptDesc.trim() || null,
+                    unit_price: unitPrice,
+                    width: width,
+                    height: height,
+                    depth: depth,
+                    area: area,
+                    volume: volume,
+                    order_index: nextOrderIndex,
+                    is_active: true
+                })
+                .select()
+                .single()
+
+            if (error) throw error
+
+            // Update local state
+            setOptions(prev => ({
+                ...prev,
+                [columnId]: [...(prev[columnId] || []), newOption as CustomProductOption]
+            }))
 
             setNewOptName('')
+            setNewOptDesc('')
             setNewOptPrice('')
+            setNewOptWidth('')
+            setNewOptHeight('')
+            setNewOptDepth('')
             setAddingOptionToCol(null)
-            fetchData()
-        } catch (error) {
+            alert('Đã thêm tùy chọn thành công!')
+            await fetchData()
+        } catch (error: any) {
             console.error('Failed to add option', error)
+            alert(`Lỗi: ${error.message || 'Không thể thêm tùy chọn. Vui lòng thử lại.'}`)
+        } finally {
+            setSubmitting(false)
         }
     }
 
-    const handleDeleteOption = async (id: string) => {
-        if (!confirm('Xóa tùy chọn này?')) return
+    const handleDeleteOption = async (id: string, optionName: string) => {
+        if (!confirm(`Bạn có chắc chắn muốn xóa tùy chọn "${optionName}"?`)) {
+            return
+        }
+
         try {
-            await fetch(`/api/custom-products/options/${id}`, { method: 'DELETE' })
-            fetchData()
-        } catch (error) {
+            setDeletingId(id)
+
+            // Check if there are products using this option
+            const { data: products } = await supabase
+                .from('custom_products')
+                .select('id')
+                .eq('option_id', id)
+                .limit(1)
+
+            if (products && products.length > 0) {
+                alert(`Không thể xóa tùy chọn "${optionName}" vì còn sản phẩm đang sử dụng. Vui lòng chuyển sản phẩm sang tùy chọn khác trước.`)
+                setDeletingId(null)
+                return
+            }
+
+            // Delete option
+            const { error } = await supabase
+                .from('custom_product_options')
+                .delete()
+                .eq('id', id)
+
+            if (error) throw error
+
+            alert(`Tùy chọn "${optionName}" đã được xóa thành công!`)
+            await fetchData()
+        } catch (error: any) {
             console.error('Failed to delete option', error)
+            alert(`Lỗi: ${error.message || 'Không thể xóa tùy chọn. Vui lòng thử lại.'}`)
+        } finally {
+            setDeletingId(null)
         }
     }
 
@@ -347,6 +795,17 @@ export default function CustomProductConfig() {
                             placeholder="Mô tả danh mục"
                             className="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                         />
+                        <label className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                checked={newCategoryIsPrimary}
+                                onChange={e => setNewCategoryIsPrimary(e.target.checked)}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                                Danh mục chính (header màu đỏ)
+                            </span>
+                        </label>
                         <div className="flex gap-3">
                             <button
                                 onClick={handleAddCategory}
@@ -359,10 +818,63 @@ export default function CustomProductConfig() {
                                     setIsAddingCategory(false)
                                     setNewCategoryName('')
                                     setNewCategoryDesc('')
+                                    setNewCategoryIsPrimary(false)
                                 }}
                                 className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                             >
                                 Hủy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Success Notification */}
+            {success && (
+                <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <div className="ml-3 flex-1">
+                            <p className="text-sm font-medium text-green-800">{success}</p>
+                        </div>
+                        <div className="ml-auto pl-3">
+                            <button
+                                onClick={() => setSuccess(null)}
+                                className="text-green-600 hover:text-green-500"
+                            >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Error Notification */}
+            {error && (
+                <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <div className="ml-3 flex-1">
+                            <p className="text-sm font-medium text-red-800">{error}</p>
+                        </div>
+                        <div className="ml-auto pl-3">
+                            <button
+                                onClick={() => setError(null)}
+                                className="text-red-600 hover:text-red-500"
+                            >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                             </button>
                         </div>
                     </div>
@@ -375,98 +887,134 @@ export default function CustomProductConfig() {
                     <div
                         key={category.id}
                         className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden"
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, 'category', category.id)}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, 'category', category.id)}
                     >
-                        {/* Category Header */}
-                        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4">
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <Package className="w-6 h-6 text-white" />
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-white">{category.name}</h3>
-                                        <p className="text-blue-100 text-sm">{category.description}</p>
-                                    </div>
+                        {editingId === category.id ? (
+                            // Edit mode
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-800 mb-2">
+                                        Tên danh mục <span className="text-red-500 font-bold">*</span>
+                                    </label>
+                                    <input
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                        placeholder="Ví dụ: Nội thất"
+                                    />
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-800 mb-2">Mô tả</label>
+                                    <input
+                                        value={editDescription}
+                                        onChange={(e) => setEditDescription(e.target.value)}
+                                        className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                        placeholder="Ghi chú mô tả cho danh mục"
+                                    />
+                                </div>
+                                <div className="flex items-center space-x-3">
+                                    <label className="flex items-center space-x-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={editIsPrimary}
+                                            onChange={(e) => setEditIsPrimary(e.target.checked)}
+                                            className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">
+                                            Danh mục chính (header màu đỏ)
+                                        </span>
+                                    </label>
+                                </div>
+                                <div className="flex items-center space-x-3">
                                     <button
-                                        onClick={() => setExpandedCategories(prev =>
-                                            new Set(prev.has(category.id) ? [] : [category.id])
-                                        )}
-                                        className="p-1 text-white hover:bg-white/20 rounded"
+                                        onClick={() => handleUpdate(category.id)}
+                                        disabled={submitting || !editName.trim()}
+                                        className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
-                                        {expandedCategories.has(category.id) ?
-                                            <ChevronDown className="w-5 h-5" /> :
-                                            <ChevronRight className="w-5 h-5" />
-                                        }
+                                        {submitting ? 'Đang lưu...' : 'Lưu'}
                                     </button>
                                     <button
-                                        onClick={() => {
-                                            setEditingCategory(category.id)
-                                            setEditCategoryName(category.name)
-                                            setEditCategoryDesc(category.description || '')
-                                        }}
-                                        className="p-1 text-white hover:bg-white/20 rounded"
+                                        onClick={cancelEdit}
+                                        disabled={submitting}
+                                        className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
-                                        <Edit className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteCategory(category.id)}
-                                        className="p-1 text-white hover:bg-red-500/20 rounded"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
+                                        Hủy
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            // View mode
+                            <>
+                                {/* Category Header */}
+                                <div className={`p-4 ${category.is_primary ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-blue-600 to-blue-700'}`}>
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-3">
+                                            <Package className="w-6 h-6 text-white" />
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-white">{category.name}</h3>
+                                                <p className={`${category.is_primary ? 'text-red-100' : 'text-blue-100'} text-sm`}>{category.description}</p>
+                                                {category.is_primary && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-200 text-red-800 mt-1">
+                                                        Chính
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className="flex items-center space-x-1 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={category.is_primary || false}
+                                                    onChange={(e) => handleToggleCategoryPrimary(category.id, category.is_primary || false)}
+                                                    disabled={loadingStates.categories[category.id]}
+                                                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                />
+                                                <span className="text-xs text-white font-medium">Chính</span>
+                                            </label>
+                                            <button
+                                                onClick={() => setExpandedCategories(prev =>
+                                                    new Set(prev.has(category.id) ? [] : [category.id])
+                                                )}
+                                                className="p-1 text-white hover:bg-white/20 rounded"
+                                            >
+                                                {expandedCategories.has(category.id) ?
+                                                    <ChevronDown className="w-5 h-5" /> :
+                                                    <ChevronRight className="w-5 h-5" />
+                                                }
+                                            </button>
+                                            <button
+                                                onClick={() => startEdit(category)}
+                                                className="p-1 text-white hover:bg-white/20 rounded"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteCategory(category.id, category.name)}
+                                                disabled={deletingId === category.id}
+                                                className="p-1 text-white hover:bg-red-500/20 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {deletingId === category.id ? (
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                ) : (
+                                                    <Trash2 className="w-4 h-4" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         {/* Category Content */}
                         {expandedCategories.has(category.id) && (
                             <div className="p-4">
-                                {/* Edit Category Form */}
-                                {editingCategory === category.id && (
-                                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                        <h4 className="font-medium mb-2">Chỉnh sửa danh mục</h4>
-                                        <div className="grid grid-cols-1 gap-2 mb-2">
-                                            <input
-                                                value={editCategoryName}
-                                                onChange={e => setEditCategoryName(e.target.value)}
-                                                placeholder="Tên danh mục"
-                                                className="p-2 border rounded text-black"
-                                            />
-                                            <input
-                                                value={editCategoryDesc}
-                                                onChange={e => setEditCategoryDesc(e.target.value)}
-                                                placeholder="Mô tả"
-                                                className="p-2 border rounded text-black"
-                                            />
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => handleEditCategory(category.id)}
-                                                className="px-3 py-1 bg-yellow-600 text-white rounded text-sm"
-                                            >
-                                                Lưu
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setEditingCategory(null)
-                                                    setEditCategoryName('')
-                                                    setEditCategoryDesc('')
-                                                }}
-                                                className="px-3 py-1 bg-gray-300 rounded text-sm"
-                                            >
-                                                Hủy
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* Add Column Button */}
                                 <button
-                                    onClick={() => setIsAddingColumn(category.id)}
+                                    onClick={() => {
+                                        setIsAddingColumn(category.id)
+                                        setAddingColumnCategory(category)
+                                        // Auto-detect primary status based on category name
+                                        updatePrimaryStatus('', category.name)
+                                    }}
                                     className="w-full mb-4 py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 flex justify-center items-center"
                                 >
                                     <Plus className="w-4 h-4 mr-2" />
@@ -480,7 +1028,10 @@ export default function CustomProductConfig() {
                                         <div className="grid grid-cols-1 gap-2 mb-2">
                                             <input
                                                 value={newColName}
-                                                onChange={e => setNewColName(e.target.value)}
+                                                onChange={e => {
+                                                    setNewColName(e.target.value)
+                                                    updatePrimaryStatus(e.target.value, addingColumnCategory?.name)
+                                                }}
                                                 placeholder="Tên thuộc tính (VD: Kích thước, Màu sắc)"
                                                 className="p-2 border rounded text-black"
                                             />
@@ -490,6 +1041,63 @@ export default function CustomProductConfig() {
                                                 placeholder="Mô tả thuộc tính"
                                                 className="p-2 border rounded text-black"
                                             />
+                                            <label className="flex items-center space-x-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newColIsPrimary}
+                                                    onChange={e => setNewColIsPrimary(e.target.checked)}
+                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span className="text-sm font-medium text-gray-700">
+                                                    Cột chính (có kích thước và giá)
+                                                    {newColIsPrimary && (isAutoDetectedFromName() || isAutoDetectedFromCategory()) && (
+                                                        <span className="text-xs text-blue-600 ml-1">
+                                                            (tự động{isAutoDetectedFromName() ? ' - tên' : isAutoDetectedFromCategory() ? ' - danh mục' : ''})
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </label>
+                                            {newColIsPrimary && (
+                                                <div className="mt-3 p-3 bg-white border border-blue-300 rounded-lg">
+                                                    <h5 className="text-sm font-medium mb-2 text-gray-700">Thông tin kích thước và giá (mặc định)</h5>
+                                                    <div className="grid grid-cols-3 gap-2 mb-2">
+                                                        <input
+                                                            type="number"
+                                                            value={newOptWidth}
+                                                            onChange={e => setNewOptWidth(e.target.value)}
+                                                            placeholder="Ngang (mm)"
+                                                            className="p-2 border rounded text-sm text-black"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            value={newOptHeight}
+                                                            onChange={e => setNewOptHeight(e.target.value)}
+                                                            placeholder="Cao (mm)"
+                                                            className="p-2 border rounded text-sm text-black"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            value={newOptDepth}
+                                                            onChange={e => setNewOptDepth(e.target.value)}
+                                                            placeholder="Sâu (mm)"
+                                                            className="p-2 border rounded text-sm text-black"
+                                                        />
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        value={newOptPrice}
+                                                        onChange={e => setNewOptPrice(e.target.value)}
+                                                        placeholder="Đơn giá (VND/m²)"
+                                                        className="p-2 border rounded text-sm text-black w-full mb-2"
+                                                    />
+                                                    {(newOptWidth && newOptHeight) && (
+                                                        <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded space-y-1">
+                                                            <div>Diện tích: {calculateArea(parseFloat(newOptWidth), parseFloat(newOptHeight)).toFixed(3)} m²</div>
+                                                            {newOptDepth && <div>Thể tích: {calculateVolume(parseFloat(newOptWidth), parseFloat(newOptHeight), parseFloat(newOptDepth)).toFixed(4)} m³</div>}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex gap-2">
                                             <button
@@ -501,8 +1109,14 @@ export default function CustomProductConfig() {
                                             <button
                                                 onClick={() => {
                                                     setIsAddingColumn(null)
+                                                    setAddingColumnCategory(null)
                                                     setNewColName('')
                                                     setNewColDesc('')
+                                                    setNewColIsPrimary(false)
+                                                    setNewOptWidth('')
+                                                    setNewOptHeight('')
+                                                    setNewOptDepth('')
+                                                    setNewOptPrice('')
                                                 }}
                                                 className="px-3 py-1 bg-gray-300 rounded text-sm"
                                             >
@@ -537,6 +1151,11 @@ export default function CustomProductConfig() {
                                                         <ChevronRight className="w-4 h-4" />
                                                     }
                                                     <span className="font-medium text-gray-700">{column.name}</span>
+                                                    {column.is_primary && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 ml-2">
+                                                            Chính
+                                                        </span>
+                                                    )}
                                                     <span className="text-xs text-gray-500">
                                                         ({(options[column.id] || []).length} tùy chọn)
                                                     </span>
@@ -545,9 +1164,7 @@ export default function CustomProductConfig() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            setEditingColumn(column.id)
-                                                            setEditColName(column.name)
-                                                            setEditColDesc(column.description || '')
+                                                            startEditColumn(column)
                                                         }}
                                                         className="p-1 text-gray-400 hover:text-blue-600 rounded"
                                                     >
@@ -556,7 +1173,7 @@ export default function CustomProductConfig() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            handleDeleteColumn(column.id)
+                                                            handleDeleteColumn(column.id, column.name)
                                                         }}
                                                         className="p-1 text-gray-400 hover:text-red-600 rounded"
                                                     >
@@ -585,6 +1202,58 @@ export default function CustomProductConfig() {
                                                                     placeholder="Mô tả"
                                                                     className="p-1 border rounded text-sm text-black"
                                                                 />
+                                                                <label className="flex items-center space-x-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={editColIsPrimary}
+                                                                        onChange={e => setEditColIsPrimary(e.target.checked)}
+                                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                    />
+                                                                    <span className="text-xs font-medium text-gray-700">
+                                                                        Cột chính (có kích thước và giá)
+                                                                    </span>
+                                                                </label>
+                                                                {editColIsPrimary && (
+                                                                    <div className="mt-2 p-2 bg-white border border-blue-300 rounded">
+                                                                        <h6 className="text-xs font-medium mb-1 text-gray-700">Thông tin kích thước và giá (mặc định)</h6>
+                                                                        <div className="grid grid-cols-3 gap-1 mb-1">
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editOptWidth}
+                                                                                onChange={e => setEditOptWidth(e.target.value)}
+                                                                                placeholder="Ngang (mm)"
+                                                                                className="p-1 border rounded text-xs text-black"
+                                                                            />
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editOptHeight}
+                                                                                onChange={e => setEditOptHeight(e.target.value)}
+                                                                                placeholder="Cao (mm)"
+                                                                                className="p-1 border rounded text-xs text-black"
+                                                                            />
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editOptDepth}
+                                                                                onChange={e => setEditOptDepth(e.target.value)}
+                                                                                placeholder="Sâu (mm)"
+                                                                                className="p-1 border rounded text-xs text-black"
+                                                                            />
+                                                                        </div>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={editOptPrice}
+                                                                            onChange={e => setEditOptPrice(e.target.value)}
+                                                                            placeholder="Đơn giá (VND/m²)"
+                                                                            className="p-1 border rounded text-xs text-black w-full mb-1"
+                                                                        />
+                                                                        {(editOptWidth && editOptHeight) && (
+                                                                            <div className="text-xs text-gray-600 bg-gray-50 p-1 rounded space-y-1">
+                                                                                <div>Diện tích: {calculateArea(parseFloat(editOptWidth), parseFloat(editOptHeight)).toFixed(3)} m²</div>
+                                                                                {editOptDepth && <div>Thể tích: {calculateVolume(parseFloat(editOptWidth), parseFloat(editOptHeight), parseFloat(editOptDepth)).toFixed(4)} m³</div>}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                             <div className="flex gap-1">
                                                                 <button
@@ -598,6 +1267,11 @@ export default function CustomProductConfig() {
                                                                         setEditingColumn(null)
                                                                         setEditColName('')
                                                                         setEditColDesc('')
+                                                                        setEditColIsPrimary(false)
+                                                                        setEditOptWidth('')
+                                                                        setEditOptHeight('')
+                                                                        setEditOptDepth('')
+                                                                        setEditOptPrice('')
                                                                     }}
                                                                     className="px-2 py-1 bg-gray-300 rounded text-xs"
                                                                 >
@@ -611,15 +1285,34 @@ export default function CustomProductConfig() {
                                                     <div className="space-y-2 mb-3">
                                                         {(options[column.id] || []).map(option => (
                                                             <div key={option.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                                                                <div>
+                                                                <div className="flex-1">
                                                                     <p className="font-medium text-sm">{option.name}</p>
-                                                                    <p className="text-xs text-gray-500">
-                                                                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(option.unit_price || 0)}
-                                                                    </p>
+                                                                    {column.is_primary ? (
+                                                                        <div className="text-xs text-gray-500 space-y-1">
+                                                                            {option.description && <p>{option.description}</p>}
+                                                                            {(option.width && option.height) && (
+                                                                                <p>Kích thước: {option.width} × {option.height}{option.depth ? ` × ${option.depth}` : ''} mm</p>
+                                                                            )}
+                                                                            {option.area && option.area > 0 && (
+                                                                                <p>Diện tích: {option.area.toFixed(3)} m²</p>
+                                                                            )}
+                                                                            {option.volume && option.volume > 0 && (
+                                                                                <p>Thể tích: {option.volume.toFixed(4)} m³</p>
+                                                                            )}
+                                                                            <p>Đơn giá: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(option.unit_price || 0)}/m²</p>
+                                                                            {option.total_price && option.total_price > 0 && (
+                                                                                <p>Giá thành: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(option.total_price)}</p>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <p className="text-xs text-gray-500">
+                                                                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(option.unit_price || 0)}
+                                                                        </p>
+                                                                    )}
                                                                 </div>
                                                                 <button
-                                                                    onClick={() => handleDeleteOption(option.id)}
-                                                                    className="text-red-400 hover:text-red-600"
+                                                                    onClick={() => handleDeleteOption(option.id, option.name)}
+                                                                    className="text-red-400 hover:text-red-600 ml-2"
                                                                 >
                                                                     <Trash2 className="w-4 h-4" />
                                                                 </button>
@@ -638,13 +1331,60 @@ export default function CustomProductConfig() {
                                                                     placeholder="Tên tùy chọn"
                                                                     className="p-1 border rounded text-sm text-black"
                                                                 />
-                                                                <input
-                                                                    type="number"
-                                                                    value={newOptPrice}
-                                                                    onChange={e => setNewOptPrice(e.target.value)}
-                                                                    placeholder="Giá (VND)"
-                                                                    className="p-1 border rounded text-sm text-black"
-                                                                />
+                                                                {column.is_primary ? (
+                                                                    <>
+                                                                        <input
+                                                                            value={newOptDesc}
+                                                                            onChange={e => setNewOptDesc(e.target.value)}
+                                                                            placeholder="Mô tả"
+                                                                            className="p-1 border rounded text-sm text-black"
+                                                                        />
+                                                                        <div className="grid grid-cols-3 gap-1">
+                                                                            <input
+                                                                                type="number"
+                                                                                value={newOptWidth}
+                                                                                onChange={e => setNewOptWidth(e.target.value)}
+                                                                                placeholder="Ngang (mm)"
+                                                                                className="p-1 border rounded text-sm text-black"
+                                                                            />
+                                                                            <input
+                                                                                type="number"
+                                                                                value={newOptHeight}
+                                                                                onChange={e => setNewOptHeight(e.target.value)}
+                                                                                placeholder="Cao (mm)"
+                                                                                className="p-1 border rounded text-sm text-black"
+                                                                            />
+                                                                            <input
+                                                                                type="number"
+                                                                                value={newOptDepth}
+                                                                                onChange={e => setNewOptDepth(e.target.value)}
+                                                                                placeholder="Sâu (mm)"
+                                                                                className="p-1 border rounded text-sm text-black"
+                                                                            />
+                                                                        </div>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={newOptPrice}
+                                                                            onChange={e => setNewOptPrice(e.target.value)}
+                                                                            placeholder="Đơn giá (VND/m²)"
+                                                                            className="p-1 border rounded text-sm text-black"
+                                                                        />
+                                                                        {(newOptWidth && newOptHeight) && (
+                                                                            <div className="text-xs text-gray-600 bg-gray-100 p-1 rounded space-y-1">
+                                                                                <div>Diện tích: {calculateArea(parseFloat(newOptWidth), parseFloat(newOptHeight)).toFixed(3)} m²</div>
+                                                                                {newOptDepth && <div>Thể tích: {calculateVolume(parseFloat(newOptWidth), parseFloat(newOptHeight), parseFloat(newOptDepth)).toFixed(4)} m³</div>}
+                                                                            </div>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    <input
+                                                                        type="number"
+                                                                        value={newOptPrice}
+                                                                        onChange={e => setNewOptPrice(e.target.value)}
+                                                                        placeholder="Giá (VND)"
+                                                                        className="p-1 border rounded text-sm text-black"
+                                                                    />
+                                                                )}
                                                             </div>
                                                             <div className="flex gap-1">
                                                                 <button
@@ -706,3 +1446,4 @@ export default function CustomProductConfig() {
         </div>
     )
 }
+

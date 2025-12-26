@@ -3,6 +3,7 @@ export interface CustomProductCategory {
     name: string
     description?: string
     order_index: number
+    is_primary: boolean
     is_active: boolean
     created_at: string
     updated_at: string
@@ -14,6 +15,7 @@ export interface CustomProductColumn {
     name: string
     description?: string
     order_index: number
+    is_primary: boolean
     is_active: boolean
     created_at: string
     updated_at: string
@@ -26,19 +28,22 @@ export interface CustomProductOption {
     description?: string
     order_index: number
 
-    // Dimensions
+    // Dimensions (in mm/cm)
     width?: number
     height?: number
     depth?: number
-    has_dimensions: boolean
+
+    // Calculated values
+    area?: number      // width * height (mm²/cm²)
+    volume?: number    // width * height * depth (mm³/cm³)
+
+    // Pricing
+    unit_price?: number
+    total_price?: number  // area/volume * unit_price
 
     // Visuals
     image_url?: string
     image_urls?: string[]
-
-    // Pricing
-    unit_price?: number
-    unit: string
 
     is_active: boolean
     created_at: string

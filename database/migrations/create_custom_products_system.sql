@@ -245,3 +245,6 @@ INSERT INTO custom_product_categories (name, description, order_index) VALUES
     ('Điện tử', 'Các sản phẩm điện tử và thiết bị', 2),
     ('Vật liệu xây dựng', 'Nguyên vật liệu xây dựng', 3)
 ON CONFLICT DO NOTHING;
+
+
+
