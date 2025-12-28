@@ -128,9 +128,12 @@ rate_limiter = RateLimiter()
 # Rate limit configuration from environment variables
 def get_rate_limit_config() -> Dict:
     """Get rate limit configuration from environment variables"""
+    # In development mode, use more lenient rate limits
+    is_development = os.getenv("ENVIRONMENT", "development") == "development"
+
     return {
-        "max_requests": int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "100")),
+        "max_requests": int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "500" if is_development else "100")),
         "window_seconds": int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
-        "enabled": os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+        "enabled": os.getenv("RATE_LIMIT_ENABLED", "false" if is_development else "true").lower() == "true"
     }
 

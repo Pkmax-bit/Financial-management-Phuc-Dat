@@ -11,17 +11,45 @@ import {
 export const customProductService = {
     // Categories
     getCategories: async (activeOnly = true): Promise<CustomProductCategory[]> => {
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
+        try {
+            const session = await supabase.auth.getSession()
+            const token = session.data.session?.access_token
 
-        const response = await fetch(getApiEndpoint('/api/custom-products/categories?active_only=' + activeOnly), {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            if (!token) {
+                throw new Error('No authentication token available. Please log in again.')
             }
-        })
-        if (!response.ok) throw new Error('Failed to fetch categories')
-        return response.json()
+
+            const response = await fetch(getApiEndpoint('/api/custom-products/categories?active_only=' + activeOnly), {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.')
+                } else if (response.status === 403) {
+                    throw new Error('You do not have permission to access this resource.')
+                } else if (response.status === 429) {
+                    throw new Error('Too many requests. Please wait a moment and try again.')
+                } else if (response.status >= 500) {
+                    throw new Error('Server error. Please try again later.')
+                } else {
+                    throw new Error(`Failed to fetch categories: ${response.status} ${response.statusText}`)
+                }
+            }
+
+            return response.json()
+        } catch (error) {
+            // Handle network errors (TypeError from fetch)
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                console.error('Network error in getCategories:', error)
+                throw new Error('Network connection failed. Please check your internet connection.')
+            }
+            console.error('Error in getCategories:', error)
+            throw error
+        }
     },
 
     createCategory: async (category: { name: string; description?: string }): Promise<CustomProductCategory> => {
@@ -85,35 +113,91 @@ export const customProductService = {
     },
 
     getColumnsByCategory: async (categoryId: string, activeOnly = true): Promise<CustomProductColumn[]> => {
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
+        try {
+            const session = await supabase.auth.getSession()
+            const token = session.data.session?.access_token
 
-        const response = await fetch(getApiEndpoint(`/api/custom-products/categories/${categoryId}/columns?active_only=${activeOnly}`), {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            if (!token) {
+                throw new Error('No authentication token available. Please log in again.')
             }
-        })
-        if (!response.ok) throw new Error('Failed to fetch columns by category')
-        return response.json()
+
+            const response = await fetch(getApiEndpoint(`/api/custom-products/categories/${categoryId}/columns?active_only=${activeOnly}`), {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.')
+                } else if (response.status === 403) {
+                    throw new Error('You do not have permission to access this resource.')
+                } else if (response.status === 429) {
+                    throw new Error('Too many requests. Please wait a moment and try again.')
+                } else if (response.status >= 500) {
+                    throw new Error('Server error. Please try again later.')
+                } else {
+                    throw new Error(`Failed to fetch columns by category: ${response.status} ${response.statusText}`)
+                }
+            }
+
+            return response.json()
+        } catch (error) {
+            // Handle network errors (TypeError from fetch)
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                console.error('Network error in getColumnsByCategory:', error)
+                throw new Error('Network connection failed. Please check your internet connection.')
+            }
+            console.error('Error in getColumnsByCategory:', error)
+            throw error
+        }
     },
 
     getOptions: async (columnId?: string, activeOnly = true): Promise<CustomProductOption[]> => {
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
+        try {
+            const session = await supabase.auth.getSession()
+            const token = session.data.session?.access_token
 
-        let url = `/api/custom-products/options?active_only=${activeOnly}`
-        if (columnId) {
-            url += `&column_id=${columnId}`
-        }
-        const response = await fetch(getApiEndpoint(url), {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            if (!token) {
+                throw new Error('No authentication token available. Please log in again.')
             }
-        })
-        if (!response.ok) throw new Error('Failed to fetch options')
-        return response.json()
+
+            let url = `/api/custom-products/options?active_only=${activeOnly}`
+            if (columnId) {
+                url += `&column_id=${columnId}`
+            }
+            const response = await fetch(getApiEndpoint(url), {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.')
+                } else if (response.status === 403) {
+                    throw new Error('You do not have permission to access this resource.')
+                } else if (response.status === 429) {
+                    throw new Error('Too many requests. Please wait a moment and try again.')
+                } else if (response.status >= 500) {
+                    throw new Error('Server error. Please try again later.')
+                } else {
+                    throw new Error(`Failed to fetch options: ${response.status} ${response.statusText}`)
+                }
+            }
+
+            return response.json()
+        } catch (error) {
+            // Handle network errors (TypeError from fetch)
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                console.error('Network error in getOptions:', error)
+                throw new Error('Network connection failed. Please check your internet connection.')
+            }
+            console.error('Error in getOptions:', error)
+            throw error
+        }
     },
 
     createProduct: async (product: CreateCustomProductPayload): Promise<CustomProduct> => {
@@ -195,20 +279,48 @@ export const customProductService = {
 
     // Structures
     getStructures: async (categoryId?: string, activeOnly = true): Promise<any[]> => {
-        const session = await supabase.auth.getSession()
-        const token = session.data.session?.access_token
+        try {
+            const session = await supabase.auth.getSession()
+            const token = session.data.session?.access_token
 
-        let url = `/api/custom-products/structures?active_only=${activeOnly}`
-        if (categoryId) url += `&category_id=${categoryId}`
-
-        const response = await fetch(getApiEndpoint(url), {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            if (!token) {
+                throw new Error('No authentication token available. Please log in again.')
             }
-        })
-        if (!response.ok) throw new Error('Failed to fetch structures')
-        return response.json()
+
+            let url = `/api/custom-products/structures?active_only=${activeOnly}`
+            if (categoryId) url += `&category_id=${categoryId}`
+
+            const response = await fetch(getApiEndpoint(url), {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.')
+                } else if (response.status === 403) {
+                    throw new Error('You do not have permission to access this resource.')
+                } else if (response.status === 429) {
+                    throw new Error('Too many requests. Please wait a moment and try again.')
+                } else if (response.status >= 500) {
+                    throw new Error('Server error. Please try again later.')
+                } else {
+                    throw new Error(`Failed to fetch structures: ${response.status} ${response.statusText}`)
+                }
+            }
+
+            return response.json()
+        } catch (error) {
+            // Handle network errors (TypeError from fetch)
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                console.error('Network error in getStructures:', error)
+                throw new Error('Network connection failed. Please check your internet connection.')
+            }
+            console.error('Error in getStructures:', error)
+            throw error
+        }
     },
 
     createStructure: async (structure: any): Promise<any> => {

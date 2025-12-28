@@ -14,6 +14,7 @@ class CustomProductCategory(BaseModel):
     description: Optional[str] = None
     order_index: int = 0
     is_active: bool = True
+    is_primary: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -169,6 +170,8 @@ class CustomProductStructure(BaseModel):
     description: Optional[str] = None
     column_order: List[str]  # UUIDs of columns
     separator: str = " "
+    column_combinations: Optional[List[str]] = None  # Combinations between columns
+    primary_column_id: Optional[str] = None  # Primary column for dimensions
     is_default: bool = False
     is_active: bool = True
     created_at: datetime
@@ -180,6 +183,8 @@ class CustomProductStructureCreate(BaseModel):
     description: Optional[str] = None
     column_order: List[str]
     separator: str = " "
+    column_combinations: Optional[List[str]] = None
+    primary_column_id: Optional[str] = None
     is_default: bool = False
 
 class CustomProductStructureUpdate(BaseModel):
@@ -187,8 +192,11 @@ class CustomProductStructureUpdate(BaseModel):
     description: Optional[str] = None
     column_order: Optional[List[str]] = None
     separator: Optional[str] = None
+    column_combinations: Optional[List[str]] = None
+    primary_column_id: Optional[str] = None
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
+
 
 
 

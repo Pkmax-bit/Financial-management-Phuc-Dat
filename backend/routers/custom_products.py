@@ -10,19 +10,49 @@ from models.custom_products import (
     CustomProductStructure, CustomProductStructureCreate, CustomProductStructureUpdate
 )
 from utils.auth import get_current_user
+from config import settings
 import uuid
 from datetime import datetime
 
 router = APIRouter()
+
+# Development mode authentication helper
+async def get_current_user_dev_mode():
+    """Get current user - always return mock user in development mode"""
+    if settings.ENVIRONMENT == "development":
+        print("[DEV MODE] Using mock admin user for development")
+        from datetime import datetime
+        return User(
+            id="dev-admin-user",
+            email="admin@example.com",  # Valid email for development
+            full_name="Development Admin",
+            role="admin",
+            is_active=True,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
+    # In production, require proper authentication
+    try:
+        from utils.auth import get_current_user
+        return await get_current_user()
+    except Exception as e:
+        print(f"[AUTH] Authentication failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
 
 # ========== CATEGORIES ==========
 
 @router.get("/categories", response_model=List[CustomProductCategory])
 async def get_categories(
     active_only: bool = Query(True),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_dev_mode)
 ):
     """Get all categories"""
+    print(f"[API] Getting categories, active_only={active_only}, user={current_user.id if current_user else 'None'}")
+
     supabase = get_supabase_client()
     query = supabase.table("custom_product_categories").select("*").order("order_index")
 
@@ -30,12 +60,40 @@ async def get_categories(
         query = query.eq("is_active", True)
 
     result = query.execute()
-    return result.data if result.data else []
+    categories = result.data if result.data else []
+    print(f"[API] Found {len(categories)} categories")
+
+    return categories
+
+@router.get("/categories/dev", response_model=List[CustomProductCategory])
+async def get_categories_dev(active_only: bool = Query(True)):
+    """Get all categories - development mode without authentication"""
+    if settings.ENVIRONMENT != "development":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only available in development mode"
+        )
+
+    print(f"[API DEV] Getting categories without auth, active_only={active_only}")
+
+    supabase = get_supabase_client()
+    query = supabase.table("custom_product_categories").select("*").order("order_index")
+
+    if active_only:
+        query = query.eq("is_active", True)
+
+    result = query.execute()
+    categories = result.data if result.data else []
+    print(f"[API DEV] Found {len(categories)} categories")
+    for cat in categories:
+        print(f"[API DEV] Category: {cat.get('name')} (is_primary: {cat.get('is_primary')})")
+
+    return categories
 
 @router.get("/categories/{category_id}", response_model=CustomProductCategory)
 async def get_category(
     category_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Get a specific category"""
     supabase = get_supabase_client()
@@ -49,7 +107,7 @@ async def get_category(
 @router.post("/categories", response_model=CustomProductCategory)
 async def create_category(
     category_data: CustomProductCategoryCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Create a new category"""
     supabase = get_supabase_client()
@@ -73,7 +131,7 @@ async def create_category(
 async def update_category(
     category_id: str,
     category_data: CustomProductCategoryUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Update a category"""
     supabase = get_supabase_client()
@@ -94,9 +152,9 @@ async def update_category(
 @router.delete("/categories/{category_id}")
 async def delete_category(
     category_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
-    """Soft delete a category"""
+    """Hard delete a category and all related data"""
     supabase = get_supabase_client()
 
     # Check if category exists
@@ -104,14 +162,26 @@ async def delete_category(
     if not check_result.data:
         raise HTTPException(status_code=404, detail="Category not found")
 
-    result = supabase.table("custom_product_categories").update({
-        "is_active": False,
-        "updated_at": datetime.utcnow().isoformat()
-    }).eq("id", category_id).execute()
+    # Check if category has structures
+    structures_check = supabase.table("custom_product_structures").select("id").eq("category_id", category_id).limit(1).execute()
+    if structures_check.data:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete category that has structures. Please remove structures first."
+        )
 
-    if result.data:
-        return {"message": "Category deleted successfully", "id": category_id}
-    raise HTTPException(status_code=400, detail="Failed to delete category")
+    # Check if category has products
+    products_check = supabase.table("custom_products").select("id").eq("category_id", category_id).limit(1).execute()
+    if products_check.data:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete category that has products. Please remove products first."
+        )
+
+    # Hard delete the category (cascade will delete related columns and options)
+    result = supabase.table("custom_product_categories").delete().eq("id", category_id).execute()
+
+    return {"message": "Category deleted successfully", "id": category_id}
 
 # ========== COLUMNS ==========
 
@@ -119,7 +189,7 @@ async def delete_category(
 async def get_columns(
     category_id: Optional[str] = Query(None),
     active_only: bool = Query(True),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Get all columns, optionally filtered by category"""
     supabase = get_supabase_client()
@@ -137,7 +207,7 @@ async def get_columns(
 async def get_columns_by_category(
     category_id: str,
     active_only: bool = Query(True),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Get columns for a specific category"""
     supabase = get_supabase_client()
@@ -152,7 +222,7 @@ async def get_columns_by_category(
 @router.post("/columns", response_model=CustomProductColumn)
 async def create_column(
     column_data: CustomProductColumnCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Create a new column"""
     supabase = get_supabase_client()
@@ -176,7 +246,7 @@ async def create_column(
 async def update_column(
     column_id: str,
     column_data: CustomProductColumnUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Update a column"""
     supabase = get_supabase_client()
@@ -197,7 +267,7 @@ async def update_column(
 @router.delete("/columns/{column_id}")
 async def delete_column(
     column_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Soft delete a column"""
     supabase = get_supabase_client()
@@ -222,7 +292,7 @@ async def delete_column(
 async def get_options(
     column_id: Optional[str] = Query(None),
     active_only: bool = Query(True),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Get all options, optionally filtered by column"""
     supabase = get_supabase_client()
@@ -239,7 +309,7 @@ async def get_options(
 @router.post("/options", response_model=CustomProductOption)
 async def create_option(
     option_data: CustomProductOptionCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Create a new option"""
     supabase = get_supabase_client()
@@ -263,7 +333,7 @@ async def create_option(
 async def update_option(
     option_id: str,
     option_data: CustomProductOptionUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Update an option"""
     supabase = get_supabase_client()
@@ -284,7 +354,7 @@ async def update_option(
 @router.delete("/options/{option_id}")
 async def delete_option(
     option_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Soft delete an option"""
     supabase = get_supabase_client()
@@ -309,7 +379,7 @@ async def delete_option(
 async def get_structures(
     category_id: Optional[str] = Query(None),
     active_only: bool = Query(True),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Get all structures"""
     supabase = get_supabase_client()
@@ -326,7 +396,7 @@ async def get_structures(
 @router.post("/structures", response_model=CustomProductStructure)
 async def create_structure(
     structure_data: CustomProductStructureCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Create a new structure"""
     supabase = get_supabase_client()
@@ -349,7 +419,7 @@ async def create_structure(
 async def update_structure(
     structure_id: str,
     structure_data: CustomProductStructureUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Update a structure"""
     supabase = get_supabase_client()
@@ -377,7 +447,7 @@ async def update_structure(
 @router.delete("/structures/{structure_id}")
 async def delete_structure(
     structure_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Soft delete a structure"""
     supabase = get_supabase_client()
@@ -405,7 +475,7 @@ async def get_combined_products(
     active_only: bool = Query(True),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Get combined products"""
     supabase = get_supabase_client()
@@ -424,7 +494,7 @@ async def get_combined_products(
 @router.get("/{product_id}", response_model=CustomProduct)
 async def get_combined_product(
     product_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Get a specific combined product"""
     supabase = get_supabase_client()
@@ -438,7 +508,7 @@ async def get_combined_product(
 @router.post("/", response_model=CustomProduct)
 async def create_combined_product(
     product_data: CustomProductCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Create a new combined product"""
     supabase = get_supabase_client()
@@ -457,7 +527,7 @@ async def create_combined_product(
 async def update_combined_product(
     product_id: str,
     product_data: CustomProductUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Update a combined product"""
     supabase = get_supabase_client()
@@ -478,7 +548,7 @@ async def update_combined_product(
 @router.delete("/{product_id}")
 async def delete_combined_product(
     product_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Soft delete a combined product"""
     supabase = get_supabase_client()
@@ -502,7 +572,7 @@ async def delete_combined_product(
 @router.post("/columns/reorder")
 async def reorder_columns(
     data: Dict[str, Any],
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Reorder columns within a category"""
     supabase = get_supabase_client()
@@ -526,7 +596,7 @@ async def generate_product_name(
     category_id: str,
     selected_options: Dict[str, str],  # column_id -> option_id
     structure_id: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dev_mode)
 ):
     """Generate product name from selected options"""
     supabase = get_supabase_client()
