@@ -323,6 +323,48 @@ export const customProductService = {
         }
     },
 
+    // New optimized method to get all dashboard data in one request
+    getDashboardData: async (): Promise<any> => {
+        try {
+            const session = await supabase.auth.getSession()
+            const token = session.data.session?.access_token
+
+            if (!token) {
+                throw new Error('No authentication token available. Please log in again.')
+            }
+
+            const response = await fetch(getApiEndpoint('/api/custom-products/dashboard-data'), {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Authentication failed. Please log in again.')
+                } else if (response.status === 403) {
+                    throw new Error('You do not have permission to access dashboard data.')
+                } else if (response.status === 429) {
+                    throw new Error('Too many requests. Please wait a moment and try again.')
+                } else if (response.status >= 500) {
+                    throw new Error('Server error. Please try again later.')
+                } else {
+                    throw new Error(`Failed to fetch dashboard data: ${response.status} ${response.statusText}`)
+                }
+            }
+
+            return response.json()
+        } catch (error) {
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                console.error('Network error in getDashboardData:', error)
+                throw new Error('Network connection failed. Please check your internet connection.')
+            }
+            console.error('Error in getDashboardData:', error)
+            throw error
+        }
+    },
+
     createStructure: async (structure: any): Promise<any> => {
         const session = await supabase.auth.getSession()
         const token = session.data.session?.access_token

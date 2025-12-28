@@ -184,43 +184,77 @@ export default function StructureManagement() {
             const allColumns: Record<string, any[]> = {}
             const allOptions: Record<string, any[]> = {}
 
-            for (const category of cats) {
+            // Load structures for all categories in parallel with controlled concurrency
+            const structurePromises = cats.map(async (category, index) => {
                 try {
-                    // Add small delay between categories to prevent rate limiting
-                    await delay(200)
+                    // Stagger requests to prevent overwhelming the server
+                    await delay(index * 1000) // Increased delay to prevent rate limiting
 
-                    // Load structures for this category
                     const structs = await retryApiCall(() =>
                         customProductService.getStructures(category.id, false)
                     )
-                    allStructures.push(...structs.map(s => ({ ...s, category_name: category.name })))
+                    return structs.map(s => ({ ...s, category_name: category.name }))
+                } catch (error) {
+                    console.error(`Failed to load structures for category ${category.id}`, error)
+                    return []
+                }
+            })
 
-                    // Load columns for this category
+            // Load columns for all categories in parallel with controlled concurrency
+            const columnPromises = cats.map(async (category, index) => {
+                try {
+                    await delay(index * 1100) // Increased delay
+
                     const cols = await retryApiCall(() =>
                         customProductService.getColumnsByCategory(category.id, false)
                     )
-                    allColumns[category.id] = cols
-                    console.log(`Loaded ${cols.length} columns for category ${category.id} (${category.name})`)
-
-                    // Load options for each column with delays to prevent rate limiting
-                    for (const column of cols) {
-                        try {
-                            // Add delay between column option requests
-                            await delay(100)
-
-                            const columnOptions = await retryApiCall(() =>
-                                customProductService.getOptions(column.id, true)
-                            )
-                            allOptions[column.id] = columnOptions
-                        } catch (error) {
-                            console.error(`Failed to load options for column ${column.id}`, error)
-                            allOptions[column.id] = []
-                        }
-                    }
+                    return { categoryId: category.id, columns: cols }
                 } catch (error) {
-                    console.error(`Failed to load data for category ${category.id}`, error)
-                    // Continue with other categories even if one fails
+                    console.error(`Failed to load columns for category ${category.id}`, error)
+                    return { categoryId: category.id, columns: [] }
                 }
+            })
+
+            // Execute all promises with controlled batching
+            const [structureResults, columnResults] = await Promise.all([
+                Promise.all(structurePromises),
+                Promise.all(columnPromises)
+            ])
+
+            // Process results
+            structureResults.forEach(structs => {
+                allStructures.push(...structs)
+            })
+
+            columnResults.forEach(({ categoryId, columns }) => {
+                allColumns[categoryId] = columns
+                console.log(`Loaded ${columns.length} columns for category ${categoryId}`)
+            })
+
+            // Load options only for columns that will be displayed initially
+            // This significantly reduces the number of API calls
+            const maxOptionsToLoad = 5 // Further reduced for performance
+            let loadedOptionsCount = 0
+
+            for (const category of cats) {
+                const categoryColumns = allColumns[category.id] || []
+                for (const column of categoryColumns) {
+                    if (loadedOptionsCount >= maxOptionsToLoad) break
+
+                    try {
+                        await delay(800) // Increased delay for options
+
+                        const columnOptions = await retryApiCall(() =>
+                            customProductService.getOptions(column.id, true)
+                        )
+                        allOptions[column.id] = columnOptions
+                        loadedOptionsCount++
+                    } catch (error) {
+                        console.error(`Failed to load options for column ${column.id}`, error)
+                        allOptions[column.id] = []
+                    }
+                }
+                if (loadedOptionsCount >= maxOptionsToLoad) break
             }
 
             setStructures(allStructures)
@@ -259,7 +293,8 @@ export default function StructureManagement() {
                 column_order: newStructureColumns,
                 separator: newStructureSeparator,
                 column_combinations: newStructureCombinations,
-                primary_column_id: newStructurePrimaryColumn
+                primary_column_id: newStructurePrimaryColumn,
+                is_default: false // New structures are created as non-default
             }
 
             await customProductService.createStructure(payload)
@@ -424,6 +459,7 @@ export default function StructureManagement() {
 
     const getColumnName = (columnId: string) => {
         // Find column across all categories
+        if (!columns) return 'Loading...'
         for (const categoryId in columns) {
             const categoryColumns = columns[categoryId] || []
             const column = categoryColumns.find(c => c.id === columnId)
@@ -482,48 +518,90 @@ export default function StructureManagement() {
         return Array.from(categoryMap.values())
     }
 
-    const generatePreview = (columnOrder: string[], combinations: string[] | null = null, selectedCategory?: string) => {
+    const generatePreview = (columnOrder: string[], combinations: string[] | null = null, selectedCategory?: string, regularCategories?: string[], columnsParam?: Record<string, any[]>) => {
         // Ensure combinations is an array, default to empty array if null
         const safeCombinations = combinations || []
 
-        const parts: string[] = []
+        // Group columns by category in the correct order: main category first, then regular categories
+        const categoryOrder: string[] = []
+        const columnsByCategory: { [categoryId: string]: string[] } = {}
 
-        // Add category name as first part if category is selected
+        // Add main category first
         if (selectedCategory) {
-            const category = categories.find(cat => cat.id === selectedCategory)
-            if (category) {
-                parts.push(category.name)
-                // Add separator between category name and first column
-                if (columnOrder.length > 0) {
-                    parts.push(' - ')
-                }
-            }
+            categoryOrder.push(selectedCategory)
+            columnsByCategory[selectedCategory] = []
         }
 
-        columnOrder.forEach((columnId, index) => {
-            // Find column across all categories
-            let column = null
-            for (const categoryId in columns) {
-                column = columns[categoryId]?.find(c => c.id === columnId)
-                if (column) break
-            }
+        // Add regular categories in order
+        if (regularCategories) {
+            regularCategories.forEach(catId => {
+                categoryOrder.push(catId)
+                columnsByCategory[catId] = []
+            })
+        }
 
-            const columnOptions = options[columnId] || []
-
-            if (column) {
-                // Show first option name if available, otherwise show column name
-                const displayName = columnOptions.length > 0 ? columnOptions[0].name : column.name
-                parts.push(displayName)
-
-                // Add combination separator if not the last column
-                if (index < columnOrder.length - 1) {
-                    const combination = safeCombinations[index] || ' '
-                    parts.push(combination)
+        // Group selected columns by their category
+        columnOrder.forEach(columnId => {
+            for (const categoryId of categoryOrder) {
+                const categoryColumns = columnsParam?.[categoryId] || []
+                if (categoryColumns.some(col => col.id === columnId)) {
+                    columnsByCategory[categoryId].push(columnId)
+                    break
                 }
             }
         })
 
-        return parts.join('')
+        // Generate Cartesian product combinations
+        const generateCartesianProduct = (arrays: string[][]): string[][] => {
+            if (arrays.length === 0) return [[]]
+            if (arrays.length === 1) return arrays[0].map(item => [item])
+
+            const [first, ...rest] = arrays
+            const restCombinations = generateCartesianProduct(rest)
+            const result: string[][] = []
+
+            first.forEach(item => {
+                restCombinations.forEach(combination => {
+                    result.push([item, ...combination])
+                })
+            })
+
+            return result
+        }
+
+        // Get column groups in category order (ensuring each category contributes one attribute to each combination)
+        const columnGroups: string[][] = categoryOrder
+            .filter(catId => columnsByCategory[catId].length > 0)
+            .map(catId => columnsByCategory[catId])
+
+        // Generate all possible combinations using Cartesian product
+        const allCombinations = generateCartesianProduct(columnGroups)
+
+        // Convert combinations to display names (limit to first 3 examples)
+        const previewExamples = allCombinations.slice(0, 3).map(combination => {
+            return combination.map((columnId, index) => {
+                let column = null
+                for (const categoryId in columnsParam) {
+                    column = columnsParam?.[categoryId]?.find(c => c.id === columnId)
+                    if (column) break
+                }
+
+                const columnOptions = (options && options[columnId]) || []
+                const displayName = columnOptions.length > 0 ? columnOptions[0].name : (column?.name || 'Thuộc tính')
+
+                // Add separator between attributes
+                return index < combination.length - 1 ? displayName + ' - ' : displayName
+            }).join('')
+        })
+
+        // Return preview with examples
+        if (previewExamples.length === 0) {
+            return 'Chưa có tổ hợp nào'
+        } else if (previewExamples.length === 1) {
+            return previewExamples[0]
+        } else {
+            return previewExamples.join('\n') + (allCombinations.length > 3 ? `\n... và ${allCombinations.length - 3} tổ hợp khác` : '')
+        }
     }
 
     return (
@@ -578,9 +656,9 @@ export default function StructureManagement() {
                         onMoveColumn={(from, to) => moveColumnInStructure(from, to)}
                         onUpdateCombination={(index, value) => updateColumnCombination(index, value)}
                         availableColumns={Object.values(columns).flat()} // Show all columns from all categories
-                        allColumns={columns} // Pass full columns data for debugging
+                        allColumns={columns || {}} // Pass full columns data for debugging
                         key={`new-structure-${newStructureCategory}`} // Force re-render when category changes
-                        preview={generatePreview(newStructureColumns, newStructureCombinations, newStructureCategory)}
+                        preview={generatePreview(newStructureColumns, newStructureCombinations, newStructureCategory, regularCategories, columns)}
                         onSave={handleAddStructure}
                         onCancel={() => {
                             setIsAddingStructure(false)
@@ -638,8 +716,8 @@ export default function StructureManagement() {
                                             onMoveColumn={(from, to) => moveColumnInStructure(from, to, true)}
                                             onUpdateCombination={(index, value) => updateColumnCombination(index, value, true)}
                                             availableColumns={Object.values(columns).flat()} // Show all columns from all categories
-                                            allColumns={columns} // Pass full columns data for debugging
-                                            preview={generatePreview(editStructureColumns, editStructureCombinations, structure.category_id)}
+                                            allColumns={columns || {}} // Pass full columns data for debugging
+                                            preview={generatePreview(editStructureColumns, editStructureCombinations, structure.category_id, [], columns)}
                                             onSave={() => handleEditStructure(structure.id)}
                                             onCancel={cancelEdit}
                                         />
@@ -722,10 +800,10 @@ export default function StructureManagement() {
                                                     <h4 className="font-medium text-gray-900 mb-2">Ví dụ tên sản phẩm:</h4>
                                                     <div className="p-3 bg-gray-50 rounded-lg">
                                                         <p className="font-medium text-gray-800">
-                                                            {generatePreview(structure.column_order, structure.column_combinations, structure.category_id) || 'Chưa có cấu trúc'}
+                                                            {generatePreview(structure.column_order, structure.column_combinations, structure.category_id, [], columns) || 'Chưa có tổ hợp nào'}
                                                         </p>
                                                         <p className="text-xs text-gray-500 mt-1">
-                                                            📋 [Tên danh mục] - [Các thuộc tính đã chọn]
+                                                            📋 Tổ hợp thuộc tính từ các danh mục khác nhau
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1016,7 +1094,7 @@ function StructureForm({
                             })}
                         </div>
                         <p className="text-xs text-gray-600 mt-2">
-                            ⭐ Thuộc tính chính | Tất cả thuộc tính sẽ được kết hợp theo thứ tự này
+                            ⭐ Thuộc tính chính | Thuộc tính sẽ được tổ hợp theo từng danh mục
                         </p>
                     </div>
                 </div>
@@ -1039,30 +1117,87 @@ function StructureForm({
                         <div className="flex items-center gap-3">
                             <div className="text-sm text-gray-500">Tên sản phẩm:</div>
                             <div className="flex-1">
-                                <div className="text-lg font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-lg border">
-                                    {category && (
-                                        <>
-                                            {categories.find(cat => cat.id === category)?.name}
-                                            {selectedColumns.length > 0 && (
-                                                <>
-                                                    {selectedColumns.map((columnId, index) => {
-                                                        const column = availableColumns.find(col => col.id === columnId)
-                                                        return (
-                                                            <span key={columnId}>
-                                                                {' - '}{column?.name || 'Cột'}
-                                                            </span>
-                                                        )
-                                                    })}
-                                                </>
-                                            )}
-                                        </>
-                                    )}
+                                <div className="text-sm font-medium text-gray-900 bg-gray-50 px-4 py-2 rounded-lg border max-h-24 overflow-y-auto">
+                                    {(() => {
+                                        // Group columns by category in correct order: main category first, then regular categories
+                                        const categoryOrder: string[] = []
+                                        const columnsByCategory: { [categoryId: string]: string[] } = {}
+
+                                        // Add main category first
+                                        if (category) {
+                                            categoryOrder.push(category)
+                                            columnsByCategory[category] = []
+                                        }
+
+                                        // Add regular categories in order
+                                        if (regularCategories) {
+                                            regularCategories.forEach(catId => {
+                                                categoryOrder.push(catId)
+                                                columnsByCategory[catId] = []
+                                            })
+                                        }
+
+                                        // Group selected columns by their category
+                                        selectedColumns.forEach(columnId => {
+                                            for (const catId of categoryOrder) {
+                                                const categoryColumns = allColumns?.[catId] || []
+                                                if (categoryColumns.some((col: any) => col.id === columnId)) {
+                                                    columnsByCategory[catId].push(columnId)
+                                                    break
+                                                }
+                                            }
+                                        })
+
+                                        // Generate Cartesian product combinations
+                                        const generateCartesianProduct = (arrays: string[][]): string[][] => {
+                                            if (arrays.length === 0) return [[]]
+                                            if (arrays.length === 1) return arrays[0].map(item => [item])
+
+                                            const [first, ...rest] = arrays
+                                            const restCombinations = generateCartesianProduct(rest)
+                                            const result: string[][] = []
+
+                                            first.forEach(item => {
+                                                restCombinations.forEach(combination => {
+                                                    result.push([item, ...combination])
+                                                })
+                                            })
+
+                                            return result
+                                        }
+
+                                        // Get column groups in category order
+                                        const columnGroups: string[][] = categoryOrder
+                                            .filter(catId => columnsByCategory[catId].length > 0)
+                                            .map(catId => columnsByCategory[catId])
+
+                                        // Generate all possible combinations using Cartesian product
+                                        const allCombinations = generateCartesianProduct(columnGroups)
+
+                                        // Convert to display names (show first 3 examples)
+                                        const previewExamples = allCombinations.slice(0, 3).map(combination => {
+                                            return combination.map(columnId => {
+                                                const column = availableColumns.find(col => col.id === columnId)
+                                                return column?.name || 'Thuộc tính'
+                                            }).join(' - ')
+                                        })
+
+                                        if (previewExamples.length === 0) {
+                                            return 'Chưa có tổ hợp nào'
+                                        }
+
+                                        return previewExamples.map((example, index) => (
+                                            <div key={index} className="mb-1 last:mb-0">
+                                                {example}
+                                            </div>
+                                        ))
+                                    })()}
                                 </div>
                             </div>
                         </div>
                         <div className="text-xs text-gray-500 mt-3 space-y-1">
-                            <p><strong>📋 Logic:</strong> Chọn danh mục chính → Tự động tổ hợp tất cả thuộc tính</p>
-                            <p><strong>✨ Ví dụ:</strong> {category ? categories.find(cat => cat.id === category)?.name : 'Danh mục'} - Thuộc tính 1 - Thuộc tính 2</p>
+                            <p><strong>📋 Logic:</strong> Tổ hợp thuộc tính từ các danh mục khác nhau</p>
+                            <p><strong>✨ Ví dụ:</strong> Thuộc tính 1 (danh mục chính) - Thuộc tính 1 (danh mục thường)</p>
                         </div>
                     </div>
                 </div>

@@ -393,6 +393,60 @@ async def get_structures(
     result = query.execute()
     return result.data if result.data else []
 
+@router.get("/dashboard-data")
+async def get_dashboard_data(
+    current_user: User = Depends(get_current_user_dev_mode)
+):
+    """Get all data needed for dashboard in a single request to avoid rate limiting"""
+    supabase = get_supabase_client()
+
+    try:
+        # Get all active categories
+        categories_result = supabase.table("custom_product_categories").select("*").eq("is_active", True).order("order_index", desc=True).execute()
+        categories = categories_result.data or []
+
+        # Get all active structures
+        structures_result = supabase.table("custom_product_structures").select("*").eq("is_active", True).order("created_at", desc=True).execute()
+        structures = structures_result.data or []
+
+        # Get all active columns
+        columns_result = supabase.table("custom_product_columns").select("*").eq("is_active", True).order("order_index", desc=True).execute()
+        columns = columns_result.data or []
+
+        # Group columns by category_id
+        columns_by_category = {}
+        for column in columns:
+            category_id = column["category_id"]
+            if category_id not in columns_by_category:
+                columns_by_category[category_id] = []
+            columns_by_category[category_id].append(column)
+
+        # Get limited options for performance (first 50 options only)
+        options_result = supabase.table("custom_product_options").select("*").eq("is_active", True).order("order_index", desc=True).limit(50).execute()
+        options = options_result.data or []
+
+        # Group options by column_id
+        options_by_column = {}
+        for option in options:
+            column_id = option["column_id"]
+            if column_id not in options_by_column:
+                options_by_column[column_id] = []
+            options_by_column[column_id].append(option)
+
+        return {
+            "categories": categories,
+            "structures": structures,
+            "columns_by_category": columns_by_category,
+            "options_by_column": options_by_column
+        }
+
+    except Exception as e:
+        print(f"Error in get_dashboard_data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load dashboard data: {str(e)}"
+        )
+
 @router.post("/structures", response_model=CustomProductStructure)
 async def create_structure(
     structure_data: CustomProductStructureCreate,
