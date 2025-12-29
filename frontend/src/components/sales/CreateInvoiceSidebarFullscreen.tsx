@@ -253,9 +253,21 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       volume_is_manual: false
     }
   ])
+
   // Keep latest items snapshot for post-update reads
   const itemsRef = useRef<InvoiceItem[]>([])
-  useEffect(() => { itemsRef.current = items }, [items])
+  const [forceUpdate, setForceUpdate] = useState(0)
+
+  useEffect(() => {
+    itemsRef.current = items
+    console.log('🔄 Invoice items state updated:', items.length, 'items')
+    console.log('📋 Invoice items content:', items.map((item, i) => ({
+      index: i,
+      name: item.name_product?.substring(0, 50) + '...',
+      total: item.total_price,
+      unit_price: item.unit_price
+    })))
+  }, [items])
 
   // Filter products based on search
   const filteredProducts = products.filter(product => {
@@ -1123,14 +1135,17 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     depth?: number
     area?: number
     volume?: number
+    quantity?: number
+    total_price?: number
   }) => {
+    console.log('🎯 addCustomProductToInvoice called with:', productData)
     const newItem = {
       name_product: productData.name,
       description: productData.description,
-      quantity: 1,
+      quantity: productData.quantity || 1,
       unit: 'm²', // Default unit for custom products
       unit_price: productData.unit_price,
-      total_price: productData.unit_price * (productData.area || 1),
+      total_price: productData.total_price || (productData.unit_price * (productData.area || 1)),
       tax_rate: formData.tax_rate ?? 10,
       area: productData.area || null,
       volume: productData.volume || null,
@@ -1139,7 +1154,19 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       depth: productData.depth ? productData.depth / 1000 : null // Convert mm to m
     }
 
-    setItems([...items, newItem])
+    console.log('📝 New invoice item created:', newItem)
+    console.log('📊 Current items count before adding:', items.length)
+
+    // Force state update with callback to ensure it happens
+    setItems(prevItems => {
+      const newItems = [...prevItems, newItem]
+      console.log('📋 New items array (in callback):', newItems)
+      console.log('✅ Item added to invoice. New items count:', newItems.length)
+      return newItems
+    })
+
+    // Force re-render by triggering a state update
+    setForceUpdate(prev => prev + 1)
   }
 
   const toggleColumn = (column: keyof typeof visibleColumns) => {
