@@ -668,21 +668,46 @@ async def generate_product_name(
     column_order = structure["column_order"]
     separator = structure["separator"]
 
-    # Get option names
-    option_names = []
+    # Get detailed information for each column
+    option_details = []
+    generated_parts = []
+
     for column_id in column_order:
         if column_id in selected_options:
             option_id = selected_options[column_id]
-            option_result = supabase.table("custom_product_options").select("name").eq("id", option_id).execute()
-            if option_result.data:
-                option_names.append(option_result.data[0]["name"])
 
-    generated_name = separator.join(option_names)
+            # Get column information
+            column_result = supabase.table("custom_product_columns").select("name, category_id").eq("id", column_id).execute()
+            if column_result.data:
+                column_data = column_result.data[0]
+
+                # Get category name
+                category_result = supabase.table("custom_product_categories").select("name").eq("id", column_data["category_id"]).execute()
+                category_name = category_result.data[0]["name"] if category_result.data else "Unknown"
+
+                # Get option name
+                option_result = supabase.table("custom_product_options").select("name").eq("id", option_id).execute()
+                if option_result.data:
+                    option_name = option_result.data[0]["name"]
+
+                    # Create detailed part
+                    part_detail = {
+                        "option_name": option_name,
+                        "column_name": column_data["name"],
+                        "category_name": category_name,
+                        "full_text": f"{option_name} ({category_name})"
+                    }
+
+                    option_details.append(part_detail)
+                    generated_parts.append(part_detail["full_text"])
+
+    generated_name = separator.join(generated_parts)
 
     return {
         "generated_name": generated_name,
-        "option_names": option_names,
-        "separator": separator
+        "option_details": option_details,
+        "separator": separator,
+        "generated_parts": generated_parts
     }
 
 

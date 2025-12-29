@@ -100,7 +100,6 @@ export interface CustomProductStructure {
     description?: string
     column_order: string[]
     separator: string
-    column_combinations?: string[]
     primary_column_id?: string
     is_default: boolean
     is_active: boolean
@@ -114,7 +113,6 @@ export interface CreateCustomProductStructurePayload {
     description?: string
     column_order: string[]
     separator: string
-    column_combinations?: string[]
     primary_column_id?: string
     is_default: boolean
 }

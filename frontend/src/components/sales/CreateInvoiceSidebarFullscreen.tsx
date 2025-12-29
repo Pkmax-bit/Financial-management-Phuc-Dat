@@ -21,6 +21,7 @@ import {
 import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ColumnVisibilityDialog from './ColumnVisibilityDialog'
+import CustomProductSelectionModal from './CustomProductSelectionModal'
 import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface Customer {
@@ -117,6 +118,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
+  const [showCustomProductModal, setShowCustomProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [productSearch, setProductSearch] = useState('')
@@ -1096,12 +1098,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   }
 
   const addItem = () => {
-    setItems([...items, { 
-      name_product: '', 
-      description: '', 
-      quantity: 1, 
-      unit: '', 
-      unit_price: 0, 
+    setItems([...items, {
+      name_product: '',
+      description: '',
+      quantity: 1,
+      unit: '',
+      unit_price: 0,
       total_price: 0,
       tax_rate: formData.tax_rate ?? 10,  // Use form tax_rate as default for new items
       area: null,
@@ -1110,6 +1112,34 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       length: null,
       depth: null
     }])
+  }
+
+  const addCustomProductToQuote = (productData: {
+    name: string
+    description: string
+    unit_price: number
+    width?: number
+    height?: number
+    depth?: number
+    area?: number
+    volume?: number
+  }) => {
+    const newItem = {
+      name_product: productData.name,
+      description: productData.description,
+      quantity: 1,
+      unit: 'm²', // Default unit for custom products
+      unit_price: productData.unit_price,
+      total_price: productData.unit_price * (productData.area || 1),
+      tax_rate: formData.tax_rate ?? 10,
+      area: productData.area || null,
+      volume: productData.volume || null,
+      height: productData.height ? productData.height / 1000 : null, // Convert mm to m
+      length: productData.width ? productData.width / 1000 : null, // Convert mm to m
+      depth: productData.depth ? productData.depth / 1000 : null // Convert mm to m
+    }
+
+    setItems([...items, newItem])
   }
 
   const toggleColumn = (column: keyof typeof visibleColumns) => {
@@ -2190,6 +2220,13 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                     <Search className="h-4 w-4 mr-1" />
                     Chọn từ danh sách
                   </button>
+                  <button
+                    onClick={() => setShowCustomProductModal(true)}
+                    className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
+                  >
+                    <Package className="h-4 w-4 mr-1" />
+                    Chọn cấu trúc sản phẩm
+                  </button>
                 </div>
               </div>
 
@@ -3038,6 +3075,13 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           </div>
         </div>
       )}
+
+      {/* Custom Product Selection Modal */}
+      <CustomProductSelectionModal
+        isOpen={showCustomProductModal}
+        onClose={() => setShowCustomProductModal(false)}
+        onAddToQuote={addCustomProductToQuote}
+      />
     </div>
   )
 }

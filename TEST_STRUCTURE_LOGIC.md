@@ -158,3 +158,8 @@ Port: 3000 (development server đang chạy)
 
 ## 🎯 Test Case ID
 **TC_STRUCTURE_COMBINATION_001** - Test logic tổ hợp thuộc tính từ nhiều danh mục
+
+
+
+
+

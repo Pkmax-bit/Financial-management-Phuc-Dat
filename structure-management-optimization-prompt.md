@@ -293,3 +293,8 @@ ON custom_product_categories(is_primary) WHERE is_active = true;
 
 *Prompt này được tạo để hướng dẫn việc phát triển một hệ thống quản lý cấu trúc sản phẩm tối ưu, tập trung vào trải nghiệm người dùng và hiệu suất.*
 
+
+
+
+
+

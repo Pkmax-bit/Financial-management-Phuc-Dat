@@ -6,3 +6,8 @@ ALTER TABLE custom_product_structures DROP CONSTRAINT IF EXISTS custom_product_s
 CREATE UNIQUE INDEX custom_product_structures_category_default_unique
 ON custom_product_structures (category_id)
 WHERE is_default = true;
+
+
+
+
+

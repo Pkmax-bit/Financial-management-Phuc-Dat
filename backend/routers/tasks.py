@@ -443,8 +443,13 @@ async def get_task_groups(
                 group["category_color"] = category.get("color")
                 group["category_icon"] = category.get("icon")
                 # Nếu task_group không có name, dùng name từ category
-                if not group.get("name") and category.get("name"):
-                    group["name"] = category.get("name")
+                if not group.get("name") or group.get("name") is None:
+                    if category.get("name"):
+                        group["name"] = category.get("name")
+                    else:
+                        # Fallback: tạo name từ ID nếu cả group và category đều không có name
+                        group["name"] = f"Nhóm công việc {group['id'][:8]}"
+
                 if not group.get("description") and category.get("description"):
                     group["description"] = category.get("description")
             

@@ -17,3 +17,8 @@ COMMENT ON COLUMN custom_product_structures.primary_column_id IS 'Primary column
 CREATE INDEX IF NOT EXISTS idx_custom_product_structures_primary_column_id
 ON custom_product_structures(primary_column_id);
 
+
+
+
+
+

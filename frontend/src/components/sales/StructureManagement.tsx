@@ -26,7 +26,7 @@ export default function StructureManagement() {
     // New structure form
     const [newStructureName, setNewStructureName] = useState('')
     const [newStructureDesc, setNewStructureDesc] = useState('')
-    const [newStructureSeparator, setNewStructureSeparator] = useState(' ')
+    const [newStructureSeparator, setNewStructureSeparator] = useState(' - ')
     const [newStructureCategory, setNewStructureCategory] = useState('')
     const [regularCategories, setRegularCategories] = useState<string[]>([])
     const [categorySeparators, setCategorySeparators] = useState<string[]>([])
@@ -292,7 +292,6 @@ export default function StructureManagement() {
                 description: newStructureDesc,
                 column_order: newStructureColumns,
                 separator: newStructureSeparator,
-                column_combinations: newStructureCombinations,
                 primary_column_id: newStructurePrimaryColumn,
                 is_default: false // New structures are created as non-default
             }
@@ -302,7 +301,7 @@ export default function StructureManagement() {
             // Reset form
             setNewStructureName('')
             setNewStructureDesc('')
-            setNewStructureSeparator(' ')
+            setNewStructureSeparator(' - ')
             setNewStructureCategory('')
             setRegularCategories([])
             setCategorySeparators([])

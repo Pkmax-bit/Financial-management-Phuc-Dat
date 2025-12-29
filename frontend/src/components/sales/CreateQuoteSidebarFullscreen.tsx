@@ -22,6 +22,7 @@ import {
 import { apiPost, apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ColumnVisibilityDialog from './ColumnVisibilityDialog'
+import CustomProductSelectionModal from './CustomProductSelectionModal'
 import { useSidebar } from '@/components/LayoutWithSidebar'
 
 interface Customer {
@@ -134,6 +135,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showProductModal, setShowProductModal] = useState(false)
+  const [showCustomProductModal, setShowCustomProductModal] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   const [showColumnDialog, setShowColumnDialog] = useState(false)
@@ -477,7 +479,18 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
   ])
   // Keep latest items snapshot for post-update reads
   const itemsRef = useRef<QuoteItem[]>([])
-  useEffect(() => { itemsRef.current = items }, [items])
+  const [forceUpdate, setForceUpdate] = useState(0)
+
+  useEffect(() => {
+    itemsRef.current = items
+    console.log('🔄 Items state updated:', items.length, 'items')
+    console.log('📋 Items content:', items.map((item, i) => ({
+      index: i,
+      name: item.name_product?.substring(0, 50) + '...',
+      total: item.total_price,
+      unit_price: item.unit_price
+    })))
+  }, [items])
 
   // Note: Removed auto-close ProjectDetailSidebar to allow both to be visible
   // CreateQuoteSidebarFullscreen will display on top with z-[60]
@@ -1120,19 +1133,24 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
 
   const fetchTaskGroups = async () => {
     try {
+      console.log('🔍 Fetching task groups from database...')
       setLoadingTaskGroups(true)
       const groups = await apiGet('/api/tasks/groups')
+      console.log('🔍 Task groups data:', groups)
       setTaskGroups(groups || [])
-      
+
       // Tìm nhóm "Dự án cửa" và set làm mặc định
-      const duAnCuaGroup = groups.find((g: any) => 
+      const duAnCuaGroup = groups.find((g: any) =>
         g.name && (g.name.toLowerCase().includes('dự án cửa') || g.name.toLowerCase().includes('du an cua'))
       )
       if (duAnCuaGroup) {
+        console.log('✅ Found "Dự án cửa" group:', duAnCuaGroup)
         setSelectedTaskGroupId(duAnCuaGroup.id)
       }
     } catch (error) {
-      console.error('Error fetching task groups:', error)
+      console.error('❌ Error fetching task groups:', error)
+      // Set empty array to prevent infinite loading
+      setTaskGroups([])
     } finally {
       setLoadingTaskGroups(false)
     }
@@ -1369,6 +1387,51 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       area_is_manual: false,
       volume_is_manual: false
     }])
+  }
+
+  const addCustomProductToQuote = (productData: {
+    name: string
+    description: string
+    unit_price: number
+    width?: number
+    height?: number
+    depth?: number
+    area?: number
+    volume?: number
+  }) => {
+    console.log('🎯 addCustomProductToQuote called with:', productData)
+    const newItem: QuoteItem = {
+      name_product: productData.name,
+      description: productData.description,
+      quantity: 1,
+      unit: 'm²', // Default unit for custom products
+      unit_price: productData.unit_price,
+      total_price: productData.unit_price * (productData.area || 1),
+      tax_rate: formData.tax_rate || 10,
+      area: productData.area || null,
+      baseline_area: productData.area || null,
+      volume: productData.volume || null,
+      baseline_volume: productData.volume || null,
+      height: productData.height ? productData.height / 1000 : null, // Convert mm to m
+      length: productData.width ? productData.width / 1000 : null, // Convert mm to m
+      depth: productData.depth ? productData.depth / 1000 : null, // Convert mm to m
+      area_is_manual: false,
+      volume_is_manual: false
+    }
+
+    console.log('📝 New item created:', newItem)
+    console.log('📊 Current items count before adding:', items.length)
+
+    // Force state update with callback to ensure it happens
+    setItems(prevItems => {
+      const newItems = [...prevItems, newItem]
+      console.log('📋 New items array (in callback):', newItems)
+      console.log('✅ Item added to quote. New items count:', newItems.length)
+      return newItems
+    })
+
+    // Force re-render by triggering a state update
+    setForceUpdate(prev => prev + 1)
   }
 
   type VisibleColumns = typeof visibleColumns
@@ -3361,6 +3424,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                     <Search className="h-4 w-4 mr-1" />
                     Chọn từ danh sách
                   </button>
+                  <button
+                    onClick={() => setShowCustomProductModal(true)}
+                    className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
+                  >
+                    <Package className="h-4 w-4 mr-1" />
+                    Chọn cấu trúc sản phẩm
+                  </button>
                 </div>
               </div>
 
@@ -3407,7 +3477,7 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
                   <div className="divide-y-2 divide-gray-500">
                     {items.map((item, index) => (
                       <div
-                        key={index}
+                        key={`${item.name_product}-${item.description}-${index}-${Date.now()}`}
                         className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors px-4 py-3`}
                       >
                         <div className="grid gap-2 items-start text-xs" style={{ gridTemplateColumns }}>
@@ -4745,6 +4815,13 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
           </div>
         </div>
       )}
+
+      {/* Custom Product Selection Modal */}
+      <CustomProductSelectionModal
+        isOpen={showCustomProductModal}
+        onClose={() => setShowCustomProductModal(false)}
+        onAddToQuote={addCustomProductToQuote}
+      />
     </div>
   )
 }
