@@ -15,6 +15,29 @@ const CACHE_TIMEOUT = 5 * 60 * 1000 // 5 minutes
 // Debounce map to prevent rapid successive calls
 const pendingRequests = new Map<string, Promise<any[]>>()
 
+// Fallback function to get categories without authentication
+const getCategoriesFallback = async (activeOnly = true): Promise<CustomProductCategory[]> => {
+    try {
+        console.log('Trying fallback categories endpoint')
+        const response = await fetch(getApiEndpoint('/api/custom-products/categories/dev?active_only=' + activeOnly), {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+
+        if (!response.ok) {
+            throw new Error(`Fallback endpoint failed: ${response.status} ${response.statusText}`)
+        }
+
+        const data = await response.json()
+        console.log(`Successfully fetched ${data.length} categories via fallback endpoint`)
+        return data
+    } catch (error) {
+        console.error('Fallback categories endpoint failed:', error)
+        throw new Error('Unable to load categories. Please check your connection and try again.')
+    }
+}
+
 // Helper function to fetch options
 const _fetchOptions = async (url: string, token: string, columnId?: string, activeOnly?: boolean, cacheKey?: string): Promise<CustomProductOption[]> => {
     const response = await fetch(getApiEndpoint(url), {
@@ -59,7 +82,9 @@ export const customProductService = {
             const token = session.data.session?.access_token
 
             if (!token) {
-                throw new Error('No authentication token available. Please log in again.')
+                console.warn('No authentication token available, trying fallback endpoint')
+                // Try the dev endpoint as fallback
+                return await getCategoriesFallback(activeOnly)
             }
 
             const response = await fetch(getApiEndpoint('/api/custom-products/categories?active_only=' + activeOnly), {
@@ -70,10 +95,10 @@ export const customProductService = {
             })
 
             if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Authentication failed. Please log in again.')
-                } else if (response.status === 403) {
-                    throw new Error('You do not have permission to access this resource.')
+                if (response.status === 401 || response.status === 403) {
+                    console.warn('Authentication failed, trying fallback endpoint')
+                    // Try the dev endpoint as fallback
+                    return await getCategoriesFallback(activeOnly)
                 } else if (response.status === 429) {
                     throw new Error('Too many requests. Please wait a moment and try again.')
                 } else if (response.status >= 500) {
@@ -83,7 +108,9 @@ export const customProductService = {
                 }
             }
 
-            return response.json()
+            const data = await response.json()
+            console.log(`Successfully fetched ${data.length} categories with authentication`)
+            return data
         } catch (error) {
             // Handle network errors (TypeError from fetch)
             if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -91,6 +118,17 @@ export const customProductService = {
                 throw new Error('Network connection failed. Please check your internet connection.')
             }
             console.error('Error in getCategories:', error)
+
+            // Try fallback one more time if we haven't already
+            if (!(error as Error).message.includes('fallback')) {
+                console.warn('Primary endpoint failed, trying fallback')
+                try {
+                    return await getCategoriesFallback(activeOnly)
+                } catch (fallbackError) {
+                    console.error('Fallback also failed:', fallbackError)
+                }
+            }
+
             throw error
         }
     },
