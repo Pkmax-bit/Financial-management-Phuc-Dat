@@ -371,7 +371,7 @@ export default function CustomProductSelectionModal({
       setColumns(structureColumns)
 
       console.log('Structure column_order:', structure.column_order)
-      console.log('Found columns:', structureColumns.map(c => ({id: c.id, name: c.name})))
+      console.log('Found columns:', structureColumns.map(c => ({ id: c.id, name: c.name })))
 
       // Load options for each column
       const optsByCol: Record<string, CustomProductOption[]> = {}
@@ -565,25 +565,44 @@ export default function CustomProductSelectionModal({
       const productName = generateProductNameFromCombination(combination)
       console.log(`📝 Generated name: ${productName}`)
 
+      // Get dimensions from this specific combination's options, OR fallback to global manual dimensions
+      const firstOptionWithDimensions = Object.values(combination.options).find(opt => opt.has_dimensions)
+
+      const width = firstOptionWithDimensions?.width || dimensions.width || 0
+      const height = firstOptionWithDimensions?.height || dimensions.height || 0
+      const depth = firstOptionWithDimensions?.depth || dimensions.depth || 0
+
+      // Calculate area/volume based on the resolved dimensions
+      const itemArea = width && height ? (width * height) / 1000000 : 0 // Convert mm² to m²
+      const itemVolume = width && height && depth ? (width * height * depth) / 1000000000 : 0 // Convert mm³ to m³
+
       // Use combination's total price as unit price (price per piece)
       // If dimensions are available, calculate price per area
       let calculatedUnitPrice = combination.totalPrice
-      if (dimensions.width && dimensions.height) {
-        const area = (dimensions.width * dimensions.height) / 1000000 // Convert mm² to m²
-        calculatedUnitPrice = area > 0 ? combination.totalPrice / area : combination.totalPrice
+      if (itemArea > 0) {
+        // If the combination price is total, we might need to adjust. 
+        // Assuming combination.totalPrice is the price for the specific options (which might be unit based).
+        // If we want pricing per m2, we div by area.
+        calculatedUnitPrice = combination.totalPrice / itemArea
+      }
+
+      // Generate description with dimensions
+      let desc = `Sản phẩm tùy chỉnh từ cấu trúc: ${structure?.name} (${category?.name}) - ${combination.totalPrice.toLocaleString('vi-VN')} VND`
+      if (width > 0 && height > 0) {
+        desc += ` - ${width}x${height}${depth > 0 ? `x${depth}` : ''}mm`
       }
 
       const productData = {
         name: productName,
-        description: `Sản phẩm tùy chỉnh từ cấu trúc: ${structure?.name} (${category?.name}) - ${combination.totalPrice.toLocaleString('vi-VN')} VND`,
+        description: desc,
         unit_price: calculatedUnitPrice,
-        width: dimensions.width || undefined,
-        height: dimensions.height || undefined,
-        depth: dimensions.depth || undefined,
-        area: calculateArea() || undefined,
-        volume: calculateVolume() || undefined,
+        width: width || undefined,
+        height: height || undefined,
+        depth: depth || undefined,
+        area: itemArea || undefined,
+        volume: itemVolume || undefined,
         quantity: 1, // Default quantity
-        total_price: calculatedUnitPrice * (calculateArea() || 1) // Total price calculation
+        total_price: calculatedUnitPrice * (itemArea || 1) // Total price calculation
       }
 
       console.log('📦 Product data to add:', productData)
@@ -598,7 +617,7 @@ export default function CustomProductSelectionModal({
 
     const message = `Đã thêm ${selectedCombinationObjects.length} sản phẩm vào báo giá:\n\n${productNames.map((name, index) => `${index + 1}. ${name}`).join('\n')}`
 
-    alert(message)
+    // alert(message) // Suppress alert to avoid blocking flow if user clicks main button
 
     // Reset selections after adding
     setSelectedCombinations(new Set())
@@ -608,6 +627,12 @@ export default function CustomProductSelectionModal({
   }
 
   const handleAddToQuote = () => {
+    // If user has selected items in the table, add those instead of the manual setup
+    if (selectedCombinations.size > 0) {
+      handleAddMultipleToQuote()
+      return
+    }
+
     if (!generatedName) {
       alert('Vui lòng chọn đầy đủ thuộc tính để tạo tên sản phẩm')
       return
@@ -616,9 +641,15 @@ export default function CustomProductSelectionModal({
     const structure = structures.find(s => s.id === selectedStructure)
     const category = categories.find(c => c.id === structure?.category_id)
 
+    // Append dimensions to description for manual add too
+    let desc = `Sản phẩm tùy chỉnh từ cấu trúc: ${structure?.name} (${category?.name})`
+    if (dimensions.width > 0 && dimensions.height > 0) {
+      desc += ` - ${dimensions.width}x${dimensions.height}${dimensions.depth > 0 ? `x${dimensions.depth}` : ''}mm`
+    }
+
     const productData = {
       name: generatedName,
-      description: `Sản phẩm tùy chỉnh từ cấu trúc: ${structure?.name} (${category?.name})`,
+      description: desc,
       unit_price: unitPrice,
       width: dimensions.width || undefined,
       height: dimensions.height || undefined,
@@ -647,8 +678,8 @@ export default function CustomProductSelectionModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-60 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-60 bg-transparent flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
@@ -673,7 +704,7 @@ export default function CustomProductSelectionModal({
           ) : (
             <div className="space-y-6">
               {/* Structure Selection */}
-              <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="bg-transparent p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Chọn cấu trúc sản phẩm
                 </label>
@@ -709,7 +740,7 @@ export default function CustomProductSelectionModal({
                         }
 
                         // If not found in loaded columns, try to get from other sources or show UUID
-                        console.log('Column not found for ID:', columnId, 'Available columns:', columns.map(c => ({id: c.id, name: c.name})))
+                        console.log('Column not found for ID:', columnId, 'Available columns:', columns.map(c => ({ id: c.id, name: c.name })))
                         return `Column-${columnId.slice(0, 8)}`
                       }).join(' → ') || 'Đang tải...'
 
@@ -750,14 +781,25 @@ export default function CustomProductSelectionModal({
                         <div className="space-y-4">
                           {/* Header với thông tin danh mục */}
                           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                            <h5 className="font-semibold text-purple-900 mb-2">
-                              Danh mục: {category?.name}
+                            <h5 className="text-purple-900 mb-2">
+                              <span className="font-bold">Danh mục:</span> <span className="font-bold">{category?.name}</span>
                             </h5>
                             <p className="text-sm text-purple-700 mb-2">
                               Chọn một tổ hợp thuộc tính từ bảng dưới đây
                             </p>
-                            <div className="text-xs text-purple-600">
+                            <div className="text-xs text-purple-600 mb-3">
                               Hiển thị {combinations.length} tổ hợp có thể có từ {sortedColumns.length} cột
+                            </div>
+                            {/* Dimension Information */}
+                            <div className="mt-3 pt-3 border-t border-purple-200">
+                              <p className="text-xs text-purple-700 font-semibold mb-1">Thông tin kích thước:</p>
+                              <div className="grid grid-cols-5 gap-2 text-xs text-purple-600">
+                                <div>• Ngang (mm)</div>
+                                <div>• Cao (mm)</div>
+                                <div>• Sâu (mm)</div>
+                                <div>• Diện tích (m²)</div>
+                                <div>• Thể tích (m³)</div>
+                              </div>
                             </div>
                           </div>
 
@@ -782,11 +824,10 @@ export default function CustomProductSelectionModal({
                                             </div>
                                             <button
                                               onClick={() => openFilterModal(column.id)}
-                                              className={`ml-2 p-1 rounded transition-colors ${
-                                                hasActiveFilters
-                                                  ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                                                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                                              }`}
+                                              className={`ml-2 p-1 rounded transition-colors ${hasActiveFilters
+                                                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                                                }`}
                                               title={hasActiveFilters ? `Đã lọc ${activeFilters.length} thuộc tính` : 'Lọc thuộc tính'}
                                             >
                                               <Filter className="h-3 w-3" />
@@ -800,6 +841,22 @@ export default function CustomProductSelectionModal({
                                         </th>
                                       )
                                     })}
+                                    {/* Dimension columns */}
+                                    <th className="px-4 py-3 border-b border-gray-300 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                      Chiều ngang (mm)
+                                    </th>
+                                    <th className="px-4 py-3 border-b border-gray-300 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                      Chiều cao (mm)
+                                    </th>
+                                    <th className="px-4 py-3 border-b border-gray-300 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                      Chiều sâu (mm)
+                                    </th>
+                                    <th className="px-4 py-3 border-b border-gray-300 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                      Diện tích (m²)
+                                    </th>
+                                    <th className="px-4 py-3 border-b border-gray-300 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                      Thể tích (m³)
+                                    </th>
                                     <th className="px-4 py-3 border-b border-gray-300 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                       Tổng giá
                                     </th>
@@ -814,12 +871,11 @@ export default function CustomProductSelectionModal({
                                   {combinations.map((combination, comboIndex) => (
                                     <tr
                                       key={combination.id}
-                                      className={`hover:bg-gray-50 ${
-                                        Object.keys(selectedOptions).length === sortedColumns.length &&
+                                      className={`hover:bg-gray-50 ${Object.keys(selectedOptions).length === sortedColumns.length &&
                                         sortedColumns.every(col => selectedOptions[col.id]?.option_id === combination.options[col.id]?.id)
-                                          ? 'bg-green-50 border-green-300'
-                                          : ''
-                                      }`}
+                                        ? 'bg-green-50 border-green-300'
+                                        : ''
+                                        }`}
                                     >
                                       {/* Column values */}
                                       {sortedColumns.map((column) => {
@@ -840,6 +896,37 @@ export default function CustomProductSelectionModal({
                                           </td>
                                         )
                                       })}
+
+                                      {/* Dimensions from combination options */}
+                                      {(() => {
+                                        // Get dimensions from the first option that has dimensions
+                                        const firstOptionWithDimensions = Object.values(combination.options).find(opt => opt.has_dimensions)
+                                        const height = firstOptionWithDimensions?.height || 0
+                                        const depth = firstOptionWithDimensions?.depth || 0
+                                        const width = firstOptionWithDimensions?.width || 0
+                                        const area = width && height ? (width * height) / 1000000 : 0 // Convert mm² to m²
+                                        const volume = width && height && depth ? (width * height * depth) / 1000000000 : 0 // Convert mm³ to m³
+
+                                        return (
+                                          <>
+                                            <td className="px-4 py-3 border-b border-gray-200 text-sm text-gray-600">
+                                              {width > 0 ? width.toLocaleString() : '-'}
+                                            </td>
+                                            <td className="px-4 py-3 border-b border-gray-200 text-sm text-gray-600">
+                                              {height > 0 ? height.toLocaleString() : '-'}
+                                            </td>
+                                            <td className="px-4 py-3 border-b border-gray-200 text-sm text-gray-600">
+                                              {depth > 0 ? depth.toLocaleString() : '-'}
+                                            </td>
+                                            <td className="px-4 py-3 border-b border-gray-200 text-sm text-gray-600">
+                                              {area > 0 ? area.toFixed(3) : '-'}
+                                            </td>
+                                            <td className="px-4 py-3 border-b border-gray-200 text-sm text-gray-600">
+                                              {volume > 0 ? volume.toFixed(4) : '-'}
+                                            </td>
+                                          </>
+                                        )
+                                      })()}
 
                                       {/* Total price */}
                                       <td className="px-4 py-3 border-b border-gray-200 text-sm font-semibold text-green-600">
@@ -886,16 +973,15 @@ export default function CustomProductSelectionModal({
                                               const area = calculateArea()
                                               setUnitPrice(area > 0 ? combination.totalPrice / area : combination.totalPrice)
                                             }}
-                                            className={`px-2 py-1 rounded text-xs font-medium ${
-                                              Object.keys(selectedOptions).length === sortedColumns.length &&
+                                            className={`px-2 py-1 rounded text-xs font-medium ${Object.keys(selectedOptions).length === sortedColumns.length &&
                                               sortedColumns.every(col => selectedOptions[col.id]?.option_id === combination.options[col.id]?.id)
-                                                ? 'bg-green-600 text-white'
-                                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                                            }`}
+                                              ? 'bg-green-600 text-white'
+                                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                                              }`}
                                             title="Chọn để điền thông tin sản phẩm"
                                           >
                                             {Object.keys(selectedOptions).length === sortedColumns.length &&
-                                            sortedColumns.every(col => selectedOptions[col.id]?.option_id === combination.options[col.id]?.id)
+                                              sortedColumns.every(col => selectedOptions[col.id]?.option_id === combination.options[col.id]?.id)
                                               ? '✓ Đã chọn'
                                               : 'Chọn'}
                                           </button>
@@ -1138,18 +1224,36 @@ export default function CustomProductSelectionModal({
               <div className="max-h-32 overflow-y-auto space-y-1">
                 {currentCombinations
                   .filter(combo => selectedCombinations.has(combo.id))
-                  .map((combo, index) => (
-                    <div key={combo.id} className="text-xs text-gray-600 flex items-center gap-2">
-                      <span className="text-blue-500 font-medium">{index + 1}.</span>
-                      <span className="flex-1">{generateProductNameFromCombination(combo)}</span>
-                      <span className="text-green-600 font-medium">
-                        {new Intl.NumberFormat('vi-VN', {
-                          style: 'currency',
-                          currency: 'VND'
-                        }).format(combo.totalPrice)}
-                      </span>
-                    </div>
-                  ))}
+                  .map((combo, index) => {
+                    // Get dimensions for this combination
+                    const firstOptionWithDimensions = Object.values(combo.options).find(opt => opt.has_dimensions)
+                    const height = firstOptionWithDimensions?.height || 0
+                    const depth = firstOptionWithDimensions?.depth || 0
+                    const width = firstOptionWithDimensions?.width || 0
+                    const area = width && height ? (width * height) / 1000000 : 0 // Convert mm² to m²
+
+                    return (
+                      <div key={combo.id} className="text-xs text-gray-600 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-500 font-medium">{index + 1}.</span>
+                          <span className="flex-1">{generateProductNameFromCombination(combo)}</span>
+                          <span className="text-green-600 font-medium">
+                            {new Intl.NumberFormat('vi-VN', {
+                              style: 'currency',
+                              currency: 'VND'
+                            }).format(combo.totalPrice)}
+                          </span>
+                        </div>
+                        {(height > 0 || depth > 0 || area > 0) && (
+                          <div className="ml-4 text-gray-500 flex gap-4">
+                            {height > 0 && <span>Cao: {height}mm</span>}
+                            {depth > 0 && <span>Sâu: {depth}mm</span>}
+                            {area > 0 && <span>DT: {area.toFixed(3)}m²</span>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
               </div>
             </div>
           </div>
@@ -1176,7 +1280,7 @@ export default function CustomProductSelectionModal({
 
       {/* Filter Modal */}
       {showFilterModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
           <div className="bg-white rounded-lg max-w-md w-full mx-4 max-h-[80vh] overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
