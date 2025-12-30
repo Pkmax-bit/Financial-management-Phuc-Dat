@@ -144,13 +144,12 @@ export function StructureForm({
                                         className={`cursor-pointer p-3 rounded-lg border-2 transition-all ${
                                             isSelected
                                                 ? 'border-green-500 bg-green-100'
-                                                : 'border-gray-800 bg-white hover:border-green-300 hover:bg-green-50'
+                                                : 'border-gray-300 bg-white hover:border-green-300 hover:bg-green-50'
                                         }`}
-                                        style={{ color: 'rgb(0, 0, 0)' }}
                                     >
                                         <div className="text-center">
-                                            <div className={`font-medium ${isSelected ? 'text-green-800' : 'text-black'}`} style={!isSelected ? { color: 'rgba(0, 0, 0, 1) !important' } : {}}>{cat.name}</div>
-                                            <div className={`text-xs mt-1 ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
+                                            <div className="font-medium text-black">{cat.name}</div>
+                                            <div className={`text-xs mt-1 ${isSelected ? 'text-green-700' : 'text-gray-700'}`}>
                                                 {isSelected ? '✓ Đã chọn' : 'Chọn'}
                                             </div>
                                         </div>

@@ -941,10 +941,10 @@ function StructureForm({
             {/* 3. Danh mục thường - CHỌN THÊM CATEGORIES KHÁC */}
             {category && (
                 <div className="bg-green-50 p-6 rounded-lg border border-green-200">
-                    <label className="block text-lg font-semibold text-gray-900 mb-4">
+                    <label className="block text-lg font-bold text-black mb-4">
                         🌿 Danh mục thường
                     </label>
-                    <p className="text-sm text-gray-600 mb-4">
+                    <p className="text-sm font-bold text-black mb-4">
                         Chọn thêm các danh mục khác để tổ hợp thuộc tính vào cấu trúc sản phẩm
                     </p>
 
@@ -968,8 +968,8 @@ function StructureForm({
                                             }`}
                                     >
                                         <div className="text-center">
-                                            <div className="font-medium">{cat.name}</div>
-                                            <div className="text-xs text-gray-500 mt-1">
+                                            <div className="font-bold text-black">{cat.name}</div>
+                                            <div className="text-xs font-bold text-black mt-1">
                                                 {isSelected ? '✓ Đã chọn' : 'Chọn'}
                                             </div>
                                         </div>
