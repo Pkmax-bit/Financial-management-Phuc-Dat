@@ -40,6 +40,9 @@ export function StructureForm({
     availableColumns, allColumns, preview, onSave, onCancel, isEdit = false
 }: StructureFormProps) {
 
+    // Ensure regularCategories is always an array
+    const safeRegularCategories = Array.isArray(regularCategories) ? regularCategories : []
+
     // Show message if no categories available
     if (!categories || categories.length === 0) {
         return (
@@ -133,7 +136,7 @@ export function StructureForm({
                         {categories
                             .filter(cat => cat.id !== category && !cat.is_primary)
                             .map(cat => {
-                                const isSelected = regularCategories.includes(cat.id)
+                                const isSelected = safeRegularCategories.includes(cat.id)
                                 return (
                                     <div
                                         key={cat.id}
@@ -156,11 +159,11 @@ export function StructureForm({
                             })}
                     </div>
 
-                    {regularCategories.length > 0 && (
+                    {safeRegularCategories.length > 0 && (
                         <div className="mt-4">
                             <span className="text-sm font-medium text-green-700">Đã chọn:</span>
                             <div className="flex flex-wrap gap-2 mt-2">
-                                {regularCategories.map(catId => {
+                                {safeRegularCategories.map(catId => {
                                     const cat = categories.find(c => c.id === catId)
                                     return cat ? (
                                         <span key={catId} className="px-2 py-1 bg-green-100 text-green-800 text-sm rounded">
@@ -175,7 +178,7 @@ export function StructureForm({
             )}
 
             {/* 4. Cấu trúc với ký hiệu liên kết */}
-            {!isEdit && (category || regularCategories.length > 0) && (
+            {!isEdit && (category || safeRegularCategories.length > 0) && (
                 <div className="bg-purple-50 p-6 rounded-lg border border-purple-200">
                     <label className="block text-lg font-semibold text-gray-900 mb-4">
                         🔗 Cấu trúc hoàn chỉnh
@@ -190,9 +193,9 @@ export function StructureForm({
                                 </span>
                             )}
 
-                            {regularCategories.length > 0 && (
+                            {safeRegularCategories.length > 0 && (
                                 <>
-                                    {regularCategories.map((catId, index) => {
+                                    {safeRegularCategories.map((catId, index) => {
                                         const cat = categories.find(c => c.id === catId)
                                         return cat ? (
                                             <Fragment key={catId}>
@@ -225,7 +228,7 @@ export function StructureForm({
                                         if (mainCat) preview += mainCat.name
                                     }
 
-                                    regularCategories.forEach((catId, index) => {
+                                    safeRegularCategories.forEach((catId, index) => {
                                         const cat = categories.find(c => c.id === catId)
                                         if (cat) {
                                             preview += (categorySeparators[index] || ' - ') + cat.name
@@ -301,8 +304,8 @@ export function StructureForm({
                                         }
 
                                         // Add regular categories in order
-                                        if (regularCategories) {
-                                            regularCategories.forEach(catId => {
+                                        if (safeRegularCategories) {
+                                            safeRegularCategories.forEach(catId => {
                                                 categoryOrder.push(catId)
                                                 columnsByCategory[catId] = []
                                             })

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Fragment } from 'react'
+import React, { useState, useEffect, Fragment, useRef } from 'react'
 import {
     Plus, Edit, Trash2, Save, X, ArrowUp, ArrowDown,
     Settings, Check, Star, StarOff, GripVertical, Crown
@@ -19,6 +19,12 @@ export default function StructureManagement() {
     const [options, setOptions] = useState<Record<string, any[]>>({})
     const [loading, setLoading] = useState(true)
 
+    // Cache for loaded columns to prevent duplicate API calls
+    const loadedColumnsCache = useRef<Record<string, any[]>>({})
+
+    // Debounce timer for column updates
+    const updateColumnsTimeoutRef = useRef<NodeJS.Timeout>()
+
     // Form states
     const [isAddingStructure, setIsAddingStructure] = useState(false)
     const [editingStructure, setEditingStructure] = useState<string | null>(null)
@@ -29,6 +35,7 @@ export default function StructureManagement() {
     const [newStructureSeparator, setNewStructureSeparator] = useState(' - ')
     const [newStructureCategory, setNewStructureCategory] = useState('')
     const [regularCategories, setRegularCategories] = useState<string[]>([])
+    const safeRegularCategories = Array.isArray(regularCategories) ? regularCategories : []
     const [categorySeparators, setCategorySeparators] = useState<string[]>([])
     const [newStructureColumns, setNewStructureColumns] = useState<string[]>([])
     const [newStructureCombinations, setNewStructureCombinations] = useState<string[]>([])
@@ -37,14 +44,40 @@ export default function StructureManagement() {
     // Handle main category selection
     const handleCategorySelect = (categoryId: string) => {
         setNewStructureCategory(categoryId)
-        updateAllColumns() // Recalculate all columns when main category changes
+
+        // Debounce column updates to prevent excessive API calls
+        if (updateColumnsTimeoutRef.current) {
+            clearTimeout(updateColumnsTimeoutRef.current)
+        }
+
+        updateColumnsTimeoutRef.current = setTimeout(async () => {
+            await updateAllColumns() // Recalculate all columns when main category changes
+        }, 300) // 300ms debounce
     }
 
     // Handle regular category selection
     const handleRegularCategorySelect = async (categoryId: string, isSelected: boolean) => {
-        const newRegularCategories = isSelected
-            ? [...regularCategories, categoryId]
-            : regularCategories.filter(id => id !== categoryId)
+        let newRegularCategories
+
+        if (isSelected) {
+            // Add category if not already selected (prevent duplicates)
+            if (!safeRegularCategories.includes(categoryId)) {
+                newRegularCategories = [...safeRegularCategories, categoryId]
+            } else {
+                newRegularCategories = safeRegularCategories // No change if already selected
+            }
+        } else {
+            // Remove category
+            newRegularCategories = safeRegularCategories.filter(id => id !== categoryId)
+        }
+
+        console.log('handleRegularCategorySelect:', {
+            categoryId,
+            isSelected,
+            oldRegularCategories: safeRegularCategories,
+            newRegularCategories,
+            wasDuplicate: isSelected && safeRegularCategories.includes(categoryId)
+        })
 
         setRegularCategories(newRegularCategories)
 
@@ -64,7 +97,14 @@ export default function StructureManagement() {
             setCategorySeparators(newSeparators)
         }
 
-        await updateAllColumns() // Recalculate all columns when regular categories change
+        // Debounce column updates to prevent excessive API calls
+        if (updateColumnsTimeoutRef.current) {
+            clearTimeout(updateColumnsTimeoutRef.current)
+        }
+
+        updateColumnsTimeoutRef.current = setTimeout(async () => {
+            await updateAllColumns() // Recalculate all columns when regular categories change
+        }, 300) // 300ms debounce
     }
 
     // Handle separator change
@@ -76,8 +116,8 @@ export default function StructureManagement() {
 
     // Update all columns from main category + regular categories
     const updateAllColumns = async () => {
-        const allCategoryIds = [newStructureCategory, ...regularCategories].filter(Boolean)
-        console.log('🔄 updateAllColumns called with:', { allCategoryIds, newStructureCategory, regularCategories })
+        const allCategoryIds = [newStructureCategory, ...safeRegularCategories].filter(Boolean)
+        console.log('🔄 updateAllColumns called with:', { allCategoryIds, newStructureCategory, regularCategories: safeRegularCategories })
 
         if (allCategoryIds.length === 0) {
             console.log('❌ No categories selected, clearing columns')
@@ -88,22 +128,48 @@ export default function StructureManagement() {
 
         try {
             const allColumns: string[] = []
+            const categoriesToLoad: string[] = []
 
+            // Check cache first
             for (const categoryId of allCategoryIds) {
-                console.log(`🔍 Loading columns for category ${categoryId}`)
-                const categoryColumns = await retryApiCall(() =>
-                    customProductService.getColumnsByCategory(categoryId, false)
-                )
-
-                console.log(`📊 Category ${categoryId} returned:`, categoryColumns)
-
-                if (categoryColumns && categoryColumns.length > 0) {
-                    const columnIds = categoryColumns.map(col => col.id)
-                    allColumns.push(...columnIds)
-                    console.log(`✅ Added ${columnIds.length} columns from category ${categoryId}:`, columnIds)
+                if (!loadedColumnsCache.current[categoryId]) {
+                    categoriesToLoad.push(categoryId)
                 } else {
-                    console.log(`⚠️ No columns found for category ${categoryId}`)
+                    console.log(`📋 Using cached columns for category ${categoryId}`)
+                    const cachedColumns = loadedColumnsCache.current[categoryId]
+                    if (cachedColumns && cachedColumns.length > 0) {
+                        allColumns.push(...cachedColumns.map(col => col.id))
+                    }
                 }
+            }
+
+            // Load missing categories in parallel
+            if (categoriesToLoad.length > 0) {
+                console.log(`🔍 Loading columns for ${categoriesToLoad.length} uncached categories:`, categoriesToLoad)
+
+                const columnPromises = categoriesToLoad.map(async (categoryId, index) => {
+                    // Add small delay to prevent overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, index * 100))
+
+                    const categoryColumns = await retryApiCall(() =>
+                        customProductService.getColumnsByCategory(categoryId, false)
+                    )
+
+                    // Cache the result
+                    loadedColumnsCache.current[categoryId] = categoryColumns || []
+
+                    return { categoryId, columns: categoryColumns }
+                })
+
+                const results = await Promise.all(columnPromises)
+
+                // Process results
+                results.forEach(({ categoryId, columns }) => {
+                    if (columns && columns.length > 0) {
+                        const columnIds = columns.map(col => col.id)
+                        allColumns.push(...columnIds)
+                    }
+                })
             }
 
             console.log('🎯 Final allColumns:', allColumns)
@@ -138,11 +204,11 @@ export default function StructureManagement() {
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
     // Helper function to retry API calls with exponential backoff
-    const retryApiCall = async <T>(
+    const retryApiCall = async function <T>(
         apiCall: () => Promise<T>,
         maxRetries: number = 3,
         baseDelay: number = 1000
-    ): Promise<T> => {
+    ): Promise<T> {
         let lastError: Error
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -704,7 +770,11 @@ export default function StructureManagement() {
                                             separator={editStructureSeparator}
                                             setSeparator={setEditStructureSeparator}
                                             category={structure.category_id}
-                                            setCategory={() => {}} // Read-only for edit
+                                            setCategory={() => { }} // Read-only for edit
+                                            regularCategories={[]} // Read-only for edit
+                                            onRegularCategorySelect={() => { }} // Read-only for edit
+                                            categorySeparators={[]} // Read-only for edit
+                                            onSeparatorChange={() => { }} // Read-only for edit
                                             categories={categories}
                                             selectedColumns={editStructureColumns}
                                             selectedCombinations={editStructureCombinations}
@@ -772,11 +842,10 @@ export default function StructureManagement() {
                                                             return (
                                                                 <span
                                                                     key={columnId}
-                                                                    className={`inline-flex items-center px-3 py-1 text-sm rounded-full ${
-                                                                        isPrimary
+                                                                    className={`inline-flex items-center px-3 py-1 text-sm rounded-full ${isPrimary
                                                                             ? 'bg-yellow-100 text-yellow-800'
                                                                             : 'bg-blue-100 text-blue-800'
-                                                                    }`}
+                                                                        }`}
                                                                 >
                                                                     {index + 1}. {getColumnName(columnId)}
                                                                     {isPrimary && <Crown className="w-3 h-3 ml-1" />}
@@ -848,13 +917,17 @@ interface StructureFormProps {
     onCancel: () => void
 }
 
+// StructureForm component - handles form for creating/editing structures
 function StructureForm({
     name, setName, description, setDescription, separator, setSeparator,
-    category, setCategory, regularCategories, onRegularCategorySelect, categorySeparators, onSeparatorChange, categories,
+    category, setCategory, regularCategories = [], onRegularCategorySelect, categorySeparators, onSeparatorChange, categories,
     selectedColumns, selectedCombinations, primaryColumn, setPrimaryColumn,
     onAddColumn, onRemoveColumn, onMoveColumn, onUpdateCombination,
     availableColumns, allColumns, preview, onSave, onCancel
 }: StructureFormProps) {
+
+    // Ensure regularCategories is always an array
+    const safeRegularCategories = Array.isArray(regularCategories) ? regularCategories : []
 
     // Show message if no categories available
     if (!categories || categories.length === 0) {
@@ -944,19 +1017,22 @@ function StructureForm({
 
                     {/* Available regular categories */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {categories
-                            .filter(cat => cat.id !== category && !cat.is_primary)
+                        {(() => {
+                            const availableRegularCategories = categories.filter(cat => cat.id !== category && !cat.is_primary)
+                            console.log(`Available regular categories: ${availableRegularCategories.length}`, availableRegularCategories.map(cat => cat.name))
+                            return availableRegularCategories
+                        })()
                             .map(cat => {
-                                const isSelected = regularCategories.includes(cat.id)
+                                const isSelected = safeRegularCategories.includes(cat.id)
+                                console.log(`Available category: ${cat.name} (${cat.id}) - selected: ${isSelected}`)
                                 return (
                                     <div
                                         key={cat.id}
                                         onClick={() => onRegularCategorySelect(cat.id, !isSelected)}
-                                        className={`cursor-pointer p-3 rounded-lg border-2 transition-all ${
-                                            isSelected
+                                        className={`cursor-pointer p-3 rounded-lg border-2 transition-all ${isSelected
                                                 ? 'border-green-500 bg-green-100 text-green-800'
                                                 : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50'
-                                        }`}
+                                            }`}
                                     >
                                         <div className="text-center">
                                             <div className="font-medium">{cat.name}</div>
@@ -970,11 +1046,11 @@ function StructureForm({
                     </div>
 
                     {/* Selected regular categories summary */}
-                    {regularCategories.length > 0 && (
+                    {safeRegularCategories.length > 0 && (
                         <div className="mt-4">
                             <span className="text-sm font-medium text-green-700">Đã chọn:</span>
                             <div className="flex flex-wrap gap-2 mt-2">
-                                {regularCategories.map(catId => {
+                                {safeRegularCategories.map(catId => {
                                     const cat = categories.find(c => c.id === catId)
                                     return cat ? (
                                         <span key={catId} className="px-2 py-1 bg-green-100 text-green-800 text-sm rounded">
@@ -989,7 +1065,7 @@ function StructureForm({
             )}
 
             {/* 4. Cấu trúc với ký hiệu liên kết */}
-            {(category || regularCategories.length > 0) && (
+            {(category || safeRegularCategories.length > 0) && (
                 <div className="bg-purple-50 p-6 rounded-lg border border-purple-200">
                     <label className="block text-lg font-semibold text-gray-900 mb-4">
                         🔗 Cấu trúc hoàn chỉnh
@@ -1007,40 +1083,34 @@ function StructureForm({
                             )}
 
                             {/* Show separator and regular categories if any */}
-                            {regularCategories.length > 0 && (
+                            {safeRegularCategories.length > 0 && (
                                 <>
-                                    {/* Separator between main and first regular category */}
-                                    <input
-                                        type="text"
-                                        value={categorySeparators[0] || ' - '}
-                                        onChange={(e) => onSeparatorChange(0, e.target.value)}
-                                        className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder=" - "
-                                    />
-
                                     {/* Regular categories with separators */}
-                                    {regularCategories.map((catId, index) => {
+                                    {safeRegularCategories.map((catId, index) => {
                                         const cat = categories.find(c => c.id === catId)
-                                        const separatorIndex = index + 1 // Offset by 1 since first separator is before first regular category
                                         return cat ? (
                                             <React.Fragment key={catId}>
-                                                {/* Separator input - between regular categories */}
-                                                {index > 0 && (
-                                                    <input
-                                                        type="text"
-                                                        value={categorySeparators[separatorIndex] || ' - '}
-                                                        onChange={(e) => onSeparatorChange(separatorIndex, e.target.value)}
-                                                        className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                        placeholder=" - "
-                                                    />
-                                                )}
+                                                {/* Separator before each regular category (including first one) */}
+                                                <input
+                                                    type="text"
+                                                    value={categorySeparators[index] || ' - '}
+                                                    onChange={(e) => onSeparatorChange(index, e.target.value)}
+                                                    className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder=" - "
+                                                />
 
                                                 {/* Category */}
                                                 <span className="px-3 py-2 bg-green-100 text-green-800 rounded-lg text-sm">
                                                     {cat.name}
                                                 </span>
                                             </React.Fragment>
-                                        ) : null
+                                        ) : (
+                                            <React.Fragment key={catId}>
+                                                <span className="px-3 py-2 bg-red-100 text-red-800 rounded-lg text-sm">
+                                                    Category not found: {catId}
+                                                </span>
+                                            </React.Fragment>
+                                        )
                                     })}
                                 </>
                             )}
@@ -1057,7 +1127,7 @@ function StructureForm({
                                         if (mainCat) preview += mainCat.name
                                     }
 
-                                    regularCategories.forEach((catId, index) => {
+                                    safeRegularCategories.forEach((catId, index) => {
                                         const cat = categories.find(c => c.id === catId)
                                         if (cat) {
                                             preview += (categorySeparators[index] || ' - ') + cat.name
@@ -1078,11 +1148,10 @@ function StructureForm({
                                 const column = availableColumns.find(col => col.id === columnId)
                                 const isPrimary = primaryColumn === columnId
                                 return (
-                                    <span key={columnId} className={`inline-flex items-center px-3 py-1 rounded-lg text-sm ${
-                                        isPrimary
+                                    <span key={columnId} className={`inline-flex items-center px-3 py-1 rounded-lg text-sm ${isPrimary
                                             ? 'bg-yellow-100 text-yellow-800 font-semibold'
                                             : 'bg-white border border-gray-300'
-                                    }`}>
+                                        }`}>
                                         {index + 1}. {column?.name || 'Cột'}
                                         {isPrimary && <span className="ml-1 text-yellow-600">⭐</span>}
                                         {index < selectedColumns.length - 1 && (
@@ -1129,8 +1198,8 @@ function StructureForm({
                                         }
 
                                         // Add regular categories in order
-                                        if (regularCategories) {
-                                            regularCategories.forEach(catId => {
+                                        if (safeRegularCategories) {
+                                            safeRegularCategories.forEach(catId => {
                                                 categoryOrder.push(catId)
                                                 columnsByCategory[catId] = []
                                             })

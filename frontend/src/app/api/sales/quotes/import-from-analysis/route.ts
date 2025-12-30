@@ -7,7 +7,7 @@ import { getServerSession } from 'next-auth'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     console.log('📥 Import request received:', {
       hasCustomer: !!body.customer,
       customerName: body.customer?.name,
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       isNewCustomer: body.is_new_customer,
       isNewProject: body.is_new_project
     })
-    
+
     // Get auth token from header
     const authHeader = request.headers.get('authorization')
     if (!authHeader) {
@@ -35,14 +35,14 @@ export async function POST(request: NextRequest) {
     // Forward to backend API
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const apiUrl = `${backendUrl}/api/sales/quotes/import-from-analysis`
-    
+
     console.log('📤 Forwarding to backend:', apiUrl)
     console.log('📦 Request body:', JSON.stringify({
       customer: body.customer?.name,
       project: body.project?.name,
       items: `${body.items?.length} items`
     }))
-    
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -60,12 +60,12 @@ export async function POST(request: NextRequest) {
         const error = await response.json()
         console.error('❌ Backend error response:', error)
         errorDetail = error.detail || error.message || errorDetail
-        
+
         return NextResponse.json(
-          { 
+          {
             error: errorDetail,
             detail: errorDetail,
-            status: response.status 
+            status: response.status
           },
           { status: response.status }
         )
@@ -73,10 +73,10 @@ export async function POST(request: NextRequest) {
         const errorText = await response.text()
         console.error('❌ Backend error text:', errorText)
         return NextResponse.json(
-          { 
+          {
             error: errorText || errorDetail,
             detail: errorText || errorDetail,
-            status: response.status 
+            status: response.status
           },
           { status: response.status }
         )
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       createdQuotes: result.createdQuotes,
       createdProducts: result.createdProducts
     })
-    
+
     return NextResponse.json(result)
 
   } catch (error) {

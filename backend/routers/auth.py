@@ -17,9 +17,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from config import settings
 from services.supabase_client import get_supabase_client
-# Temporarily disabled email service
-# from services.email_service import email_service
-email_service = None  # Email service temporarily disabled
+# Email service
+from services.email_service import email_service
 from models.user import User, UserCreate, UserUpdate, UserLogin, UserResponse
 from utils.auth import (
     create_access_token,

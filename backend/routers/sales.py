@@ -25,8 +25,7 @@ from services.supabase_client import get_supabase_client
 from services.journal_service import journal_service
 from services.project_validation_service import ProjectValidationService
 # Temporarily disabled email service
-# from services.email_service import email_service
-email_service = None  # Email service temporarily disabled
+from services.email_service import email_service
 from services.notification_service import notification_service
 from services.quote_service import quote_service
 from utils.file_utils import get_company_logo_path
@@ -1395,7 +1394,8 @@ async def preview_quote_email(
                 additional_notes=additional_notes,
                 company_info=company_info if company_info else None,
                 bank_info=bank_info if bank_info else None,
-                default_notes=default_notes
+                default_notes=default_notes,
+                logo_src="https://your-domain.com/logo.png"  # Update with actual logo URL
             )
             print(f"📝 Generated HTML from template")
         
@@ -1888,7 +1888,8 @@ async def send_quote_to_customer(
                                 additional_notes=additional_notes,
                                 company_info=company_info if company_info else None,
                                 bank_info=bank_info if bank_info else None,
-                                default_notes=default_notes
+                                default_notes=default_notes,
+                                logo_src="https://your-domain.com/logo.png"  # Update with actual logo URL
                             )
                             print(f"📝 Generated HTML from template")
                         
