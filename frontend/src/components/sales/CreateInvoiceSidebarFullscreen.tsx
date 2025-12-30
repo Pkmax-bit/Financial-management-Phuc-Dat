@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { 
-  X, 
-  FileText, 
-  User, 
-  Calendar, 
-  DollarSign, 
-  Plus, 
-  Trash2, 
+import {
+  X,
+  FileText,
+  User,
+  Calendar,
+  DollarSign,
+  Plus,
+  Trash2,
   Save,
   Send,
   Package,
@@ -94,7 +94,7 @@ interface CreateInvoiceSidebarProps {
 // Helper function to convert category names to Vietnamese with diacritics
 const getCategoryDisplayName = (categoryName: string | undefined) => {
   if (!categoryName) return 'Khác'
-  
+
   const categoryMap: Record<string, string> = {
     'Thiet bi dien tu': 'Thiết bị điện tử',
     'Noi that': 'Nội thất',
@@ -102,7 +102,7 @@ const getCategoryDisplayName = (categoryName: string | undefined) => {
     'Thiet bi van phong': 'Thiết bị văn phòng',
     'Phan mem': 'Phần mềm'
   }
-  
+
   return categoryMap[categoryName] || categoryName
 }
 
@@ -131,11 +131,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const [autoCalcDimensions, setAutoCalcDimensions] = useState(true)
   // Always-on auto adjustment
   const autoAdjustEnabled = true
-  const [descriptionModal, setDescriptionModal] = useState<{ isOpen: boolean; index: number; description: string; productName: string }>({ 
-    isOpen: false, 
-    index: -1, 
-    description: '', 
-    productName: '' 
+  const [descriptionModal, setDescriptionModal] = useState<{ isOpen: boolean; index: number; description: string; productName: string }>({
+    isOpen: false,
+    index: -1,
+    description: '',
+    productName: ''
   })
 
   // Preloaded adjustment rules for instant access
@@ -145,7 +145,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   const adjustmentTimersRef = useRef<Map<string, any>>(new Map())
   const [showRulesDialog, setShowRulesDialog] = useState(false)
   const [manualAdjusting, setManualAdjusting] = useState(false)
-  
+
   // Tour state
   const INVOICE_FORM_TOUR_STORAGE_KEY = 'invoice-form-tour-status-v1'
   const [isInvoiceTourRunning, setIsInvoiceTourRunning] = useState(false)
@@ -157,16 +157,16 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
   type InvoiceShepherdTour = InstanceType<InvoiceShepherdType['Tour']>
   const [visibleColumns, setVisibleColumns] = useState({
     name: true,
-    description: false,
+    description: true,
     quantity: true,
     unit: true,
     unit_price: true,
     total_price: true,
     area: true,
-    volume: false, // Mặc định ẩn thể tích
+    volume: true,
     height: true,
     length: true,
-    depth: false, // Mặc định ẩn độ sâu
+    depth: true,
     components_block: true
   })
 
@@ -179,7 +179,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     issue_date: new Date().toISOString().split('T')[0],
     due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     subtotal: 0,
-    tax_rate: 10,
+    tax_rate: 0,
     tax_amount: 0,
     discount_amount: 0,
     total_amount: 0,
@@ -241,7 +241,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       unit: '',
       unit_price: 0,
       total_price: 0,
-      tax_rate: 10,  // Default tax rate for new items
+      tax_rate: 0,  // Default tax rate for new items
       area: null,
       baseline_area: null,
       volume: null,
@@ -339,19 +339,19 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
   // Grid dùng chung cho bảng sản phẩm + block vật tư để header/body luôn thẳng cột
   const gridTemplateColumns = [
-    visibleColumns.name && 'minmax(200px, auto)',
-    visibleColumns.description && '150px',
-    visibleColumns.quantity && 'minmax(80px, auto)',
-    visibleColumns.unit && '80px',
-    visibleColumns.unit_price && 'minmax(100px, auto)',
-    visibleColumns.total_price && 'minmax(120px, auto)',
-    visibleColumns.area && 'minmax(80px, auto)',
-    visibleColumns.volume && 'minmax(80px, auto)',
-    visibleColumns.height && 'minmax(80px, auto)',
-    visibleColumns.length && 'minmax(80px, auto)',
-    visibleColumns.depth && 'minmax(80px, auto)',
-    // Components block width per component: unit 80 + unit_price 100 + quantity 80 + total 120 = 380
-    visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * (80 + 100 + 80 + 120)}px, auto)`
+    visibleColumns.name && 'minmax(250px, 2fr)',
+    visibleColumns.description && 'minmax(200px, 3fr)',
+    visibleColumns.quantity && 'minmax(80px, 1fr)',
+    visibleColumns.unit && 'minmax(80px, 0.5fr)',
+    visibleColumns.unit_price && 'minmax(120px, 1fr)',
+    visibleColumns.total_price && 'minmax(120px, 1fr)',
+    visibleColumns.area && 'minmax(90px, 0.8fr)',
+    visibleColumns.volume && 'minmax(90px, 0.8fr)',
+    visibleColumns.height && 'minmax(90px, 0.8fr)',
+    visibleColumns.length && 'minmax(90px, 0.8fr)',
+    visibleColumns.depth && 'minmax(90px, 0.8fr)',
+    // Components block width - use auto to fit content or flexible
+    visibleColumns.components_block && `minmax(${(headerComponents.length || 1) * 100}px, auto)`
   ].filter(Boolean).join(' ')
 
   // Hide sidebar when modal opens/closes
@@ -579,7 +579,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     if (loading && invoiceId) {
       return
     }
-    
+
     if (formData.customer_id) {
       fetchProjectsByCustomer(formData.customer_id)
     } else {
@@ -628,21 +628,21 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     try {
       setLoading(true)
       console.log('🔍 Fetching customers from database...')
-      
+
       // Use Supabase client directly to get real data
       const { data, error } = await supabase
         .from('customers')
         .select('*')
         .limit(10)
-      
+
       if (error) {
         console.error('❌ Supabase error:', error)
         throw error
       }
-      
+
       console.log('🔍 Real customers data from database:', data)
       setCustomers(data || [])
-      
+
       if (!data || data.length === 0) {
         alert('Không có khách hàng nào trong database. Vui lòng tạo khách hàng trước.')
       }
@@ -663,7 +663,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     try {
       setLoadingProjects(true)
       console.log('🔍 Fetching projects for customer:', customerId)
-      
+
       // Use Supabase directly to get projects for the customer
       const { data: projects, error } = await supabase
         .from('projects')
@@ -671,12 +671,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         .eq('customer_id', customerId)
         .in('status', ['planning', 'active'])
         .order('name')
-      
+
       if (error) {
         console.error('❌ Supabase error fetching projects:', error)
         throw error
       }
-      
+
       console.log('🔍 Projects data for customer:', projects)
       setProjects(projects || [])
     } catch (error) {
@@ -692,7 +692,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     try {
       setLoadingProducts(true)
       console.log('🔍 Fetching products from database...')
-      
+
       // Use Supabase client directly to get products
       const { data, error } = await supabase
         .from('products')
@@ -703,14 +703,14 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         .eq('is_active', true)
         .order('name')
         .limit(50)
-      
+
       if (error) {
         console.error('❌ Supabase error:', error)
         throw error
       }
-      
+
       console.log('🔍 Products data from database:', data)
-      
+
       if (data && data.length > 0) {
         // Transform data to match the expected format
         const transformedProducts = data.map(product => ({
@@ -841,9 +841,9 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       setLoadingTaskGroups(true)
       const groups = await apiGet('/api/tasks/groups')
       setTaskGroups(groups || [])
-      
+
       // Tìm nhóm "Dự án cửa" và set làm mặc định
-      const duAnCuaGroup = groups.find((g: any) => 
+      const duAnCuaGroup = groups.find((g: any) =>
         g.name && (g.name.toLowerCase().includes('dự án cửa') || g.name.toLowerCase().includes('du an cua'))
       )
       if (duAnCuaGroup) {
@@ -918,44 +918,44 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
   const loadInvoiceData = async () => {
     if (!invoiceId) return
-    
+
     try {
       setLoading(true)
       console.log('🔍 Loading invoice data for ID:', invoiceId)
-      
+
       // Load invoice
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .select('*')
         .eq('id', invoiceId)
         .single()
-      
+
       if (invoiceError) {
         console.error('❌ Error loading invoice:', invoiceError)
         alert('Không thể tải hóa đơn: ' + invoiceError.message)
         return
       }
-      
+
       console.log('✅ Invoice loaded:', invoice)
-      
+
       // Load invoice items FIRST before setting formData to avoid race conditions
       const { data: invoiceItems, error: itemsError } = await supabase
         .from('invoice_items')
         .select('*')
         .eq('invoice_id', invoiceId)
         .order('created_at', { ascending: true })
-      
+
       console.log('🔍 Invoice items query result:', { invoiceItems, itemsError, count: invoiceItems?.length || 0 })
-      
+
       if (itemsError) {
         console.error('❌ Error loading invoice items:', itemsError)
         alert('Không thể tải danh sách sản phẩm: ' + itemsError.message)
       } else {
         console.log('✅ Invoice items loaded successfully:', invoiceItems?.length || 0, 'items')
-        
+
         if (invoiceItems && invoiceItems.length > 0) {
           console.log('🔍 Raw invoice items data:', invoiceItems)
-          
+
           const loadedItems: InvoiceItem[] = invoiceItems.map((item: any) => {
             console.log('🔍 Mapping invoice item:', {
               id: item.id,
@@ -964,7 +964,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               unit_price: item.unit_price,
               product_service_id: item.product_service_id
             })
-            
+
             return {
               id: item.id,
               invoice_id: item.invoice_id,
@@ -975,7 +975,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               unit: item.unit || '',
               unit_price: Number(item.unit_price) || 0,
               total_price: Number(item.total_price) || 0,
-              tax_rate: item.tax_rate != null ? Number(item.tax_rate) : (invoice.tax_rate != null ? Number(invoice.tax_rate) : 10),  // Load tax_rate from item or use invoice default
+              tax_rate: item.tax_rate != null ? Number(item.tax_rate) : (invoice.tax_rate != null ? Number(invoice.tax_rate) : 0),  // Load tax_rate from item or use invoice default
               area: item.area != null ? Number(item.area) : null,
               baseline_area: item.area != null ? Number(item.area) : null, // Use current area as baseline
               volume: item.volume != null ? Number(item.volume) : null,
@@ -988,24 +988,24 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               // Load components from product_components JSONB column if exists
               components: Array.isArray(item.product_components) && item.product_components.length > 0
                 ? item.product_components.map((comp: any) => ({
-                    expense_object_id: comp.expense_object_id,
-                    name: comp.name,
-                    unit: comp.unit || '',
-                    unit_price: Number(comp.unit_price || 0),
-                    quantity: Number(comp.quantity || 0),
-                    total_price: Number(comp.total_price || 0),
-                    baseline_quantity: comp.quantity != null ? Number(comp.quantity) : 0 // Store baseline for quantity adjustments
-                  }))
+                  expense_object_id: comp.expense_object_id,
+                  name: comp.name,
+                  unit: comp.unit || '',
+                  unit_price: Number(comp.unit_price || 0),
+                  quantity: Number(comp.quantity || 0),
+                  total_price: Number(comp.total_price || 0),
+                  baseline_quantity: comp.quantity != null ? Number(comp.quantity) : 0 // Store baseline for quantity adjustments
+                }))
                 : []
             }
           })
-          
+
           console.log('🔍 Mapped invoice items:', loadedItems)
           console.log('🔍 Setting items with', loadedItems.length, 'items')
-          
+
           // Set items immediately after mapping
           setItems(loadedItems)
-          
+
           // Verify items were set
           setTimeout(() => {
             console.log('🔍 Items state after setItems:', loadedItems.length)
@@ -1013,14 +1013,14 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         } else {
           console.log('⚠️ No invoice items found, setting empty item')
           // No items, start with empty item
-          setItems([{ 
-            name_product: '', 
-            description: '', 
-            quantity: 1, 
-            unit: '', 
-            unit_price: 0, 
+          setItems([{
+            name_product: '',
+            description: '',
+            quantity: 1,
+            unit: '',
+            unit_price: 0,
             total_price: 0,
-            tax_rate: invoice.tax_rate ?? 10,  // Use invoice tax_rate as default
+            tax_rate: invoice.tax_rate ?? 0,  // Use invoice tax_rate as default
             area: null,
             volume: null,
             height: null,
@@ -1029,11 +1029,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           }])
         }
       }
-      
+
       // Fill form data AFTER loading items to avoid race conditions
       // Use setTimeout to ensure items are set before formData triggers other useEffects
       await new Promise(resolve => setTimeout(resolve, 50))
-      
+
       setFormData({
         invoice_number: invoice.invoice_number || '',
         customer_id: invoice.customer_id || '',
@@ -1042,7 +1042,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         issue_date: invoice.issue_date ? String(invoice.issue_date).slice(0, 10) : new Date().toISOString().split('T')[0],
         due_date: invoice.due_date ? String(invoice.due_date).slice(0, 10) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         subtotal: invoice.subtotal || 0,
-        tax_rate: invoice.tax_rate || 10,
+        tax_rate: invoice.tax_rate || 0,
         tax_amount: invoice.tax_amount || 0,
         discount_amount: invoice.discount_amount || 0,
         total_amount: invoice.total_amount || 0,
@@ -1054,14 +1054,14 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         terms_and_conditions: invoice.terms_and_conditions || 'Hóa đơn có hiệu lực từ ngày phát hành.',
         created_by: invoice.created_by || ''
       })
-      
+
       // Double-check items are still set after formData update
       if (invoiceItems && invoiceItems.length > 0) {
         setTimeout(() => {
           console.log('🔍 Final check - items should be set:', invoiceItems.length)
         }, 200)
       }
-      
+
       // Load projects for the customer
       if (invoice.customer_id) {
         // Fetch projects for customer
@@ -1073,7 +1073,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             .eq('customer_id', invoice.customer_id)
             .in('status', ['planning', 'active'])
             .order('name')
-          
+
           if (!projectsError && projectsData) {
             setProjects(projectsData || [])
           }
@@ -1095,17 +1095,17 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
     // Calculate total tax from all items (each item has its own tax_rate)
     const total_tax = items.reduce((sum, item) => {
-      const itemTaxRate = item.tax_rate ?? formData.tax_rate ?? 10
+      const itemTaxRate = item.tax_rate ?? formData.tax_rate ?? 0
       return sum + (item.total_price * (itemTaxRate / 100))
     }, 0)
     // Total amount = subtotal + total tax from all items - discount
     const total_amount = subtotal + total_tax - formData.discount_amount
-    
-    setFormData(prev => ({ 
-      ...prev, 
-      subtotal, 
+
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
       tax_amount: total_tax,  // Store total tax for reference
-      total_amount 
+      total_amount
     }))
   }
 
@@ -1117,7 +1117,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       unit: '',
       unit_price: 0,
       total_price: 0,
-      tax_rate: formData.tax_rate ?? 10,  // Use form tax_rate as default for new items
+      tax_rate: formData.tax_rate ?? 0,  // Use form tax_rate as default for new items
       area: null,
       volume: null,
       height: null,
@@ -1146,12 +1146,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       unit: 'm²', // Default unit for custom products
       unit_price: productData.unit_price,
       total_price: productData.total_price || (productData.unit_price * (productData.area || 1)),
-      tax_rate: formData.tax_rate ?? 10,
+      tax_rate: formData.tax_rate ?? 0,
       area: productData.area || null,
       volume: productData.volume || null,
-      height: productData.height ? productData.height / 1000 : null, // Convert mm to m
-      length: productData.width ? productData.width / 1000 : null, // Convert mm to m
-      depth: productData.depth ? productData.depth / 1000 : null // Convert mm to m
+      height: productData.height || null,
+      length: productData.width || null, // Map width to length
+      depth: productData.depth || null
     }
 
     console.log('📝 New invoice item created:', newItem)
@@ -1368,48 +1368,48 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     const oldHeight = oldItem.height
     const oldLength = oldItem.length
     const oldDepth = oldItem.depth
-    
+
     updatedItems[index] = { ...updatedItems[index], [field]: value }
     const curr = updatedItems[index]
-    
+
     // Convert dimensions from mm to meters for calculations
     const lengthMm = curr.length != null ? Number(curr.length) : null
     const heightMm = curr.height != null ? Number(curr.height) : null
     const depthMm = curr.depth != null ? Number(curr.depth) : null
-    
+
     let autoAreaChanged = false
     let autoVolumeChanged = false
-    
+
     // Mark manual overrides for total_price
     if (field === 'total_price') {
       updatedItems[index].total_is_manual = value != null
     }
-    
+
     // Recalculate total_price cho dòng sản phẩm khi thay đổi các trường nguồn
     if (field === 'quantity' || field === 'unit_price' || field === 'area') {
       updatedItems[index].total_price = computeItemTotal(updatedItems[index])
       updatedItems[index].total_is_manual = false
     }
-    
+
     // When quantity changes, adjust components quantity proportionally
     if (field === 'quantity') {
       const newQuantity = Number(value || 0)
       const oldQty = Number(oldQuantity || 1)
-      
+
       if (oldQty > 0 && newQuantity > 0 && curr.components && Array.isArray(curr.components) && curr.components.length > 0) {
         const updatedComponents = curr.components.map((component: any) => {
           const currentComponentQuantity = Number(component.quantity || 0)
           const baseComponentQuantityPerUnit = currentComponentQuantity / oldQty
           const newComponentQuantity = baseComponentQuantityPerUnit * newQuantity
           const adjustedUnitPrice = Number(component.unit_price || 0)
-          
+
           return {
             ...component,
             quantity: Math.max(0, newComponentQuantity),
             total_price: Math.max(0, newComponentQuantity) * adjustedUnitPrice
           }
         })
-        
+
         curr.components = updatedComponents
       }
     }
@@ -1479,7 +1479,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         }
       }
     }
-    
+
     setItems(updatedItems)
 
     // Apply material adjustment rules when dimensions or quantity change (if enabled)
@@ -1557,7 +1557,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     comp.total_price = qty * price
     if (idx >= 0) comps[idx] = comp
     else comps.push(comp)
-    ;(updated[itemIndex] as any).components = comps
+      ; (updated[itemIndex] as any).components = comps
     // Cập nhật lại thành tiền dòng hóa đơn sau khi thay đổi vật tư
     updated[itemIndex].total_price = computeItemTotal(updated[itemIndex])
     setItems(updated)
@@ -1647,12 +1647,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           : (displayFractionDigits != null
             ? new Intl.NumberFormat('vi-VN', { minimumFractionDigits: displayFractionDigits, maximumFractionDigits: displayFractionDigits }).format(value)
             : formatNumber(value)))
-      
+
       // Truncate display to 15 characters for total_price and unit_price fields
-      const truncatedDisplay = (field === 'total_price' || field === 'unit_price') && display.length > 15 
-        ? display.substring(0, 15) + '...' 
+      const truncatedDisplay = (field === 'total_price' || field === 'unit_price') && display.length > 15
+        ? display.substring(0, 15) + '...'
         : display
-      
+
       return (
         <div
           className={`w-full border border-gray-300 rounded-md px-2 py-1 text-xs text-black text-right bg-white cursor-text ${(field === 'total_price' || field === 'unit_price') ? 'max-w-[15ch] truncate' : ''}`}
@@ -1794,7 +1794,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         total_price: areaVal != null && isFinite(areaVal) && areaVal > 0
           ? unitPrice * areaVal
           : (base.quantity || 1) * unitPrice,
-        tax_rate: base.tax_rate ?? formData.tax_rate ?? 10,  // Keep existing tax_rate or use form default
+        tax_rate: base.tax_rate ?? formData.tax_rate ?? 0,  // Keep existing tax_rate or use form default
         area: product.area ?? null,
         volume: product.volume ?? null,
         height: product.height ?? null,
@@ -1824,11 +1824,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
   const handleSubmit = async (sendImmediately = false) => {
     setSubmitting(true)
-    
+
     try {
       // Get current user for created_by
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       let created_by = null
       if (user?.id) {
         const { data: employee } = await supabase
@@ -1836,12 +1836,12 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           .select('id')
           .eq('user_id', user.id)
           .single()
-        
+
         if (employee) {
           created_by = employee.id
         }
       }
-      
+
       const invoiceData = {
         invoice_number: formData.invoice_number,
         customer_id: formData.customer_id,
@@ -1878,10 +1878,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           console.error('Invoice update error:', invoiceError)
           throw new Error(`Lỗi cập nhật hóa đơn: ${invoiceError.message}`)
         }
-        
+
         invoice = updatedInvoice
         console.log('Invoice updated successfully:', invoice)
-        
+
         // Delete existing invoice items
         const { error: deleteError } = await supabase
           .from('invoice_items')
@@ -1912,7 +1912,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             depth: item.depth ?? null
           }))
         })
-        
+
         invoice = result
         console.log('Invoice created successfully:', invoice)
       }
@@ -1942,7 +1942,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             unit: item.unit,
             unit_price: item.unit_price,
             total_price: item.total_price,
-            tax_rate: item.tax_rate ?? formData.tax_rate ?? 10,  // Save tax_rate for each item
+            tax_rate: item.tax_rate ?? formData.tax_rate ?? 0,  // Save tax_rate for each item
             area: item.area,
             volume: item.volume,
             height: item.height,
@@ -1961,7 +1961,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           // Don't throw error here, invoice was saved successfully
         }
       }
-        
+
       // If sending immediately, also send the invoice
       if (sendImmediately) {
         await apiPost(`/api/sales/invoices/${currentInvoiceId}/send`, {})
@@ -1992,7 +1992,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         </style>
       `
       document.body.appendChild(successMessage)
-      
+
       // Auto remove success message after 5 seconds
       setTimeout(() => {
         if (document.body.contains(successMessage)) {
@@ -2020,7 +2020,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       issue_date: new Date().toISOString().split('T')[0],
       due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       subtotal: 0,
-      tax_rate: 10,
+      tax_rate: 0,
       tax_amount: 0,
       discount_amount: 0,
       total_amount: 0,
@@ -2032,14 +2032,14 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       terms_and_conditions: 'Hóa đơn có hiệu lực từ ngày phát hành.',
       created_by: ''
     })
-    setItems([{ 
-      name_product: '', 
-      description: '', 
-      quantity: 1, 
-      unit: '', 
-      unit_price: 0, 
+    setItems([{
+      name_product: '',
+      description: '',
+      quantity: 1,
+      unit: '',
+      unit_price: 0,
       total_price: 0,
-      tax_rate: formData.tax_rate ?? 10,  // Use form tax_rate as default
+      tax_rate: formData.tax_rate ?? 0,  // Use form tax_rate as default
       area: null,
       volume: null,
       height: null,
@@ -2071,11 +2071,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
             <button
               onClick={() => startInvoiceTour()}
               disabled={isInvoiceTourRunning || submitting}
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                isInvoiceTourRunning || submitting
-                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                  : 'text-white bg-blue-600 hover:bg-blue-700'
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${isInvoiceTourRunning || submitting
+                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                : 'text-white bg-blue-600 hover:bg-blue-700'
+                }`}
               title="Bắt đầu hướng dẫn tạo hóa đơn"
             >
               <CircleHelp className="h-4 w-4" />
@@ -2257,24 +2256,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-300 rounded-md overflow-hidden">
+              <div className="bg-white border border-gray-300 rounded-md overflow-hidden w-full">
                 {/* Header */}
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-300">
-                  <div className="grid gap-4 text-sm font-medium text-black" style={{
-                    gridTemplateColumns: [
-                      visibleColumns.name && '2fr',
-                      visibleColumns.description && '150px', 
-                      visibleColumns.quantity && '1fr',
-                      visibleColumns.unit && '1fr',
-                      visibleColumns.unit_price && '1.5fr',
-                      visibleColumns.total_price && '1.5fr',
-                      visibleColumns.area && '1fr',
-                      visibleColumns.volume && '1fr',
-                      visibleColumns.height && '1fr',
-                      visibleColumns.length && '1fr',
-                      visibleColumns.depth && '1fr'
-                    ].filter(Boolean).join(' ')
-                  }}>
+                  <div className="grid gap-4 text-sm font-medium text-black" style={{ gridTemplateColumns }}>
                     {visibleColumns.name && <div>Tên sản phẩm</div>}
                     {visibleColumns.description && <div>Mô tả</div>}
                     {visibleColumns.quantity && <div>Số lượng</div>}
@@ -2293,21 +2278,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 <div className="divide-y divide-gray-300">
                   {items.map((item, index) => (
                     <div key={index} className="px-4 py-3">
-                      <div className="grid gap-4 items-center" style={{
-                        gridTemplateColumns: [
-                          visibleColumns.name && '2fr',
-                          visibleColumns.description && '150px', 
-                          visibleColumns.quantity && '1fr',
-                          visibleColumns.unit && '1fr',
-                          visibleColumns.unit_price && '1.5fr',
-                          visibleColumns.total_price && '1.5fr',
-                          visibleColumns.area && '1fr',
-                          visibleColumns.volume && '1fr',
-                          visibleColumns.height && '1fr',
-                          visibleColumns.length && '1fr',
-                          visibleColumns.depth && '1fr'
-                        ].filter(Boolean).join(' ')
-                      }}>
+                      <div className="grid gap-4 items-center" style={{ gridTemplateColumns }}>
                         {visibleColumns.name && (
                           <div>
                             <div className="flex gap-2">
@@ -2411,7 +2382,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                   <span className="text-xs text-gray-500">+ Thuế:</span>
                                   <input
                                     type="number"
-                                    value={item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 10)}
+                                    value={item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 0)}
                                     onChange={(e) => {
                                       const newTaxRate = parseFloat(e.target.value) || 0
                                       const updatedItems = [...items]
@@ -2426,7 +2397,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                   />
                                   <span className="text-xs text-gray-500">%</span>
                                   <span className="text-xs text-gray-500">
-                                    = {formatCurrency(item.total_price * ((item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 10)) / 100))}
+                                    = {formatCurrency(item.total_price * ((item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 0)) / 100))}&nbsp;VND \u003cbr /\u003e
                                   </span>
                                 </div>
                               </div>
@@ -2555,10 +2526,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                               {(headerComponents.length > 0 ? headerComponents : [{}]).flatMap((hc: any, idx: number) => {
                                 const realMatch: any =
                                   (item as any).components &&
-                                  Array.isArray((item as any).components)
+                                    Array.isArray((item as any).components)
                                     ? (item as any).components.find(
-                                        (c: any) => String(c.expense_object_id) === String(hc.expense_object_id)
-                                      )
+                                      (c: any) => String(c.expense_object_id) === String(hc.expense_object_id)
+                                    )
                                     : null
                                 if (!realMatch) {
                                   return []
@@ -2783,7 +2754,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 />
               </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto bg-gray-50">
               {loadingProducts ? (
                 <div className="text-center py-8">
@@ -2828,10 +2799,10 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                           </div>
 
                           {isExpanded && (
-                        <div className="space-y-2">
-                          {categoryProducts.map((product) => (
+                            <div className="space-y-2">
+                              {categoryProducts.map((product) => (
                                 <label
-                              key={product.id}
+                                  key={product.id}
                                   className="p-4 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-3"
                                 >
                                   <input
@@ -2845,11 +2816,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                     className="h-4 w-4"
                                   />
                                   <div className="grid grid-cols-6 gap-3 items-center w-full">
-                                <div className="col-span-2">
-                                  <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
-                                  <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
-                                    {category}
-                                  </div>
+                                    <div className="col-span-2">
+                                      <h5 className="font-semibold text-gray-800 text-sm mb-1">{product.name}</h5>
+                                      <div className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded inline-block">
+                                        {category}
+                                      </div>
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation()
@@ -2863,53 +2834,53 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                           return variants.length > 1 ? `Chọn biến thể (${variants.length})` : 'Chọn sản phẩm này'
                                         })()}
                                       </button>
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
                                         <span className="font-medium">Đơn vị:</span><br />
-                                    {product.unit || 'Chưa có'}
-                                  </span>
-                                </div>
-                                <div className="col-span-1">
-                                  {product.unit_price ? (
-                                    <span className="text-sm font-bold text-green-600">
+                                        {product.unit || 'Chưa có'}
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1">
+                                      {product.unit_price ? (
+                                        <span className="text-sm font-bold text-green-600">
                                           <span className="font-medium">Đơn giá:</span><br />
-                                      {formatCurrency(product.unit_price)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-sm text-gray-400">
+                                          {formatCurrency(product.unit_price)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-sm text-gray-400">
                                           <span className="font-medium">Đơn giá:</span><br />
-                                      Chưa có
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
+                                          Chưa có
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
                                         <span className="font-medium">Kích thước:</span><br />
-                                    <div className="text-xs space-y-1">
-                                      {product.area && <div>📐 Diện tích: {product.area} m²</div>}
-                                      {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
+                                        <div className="text-xs space-y-1">
+                                          {product.area && <div>📐 Diện tích: {product.area} m²</div>}
+                                          {product.volume && <div>📦 Thể tích: {product.volume} m³</div>}
                                           {product.height && <div>📏 Cao: {product.height} mm</div>}
                                           {product.length && <div>📏 Dài: {product.length} mm</div>}
                                           {product.depth && <div>📏 Sâu: {product.depth} mm</div>}
                                           {!product.area && !product.volume && !product.height && !product.length && !product.depth && (
-                                        <div className="text-gray-400">Chưa có kích thước</div>
+                                            <div className="text-gray-400">Chưa có kích thước</div>
                                           )}
+                                        </div>
+                                      </span>
                                     </div>
-                                  </span>
-                                </div>
-                                <div className="col-span-1">
-                                  <span className="text-sm text-gray-500">
+                                    <div className="col-span-1">
+                                      <span className="text-sm text-gray-500">
                                         <span className="font-medium">Mô tả:</span><br />
-                                    {product.description || 'Không có mô tả'}
-                                  </span>
-                                </div>
-                              </div>
+                                        {product.description || 'Không có mô tả'}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </label>
-                          ))}
-                        </div>
+                              ))}
+                            </div>
                           )}
-                      </div>
+                        </div>
                       )
                     })
                   })()}
@@ -3045,11 +3016,11 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
       {/* Description Modal */}
       {descriptionModal.isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none"
           onClick={() => setDescriptionModal({ isOpen: false, index: -1, description: '', productName: '' })}
         >
-          <div 
+          <div
             className="bg-white rounded-lg shadow-2xl border-2 border-blue-500 max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col pointer-events-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -3065,7 +3036,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             {/* Content */}
             <div className="p-6 flex-1 overflow-y-auto">
               <textarea
@@ -3078,7 +3049,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 autoFocus
               />
             </div>
-            
+
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200">
               <button
