@@ -15,6 +15,42 @@ const CACHE_TIMEOUT = 5 * 60 * 1000 // 5 minutes
 // Debounce map to prevent rapid successive calls
 const pendingRequests = new Map<string, Promise<any[]>>()
 
+// Helper function to fetch options
+const _fetchOptions = async (url: string, token: string, columnId?: string, activeOnly?: boolean, cacheKey?: string): Promise<CustomProductOption[]> => {
+    const response = await fetch(getApiEndpoint(url), {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    })
+
+    if (!response.ok) {
+        if (response.status === 401) {
+            throw new Error('Authentication failed. Please log in again.')
+        } else if (response.status === 403) {
+            throw new Error('You do not have permission to access this resource.')
+        } else if (response.status === 429) {
+            throw new Error('Too many requests. Please wait a moment and try again.')
+        } else if (response.status >= 500) {
+            throw new Error('Server error. Please try again later.')
+        } else {
+            throw new Error(`Failed to fetch options: ${response.status} ${response.statusText}`)
+        }
+    }
+
+    const data = await response.json()
+
+    // Cache the results if cacheKey is provided
+    if (cacheKey) {
+        optionsCache.set(cacheKey, {
+            data: data,
+            timestamp: Date.now()
+        })
+    }
+
+    return data
+}
+
 export const customProductService = {
     // Categories
     getCategories: async (activeOnly = true): Promise<CustomProductCategory[]> => {
@@ -193,7 +229,7 @@ export const customProductService = {
                 const cacheKey = `${columnId}_${activeOnly}`
 
                 // Create the request promise and store it to prevent duplicate calls
-                const requestPromise = this._fetchOptions(url, token, columnId, activeOnly, cacheKey)
+                const requestPromise = _fetchOptions(url, token, columnId, activeOnly, cacheKey)
                 pendingRequests.set(cacheKey, requestPromise)
 
                 try {
@@ -205,7 +241,7 @@ export const customProductService = {
             }
 
             // For non-column-specific requests, just fetch directly
-            return await this._fetchOptions(url, token, columnId, activeOnly)
+            return await _fetchOptions(url, token, columnId, activeOnly)
             const response = await fetch(getApiEndpoint(url), {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -250,40 +286,6 @@ export const customProductService = {
         }
     },
 
-    _fetchOptions: async (url: string, token: string, columnId?: string, activeOnly?: boolean, cacheKey?: string): Promise<CustomProductOption[]> => {
-        const response = await fetch(getApiEndpoint(url), {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        })
-
-        if (!response.ok) {
-            if (response.status === 401) {
-                throw new Error('Authentication failed. Please log in again.')
-            } else if (response.status === 403) {
-                throw new Error('You do not have permission to access this resource.')
-            } else if (response.status === 429) {
-                throw new Error('Too many requests. Please wait a moment and try again.')
-            } else if (response.status >= 500) {
-                throw new Error('Server error. Please try again later.')
-            } else {
-                throw new Error(`Failed to fetch options: ${response.status} ${response.statusText}`)
-            }
-        }
-
-        const data = await response.json()
-
-        // Cache the results if cacheKey is provided
-        if (cacheKey) {
-            optionsCache.set(cacheKey, {
-                data: data,
-                timestamp: Date.now()
-            })
-        }
-
-        return data
-    },
 
     createProduct: async (product: CreateCustomProductPayload): Promise<CustomProduct> => {
         const session = await supabase.auth.getSession()

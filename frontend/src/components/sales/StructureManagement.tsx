@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Fragment, useRef } from 'react'
+import React, { useState, useEffect, Fragment, useRef, useCallback } from 'react'
 import {
     Plus, Edit, Trash2, Save, X, ArrowUp, ArrowDown,
     Settings, Check, Star, StarOff, GripVertical, Crown
@@ -19,11 +19,11 @@ export default function StructureManagement() {
     const [options, setOptions] = useState<Record<string, any[]>>({})
     const [loading, setLoading] = useState(true)
 
-    // Cache for loaded columns to prevent duplicate API calls
-    const loadedColumnsCache = useRef<Record<string, any[]>>({})
+    // Data loading state
+    const [error, setError] = useState<string | null>(null)
 
     // Debounce timer for column updates
-    const updateColumnsTimeoutRef = useRef<NodeJS.Timeout>()
+    const updateColumnsTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     // Form states
     const [isAddingStructure, setIsAddingStructure] = useState(false)
@@ -44,15 +44,14 @@ export default function StructureManagement() {
     // Handle main category selection
     const handleCategorySelect = (categoryId: string) => {
         setNewStructureCategory(categoryId)
+        setRegularCategories([])
+        setCategorySeparators([])
+        setNewStructureColumns([])
+        setNewStructureCombinations([])
+        setNewStructurePrimaryColumn('')
 
-        // Debounce column updates to prevent excessive API calls
-        if (updateColumnsTimeoutRef.current) {
-            clearTimeout(updateColumnsTimeoutRef.current)
-        }
-
-        updateColumnsTimeoutRef.current = setTimeout(async () => {
-            await updateAllColumns() // Recalculate all columns when main category changes
-        }, 300) // 300ms debounce
+        // Load columns for the selected category on demand
+        loadCategoryDataOnDemand(categoryId)
     }
 
     // Handle regular category selection
@@ -97,14 +96,10 @@ export default function StructureManagement() {
             setCategorySeparators(newSeparators)
         }
 
-        // Debounce column updates to prevent excessive API calls
-        if (updateColumnsTimeoutRef.current) {
-            clearTimeout(updateColumnsTimeoutRef.current)
+        // Load data for newly added categories on demand
+        if (isSelected && !columns[categoryId]) {
+            loadCategoryDataOnDemand(categoryId)
         }
-
-        updateColumnsTimeoutRef.current = setTimeout(async () => {
-            await updateAllColumns() // Recalculate all columns when regular categories change
-        }, 300) // 300ms debounce
     }
 
     // Handle separator change
@@ -114,79 +109,7 @@ export default function StructureManagement() {
         setCategorySeparators(newSeparators)
     }
 
-    // Update all columns from main category + regular categories
-    const updateAllColumns = async () => {
-        const allCategoryIds = [newStructureCategory, ...safeRegularCategories].filter(Boolean)
-        console.log('🔄 updateAllColumns called with:', { allCategoryIds, newStructureCategory, regularCategories: safeRegularCategories })
-
-        if (allCategoryIds.length === 0) {
-            console.log('❌ No categories selected, clearing columns')
-            setNewStructureColumns([])
-            setNewStructurePrimaryColumn('')
-            return
-        }
-
-        try {
-            const allColumns: string[] = []
-            const categoriesToLoad: string[] = []
-
-            // Check cache first
-            for (const categoryId of allCategoryIds) {
-                if (!loadedColumnsCache.current[categoryId]) {
-                    categoriesToLoad.push(categoryId)
-                } else {
-                    console.log(`📋 Using cached columns for category ${categoryId}`)
-                    const cachedColumns = loadedColumnsCache.current[categoryId]
-                    if (cachedColumns && cachedColumns.length > 0) {
-                        allColumns.push(...cachedColumns.map(col => col.id))
-                    }
-                }
-            }
-
-            // Load missing categories in parallel
-            if (categoriesToLoad.length > 0) {
-                console.log(`🔍 Loading columns for ${categoriesToLoad.length} uncached categories:`, categoriesToLoad)
-
-                const columnPromises = categoriesToLoad.map(async (categoryId, index) => {
-                    // Add small delay to prevent overwhelming the server
-                    await new Promise(resolve => setTimeout(resolve, index * 100))
-
-                    const categoryColumns = await retryApiCall(() =>
-                        customProductService.getColumnsByCategory(categoryId, false)
-                    )
-
-                    // Cache the result
-                    loadedColumnsCache.current[categoryId] = categoryColumns || []
-
-                    return { categoryId, columns: categoryColumns }
-                })
-
-                const results = await Promise.all(columnPromises)
-
-                // Process results
-                results.forEach(({ categoryId, columns }) => {
-                    if (columns && columns.length > 0) {
-                        const columnIds = columns.map(col => col.id)
-                        allColumns.push(...columnIds)
-                    }
-                })
-            }
-
-            console.log('🎯 Final allColumns:', allColumns)
-            setNewStructureColumns(allColumns)
-
-            // Set primary column to first column from main category if available
-            if (newStructureCategory && allColumns.length > 0) {
-                setNewStructurePrimaryColumn(allColumns[0])
-            }
-
-            console.log(`Total selected columns: ${allColumns.length}`)
-        } catch (error) {
-            console.error(`Failed to load columns:`, error)
-            setNewStructureColumns([])
-            setNewStructurePrimaryColumn('')
-        }
-    }
+    // Column loading is now handled by loadCategoryDataOnDemand
 
     // Edit structure form
     const [editStructureName, setEditStructureName] = useState('')
@@ -199,6 +122,60 @@ export default function StructureManagement() {
     useEffect(() => {
         loadAllData()
     }, [])
+
+    // Load all structures and their columns when categories are loaded
+    useEffect(() => {
+        const loadAllStructuresAndColumns = async () => {
+            if (categories.length > 0) {
+                console.log('Loading structures and columns for all categories...')
+                const structurePromises = categories.map(async (category) => {
+                    try {
+                        const structs = await retryApiCall(() =>
+                            customProductService.getStructures(category.id, false)
+                        )
+                        return structs.map(s => ({
+                            ...s,
+                            category_name: category.name
+                        }))
+                    } catch (error) {
+                        console.error(`Failed to load structures for category ${category.id}`, error)
+                        return []
+                    }
+                })
+
+                const columnPromises = categories.map(async (category) => {
+                    try {
+                        const cols = await retryApiCall(() =>
+                            customProductService.getColumnsByCategory(category.id, false)
+                        )
+                        return { categoryId: category.id, columns: cols }
+                    } catch (error) {
+                        console.error(`Failed to load columns for category ${category.id}`, error)
+                        return { categoryId: category.id, columns: [] }
+                    }
+                })
+
+                const [structureResults, columnResults] = await Promise.all([
+                    Promise.all(structurePromises),
+                    Promise.all(columnPromises)
+                ])
+
+                const allStructures = structureResults.flat()
+                const allColumns: Record<string, any[]> = {}
+                columnResults.forEach(({ categoryId, columns }) => {
+                    allColumns[categoryId] = columns
+                })
+
+                setStructures(allStructures)
+                setColumns(allColumns)
+                console.log(`Loaded ${allStructures.length} structures and ${Object.keys(allColumns).length} column sets from ${categories.length} categories`)
+            }
+        }
+
+        loadAllStructuresAndColumns()
+    }, [categories])
+
+    // No initial loading of all data - load on demand only
 
     // Helper function to add delay between API calls to prevent rate limiting
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -241,112 +218,58 @@ export default function StructureManagement() {
     const loadAllData = async () => {
         setLoading(true)
         try {
-            // Load all categories
+            // Load categories only - structures and columns will be loaded on demand
             const cats = await retryApiCall(() => customProductService.getCategories(false))
             setCategories(cats)
 
-            // Load all structures from all categories
-            const allStructures: any[] = []
-            const allColumns: Record<string, any[]> = {}
-            const allOptions: Record<string, any[]> = {}
-
-            // Load structures for all categories in parallel with controlled concurrency
-            const structurePromises = cats.map(async (category, index) => {
-                try {
-                    // Stagger requests to prevent overwhelming the server
-                    await delay(index * 1000) // Increased delay to prevent rate limiting
-
-                    const structs = await retryApiCall(() =>
-                        customProductService.getStructures(category.id, false)
-                    )
-                    return structs.map(s => ({ ...s, category_name: category.name }))
-                } catch (error) {
-                    console.error(`Failed to load structures for category ${category.id}`, error)
-                    return []
-                }
-            })
-
-            // Load columns for all categories in parallel with controlled concurrency
-            const columnPromises = cats.map(async (category, index) => {
-                try {
-                    await delay(index * 1100) // Increased delay
-
-                    const cols = await retryApiCall(() =>
-                        customProductService.getColumnsByCategory(category.id, false)
-                    )
-                    return { categoryId: category.id, columns: cols }
-                } catch (error) {
-                    console.error(`Failed to load columns for category ${category.id}`, error)
-                    return { categoryId: category.id, columns: [] }
-                }
-            })
-
-            // Execute all promises with controlled batching
-            const [structureResults, columnResults] = await Promise.all([
-                Promise.all(structurePromises),
-                Promise.all(columnPromises)
-            ])
-
-            // Process results
-            structureResults.forEach(structs => {
-                allStructures.push(...structs)
-            })
-
-            columnResults.forEach(({ categoryId, columns }) => {
-                allColumns[categoryId] = columns
-                console.log(`Loaded ${columns.length} columns for category ${categoryId}`)
-            })
-
-            // Load options only for columns that will be displayed initially
-            // This significantly reduces the number of API calls
-            const maxOptionsToLoad = 2 // Further reduced for performance
-            let loadedOptionsCount = 0
-
-            for (const category of cats) {
-                const categoryColumns = allColumns[category.id] || []
-                for (const column of categoryColumns) {
-                    if (loadedOptionsCount >= maxOptionsToLoad) break
-
-                    try {
-                        await delay(1500) // Increased delay for options to prevent rate limiting
-
-                        const columnOptions = await retryApiCall(() =>
-                            customProductService.getOptions(column.id, true)
-                        )
-                        allOptions[column.id] = columnOptions
-                        loadedOptionsCount++
-                    } catch (error) {
-                        console.error(`Failed to load options for column ${column.id}`, error)
-                        allOptions[column.id] = []
-                    }
-                }
-                if (loadedOptionsCount >= maxOptionsToLoad) break
-            }
-
-            setStructures(allStructures)
-            setColumns(allColumns)
-            setOptions(allOptions)
-            console.log('Data loading completed:', {
-                categoriesCount: cats.length,
-                structuresCount: allStructures.length,
-                columnsCount: Object.keys(allColumns).length,
-                totalColumns: Object.values(allColumns).reduce((sum, cols) => sum + cols.length, 0)
-            })
-        } catch (error) {
-            console.error('Failed to load all data', error)
-            // Set empty arrays to prevent UI crashes
-            setCategories([])
+            // Initialize empty structures and columns - will be loaded on demand
             setStructures([])
             setColumns({})
             setOptions({})
 
-            // Show user-friendly error message
-            const errorMessage = error instanceof Error ? error.message : 'Failed to load data'
-            alert(`Lỗi tải dữ liệu: ${errorMessage}\n\nVui lòng kiểm tra kết nối và thử lại.`)
+            console.log(`Loaded ${cats.length} categories. Structures and columns will be loaded on demand to reduce API calls.`)
+        } catch (error) {
+            console.error('Failed to load categories:', error)
+            setError('Failed to load categories. Please try again.')
         } finally {
             setLoading(false)
         }
     }
+
+    // Load category data on demand (structures and columns)
+    const loadCategoryDataOnDemand = useCallback(async (categoryId: string) => {
+        try {
+            // Load structures for this category if not loaded
+            if (!structures.some(s => s.category_id === categoryId)) {
+                const category = categories.find(cat => cat.id === categoryId)
+                if (category) {
+                    const structs = await retryApiCall(() =>
+                        customProductService.getStructures(categoryId, false)
+                    )
+                    const structuresWithCategory = structs.map(s => ({
+                        ...s,
+                        category_name: category.name
+                    }))
+                    setStructures(prev => [...prev, ...structuresWithCategory])
+                    console.log(`Loaded ${structuresWithCategory.length} structures for category ${categoryId}`)
+                }
+            }
+
+            // Load columns for this category if not loaded
+            if (!columns[categoryId]) {
+                const cols = await retryApiCall(() =>
+                    customProductService.getColumnsByCategory(categoryId, false)
+                )
+                setColumns(prev => ({
+                    ...prev,
+                    [categoryId]: cols
+                }))
+                console.log(`Loaded ${cols.length} columns for category ${categoryId}`)
+            }
+        } catch (error) {
+            console.error(`Failed to load data for category ${categoryId}:`, error)
+        }
+    }, [categories, structures, columns])
 
     const handleAddStructure = async () => {
         if (!newStructureName || newStructureColumns.length === 0 || !newStructureCategory) return
@@ -449,6 +372,22 @@ export default function StructureManagement() {
 
         if (!targetColumns.includes(columnId)) {
             setter([...targetColumns, columnId])
+            // Load options for the newly added column if not already loaded
+            if (!options[columnId]) {
+                customProductService.getOptions(columnId, true).then(columnOptions => {
+                    setOptions(prev => ({
+                        ...prev,
+                        [columnId]: columnOptions
+                    }))
+                    console.log(`Loaded ${columnOptions.length} options for column ${columnId}`)
+                }).catch(error => {
+                    console.error(`Failed to load options for column ${columnId}:`, error)
+                    setOptions(prev => ({
+                        ...prev,
+                        [columnId]: []
+                    }))
+                })
+            }
         }
     }
 
@@ -533,12 +472,12 @@ export default function StructureManagement() {
         return 'Unknown'
     }
 
-    const getSelectedCategoryCount = () => {
+    const getSelectedCategoryCount = (selectedColumns: string[], columnsParam: Record<string, any[]>) => {
         const selectedCategoryIds = new Set<string>()
         selectedColumns.forEach(colId => {
             // Find which category this column belongs to
-            for (const [catId, catColumns] of Object.entries(allColumns || {})) {
-                if (catColumns.some(col => col.id === colId)) {
+            for (const [catId, catColumns] of Object.entries(columnsParam || {})) {
+                if (catColumns.some((col: any) => col.id === colId)) {
                     selectedCategoryIds.add(catId)
                     break
                 }
@@ -547,13 +486,13 @@ export default function StructureManagement() {
         return selectedCategoryIds.size
     }
 
-    const getSelectedCategories = () => {
+    const getSelectedCategories = (selectedColumns: string[], columnsParam: Record<string, any[]>, categories: any[]) => {
         const categoryMap = new Map<string, { id: string, name: string, columns: any[] }>()
 
         selectedColumns.forEach(colId => {
             // Find which category this column belongs to
-            for (const [catId, catColumns] of Object.entries(allColumns || {})) {
-                const column = catColumns.find(col => col.id === colId)
+            for (const [catId, catColumns] of Object.entries(columnsParam || {})) {
+                const column = catColumns.find((col: any) => col.id === colId)
                 if (column) {
                     const category = categories.find(cat => cat.id === catId)
                     if (category && !categoryMap.has(catId)) {
@@ -692,12 +631,6 @@ export default function StructureManagement() {
             {isAddingStructure && (
                 <div className="bg-white rounded-lg shadow-lg p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Thêm cấu trúc mới</h3>
-                    {console.log('Rendering StructureForm with:', {
-                        newStructureCategory,
-                        availableColumns: newStructureCategory ? columns[newStructureCategory] || [] : [],
-                        columnsKeys: Object.keys(columns),
-                        categoriesCount: categories.length
-                    })}
                     <StructureForm
                         name={newStructureName}
                         setName={setNewStructureName}
@@ -987,12 +920,12 @@ function StructureForm({
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-lg"
                 >
                     <option value="">
-                        {categories.filter(cat => cat.is_primary === true || cat.is_primary === "true").length === 0
+                        {categories.filter(cat => Boolean(cat.is_primary)).length === 0
                             ? '⚠️ Không có danh mục chính nào khả dụng'
                             : 'Chọn danh mục chính...'}
                     </option>
                     {categories
-                        .filter(cat => cat.is_primary === true || cat.is_primary === "true")
+                        .filter(cat => Boolean(cat.is_primary))
                         .map(cat => (
                             <option key={cat.id} value={cat.id}>
                                 {cat.name}

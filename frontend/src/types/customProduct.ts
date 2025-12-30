@@ -99,12 +99,15 @@ export interface CustomProductStructure {
     name: string
     description?: string
     column_order: string[]
+    column_combinations?: string[]
     separator: string
     primary_column_id?: string
     is_default: boolean
     is_active: boolean
     created_at: string
     updated_at: string
+    // Additional fields added by frontend
+    category_name?: string
 }
 
 export interface CreateCustomProductStructurePayload {
