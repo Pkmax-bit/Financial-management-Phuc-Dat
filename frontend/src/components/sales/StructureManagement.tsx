@@ -299,7 +299,7 @@ export default function StructureManagement() {
 
             // Load options only for columns that will be displayed initially
             // This significantly reduces the number of API calls
-            const maxOptionsToLoad = 5 // Further reduced for performance
+            const maxOptionsToLoad = 2 // Further reduced for performance
             let loadedOptionsCount = 0
 
             for (const category of cats) {
@@ -308,7 +308,7 @@ export default function StructureManagement() {
                     if (loadedOptionsCount >= maxOptionsToLoad) break
 
                     try {
-                        await delay(800) // Increased delay for options
+                        await delay(1500) // Increased delay for options to prevent rate limiting
 
                         const columnOptions = await retryApiCall(() =>
                             customProductService.getOptions(column.id, true)

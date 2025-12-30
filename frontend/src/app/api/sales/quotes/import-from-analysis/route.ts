@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 
 // This will be a server-side API route that imports data from AI analysis
 // We'll need to call the backend API
