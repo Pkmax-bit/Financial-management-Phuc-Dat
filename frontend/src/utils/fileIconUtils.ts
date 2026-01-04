@@ -70,6 +70,11 @@ export const getFileIconByType = (fileType: string, fileName?: string): string |
     return getFileIconPath('doc.png')
   }
 
+  // Order files - custom order icon
+  if (name.includes('order') || extension === 'order') {
+    return getFileIconPath('order.png')
+  }
+
   // Images - return null to use ImageIcon component
   if (
     ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(extension) ||

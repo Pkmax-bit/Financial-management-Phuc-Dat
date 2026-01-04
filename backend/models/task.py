@@ -211,6 +211,7 @@ class TaskChecklistItem(BaseModel):
 class ChecklistItemAssignment(BaseModel):
     employee_id: str
     responsibility_type: str  # 'accountable', 'responsible', 'consulted', 'informed'
+    employee_name: Optional[str] = None
 
 
 class TaskChecklistItemCreate(BaseModel):
@@ -275,6 +276,7 @@ class Task(BaseModel):
     attachment_count: Optional[int] = 0
     parent_id: Optional[str] = None
     checklists: Optional[List["TaskChecklist"]] = []
+    project: Optional[dict] = None
 
 
 class TaskTimeLog(BaseModel):
@@ -344,7 +346,6 @@ class TaskResponse(BaseModel):
     attachments: List["TaskAttachment"] = []
     checklists: List["TaskChecklist"] = []
     time_logs: List["TaskTimeLog"] = []
-    participants: List["TaskParticipant"] = []
     participants: List["TaskParticipant"] = []
     notes: List["TaskNote"] = []
     sub_tasks: List["Task"] = []

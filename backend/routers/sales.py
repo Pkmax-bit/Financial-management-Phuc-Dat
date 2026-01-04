@@ -13,8 +13,14 @@ import io
 import json
 from pydantic import BaseModel
 
-from models.quote import Quote, QuoteCreate, QuoteUpdate, QuoteConvertToInvoice
-from models.invoice import Invoice, InvoiceCreate, InvoiceUpdate, InvoiceItem
+from models.quote import (
+    Quote, QuoteCreate, QuoteUpdate, QuoteConvertToInvoice,
+    QuoteItem, QuoteItemCreate, QuoteItemUpdate
+)
+from models.invoice import (
+    Invoice, InvoiceCreate, InvoiceUpdate,
+    InvoiceItem, InvoiceItemCreate, InvoiceItemUpdate
+)
 from models.sales_receipt import SalesReceipt, SalesReceiptCreate, SalesReceiptUpdate
 from models.payment import Payment, PaymentCreate, PaymentUpdate, PaymentWithAllocations
 from models.expense import Expense, ExpenseCreate, ExpenseUpdate

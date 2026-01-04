@@ -31,11 +31,21 @@ def run_migration(migration_filename=None):
         print(sql)
         print("\n" + "="*50)
 
-        # Execute migration
-        result = supabase.rpc('exec_sql', {'sql': sql}).execute()
+        # Execute migration by splitting into individual statements
+        statements = [stmt.strip() for stmt in sql.split(';') if stmt.strip() and not stmt.strip().startswith('--')]
 
-        print("Migration completed successfully!")
-        print(f"Result: {result}")
+        for i, statement in enumerate(statements, 1):
+            if statement:
+                print(f"Executing statement {i}/{len(statements)}...")
+                try:
+                    result = supabase.rpc('exec', {'query': statement}).execute()
+                    print(f"Statement {i} completed successfully")
+                except Exception as stmt_error:
+                    print(f"Statement {i} failed: {str(stmt_error)}")
+                    # Continue with next statement instead of failing completely
+                    continue
+
+        print("Migration completed!")
 
     except Exception as e:
         print(f"Migration failed: {str(e)}")

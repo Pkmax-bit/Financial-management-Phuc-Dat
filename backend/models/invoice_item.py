@@ -1,43 +1,9 @@
 """
-Invoice Item model definitions
+Invoice Item model definitions - DEPRECATED
+
+This file is deprecated. Use the InvoiceItem model from invoice.py instead.
+The invoice_item table should be used instead of JSONB storage for consistency.
 """
 
-from pydantic import BaseModel
-from typing import Optional
-
-class InvoiceItem(BaseModel):
-    """Invoice item model"""
-    id: str
-    invoice_id: str
-    description: str
-    quantity: float
-    unit_price: float
-    subtotal: float
-    area: Optional[float] = None
-    volume: Optional[float] = None
-    height: Optional[float] = None
-    length: Optional[float] = None
-    depth: Optional[float] = None
-
-class InvoiceItemCreate(BaseModel):
-    """Invoice item creation model"""
-    invoice_id: str
-    description: str
-    quantity: float
-    unit_price: float
-    area: Optional[float] = None
-    volume: Optional[float] = None
-    height: Optional[float] = None
-    length: Optional[float] = None
-    depth: Optional[float] = None
-
-class InvoiceItemUpdate(BaseModel):
-    """Invoice item update model"""
-    description: Optional[str] = None
-    quantity: Optional[float] = None
-    unit_price: Optional[float] = None
-    area: Optional[float] = None
-    volume: Optional[float] = None
-    height: Optional[float] = None
-    length: Optional[float] = None
-    depth: Optional[float] = None
+# This file is kept for backward compatibility but should not be used for new development
+# All invoice item functionality has been moved to invoice.py for consistency

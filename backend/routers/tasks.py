@@ -153,18 +153,55 @@ def _fetch_task_checklists(supabase, task_id: str) -> List[TaskChecklist]:
                 if item_id not in assignments_map:
                     assignments_map[item_id] = []
                 employee = assignment.get("employees")
+                if isinstance(employee, list):
+                    employee = employee[0] if employee else None
+                
                 assignment_data = {
                     "employee_id": assignment["employee_id"],
                     "responsibility_type": assignment["responsibility_type"]
                 }
                 if employee:
-                    assignment_data["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                    name = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                    if not name:
+                        name = employee.get('full_name')
+                    
+                    if name:
+                        assignment_data["employee_name"] = name
+                
+                # Fallback: if join didn't work, query directly
+                if not assignment_data.get("employee_name") and assignment.get("employee_id"):
+                    try:
+                        emp_result = supabase.table("employees").select("first_name, last_name").eq("id", assignment.get("employee_id")).single().execute()
+                        if emp_result.data:
+                            emp_data = emp_result.data
+                            name = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                            if not name:
+                                name = emp_data.get('full_name')
+                            
+                            if name:
+                                assignment_data["employee_name"] = name
+                    except Exception:
+                        pass
+
                 assignments_map[item_id].append(assignment_data)
         
         for item in items_result.data or []:
             employee = item.get("employees")
+            if isinstance(employee, list):
+                employee = employee[0] if employee else None
+            
             if employee:
                 item["assignee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+            
+            # Fallback for assignee_name
+            if not item.get("assignee_name") and item.get("assignee_id"):
+                try:
+                    emp_result = supabase.table("employees").select("first_name, last_name").eq("id", item.get("assignee_id")).single().execute()
+                    if emp_result.data:
+                        emp_data = emp_result.data
+                        item["assignee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                except Exception:
+                    pass
             # Add assignments to item
             item["assignments"] = assignments_map.get(item["id"], [])
             items_map.setdefault(item["checklist_id"], []).append(item)
@@ -1384,6 +1421,32 @@ async def get_task(
         project = task.get("projects")
         if project:
             task["project_name"] = project.get("name")
+            
+        # Fetch detailed project info for Android App Overview
+        if task.get("project_id"):
+            try:
+                # Get full project details
+                proj_result = supabase.table("projects").select("*").eq("id", task.get("project_id")).single().execute()
+                if proj_result.data:
+                    project_data = proj_result.data
+                    
+                    # Get Customer Name
+                    if project_data.get("customer_id"):
+                        cust_res = supabase.table("customers").select("name").eq("id", project_data["customer_id"]).single().execute()
+                        if cust_res.data:
+                            project_data["customer_name"] = cust_res.data.get("name")
+                            
+                    # Get Manager Name (assigned_to in project table)
+                    if project_data.get("manager_id"):
+                        mgr_res = supabase.table("employees").select("first_name, last_name").eq("id", project_data["manager_id"]).single().execute()
+                        if mgr_res.data:
+                            mgr_data = mgr_res.data
+                            project_data["manager_name"] = f"{mgr_data.get('first_name', '')} {mgr_data.get('last_name', '')}".strip()
+                    
+                    # Add to task object
+                    task["project"] = project_data
+            except Exception as e:
+                print(f"Error fetching project details for task: {str(e)}")
         
         # Get assignments
         assignments_result = supabase.table("task_assignments").select("""
@@ -1550,6 +1613,14 @@ async def get_task(
                 if emp.data:
                     sub_task["assigned_to_name"] = f"{emp.data.get('first_name', '')} {emp.data.get('last_name', '')}".strip()
             sub_tasks.append(sub_task)
+
+        # Enrich main task with counts and checklists for Android parity
+        # (Android might be checking task.getChecklists() instead of response.getChecklists())
+        comment_count = len(comments) # Approximate, recursive replies might differ
+        task["comment_count"] = comment_count
+        task["attachment_count"] = len(attachments)
+        task["assignee_count"] = len(assignments)
+        task["checklists"] = checklists
 
         return TaskResponse(
             task=task,

@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
 from services.supabase_client import get_supabase_client
 from models.user import User
-from models.products_services import ProductService, ProductServiceCreate, ProductServiceUpdate
+from models.products_services import (
+    ProductService,
+    ProductServiceCreate,
+    ProductServiceUpdate,
+    ProductServiceType,
+    ProductServiceStatus
+)
 from utils.auth import get_current_user
 import uuid
 from datetime import datetime
@@ -259,12 +265,22 @@ async def bulk_create_products(
                 
                 # Create product
                 data = {
+                    "id": str(uuid.uuid4()),
+                    "code": product_data.get("code"),
                     "name": product_name,
-                    "category_id": category_id,
-                    "price": product_data.get("price", 0.0),
-                    "unit": product_data.get("unit", "cái"),
                     "description": product_data.get("description", f"Sản phẩm {product_name}"),
+                    "type": product_data.get("type", "product"),
+                    "unit": product_data.get("unit", "cái"),
+                    "unit_price": product_data.get("unit_price", product_data.get("price", 0.0)),
+                    "cost": product_data.get("cost"),
+                    "currency": product_data.get("currency", "VND"),
+                    "tax_rate": product_data.get("tax_rate", 0.0),
+                    "tax_included": product_data.get("tax_included", False),
+                    "category_id": category_id,
+                    "status": product_data.get("status", "active"),
                     "is_active": product_data.get("is_active", True),
+                    "tags": product_data.get("tags"),
+                    "attributes": product_data.get("attributes"),
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat()
                 }

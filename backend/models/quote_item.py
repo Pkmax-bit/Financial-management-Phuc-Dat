@@ -1,46 +1,9 @@
 """
-Quote Item model definitions
+Quote Item model definitions - DEPRECATED
+
+This file is deprecated. Use the QuoteItem model from quote.py instead.
+The quote_item table should be used instead of JSONB storage for consistency.
 """
 
-from pydantic import BaseModel
-from typing import Optional
-
-class QuoteItem(BaseModel):
-    """Quote item model"""
-    id: str
-    quote_id: str
-    description: str
-    quantity: float
-    unit_price: float
-    subtotal: float
-    area: Optional[float] = None
-    volume: Optional[float] = None
-    height: Optional[float] = None
-    length: Optional[float] = None
-    depth: Optional[float] = None
-    vat_rate: Optional[float] = 10.0
-
-class QuoteItemCreate(BaseModel):
-    """Quote item creation model"""
-    quote_id: str
-    description: str
-    quantity: float
-    unit_price: float
-    area: Optional[float] = None
-    volume: Optional[float] = None
-    height: Optional[float] = None
-    length: Optional[float] = None
-    depth: Optional[float] = None
-    vat_rate: Optional[float] = 10.0
-
-class QuoteItemUpdate(BaseModel):
-    """Quote item update model"""
-    description: Optional[str] = None
-    quantity: Optional[float] = None
-    unit_price: Optional[float] = None
-    area: Optional[float] = None
-    volume: Optional[float] = None
-    height: Optional[float] = None
-    length: Optional[float] = None
-    depth: Optional[float] = None
-    vat_rate: Optional[float] = None
+# This file is kept for backward compatibility but should not be used for new development
+# All quote item functionality has been moved to quote.py for consistency
