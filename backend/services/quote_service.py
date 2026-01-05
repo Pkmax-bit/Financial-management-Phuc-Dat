@@ -170,6 +170,27 @@ class QuoteService:
                 if product.get('price'):
                     item['product_price'] = product.get('price')
 
+            # Ensure required financial fields exist (for Pydantic validation)
+            # Calculate if missing
+            quantity = float(item.get('quantity') or 0)
+            unit_price = float(item.get('unit_price') or 0)
+            
+            # 1. line_total
+            if item.get('line_total') is None:
+                item['line_total'] = quantity * unit_price
+            
+            # 2. tax_rate & tax_amount
+            tax_rate = float(item.get('tax_rate') or 0)
+            line_total = float(item.get('line_total') or 0)
+            
+            if item.get('tax_amount') is None:
+                item['tax_amount'] = line_total * (tax_rate / 100)
+            
+            # 3. total_with_tax
+            if item.get('total_with_tax') is None:
+                tax_amount = float(item.get('tax_amount') or 0)
+                item['total_with_tax'] = line_total + tax_amount
+
         return invoice_items
 
 quote_service = QuoteService()
