@@ -448,8 +448,9 @@ async def get_task_groups(
     try:
         supabase = get_supabase_client()
         
+        # Query from view task_groups_with_counts to get task counts automatically
         # Join với project_categories để lấy name/description (Single Source of Truth)
-        query = supabase.table("task_groups").select("""
+        query = supabase.table("task_groups_with_counts").select("""
             *,
             project_categories:category_id(
                 id,
@@ -462,7 +463,7 @@ async def get_task_groups(
             )
         """)
         
-        # Filter out deleted groups
+        # Filter out deleted groups (already filtered in view, but keep for safety)
         query = query.is_("deleted_at", "null")
         
         if is_active is not None:
@@ -478,6 +479,11 @@ async def get_task_groups(
             # Get member count
             member_count = supabase.table("task_group_members").select("id", count="exact").eq("group_id", group["id"]).execute()
             group["member_count"] = member_count.count if hasattr(member_count, 'count') else 0
+            
+            # task_count and completed_count are already included from the view
+            # Ensure they are integers (default to 0 if None)
+            group["task_count"] = group.get("task_count", 0) or 0
+            group["completed_count"] = group.get("completed_count", 0) or 0
             
             # Nếu có category, lấy name/description từ category
             if group.get("project_categories"):

@@ -49,3 +49,4 @@ END $$;
 
 COMMENT ON DATABASE CURRENT_DATABASE IS 'Migration completed: Inserted sample checklist item assignments for testing assignments display';
 
+

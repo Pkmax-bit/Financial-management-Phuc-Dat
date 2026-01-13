@@ -195,3 +195,4 @@ CREATE TRIGGER update_invoices_updated_at
 COMMENT ON DATABASE postgres IS 'Migration: optimize_products_quotes_invoices_structure applied on 2025-01-02';
 
 
+
