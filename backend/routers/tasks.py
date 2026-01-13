@@ -47,6 +47,13 @@ from models.task import (
     TaskNote,
     TaskNoteCreate,
     TaskNoteUpdate,
+    MessageReadReceipt,
+    MessageReadReceiptCreate,
+    TypingIndicator,
+    TypingIndicatorUpdate,
+    MessageReaction,
+    MessageReactionCreate,
+    ReactionSummary,
 )
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
@@ -2106,6 +2113,32 @@ async def get_task_comments(
                 comment["replies"] = get_replies(comment["id"])
             except Exception:
                 comment["replies"] = []
+            
+            # Get read receipts for this comment
+            try:
+                receipts_result = supabase.table("message_read_receipts").select("user_id, read_at").eq("message_id", comment["id"]).execute()
+                comment["read_by"] = [r["user_id"] for r in (receipts_result.data or [])]
+                comment["read_count"] = len(receipts_result.data or [])
+            except Exception:
+                comment["read_by"] = []
+                comment["read_count"] = 0
+            
+            # Get reactions for this comment
+            try:
+                reactions_result = supabase.table("message_reactions").select("emoji, user_id").eq("message_id", comment["id"]).execute()
+                # Group by emoji
+                emoji_map = {}
+                for reaction in reactions_result.data or []:
+                    emoji = reaction["emoji"]
+                    user_id = reaction["user_id"]
+                    if emoji not in emoji_map:
+                        emoji_map[emoji] = {"emoji": emoji, "count": 0, "users": []}
+                    emoji_map[emoji]["count"] += 1
+                    emoji_map[emoji]["users"].append(user_id)
+                comment["reactions"] = list(emoji_map.values())
+            except Exception:
+                comment["reactions"] = []
+            
             comments.append(comment)
         
         return comments
@@ -2148,8 +2181,11 @@ async def create_task_comment(
             "type": comment_data.type,
             "file_url": comment_data.file_url,
             "is_pinned": comment_data.is_pinned,
-            "parent_id": comment_data.parent_id
         }
+        
+        # Only include parent_id if it's provided (not None)
+        if comment_data.parent_id:
+            comment_record["parent_id"] = comment_data.parent_id
         
         result = supabase.table("task_comments").insert(comment_record).execute()
         
@@ -2161,6 +2197,10 @@ async def create_task_comment(
         
         # Enrich comment with user_name / employee_name dựa trên user_id / employee_id vừa lưu
         comment = result.data[0]
+        
+        # Ensure parent_id is included in response (even if None)
+        if "parent_id" not in comment:
+            comment["parent_id"] = comment_data.parent_id
 
         # Lấy tên user từ bảng users
         try:
@@ -2929,9 +2969,10 @@ from services.file_upload_service import get_file_upload_service
 async def upload_task_attachment(
     task_id: str,
     file: UploadFile = File(...),
+    checklist_item_id: Optional[str] = Query(None, description="Optional: Link attachment to a specific checklist item (subtask)"),
     current_user: User = Depends(get_current_user)
 ):
-    """Upload attachment for a task"""
+    """Upload attachment for a task. If checklist_item_id is provided, links attachment to that subtask."""
     try:
         supabase = get_supabase_client()
         
@@ -2994,6 +3035,16 @@ async def upload_task_attachment(
         elif file_result.get("storage_name"):
             stored_filename = file_result["storage_name"]
         
+        # Verify checklist_item_id exists if provided
+        if checklist_item_id:
+            checklist_item_result = supabase.table("task_checklist_items").select("id, checklist_id").eq("id", checklist_item_id).execute()
+            if not checklist_item_result.data:
+                raise HTTPException(status_code=404, detail="Checklist item not found")
+            # Verify the checklist item belongs to the same task
+            checklist_result = supabase.table("task_checklists").select("task_id").eq("id", checklist_item_result.data[0]["checklist_id"]).execute()
+            if not checklist_result.data or checklist_result.data[0]["task_id"] != task_id:
+                raise HTTPException(status_code=400, detail="Checklist item does not belong to this task")
+        
         # Create attachment record
         attachment_data = {
             "id": str(uuid.uuid4()),
@@ -3006,6 +3057,10 @@ async def upload_task_attachment(
             "uploaded_by": current_user.id,
             "created_at": datetime.utcnow().isoformat()
         }
+        
+        # Add checklist_item_id if provided
+        if checklist_item_id:
+            attachment_data["checklist_item_id"] = checklist_item_id
         
         result = supabase.table("task_attachments").insert(attachment_data).execute()
         
@@ -3233,4 +3288,395 @@ async def delete_task_note(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete note: {str(e)}"
+        )
+
+
+# ==================== Message Read Receipts ====================
+
+@router.post("/{task_id}/comments/{comment_id}/read", response_model=MessageReadReceipt)
+async def mark_message_as_read(
+    task_id: str,
+    comment_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Mark a message as read by current user
+    Creates or updates read receipt
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify message exists and user has access to task
+        comment_result = supabase.table("task_comments").select("*").eq("id", comment_id).eq("task_id", task_id).single().execute()
+        if not comment_result.data:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # Check if read receipt already exists
+        existing_result = supabase.table("message_read_receipts").select("*").eq("message_id", comment_id).eq("user_id", current_user.id).execute()
+        
+        if existing_result.data:
+            # Update existing read receipt
+            receipt_data = {
+                "read_at": datetime.now(timezone.utc).isoformat(),
+            }
+            result = supabase.table("message_read_receipts").update(receipt_data).eq("id", existing_result.data[0]["id"]).execute()
+            receipt = result.data[0]
+        else:
+            # Create new read receipt
+            receipt_data = {
+                "message_id": comment_id,
+                "user_id": current_user.id,
+                "read_at": datetime.now(timezone.utc).isoformat(),
+            }
+            result = supabase.table("message_read_receipts").insert(receipt_data).execute()
+            receipt = result.data[0]
+        
+        # Get user name
+        user_result = supabase.table("users").select("full_name").eq("id", current_user.id).single().execute()
+        if user_result.data:
+            receipt["user_name"] = user_result.data.get("full_name")
+        
+        return receipt
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error marking message as read: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to mark message as read: {str(e)}"
+        )
+
+
+@router.post("/{task_id}/comments/batch-read")
+async def mark_messages_as_read_batch(
+    task_id: str,
+    message_ids: List[str],
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Mark multiple messages as read (batch operation for efficiency)
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify user has access to task
+        task_result = supabase.table("tasks").select("id").eq("id", task_id).single().execute()
+        if not task_result.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        created_receipts = []
+        for message_id in message_ids:
+            try:
+                # Check if read receipt already exists
+                existing_result = supabase.table("message_read_receipts").select("id").eq("message_id", message_id).eq("user_id", current_user.id).execute()
+                
+                if not existing_result.data:
+                    # Create new read receipt
+                    receipt_data = {
+                        "message_id": message_id,
+                        "user_id": current_user.id,
+                        "read_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    result = supabase.table("message_read_receipts").insert(receipt_data).execute()
+                    if result.data:
+                        created_receipts.append(result.data[0])
+            except Exception as e:
+                logger.warning(f"Failed to mark message {message_id} as read: {str(e)}")
+                continue
+        
+        return {"marked_as_read": len(created_receipts), "message_ids": [r["message_id"] for r in created_receipts]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in batch mark as read: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to mark messages as read: {str(e)}"
+        )
+
+
+@router.get("/{task_id}/comments/{comment_id}/read-receipts", response_model=List[MessageReadReceipt])
+async def get_message_read_receipts(
+    task_id: str,
+    comment_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all read receipts for a specific message
+    Shows who has read the message and when
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify message exists and user has access
+        comment_result = supabase.table("task_comments").select("*").eq("id", comment_id).eq("task_id", task_id).single().execute()
+        if not comment_result.data:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # Get read receipts with user info
+        receipts_result = supabase.table("message_read_receipts").select("""
+            *,
+            users:user_id(id, full_name)
+        """).eq("message_id", comment_id).order("read_at", desc=False).execute()
+        
+        receipts = []
+        for receipt in receipts_result.data or []:
+            # Get user name
+            usr = receipt.get("users")
+            if usr:
+                if isinstance(usr, list):
+                    usr = usr[0] if usr else None
+                if usr:
+                    receipt["user_name"] = usr.get("full_name")
+            
+            receipts.append(receipt)
+        
+        return receipts
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting read receipts: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get read receipts: {str(e)}"
+        )
+
+
+# ==================== Typing Indicators ====================
+
+@router.post("/{task_id}/typing")
+async def update_typing_status(
+    task_id: str,
+    typing_data: TypingIndicatorUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update typing status for current user in a task chat
+    Automatically expires after 5 seconds
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify task exists and user has access
+        task_result = supabase.table("tasks").select("id").eq("id", task_id).single().execute()
+        if not task_result.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Clean up expired indicators first
+        try:
+            supabase.rpc("cleanup_expired_typing_indicators").execute()
+        except Exception:
+            pass  # Ignore if function doesn't exist
+        
+        if typing_data.is_typing:
+            # Upsert typing indicator
+            indicator_data = {
+                "task_id": task_id,
+                "user_id": current_user.id,
+                "is_typing": True,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": (datetime.now(timezone.utc) + __import__('datetime').timedelta(seconds=5)).isoformat(),
+            }
+            
+            # Check if exists
+            existing = supabase.table("typing_indicators").select("id").eq("task_id", task_id).eq("user_id", current_user.id).execute()
+            
+            if existing.data:
+                # Update existing
+                result = supabase.table("typing_indicators").update(indicator_data).eq("id", existing.data[0]["id"]).execute()
+            else:
+                # Insert new
+                result = supabase.table("typing_indicators").insert(indicator_data).execute()
+        else:
+            # Stop typing - delete indicator
+            supabase.table("typing_indicators").delete().eq("task_id", task_id).eq("user_id", current_user.id).execute()
+            return {"is_typing": False}
+        
+        return {"is_typing": True, "updated_at": indicator_data["updated_at"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating typing status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update typing status: {str(e)}"
+        )
+
+
+@router.get("/{task_id}/typing", response_model=List[TypingIndicator])
+async def get_typing_users(
+    task_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get list of users currently typing in a task chat
+    Excludes current user
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify task exists
+        task_result = supabase.table("tasks").select("id").eq("id", task_id).single().execute()
+        if not task_result.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Clean up expired indicators
+        try:
+            supabase.rpc("cleanup_expired_typing_indicators").execute()
+        except Exception:
+            pass
+        
+        # Get typing indicators with user info
+        typing_result = supabase.table("typing_indicators").select("""
+            *,
+            users:user_id(id, full_name),
+            employees:employee_id(id, first_name, last_name)
+        """).eq("task_id", task_id).eq("is_typing", True).neq("user_id", current_user.id).execute()
+        
+        typing_users = []
+        for indicator in typing_result.data or []:
+            # Check if not expired
+            expires_at = __import__('dateutil.parser').parse(indicator["expires_at"])
+            if expires_at > datetime.now(timezone.utc):
+                # Get user name
+                usr = indicator.get("users")
+                if usr:
+                    if isinstance(usr, list):
+                        usr = usr[0] if usr else None
+                    if usr:
+                        indicator["user_name"] = usr.get("full_name")
+                
+                # Get employee name
+                emp = indicator.get("employees")
+                if emp:
+                    if isinstance(emp, list):
+                        emp = emp[0] if emp else None
+                    if emp:
+                        indicator["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                
+                typing_users.append(indicator)
+        
+        return typing_users
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting typing users: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get typing users: {str(e)}"
+        )
+
+
+# ==================== Message Reactions ====================
+
+@router.post("/{task_id}/comments/{comment_id}/react", response_model=MessageReaction)
+async def add_reaction_to_message(
+    task_id: str,
+    comment_id: str,
+    reaction_data: MessageReactionCreate,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Add or update reaction to a message
+    If user already reacted with same emoji, remove it (toggle)
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify message exists
+        comment_result = supabase.table("task_comments").select("*").eq("id", comment_id).eq("task_id", task_id).single().execute()
+        if not comment_result.data:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # Check if reaction already exists
+        existing = supabase.table("message_reactions").select("*").eq("message_id", comment_id).eq("user_id", current_user.id).eq("emoji", reaction_data.emoji).execute()
+        
+        if existing.data:
+            # Toggle - remove existing reaction
+            supabase.table("message_reactions").delete().eq("id", existing.data[0]["id"]).execute()
+            return {"message": "Reaction removed"}
+        else:
+            # Add new reaction
+            reaction_record = {
+                "message_id": comment_id,
+                "user_id": current_user.id,
+                "emoji": reaction_data.emoji,
+            }
+            result = supabase.table("message_reactions").insert(reaction_record).execute()
+            
+            reaction = result.data[0]
+            
+            # Get user name
+            user_result = supabase.table("users").select("full_name").eq("id", current_user.id).single().execute()
+            if user_result.data:
+                reaction["user_name"] = user_result.data.get("full_name")
+            
+            return reaction
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding reaction: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add reaction: {str(e)}"
+        )
+
+
+@router.get("/{task_id}/comments/{comment_id}/reactions", response_model=List[ReactionSummary])
+async def get_message_reactions(
+    task_id: str,
+    comment_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get reactions summary for a message
+    Returns list of {emoji, count, users[]} grouped by emoji
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Verify message exists
+        comment_result = supabase.table("task_comments").select("*").eq("id", comment_id).eq("task_id", task_id).single().execute()
+        if not comment_result.data:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # Get all reactions for this message
+        reactions_result = supabase.table("message_reactions").select("""
+            *,
+            users:user_id(id, full_name)
+        """).eq("message_id", comment_id).execute()
+        
+        # Group by emoji
+        emoji_map = {}
+        for reaction in reactions_result.data or []:
+            emoji = reaction["emoji"]
+            user_id = reaction["user_id"]
+            
+            if emoji not in emoji_map:
+                emoji_map[emoji] = {
+                    "emoji": emoji,
+                    "count": 0,
+                    "users": [],
+                    "user_names": []
+                }
+            
+            emoji_map[emoji]["count"] += 1
+            emoji_map[emoji]["users"].append(user_id)
+            
+            # Get user name
+            usr = reaction.get("users")
+            if usr:
+                if isinstance(usr, list):
+                    usr = usr[0] if usr else None
+                if usr:
+                    emoji_map[emoji]["user_names"].append(usr.get("full_name", ""))
+        
+        return list(emoji_map.values())
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting reactions: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get reactions: {str(e)}"
         )

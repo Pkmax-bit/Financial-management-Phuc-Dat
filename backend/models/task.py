@@ -136,6 +136,59 @@ class TaskAssignment(BaseModel):
     assigned_to_name: Optional[str] = None
     assigned_by_name: Optional[str] = None
 
+class MessageReadReceipt(BaseModel):
+    """Message Read Receipt model"""
+    id: str
+    message_id: str
+    user_id: str
+    employee_id: Optional[str] = None
+    read_at: datetime
+    created_at: datetime
+    user_name: Optional[str] = None
+    employee_name: Optional[str] = None
+
+class MessageReadReceiptCreate(BaseModel):
+    """Message Read Receipt creation model"""
+    message_id: str
+
+class TypingIndicator(BaseModel):
+    """Typing Indicator model"""
+    id: str
+    task_id: str
+    user_id: str
+    employee_id: Optional[str] = None
+    is_typing: bool = True
+    updated_at: datetime
+    expires_at: datetime
+    user_name: Optional[str] = None
+    employee_name: Optional[str] = None
+
+class TypingIndicatorUpdate(BaseModel):
+    """Typing Indicator update model"""
+    is_typing: bool = True
+
+class MessageReaction(BaseModel):
+    """Message Reaction model"""
+    id: str
+    message_id: str
+    user_id: str
+    employee_id: Optional[str] = None
+    emoji: str
+    created_at: datetime
+    user_name: Optional[str] = None
+    employee_name: Optional[str] = None
+
+class MessageReactionCreate(BaseModel):
+    """Message Reaction creation model"""
+    emoji: str  # Emoji character like ❤️, 👍, 😂
+
+class ReactionSummary(BaseModel):
+    """Summary of reactions for a message"""
+    emoji: str
+    count: int
+    users: List[str]  # List of user IDs who reacted with this emoji
+    user_names: Optional[List[str]] = []  # List of user names
+
 class TaskComment(BaseModel):
     """Task Comment model"""
     id: str
@@ -152,6 +205,9 @@ class TaskComment(BaseModel):
     is_pinned: bool = False
     parent_id: Optional[str] = None  # ID of parent comment if this is a reply
     replies: Optional[List['TaskComment']] = []  # Nested replies
+    read_by: Optional[List[str]] = []  # List of user IDs who have read this message
+    read_count: Optional[int] = 0  # Number of users who have read this message
+    reactions: Optional[List['ReactionSummary']] = []  # Reactions summary
 
 class TaskCommentCreate(BaseModel):
     """Task Comment creation model"""
