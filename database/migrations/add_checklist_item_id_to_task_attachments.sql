@@ -12,3 +12,4 @@ ON task_attachments(checklist_item_id);
 COMMENT ON COLUMN task_attachments.checklist_item_id IS 'Optional: Links attachment to a specific checklist item (subtask). If NULL, attachment belongs to the main task.';
 
 
+

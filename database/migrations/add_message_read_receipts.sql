@@ -66,3 +66,4 @@ CREATE POLICY "Users can update their own read receipts"
 -- Comment
 COMMENT ON TABLE message_read_receipts IS 'Tracks when messages are read by users for read receipts (✓✓) feature';
 
+

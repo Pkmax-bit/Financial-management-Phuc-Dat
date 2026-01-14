@@ -52,3 +52,4 @@ CREATE POLICY "Users can manage their own typing indicators"
 -- Comment
 COMMENT ON TABLE typing_indicators IS 'Tracks when users are typing in chat (auto-expires after 5 seconds)';
 
+

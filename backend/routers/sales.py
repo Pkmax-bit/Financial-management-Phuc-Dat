@@ -2378,7 +2378,35 @@ async def get_invoices(
                     unique_invoices.append(invoice)
             result.data = unique_invoices
         
-        return [Invoice(**invoice) for invoice in result.data]
+        # Normalize invoice data before parsing to handle NULL values
+        normalized_invoices = []
+        default_employee_id = None
+        
+        for invoice in result.data:
+            # Set default values for required fields if NULL
+            if invoice.get("invoice_type") is None:
+                invoice["invoice_type"] = "standard"
+            
+            if invoice.get("created_by") is None:
+                # Get default employee ID if not already fetched
+                if default_employee_id is None:
+                    try:
+                        emp_result = supabase.table("employees").select("id").limit(1).execute()
+                        if emp_result.data:
+                            default_employee_id = emp_result.data[0]["id"]
+                    except Exception:
+                        pass
+                
+                # Use default employee or skip if no employees exist
+                if default_employee_id:
+                    invoice["created_by"] = default_employee_id
+                else:
+                    # Skip invoice if no employees exist (shouldn't happen in production)
+                    continue
+            
+            normalized_invoices.append(invoice)
+        
+        return [Invoice(**invoice) for invoice in normalized_invoices]
         
     except Exception as e:
         raise HTTPException(
