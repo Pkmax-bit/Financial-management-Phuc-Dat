@@ -316,20 +316,25 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
     }
 
     try {
+      // Backend will automatically update status based on progress:
+      // - progress >= 99.9% -> status = 'completed'
+      // - 0% < progress < 100% -> status = 'active'
+      // - progress = 0% -> status = 'planning'
+      // Database trigger will also handle this automatically
       const res = await fetch(getApiEndpoint(`/api/projects/${project.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          progress: newProgress
+          progress: newProgress  // Backend will normalize to 0-1 scale and auto-update status
         })
       })
 
       if (res.ok) {
         setEditingProgress(false)
         setProgressValue('')
-        // Dispatch custom event to refresh project data
+        // Dispatch custom event to refresh project data (status will be auto-updated)
         window.dispatchEvent(new CustomEvent('projectUpdated', { detail: { projectId: project.id } }))
       } else {
         alert('Không thể cập nhật tiến độ')

@@ -56,12 +56,12 @@ export const useRoleBasedAuth = () => {
 
   const router = useRouter();
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from localStorage (and optionally fetch from backend if user_data thiếu)
   useEffect(() => {
-    const initializeAuth = () => {
+    const initializeAuth = async () => {
       try {
-        const token = localStorage.getItem('access_token');
-        const userData = localStorage.getItem('user_data');
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+        const userData = typeof window !== 'undefined' ? localStorage.getItem('user_data') : null;
         
         if (token && userData) {
           const user = JSON.parse(userData);
@@ -71,14 +71,45 @@ export const useRoleBasedAuth = () => {
             isLoading: false,
             error: null
           });
-        } else {
-          setAuthState({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-            error: null
-          });
+          return;
         }
+
+        // Trường hợp có token nhưng không có user_data (ví dụ đăng nhập bằng QR / luồng khác):
+        // -> thử gọi API để lấy thông tin user và role rồi lưu lại vào localStorage
+        if (token && !userData) {
+          try {
+            const response = await fetch('/api/customers/user-permissions', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.user) {
+                const user = data.user as User;
+                localStorage.setItem('user_data', JSON.stringify(user));
+                setAuthState({
+                  user,
+                  isAuthenticated: true,
+                  isLoading: false,
+                  error: null
+                });
+                return;
+              }
+            }
+          } catch (fetchError) {
+            console.error('Error fetching user permissions on init:', fetchError);
+          }
+        }
+
+        // Fallback: không có token hoặc không lấy được user
+        setAuthState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: null
+        });
       } catch (error) {
         console.error('Error initializing auth:', error);
         setAuthState({

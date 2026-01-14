@@ -1566,13 +1566,44 @@ async def get_task(
         
         comments = []
         for comment in comments_result.data or []:
+            # Get user name - handle both dict and list formats from Supabase join
             usr = comment.get("users")
             if usr:
-                comment["user_name"] = usr.get("full_name")
+                if isinstance(usr, list):
+                    usr = usr[0] if usr else None
+                if usr:
+                    comment["user_name"] = usr.get("full_name")
             
+            # Get employee name - handle both dict and list formats from Supabase join
             emp = comment.get("employees")
             if emp:
-                comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                # Handle both dict and list formats from Supabase join
+                if isinstance(emp, list):
+                    emp = emp[0] if emp else None
+                if emp:
+                    comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+
+            # Fallback: nếu chưa có employee_name, tìm theo employee_id hoặc user_id
+            if not comment.get("employee_name"):
+                employee_id = comment.get("employee_id")
+                if employee_id:
+                    try:
+                        emp_result = supabase.table("employees").select("first_name, last_name").eq("id", employee_id).single().execute()
+                        if emp_result.data:
+                            emp_data = emp_result.data
+                            comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                    except Exception:
+                        pass
+                
+                # Fallback: tìm employee theo user_id
+                if not comment.get("employee_name") and comment.get("user_id"):
+                    try:
+                        emp_result = supabase.table("employees").select("first_name, last_name").eq("user_id", comment.get("user_id")).single().execute()
+                        if emp_result.data:
+                            emp_data = emp_result.data
+                            comment["employee_name"] = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                    except Exception:
+                        pass
 
             # Fallback: nếu chưa có user_name mà có user_id thì lấy từ bảng users
             if not comment.get("user_name") and comment.get("user_id"):

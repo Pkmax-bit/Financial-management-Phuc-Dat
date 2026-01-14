@@ -342,7 +342,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     HelpCircle,
     CheckSquare,
     PlayCircle,
-    MessageSquare
+    MessageSquare,
+    Smartphone
   }
 
   const handleNavigation = (href: string) => {

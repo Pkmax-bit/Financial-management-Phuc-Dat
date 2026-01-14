@@ -155,6 +155,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     roles: ['admin'],
     category: 'management'
   },
+  {
+    name: 'Link tải App Android',
+    href: '/system/app-download',
+    icon: 'Smartphone',
+    description: 'Quản lý link tải app Android (chỉ admin)',
+    roles: ['admin'],
+    category: 'management'
+  },
 ]
 
 // Get navigation items for a specific role

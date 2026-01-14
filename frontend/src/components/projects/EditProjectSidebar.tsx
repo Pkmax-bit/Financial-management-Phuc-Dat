@@ -207,6 +207,11 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
         budget: formData.budget ? parseFloat(formData.budget) : null,
         hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
         progress: Number(formData.progress)
+        // Note: Backend will automatically update status based on progress:
+        // - progress >= 99.9% -> status = 'completed'
+        // - 0% < progress < 100% -> status = 'active'
+        // - progress = 0% -> status = 'planning'
+        // Database trigger will also handle this automatically
       }
 
       await projectApi.updateProject(project.id, updateData)

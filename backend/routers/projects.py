@@ -1417,18 +1417,55 @@ async def update_project(
         
         # Auto-update status based on progress (only if status_id is not being updated)
         # If status_id is provided, respect it and don't auto-update status enum
+        # Note: Database trigger will also handle this, but we do it here for consistency
         if 'progress' in update_data and 'status_id' not in update_data:
             progress = update_data['progress']
+            
+            # Normalize progress: if > 1, assume it's 0-100 scale and convert to 0-1
+            progress_normalized = progress
+            if progress > 1:
+                progress_normalized = progress / 100.0
+                update_data['progress'] = progress_normalized  # Update to normalized value
+            
             # Get current project status
             current_project = supabase.table("projects").select("status, status_id").eq("id", project_id).execute()
             current_status = current_project.data[0]['status'] if current_project.data else 'planning'
             old_status_id = current_project.data[0].get('status_id') if current_project.data else None
 
-            # Auto-change status based on progress (only for legacy status enum)
-            if progress > 0 and current_status == 'planning':
-                update_data['status'] = 'active'
-            elif progress >= 100 and current_status not in ['completed', 'cancelled']:
+            # Auto-change status based on progress (matching database trigger logic)
+            # progress >= 0.999 (99.9%) -> completed
+            # 0 < progress < 1 -> active  
+            # progress <= 0 -> planning
+            if progress_normalized >= 0.999:
                 update_data['status'] = 'completed'
+                # Try to find completed status_id
+                completed_status = supabase.table("project_statuses")\
+                    .select("id")\
+                    .or_("code.ilike.completed,name.ilike.%completed%,name.ilike.%hoàn thành%")\
+                    .limit(1)\
+                    .execute()
+                if completed_status.data:
+                    update_data['status_id'] = completed_status.data[0]['id']
+            elif progress_normalized > 0.0:
+                update_data['status'] = 'active'
+                # Try to find active status_id
+                active_status = supabase.table("project_statuses")\
+                    .select("id")\
+                    .or_("code.ilike.active,name.ilike.%active%")\
+                    .limit(1)\
+                    .execute()
+                if active_status.data:
+                    update_data['status_id'] = active_status.data[0]['id']
+            else:
+                update_data['status'] = 'planning'
+                # Try to find planning status_id
+                planning_status = supabase.table("project_statuses")\
+                    .select("id")\
+                    .or_("code.ilike.planning,name.ilike.%planning%")\
+                    .limit(1)\
+                    .execute()
+                if planning_status.data:
+                    update_data['status_id'] = planning_status.data[0]['id']
         
         # Get old status_id before update
         old_project = supabase.table("projects").select("status_id").eq("id", project_id).execute()
