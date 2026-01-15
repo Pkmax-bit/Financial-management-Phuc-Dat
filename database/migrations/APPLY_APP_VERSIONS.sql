@@ -6,3 +6,7 @@
 
 -- Or copy and paste the entire content of create_app_versions_table.sql
 
+
+
+
+

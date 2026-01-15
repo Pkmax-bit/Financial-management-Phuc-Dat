@@ -49,3 +49,7 @@ CREATE POLICY "Users can delete their own reactions"
 COMMENT ON TABLE message_reactions IS 'Tracks emoji reactions on chat messages (like Facebook/Zalo reactions)';
 
 
+
+
+
+

@@ -116,3 +116,7 @@ if __name__ == "__main__":
         print("   python check_app_version_url.py --list           # Liệt kê tất cả versions")
         print("   python check_app_version_url.py --update 1 --url 'https://...'  # Cập nhật URL")
 
+
+
+
+

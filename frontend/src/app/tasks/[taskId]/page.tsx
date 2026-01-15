@@ -728,6 +728,42 @@ export default function TaskDetailPage() {
     loadTaskDetails()
   }, [loadTaskDetails])
 
+  // Supabase Realtime subscription for task comments
+  useEffect(() => {
+    if (!taskId) return
+
+    // Subscribe to task_comments changes for this specific task
+    const channel = supabase
+      .channel(`task-comments-${taskId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'task_comments',
+          filter: `task_id=eq.${taskId}` // Filter by task_id
+        },
+        (payload) => {
+          console.log('Realtime comment update:', payload)
+          
+          // Reload comments to get latest data including joined fields (user_name, employee_name, etc.)
+          loadComments()
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Subscribed to task comments realtime for task:', taskId)
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Error subscribing to task comments realtime')
+        }
+      })
+
+    // Cleanup: unsubscribe when component unmounts or taskId changes
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [taskId, loadComments])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')

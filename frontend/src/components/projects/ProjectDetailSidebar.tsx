@@ -26,12 +26,12 @@ import {
   Check,
 } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
+import { apiGet } from '@/lib/api'
 import ProjectTeam from './ProjectTeam'
 import ProjectTasksTab from './ProjectTasksTab'
 import ProjectStatusBar from './ProjectStatusBar'
 import CreateQuoteSidebarFullscreen from '@/components/sales/CreateQuoteSidebarFullscreen'
 import CreateProjectExpenseDialog from '@/components/expenses/CreateProjectExpenseDialog'
-import { apiGet } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
 interface Project {
@@ -122,13 +122,18 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
 
     const fetchFinancial = async () => {
       try {
-        const res = await fetch(getApiEndpoint(`/api/projects/${project.id}/financial-summary`))
-        if (res.ok) {
-          const data = await res.json()
+        const data = await apiGet(`/api/projects/${project.id}/financial-summary`)
+        if (data) {
           setFinancialData(data)
         }
-      } catch (e) {
-        console.error('Failed to fetch project financial summary', e)
+      } catch (e: any) {
+        // Handle 403 gracefully - user may not have permission to view financial data
+        if (e?.status === 403) {
+          console.warn('No permission to view financial summary for this project')
+          setFinancialData(null)
+        } else {
+          console.error('Failed to fetch project financial summary', e)
+        }
       }
     }
 

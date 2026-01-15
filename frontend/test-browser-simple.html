@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Detail Page Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .log {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Project Detail Page - Automated Test</h1>
+    
+    <div class="test-container">
+        <h2>Test Configuration</h2>
+        <label>
+            Project ID: 
+            <input type="text" id="projectId" value="6bf71318-f57f-405f-b137-f6770c99cd01" style="width: 400px; padding: 5px;">
+        </label>
+        <br><br>
+        <label>
+            Frontend URL: 
+            <input type="text" id="frontendUrl" value="http://localhost:3000" style="width: 400px; padding: 5px;">
+        </label>
+        <br><br>
+        <button onclick="runTests()">🚀 Run Tests</button>
+        <button onclick="openProjectPage()">📂 Open Project Page</button>
+        <button onclick="clearLogs()">🗑️ Clear Logs</button>
+    </div>
+
+    <div class="test-container">
+        <h2>Test Results</h2>
+        <div id="testResults"></div>
+    </div>
+
+    <div class="test-container">
+        <h2>Console Logs</h2>
+        <div id="consoleLog" class="log"></div>
+    </div>
+
+    <div class="test-container">
+        <h2>Project Page Preview</h2>
+        <iframe id="projectFrame" src="about:blank"></iframe>
+    </div>
+
+    <script>
+        const logs = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.push({ timestamp, message, type });
+            updateLogDisplay();
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function updateLogDisplay() {
+            const logDiv = document.getElementById('consoleLog');
+            logDiv.innerHTML = logs.map(log => 
+                `<div class="test-result ${log.type}">
+                    <strong>[${log.timestamp}]</strong> ${log.message}
+                </div>`
+            ).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function addResult(title, message, type = 'info') {
+            const resultsDiv = document.getElementById('testResults');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.innerHTML = `<strong>${title}</strong><br>${message}`;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function clearLogs() {
+            logs.length = 0;
+            updateLogDisplay();
+            document.getElementById('testResults').innerHTML = '';
+        }
+
+        function openProjectPage() {
+            const projectId = document.getElementById('projectId').value;
+            const frontendUrl = document.getElementById('frontendUrl').value;
+            const url = `${frontendUrl}/projects/${projectId}/detail`;
+            
+            log(`Opening project page: ${url}`, 'info');
+            window.open(url, '_blank');
+            
+            // Also load in iframe
+            document.getElementById('projectFrame').src = url;
+        }
+
+        async function testEndpoint(name, url, method = 'GET', body = null) {
+            log(`Testing: ${name} - ${method} ${url}`, 'info');
+            
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(url, options);
+                const data = await response.json().catch(() => ({ message: 'No JSON response' }));
+                
+                if (response.ok) {
+                    log(`✅ ${name}: Success (${response.status})`, 'success');
+                    return { success: true, status: response.status, data };
+                } else if (response.status === 401 || response.status === 403) {
+                    log(`⚠️ ${name}: Auth Error (${response.status}) - ${data.detail || data.message || 'Authentication failed'}`, 'warning');
+                    return { success: false, status: response.status, authError: true, data };
+                } else {
+                    log(`❌ ${name}: Error (${response.status}) - ${data.detail || data.message || 'Request failed'}`, 'error');
+                    return { success: false, status: response.status, data };
+                }
+            } catch (error) {
+                log(`❌ ${name}: Exception - ${error.message}`, 'error');
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function runTests() {
+            clearLogs();
+            addResult('Test Started', 'Running automated tests...', 'info');
+            
+            const projectId = document.getElementById('projectId').value;
+            const frontendUrl = document.getElementById('frontendUrl').value;
+            const apiUrl = frontendUrl.replace(':3000', ':8000'); // Assume backend on port 8000
+            
+            log('🚀 Starting tests...', 'info');
+            
+            // Test 1: Frontend accessibility
+            addResult('Test 1', 'Checking frontend server...', 'info');
+            try {
+                const response = await fetch(`${frontendUrl}/login`);
+                if (response.ok) {
+                    addResult('Test 1', '✅ Frontend server is accessible', 'success');
+                    log('Frontend server is running', 'success');
+                } else {
+                    addResult('Test 1', `⚠️ Frontend returned status ${response.status}`, 'warning');
+                }
+            } catch (error) {
+                addResult('Test 1', `❌ Frontend not accessible: ${error.message}`, 'error');
+                log(`Frontend error: ${error.message}`, 'error');
+                return;
+            }
+            
+            // Test 2: Open project page
+            addResult('Test 2', 'Opening project detail page...', 'info');
+            openProjectPage();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Test 3: Check for console errors (this would need to be done in the actual page context)
+            addResult('Test 3', '⚠️ Console error checking requires browser DevTools', 'warning');
+            log('To check console errors:', 'info');
+            log('1. Open browser DevTools (F12)', 'info');
+            log('2. Go to Console tab', 'info');
+            log('3. Look for red error messages', 'info');
+            log('4. Check for "Not authenticated" or "401/403" errors', 'info');
+            
+            // Test 4: Test API endpoints (would need authentication)
+            addResult('Test 4', '⚠️ API endpoint tests require authentication token', 'warning');
+            log('To test API endpoints:', 'info');
+            log('1. Open project detail page in browser', 'info');
+            log('2. Open DevTools > Application > Local Storage', 'info');
+            log('3. Find Supabase auth token', 'info');
+            log('4. Use that token to test API endpoints', 'info');
+            
+            addResult('Tests Complete', 'Check the logs above for details. Open the project page and check browser console for errors.', 'info');
+            log('✅ Tests completed. Please check browser console for any errors.', 'success');
+        }
+
+        // Auto-run on load (optional)
+        // runTests();
+    </script>
+</body>
+</html>
+
+

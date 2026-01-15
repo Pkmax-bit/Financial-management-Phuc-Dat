@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Edit, DollarSign, Clock, Users, TrendingUp, Calendar, Target, CheckSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { getApiEndpoint } from '@/lib/apiUrl'
+import { apiGet } from '@/lib/api'
 import ProjectTasksTab from '@/components/projects/ProjectTasksTab'
 import EditProjectModal from '@/components/projects/EditProjectModal';
 
@@ -136,13 +137,18 @@ export default function ProjectDetailPage() {
 
   const fetchFinancialSummary = async () => {
     try {
-      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/financial-summary`))
-      if (response.ok) {
-        const data = await response.json();
+      const data = await apiGet(`/api/projects/${projectId}/financial-summary`)
+      if (data) {
         setFinancialSummary(data);
       }
-    } catch (error) {
-      console.error('Error fetching financial summary:', error);
+    } catch (error: any) {
+      // Handle 403 gracefully - user may not have permission to view financial data
+      if (error?.status === 403) {
+        console.warn('No permission to view financial summary for this project')
+        setFinancialSummary(null)
+      } else {
+        console.error('Error fetching financial summary:', error);
+      }
     } finally {
       setLoading(false);
     }

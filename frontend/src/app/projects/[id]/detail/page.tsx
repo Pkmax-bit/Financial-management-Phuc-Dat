@@ -30,7 +30,7 @@ import ProjectTeam from '@/components/projects/ProjectTeam'
 import ProjectTimeline from '@/components/projects/ProjectTimeline'
 // Đã ẩn tab Hóa đơn & Chi phí trên giao diện chi tiết dự án
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
-import { getApiEndpoint } from '@/lib/apiUrl'
+import { apiGet, apiPut } from '@/lib/api'
 import ProjectTasksTab from '@/components/projects/ProjectTasksTab'
 
 interface Project {
@@ -151,17 +151,18 @@ export default function ProjectDetailPage() {
   const fetchProject = async () => {
     try {
       setLoading(true)
-      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}`))
-
-      if (response.ok) {
-        const data = await response.json()
-        setProject(data)
-      } else {
-        setError('Project not found')
-      }
-    } catch (error) {
+      const data = await apiGet(`/api/projects/${projectId}`)
+      setProject(data)
+    } catch (error: any) {
       console.error('Error fetching project:', error)
-      setError('Error loading project')
+      if (error?.status === 404) {
+        setError('Project not found')
+      } else if (error?.status === 401 || error?.status === 403) {
+        setError('Not authenticated')
+        router.push('/login')
+      } else {
+        setError('Error loading project')
+      }
     } finally {
       setLoading(false)
     }
@@ -201,6 +202,7 @@ export default function ProjectDetailPage() {
   }
 
   const handleStartProgressEdit = () => {
+    if (!project) return
     setProgressValue(project.progress.toString())
     setEditingProgress(true)
   }
@@ -218,22 +220,21 @@ export default function ProjectDetailPage() {
     }
 
     try {
-      await fetch(getApiEndpoint(`/api/projects/${projectId}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          progress: newProgress
-        })
+      await apiPut(`/api/projects/${projectId}`, {
+        progress: newProgress
       })
 
       setEditingProgress(false)
       setProgressValue('')
       fetchProject() // Refresh project data
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating progress:', error)
-      alert('Không thể cập nhật tiến độ. Vui lòng thử lại.')
+      if (error?.status === 401 || error?.status === 403) {
+        alert('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+        router.push('/login')
+      } else {
+        alert('Không thể cập nhật tiến độ. Vui lòng thử lại.')
+      }
     }
   }
 

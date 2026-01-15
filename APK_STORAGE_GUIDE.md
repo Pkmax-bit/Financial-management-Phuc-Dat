@@ -227,3 +227,7 @@ WHERE version_code = 1;
 | **Metadata** | `app_versions` table | Thông tin version, URL, size |
 | **Download URL** | `apk_file_url` column | URL công khai để download |
 
+
+
+
+

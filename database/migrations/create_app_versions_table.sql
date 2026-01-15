@@ -141,3 +141,7 @@ COMMENT ON COLUMN public.app_versions.apk_file_path IS 'Path to APK file in Supa
 COMMENT ON COLUMN public.app_versions.apk_file_url IS 'Public URL to download APK (e.g., Google Drive, GitHub Releases)';
 COMMENT ON COLUMN public.app_versions.is_active IS 'Only one version can be active at a time (latest version)';
 
+
+
+
+

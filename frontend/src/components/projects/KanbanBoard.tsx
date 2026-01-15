@@ -405,8 +405,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       const response = await apiGet('/api/customers?limit=1000')
       const customersData = response?.customers || response || []
       setCustomers(customersData.map((c: any) => ({ id: c.id, name: c.name })))
-    } catch (error) {
-      console.error('Error fetching customers:', error)
+    } catch (error: any) {
+      // Handle 403 gracefully - user may not have permission to view customers
+      if (error?.status === 403) {
+        console.warn('No permission to view customers list')
+        setCustomers([])
+      } else {
+        console.error('Error fetching customers:', error)
+      }
     }
   }
 

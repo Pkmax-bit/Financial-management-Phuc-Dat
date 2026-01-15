@@ -111,3 +111,7 @@ private static final long CACHE_VALIDITY_MS = 5000; // 5 seconds cache validity
 4. Implement DiffUtil trong adapters
 5. Add offline support với operation queue
 
+
+
+
+

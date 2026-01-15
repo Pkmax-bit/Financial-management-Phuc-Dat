@@ -134,3 +134,7 @@ GET https://financial-management-backend-3m78.onrender.com/api/app-updates/downl
 
 Hệ thống hiện đã **tải APK trực tiếp từ backend endpoint** thay vì Google Drive link!
 
+
+
+
+

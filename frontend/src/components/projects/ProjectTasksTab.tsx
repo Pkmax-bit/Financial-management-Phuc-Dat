@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CheckSquare,
@@ -99,6 +99,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   const [projectStatuses, setProjectStatuses] = useState<any[]>([])
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [allComments, setAllComments] = useState<TaskComment[]>([])
+  const allCommentsRef = useRef<TaskComment[]>([]) // Ref to track previous comments without causing re-renders
   const [loadingComments, setLoadingComments] = useState(false)
   const [chatMessage, setChatMessage] = useState('')
   const [replyingTo, setReplyingTo] = useState<TaskComment | null>(null)
@@ -106,6 +107,18 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [sendingMessageIds, setSendingMessageIds] = useState<Set<string>>(new Set()) // Track messages being sent
+  const [isTyping, setIsTyping] = useState(false) // Track if user is typing (for local UI - not shown to self)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Timeout for typing indicator
+  const [typingUsers, setTypingUsers] = useState<Map<string, { userId: string; userName: string; timestamp: number }>>(new Map()) // Track other users typing
+  const typingChannelRef = useRef<any>(null) // Realtime channel for typing indicators
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null) // Polling interval for new messages
+  const lastCommentCountRef = useRef<number>(0) // Track last comment count for polling
+  const lastRealtimeUpdateRef = useRef<number>(Date.now()) // Track last realtime update time
+  const pollingAttemptsRef = useRef<number>(0) // Track polling attempts for exponential backoff
+  const isPollingRef = useRef<boolean>(false) // Prevent concurrent polling requests
+  const typingBroadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Throttle typing broadcasts
+  const lastTypingBroadcastRef = useRef<number>(0) // Last time we broadcasted typing
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
@@ -120,6 +133,15 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     phone?: string;
     status?: string;
   }>>([])
+  const groupMembersRef = useRef<Array<{
+    employee_id: string;
+    employee_name?: string;
+    employee_email?: string;
+    responsibility_type?: 'accountable' | 'responsible' | 'consulted' | 'informed';
+    avatar?: string;
+    phone?: string;
+    status?: string;
+  }>>([]) // Ref to avoid dependency issues
   const [newMessageNotification, setNewMessageNotification] = useState<{ id: string; message: string } | null>(null)
   const mentionInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [showQuickCreate, setShowQuickCreate] = useState(false)
@@ -145,7 +167,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     }
   }
 
-  const getDisplayName = (comment: TaskComment) => {
+  const getDisplayName = useCallback((comment: TaskComment) => {
     if (comment.user_name) return comment.user_name
     if (comment.employee_name) return comment.employee_name
 
@@ -157,14 +179,15 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       return user.full_name || 'Tôi'
     }
 
-    // Try to find in groupMembers
-    if (groupMembers.length > 0) {
-      const member = groupMembers.find(m => m.employee_id === comment.employee_id)
+    // Try to find in groupMembers using ref to avoid dependency
+    const members = groupMembersRef.current
+    if (members.length > 0) {
+      const member = members.find(m => m.employee_id === comment.employee_id)
       if (member?.employee_name) return member.employee_name
     }
 
     return 'Người dùng'
-  }
+  }, [user]) // Removed groupMembers from dependencies
 
   // Auto scroll to bottom when comments change
   useEffect(() => {
@@ -220,6 +243,177 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     }
   }, [project?.category_id, project?.id])
 
+  const fetchAllComments = useCallback(async (silent = false) => {
+    try {
+      if (!silent) {
+        setLoadingComments(true)
+      }
+
+      // Use the new project-level endpoint for much better performance
+      const allCommentsFlat: TaskComment[] = await apiGet(`/api/tasks/project/${projectId}/comments`)
+
+      if (!allCommentsFlat) return
+
+      // Sort by created_at ascending (oldest first, like a chat)
+      allCommentsFlat.sort((a: TaskComment, b: TaskComment) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+
+      // Check for new messages (not from current user)
+      // Use ref to avoid dependency on allComments state
+      const previousComments = allCommentsRef.current
+      if (silent && user && previousComments.length > 0) {
+        const newComments = allCommentsFlat.filter((newComment: TaskComment) => {
+          const isNew = !previousComments.find(oldComment => oldComment.id === newComment.id)
+          const isNotFromMe = newComment.user_id !== user.id && newComment.employee_id !== user.id
+          return isNew && isNotFromMe
+        })
+
+        if (newComments.length > 0) {
+          // Show notification
+          const latestComment = newComments[0]
+          setNewMessageNotification({
+            id: latestComment.id,
+            message: `${getDisplayName(latestComment)}: ${latestComment.comment?.substring(0, 50) || 'đã gửi tin nhắn'}...`
+          })
+          // Auto-hide after 5 seconds
+          setTimeout(() => {
+            setNewMessageNotification(null)
+          }, 5000)
+        }
+      }
+
+      // Merge with optimistic messages (keep sending messages)
+      setAllComments(prev => {
+        // Keep ALL optimistic messages that are still in sendingMessageIds
+        const optimisticMessages = prev.filter(c => 
+          c.id?.startsWith('temp-') && sendingMessageIds.has(c.id)
+        )
+        
+        // Combine with real messages, avoiding duplicates by ID
+        const realMessageIds = new Set(allCommentsFlat.map(c => c.id))
+        
+        // Also check for optimistic messages that match real messages by content
+        // (in case realtime already replaced them but we haven't updated sendingMessageIds yet)
+        const merged = [...allCommentsFlat]
+        
+        // Add optimistic messages that don't have a real replacement yet
+        optimisticMessages.forEach(optMsg => {
+          // Check if there's a real message with same content
+          const hasRealMatch = allCommentsFlat.some(real => 
+            real.comment === optMsg.comment &&
+            real.task_id === optMsg.task_id &&
+            real.type === optMsg.type
+          )
+          
+          // Only add if no real match found
+          if (!hasRealMatch) {
+            merged.push(optMsg)
+          } else {
+            // Real message exists, remove from sendingMessageIds
+            setSendingMessageIds(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(optMsg.id)
+              return newSet
+            })
+          }
+        })
+        
+        // Remove duplicates by ID (keep real messages over optimistic)
+        const unique = merged.filter((c, index, self) => 
+          index === self.findIndex(cc => cc.id === c.id)
+        )
+        
+        // Sort again after merge
+        unique.sort((a: TaskComment, b: TaskComment) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+        allCommentsRef.current = unique
+        return unique
+      })
+    } catch (err: any) {
+      console.error('Error fetching comments:', err)
+      
+      // Only show error if it's not an authentication error (auth errors will redirect)
+      // Don't redirect here - let API client handle it
+      if (err?.status !== 401 && err?.status !== 403) {
+        // For non-auth errors, just log - don't show alert to avoid spam
+        console.warn('Failed to fetch comments, will retry later')
+      }
+      // If it's an auth error, API client will handle redirect
+    } finally {
+      if (!silent) {
+        setLoadingComments(false)
+      }
+    }
+  }, [projectId, user]) // Removed getDisplayName and allComments from dependencies to avoid infinite loop
+
+  // Load group members function - defined before useEffect that uses it
+  const loadGroupMembers = useCallback(async () => {
+    if (!projectId) return
+    
+    try {
+      // Lấy nhân viên từ đội ngũ dự án (project team)
+      try {
+        const teamResponse = await apiGet(`/api/projects/${projectId}/team`)
+        const teamMembers = teamResponse?.team_members || []
+
+        // Convert to format expected by mentions and assignments
+        // Chỉ lấy các thành viên có employee_id và status = 'active'
+        const members = teamMembers
+          .filter((member: any) => member.employee_id && member.status === 'active')
+          .map((member: any) => ({
+            employee_id: member.employee_id, // Use actual employee ID from employees table
+            employee_name: member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email || 'Thành viên',
+            employee_email: member.email
+          }))
+
+        setGroupMembers(members)
+        groupMembersRef.current = members // Update ref
+      } catch (teamErr) {
+        console.error('Error fetching project team members:', teamErr)
+        // Fallback: Get group members from all tasks (use current tasks from state)
+        const currentTasks = tasks // Use tasks from closure, but this should be stable
+        const groupIds = [...new Set(currentTasks.map(t => t.group_id).filter(id => id && id !== 'null' && id !== 'undefined' && typeof id === 'string'))]
+        if (groupIds.length === 0) {
+          setGroupMembers([])
+          groupMembersRef.current = []
+          return
+        }
+
+        const membersPromises = groupIds.map(async (groupId) => {
+          try {
+            // Validate groupId before making API call
+            if (!groupId || groupId === 'null' || groupId === 'undefined') {
+              console.warn(`Skipping invalid groupId: ${groupId}`)
+              return []
+            }
+            // Pass project_id to get project team information
+            const members = await apiGet(`/api/tasks/groups/${groupId}/members?project_id=${projectId}`)
+            return members || []
+          } catch (err) {
+            console.error(`Error fetching members for group ${groupId}:`, err)
+            return []
+          }
+        })
+
+        const membersArrays = await Promise.all(membersPromises)
+        const allMembers = membersArrays.flat()
+        // Remove duplicates and filter to only include members with valid employee IDs
+        const uniqueMembers = Array.from(
+          new Map(allMembers.map(m => [m.employee_id, m])).values()
+        ).filter((member: any) => member.employee_id) // Only include members with employee_id
+        setGroupMembers(uniqueMembers)
+        groupMembersRef.current = uniqueMembers // Update ref
+      }
+    } catch (err) {
+      console.error('Error loading group members:', err)
+      setGroupMembers([])
+      groupMembersRef.current = []
+    }
+  }, [projectId]) // Only depend on projectId - tasks will be accessed from closure when needed
+
+  // Load comments and set up when tasks are loaded
   useEffect(() => {
     if (tasks.length > 0) {
       fetchAllComments()
@@ -227,45 +421,550 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       if (!selectedTaskId) {
         setSelectedTaskId(tasks[0].id)
       }
-      // Load group members for mentions
-      loadGroupMembers()
     }
-  }, [tasks, selectedTaskId])
+  }, [tasks, selectedTaskId, fetchAllComments])
+
+  // Load group members separately - only when projectId changes or when tasks are first loaded
+  const hasLoadedGroupMembers = useRef(false)
+  useEffect(() => {
+    if (projectId && !hasLoadedGroupMembers.current) {
+      loadGroupMembers()
+      hasLoadedGroupMembers.current = true
+    }
+    // Reset flag when projectId changes
+    return () => {
+      hasLoadedGroupMembers.current = false
+    }
+  }, [projectId, loadGroupMembers])
 
   // Realtime subscription for new messages
   useEffect(() => {
-    if (tasks.length === 0) return
+    if (tasks.length === 0 || !projectId) return
 
-    const taskIds = tasks.map(t => t.id)
+    let channel: any = null
 
-    // Subscribe to task_comments changes
-    const channel = supabase
-      .channel(`project-comments-${projectId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'task_comments'
-        },
-        (payload) => {
-          // Check if this comment belongs to one of the project tasks
-          const newComment = payload.new as any
-          const oldComment = payload.old as any
-          const taskId = newComment?.task_id || oldComment?.task_id
-
-          if (taskId && taskIds.includes(taskId)) {
-            // Refresh comments to get latest data including joined fields
-            fetchAllComments(true)
-          }
+    const setupRealtime = async () => {
+      try {
+        // Check if user is authenticated before subscribing
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError || !session) {
+          console.warn('[Realtime] No session available, skipping realtime subscription')
+          return
         }
-      )
-      .subscribe()
+
+        const taskIds = tasks.map(t => t.id)
+        console.log('[Realtime] Setting up subscription for project:', projectId, 'Tasks:', taskIds)
+
+        // Subscribe to task_comments changes for all tasks in this project
+        // Note: Subscribe to each event type separately to avoid "mismatch" error
+        // Supabase Realtime doesn't support IN filter, so we filter in callback
+        channel = supabase
+          .channel(`project-comments-${projectId}`, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: projectId }
+            }
+          })
+          // Subscribe to INSERT events
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'task_comments'
+            },
+            (payload) => {
+              console.log('[Realtime] Comment INSERT event received:', payload)
+              const newComment = payload.new as any
+              const taskId = newComment?.task_id
+              
+              console.log('[Realtime] New comment details:', {
+                id: newComment.id,
+                task_id: taskId,
+                comment: newComment.comment?.substring(0, 50),
+                user_id: newComment.user_id,
+                employee_id: newComment.employee_id
+              })
+              console.log('[Realtime] Task IDs in project:', taskIds)
+              console.log('[Realtime] Task ID matches?', taskId && taskIds.includes(taskId))
+
+              if (taskId && taskIds.includes(taskId)) {
+                console.log('[Realtime] Processing comment for task:', taskId)
+                // Check if this is from current user (might be replacing optimistic message)
+                const isFromCurrentUser = user && (
+                  (newComment.user_id && user.id === newComment.user_id) ||
+                  (newComment.employee_id && user.id === newComment.employee_id)
+                )
+                
+                // If from current user, replace optimistic message with real one
+                if (isFromCurrentUser) {
+                  console.log('[Realtime] ✅ Received own message, replacing optimistic:', newComment.id)
+                  
+                  // Remove from sendingMessageIds FIRST (to hide "đang gửi" immediately)
+                  setSendingMessageIds(prev => {
+                    const newSet = new Set(prev)
+                    // Find and remove all temp IDs that match this comment
+                    prev.forEach(tempId => {
+                      // Check if this temp ID's message matches the new real comment
+                      const tempComment = allCommentsRef.current.find(c => c.id === tempId)
+                      if (tempComment) {
+                        // Match by exact content OR by task_id + timestamp (within 10s)
+                        const contentMatch = tempComment.comment === newComment.comment && 
+                                           tempComment.task_id === newComment.task_id &&
+                                           tempComment.type === (newComment.type || 'text')
+                        
+                        // Also match by timestamp if content doesn't match exactly (for files)
+                        const tempTime = new Date(tempComment.created_at || Date.now()).getTime()
+                        const realTime = new Date(newComment.created_at).getTime()
+                        const timeDiff = Math.abs(realTime - tempTime)
+                        const timeMatch = tempComment.task_id === newComment.task_id && 
+                                        timeDiff < 10000 && // Within 10 seconds
+                                        tempComment.type === (newComment.type || 'text')
+                        
+                        if (contentMatch || timeMatch) {
+                          console.log('[Realtime] ✅ Removing from sendingMessageIds:', tempId, 
+                            contentMatch ? '(content match)' : '(time match)')
+                          newSet.delete(tempId)
+                        }
+                      }
+                    })
+                    return newSet
+                  })
+                  
+                  // Then update comments - replace optimistic with real
+                  setAllComments(prev => {
+                    // Find optimistic messages that match this real comment
+                    const matchingTempIds: string[] = []
+                    const filtered = prev.filter(c => {
+                      if (!c.id?.startsWith('temp-')) {
+                        // Skip if this is the real comment we're adding
+                        if (c.id === newComment.id) {
+                          return false // Remove old instance if exists
+                        }
+                        return true
+                      }
+                      // Check if optimistic message matches
+                      // Match by exact content OR by task_id + timestamp (within 10s)
+                      const contentMatch = c.comment === newComment.comment && 
+                                         c.task_id === newComment.task_id &&
+                                         c.type === (newComment.type || 'text')
+                      
+                      // Also match by timestamp if content doesn't match exactly (for files)
+                      const tempTime = new Date(c.created_at || Date.now()).getTime()
+                      const realTime = new Date(newComment.created_at).getTime()
+                      const timeDiff = Math.abs(realTime - tempTime)
+                      const timeMatch = c.task_id === newComment.task_id && 
+                                      timeDiff < 10000 && // Within 10 seconds
+                                      c.type === (newComment.type || 'text')
+                      
+                      const matches = contentMatch || timeMatch
+                      if (matches) {
+                        matchingTempIds.push(c.id)
+                        console.log('[Realtime] ✅ Removing optimistic message:', c.id, 
+                          contentMatch ? '(content match)' : '(time match)')
+                      }
+                      return !matches
+                    })
+                    
+                    // Add the new real comment
+                    filtered.push(newComment as TaskComment)
+                    
+                    // Sort by created_at
+                    filtered.sort((a: TaskComment, b: TaskComment) =>
+                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    )
+                    allCommentsRef.current = filtered
+                    console.log('[Realtime] ✅ Updated comments. Total:', filtered.length, 'Removed temp IDs:', matchingTempIds)
+                    return filtered
+                  })
+                  
+                  // Scroll to bottom to show new message
+                  setTimeout(() => scrollToBottom('smooth'), 50)
+                } else {
+                  // From another user - add the new comment immediately
+                  console.log('[Realtime] ✅ Received new comment from another user:', {
+                    id: newComment.id,
+                    comment: newComment.comment?.substring(0, 50),
+                    user_id: newComment.user_id,
+                    employee_id: newComment.employee_id,
+                    task_id: newComment.task_id
+                  })
+                  
+                  // Add immediately to state
+                  setAllComments(prev => {
+                    // Check if comment already exists
+                    const exists = prev.find(c => c.id === newComment.id)
+                    if (exists) {
+                      console.log('[Realtime] ⚠️ Comment already exists, skipping:', newComment.id)
+                      return prev
+                    }
+                    
+                    // Add new comment immediately
+                    const updated = [...prev, newComment as TaskComment]
+                    updated.sort((a: TaskComment, b: TaskComment) =>
+                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    )
+                    allCommentsRef.current = updated
+                    console.log('[Realtime] ✅ Added new comment to state. Total comments:', updated.length)
+                    console.log('[Realtime] Comment data:', newComment)
+                    return updated
+                  })
+                  
+                  // Update last realtime update time (to prevent unnecessary polling)
+                  lastRealtimeUpdateRef.current = Date.now()
+                  
+                  // Scroll to bottom immediately (no delay)
+                  scrollToBottom('smooth')
+                  
+                  // Show notification for new message
+                  if (user) {
+                    const displayName = getDisplayName(newComment as TaskComment)
+                    console.log('[Realtime] Showing notification for:', displayName)
+                    setNewMessageNotification({
+                      id: newComment.id,
+                      message: `${displayName}: ${newComment.comment?.substring(0, 50) || 'đã gửi tin nhắn'}...`
+                    })
+                    setTimeout(() => {
+                      setNewMessageNotification(null)
+                    }, 5000)
+                  }
+                  
+                  // Fetch full comment data in background to update user_name, employee_name if missing
+                  // Use a short delay to avoid race conditions
+                  setTimeout(() => {
+                    fetchAllComments(true).catch(err => {
+                      console.warn('[Realtime] Failed to fetch full comments after new message:', err)
+                    })
+                  }, 1000)
+                }
+              }
+            }
+          )
+          // Subscribe to UPDATE events
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'task_comments'
+            },
+            (payload) => {
+              console.log('[Realtime] Comment UPDATE in project:', payload)
+              const newComment = payload.new as any
+              const taskId = newComment?.task_id
+
+              if (taskId && taskIds.includes(taskId)) {
+                // Refresh comments to get latest data including joined fields
+                fetchAllComments(true)
+              }
+            }
+          )
+          // Subscribe to DELETE events
+          .on(
+            'postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: 'task_comments'
+            },
+            (payload) => {
+              console.log('[Realtime] Comment DELETE in project:', payload)
+              const oldComment = payload.old as any
+              const taskId = oldComment?.task_id
+
+              if (taskId && taskIds.includes(taskId)) {
+                // Refresh comments to get latest data including joined fields
+                fetchAllComments(true)
+              }
+            }
+          )
+          .subscribe((status, err) => {
+            console.log('[Realtime] 📡 Subscription status changed:', status, err)
+            if (status === 'SUBSCRIBED') {
+              console.log('[Realtime] ✅ Successfully subscribed to project comments for project:', projectId)
+              console.log('[Realtime] ✅ Listening for INSERT, UPDATE, DELETE events on task_comments table')
+              console.log('[Realtime] ✅ Task IDs being monitored:', taskIds)
+              // Reset last update time when subscribed
+              lastRealtimeUpdateRef.current = Date.now()
+            } else if (status === 'CHANNEL_ERROR') {
+              // Log error but don't spam console - polling will handle it
+              console.warn('[Realtime] ⚠️ Realtime subscription failed, using polling fallback:', err?.message || err)
+              console.info('[Realtime] 💡 Polling will check for new messages every 3 seconds')
+              console.info('[Realtime] 💡 To enable realtime: Supabase Dashboard → Database → Replication → Enable for task_comments')
+              // Don't throw error - app should continue working without realtime
+              // Polling fallback will handle message updates
+            } else if (status === 'TIMED_OUT') {
+              console.warn('[Realtime] ⏱️ Subscription timed out for project:', projectId)
+              console.warn('[Realtime] Will retry automatically...')
+            } else if (status === 'CLOSED') {
+              console.log('[Realtime] 🔒 Subscription closed for project:', projectId)
+            } else {
+              console.log('[Realtime] 📡 Subscription status:', status)
+            }
+          })
+
+      } catch (error) {
+        console.error('[Realtime] Failed to setup realtime subscription:', error)
+        // Don't throw - app should work without realtime
+      }
+    }
+
+    setupRealtime()
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channel) {
+        console.log('[Realtime] Unsubscribing from project comments for project:', projectId)
+        supabase.removeChannel(channel)
+      }
     }
-  }, [tasks, projectId])
+  }, [tasks, projectId, fetchAllComments])
+
+  // Polling fallback: Fetch new messages periodically if realtime is not working
+  // Optimized to reduce server load:
+  // - Only polls when realtime is not working
+  // - Uses exponential backoff (5s -> 10s -> 15s, max 15s)
+  // - Only polls when tab is visible
+  // - Prevents concurrent requests
+  useEffect(() => {
+    if (tasks.length === 0 || !projectId || !selectedTaskId) {
+      // Clear polling if conditions not met
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+        pollingAttemptsRef.current = 0
+      }
+      return
+    }
+
+    const startPolling = () => {
+      // Clear any existing polling
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+
+      // Calculate polling interval with exponential backoff
+      // Start at 5 seconds, increase to max 15 seconds
+      const baseInterval = 5000 // 5 seconds
+      const maxInterval = 15000 // 15 seconds
+      const backoffMultiplier = Math.min(1 + (pollingAttemptsRef.current * 0.5), 3) // Max 3x
+      const pollingInterval = Math.min(baseInterval * backoffMultiplier, maxInterval)
+
+      pollingIntervalRef.current = setInterval(() => {
+        // Only poll if tab is visible (to save resources)
+        if (document.hidden) return
+
+        // Check if realtime has updated recently (within last 10 seconds)
+        // If yes, stop polling (realtime is working)
+        const timeSinceLastRealtimeUpdate = Date.now() - lastRealtimeUpdateRef.current
+        if (timeSinceLastRealtimeUpdate < 10000) {
+          // Realtime is working, stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current)
+            pollingIntervalRef.current = null
+            pollingAttemptsRef.current = 0
+            console.info('[Polling] ✅ Realtime working, stopped polling')
+          }
+          return
+        }
+
+        // Prevent concurrent polling requests
+        if (isPollingRef.current) {
+          console.log('[Polling] ⏭️ Skipping poll - previous request still in progress')
+          return
+        }
+
+        // Check current comment count
+        const currentCount = allCommentsRef.current.filter(
+          c => c.task_id === selectedTaskId
+        ).length
+
+        // Fetch comments to check for new messages (silent mode)
+        isPollingRef.current = true
+        fetchAllComments(true)
+          .then(() => {
+            const newCount = allCommentsRef.current.filter(
+              c => c.task_id === selectedTaskId
+            ).length
+            
+            if (newCount > currentCount) {
+              console.log('[Polling] ✅ Found', newCount - currentCount, 'new messages via polling')
+              scrollToBottom('smooth')
+              // Reset backoff on success
+              pollingAttemptsRef.current = 0
+            } else {
+              // Increment attempts for backoff (only if no new messages)
+              pollingAttemptsRef.current++
+            }
+            
+            lastCommentCountRef.current = newCount
+          })
+          .catch(err => {
+            console.warn('[Polling] ⚠️ Failed to poll for new messages:', err)
+            // Increase backoff on error
+            pollingAttemptsRef.current++
+          })
+          .finally(() => {
+            isPollingRef.current = false
+          })
+      }, pollingInterval)
+
+      console.info(`[Polling] 🔄 Started polling fallback (interval: ${pollingInterval/1000}s)`)
+    }
+
+    // Check if realtime is working before starting polling
+    const timeSinceLastRealtimeUpdate = Date.now() - lastRealtimeUpdateRef.current
+    if (timeSinceLastRealtimeUpdate > 10000) {
+      // Realtime not working, start polling
+      startPolling()
+    } else {
+      // Realtime is working, don't poll
+      console.info('[Polling] ℹ️ Realtime working, polling not needed')
+    }
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+        pollingAttemptsRef.current = 0
+      }
+    }
+  }, [projectId, tasks, selectedTaskId, fetchAllComments])
+
+  // Also poll when tab becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && tasks.length > 0 && projectId && selectedTaskId) {
+        // Tab became visible, check for new messages if realtime is not working
+        const timeSinceLastUpdate = Date.now() - lastRealtimeUpdateRef.current
+        if (timeSinceLastUpdate > 10000) {
+          // Realtime hasn't updated recently, fetch immediately (but only once)
+          if (!isPollingRef.current) {
+            console.log('[Polling] 👁️ Tab visible, checking for new messages...')
+            isPollingRef.current = true
+            fetchAllComments(true)
+              .then(() => {
+                scrollToBottom('smooth')
+              })
+              .finally(() => {
+                isPollingRef.current = false
+              })
+          }
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [projectId, tasks, selectedTaskId, fetchAllComments])
+
+  // Setup typing indicator realtime channel
+  useEffect(() => {
+    if (!projectId || !user) return
+
+    const setupTypingChannel = async () => {
+      try {
+        // Create a channel for typing indicators
+        const typingChannel = supabase.channel(`typing:project:${projectId}`, {
+          config: {
+            presence: {
+              key: user.id
+            }
+          }
+        })
+
+        // Listen for typing events from other users
+        typingChannel
+          .on('broadcast', { event: 'typing' }, (payload) => {
+            const { userId, userName, taskId: typingTaskId, isTyping: typingStatus } = payload.payload as any
+            
+            // Only show typing indicator for other users and if they're typing in the selected task
+            if (userId !== user.id && typingTaskId === selectedTaskId && typingStatus) {
+              setTypingUsers(prev => {
+                const newMap = new Map(prev)
+                newMap.set(userId, {
+                  userId,
+                  userName: userName || 'Người dùng',
+                  timestamp: Date.now()
+                })
+                return newMap
+              })
+            } else if (userId !== user.id && (!typingStatus || typingTaskId !== selectedTaskId)) {
+              // Remove typing indicator when user stops typing or switches task
+              setTypingUsers(prev => {
+                const newMap = new Map(prev)
+                newMap.delete(userId)
+                return newMap
+              })
+            }
+          })
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              console.log('[Typing] Successfully subscribed to typing channel for project:', projectId)
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('[Typing] Error subscribing to typing channel')
+            }
+          })
+
+        typingChannelRef.current = typingChannel
+
+        return () => {
+          if (typingChannel) {
+            supabase.removeChannel(typingChannel)
+          }
+        }
+      } catch (error) {
+        console.error('[Typing] Failed to setup typing channel:', error)
+      }
+    }
+
+    setupTypingChannel()
+
+    // Cleanup on unmount
+    return () => {
+      if (typingChannelRef.current) {
+        supabase.removeChannel(typingChannelRef.current)
+      }
+    }
+  }, [projectId, user, selectedTaskId])
+
+  // Cleanup typing indicators that are too old (user stopped typing)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTypingUsers(prev => {
+        const newMap = new Map(prev)
+        const now = Date.now()
+        let updated = false
+        
+        newMap.forEach((value, key) => {
+          // Remove typing indicator if it's older than 3 seconds (user likely stopped typing)
+          if (now - value.timestamp > 3000) {
+            newMap.delete(key)
+            updated = true
+          }
+        })
+        
+        return updated ? newMap : prev
+      })
+    }, 1000) // Check every second
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (typingBroadcastTimeoutRef.current) {
+        clearTimeout(typingBroadcastTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     // Auto-create preview for first image file
@@ -279,6 +978,20 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     }
     setPendingPreview(null)
   }, [pendingFiles])
+
+  // Helper function to extract file name from URL
+  const getFileNameFromUrl = (url: string): string => {
+    try {
+      // Remove query parameters
+      const urlWithoutParams = url.split('?')[0]
+      // Get the last part of the path
+      const fileName = urlWithoutParams.split('/').pop() || 'File'
+      // Decode URL encoding
+      return decodeURIComponent(fileName)
+    } catch {
+      return 'File'
+    }
+  }
 
   // Extract shared content from comments
   const sharedContent = useMemo(() => {
@@ -457,111 +1170,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     }
   }
 
-  const fetchAllComments = async (silent = false) => {
-    try {
-      if (!silent) {
-        setLoadingComments(true)
-      }
-
-      // Use the new project-level endpoint for much better performance
-      const allCommentsFlat: TaskComment[] = await apiGet(`/api/tasks/project/${projectId}/comments`)
-
-      if (!allCommentsFlat) return
-
-      // Sort by created_at ascending (oldest first, like a chat)
-      allCommentsFlat.sort((a: TaskComment, b: TaskComment) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      )
-
-      // Check for new messages (not from current user)
-      if (silent && user && allComments.length > 0) {
-        const newComments = allCommentsFlat.filter((newComment: TaskComment) => {
-          const isNew = !allComments.find(oldComment => oldComment.id === newComment.id)
-          const isNotFromMe = newComment.user_id !== user.id && newComment.employee_id !== user.id
-          return isNew && isNotFromMe
-        })
-
-        if (newComments.length > 0) {
-          // Show notification
-          const latestComment = newComments[0]
-          setNewMessageNotification({
-            id: latestComment.id,
-            message: `${getDisplayName(latestComment)}: ${latestComment.comment?.substring(0, 50) || 'đã gửi tin nhắn'}...`
-          })
-          // Auto-hide after 5 seconds
-          setTimeout(() => {
-            setNewMessageNotification(null)
-          }, 5000)
-        }
-      }
-
-      setAllComments(allCommentsFlat)
-    } catch (err) {
-      console.error('Error fetching comments:', err)
-    } finally {
-      if (!silent) {
-        setLoadingComments(false)
-      }
-    }
-  }
-
-  const loadGroupMembers = async () => {
-    try {
-      // Lấy nhân viên từ đội ngũ dự án (project team)
-      try {
-        const teamResponse = await apiGet(`/api/projects/${projectId}/team`)
-        const teamMembers = teamResponse?.team_members || []
-
-        // Convert to format expected by mentions and assignments
-        // Chỉ lấy các thành viên có employee_id và status = 'active'
-        const members = teamMembers
-          .filter((member: any) => member.employee_id && member.status === 'active')
-          .map((member: any) => ({
-            employee_id: member.employee_id, // Use actual employee ID from employees table
-            employee_name: member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email || 'Thành viên',
-            employee_email: member.email
-          }))
-
-        setGroupMembers(members)
-      } catch (teamErr) {
-        console.error('Error fetching project team members:', teamErr)
-        // Fallback: Get group members from all tasks
-        const groupIds = [...new Set(tasks.map(t => t.group_id).filter(id => id && id !== 'null' && id !== 'undefined' && typeof id === 'string'))]
-        if (groupIds.length === 0) {
-          setGroupMembers([])
-          return
-        }
-
-        const membersPromises = groupIds.map(async (groupId) => {
-          try {
-            // Validate groupId before making API call
-            if (!groupId || groupId === 'null' || groupId === 'undefined') {
-              console.warn(`Skipping invalid groupId: ${groupId}`)
-              return []
-            }
-            // Pass project_id to get project team information
-            const members = await apiGet(`/api/tasks/groups/${groupId}/members?project_id=${projectId}`)
-            return members || []
-          } catch (err) {
-            console.error(`Error fetching members for group ${groupId}:`, err)
-            return []
-          }
-        })
-
-        const membersArrays = await Promise.all(membersPromises)
-        const allMembers = membersArrays.flat()
-        // Remove duplicates and filter to only include members with valid employee IDs
-        const uniqueMembers = Array.from(
-          new Map(allMembers.map(m => [m.employee_id, m])).values()
-        ).filter((member: any) => member.employee_id) // Only include members with employee_id
-        setGroupMembers(uniqueMembers)
-      }
-    } catch (err) {
-      console.error('Error loading group members:', err)
-      setGroupMembers([])
-    }
-  }
-
   const getMentionMembers = () => {
     const members: Array<{ id: string; name: string; type: 'member' }> = []
 
@@ -610,6 +1218,87 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     const cursorPos = e.target.selectionStart || 0
 
     setChatMessage(value)
+
+    // Broadcast typing status to other users (throttled to avoid spam)
+    if (value.trim().length > 0 && selectedTaskId && user && typingChannelRef.current) {
+      const now = Date.now()
+      // Throttle: only broadcast every 1 second
+      if (now - lastTypingBroadcastRef.current > 1000) {
+        lastTypingBroadcastRef.current = now
+        
+        // Broadcast typing status
+        typingChannelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: {
+            userId: user.id,
+            userName: user.full_name || user.email || 'Người dùng',
+            taskId: selectedTaskId,
+            isTyping: true
+          }
+        })
+      } else {
+        // Schedule a delayed broadcast if we're throttling
+        if (typingBroadcastTimeoutRef.current) {
+          clearTimeout(typingBroadcastTimeoutRef.current)
+        }
+        typingBroadcastTimeoutRef.current = setTimeout(() => {
+          if (chatMessage.trim().length > 0 && selectedTaskId && user && typingChannelRef.current) {
+            lastTypingBroadcastRef.current = Date.now()
+            typingChannelRef.current.send({
+              type: 'broadcast',
+              event: 'typing',
+              payload: {
+                userId: user.id,
+                userName: user.full_name || user.email || 'Người dùng',
+                taskId: selectedTaskId,
+                isTyping: true
+              }
+            })
+          }
+        }, 1000 - (now - lastTypingBroadcastRef.current))
+      }
+
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      // Broadcast "stopped typing" after 2 seconds of no typing
+      typingTimeoutRef.current = setTimeout(() => {
+        if (typingChannelRef.current && user && selectedTaskId) {
+          typingChannelRef.current.send({
+            type: 'broadcast',
+            event: 'typing',
+            payload: {
+              userId: user.id,
+              userName: user.full_name || user.email || 'Người dùng',
+              taskId: selectedTaskId,
+              isTyping: false
+            }
+          })
+        }
+      }, 2000)
+    } else {
+      // User stopped typing - broadcast immediately
+      if (typingChannelRef.current && user && selectedTaskId) {
+        typingChannelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: {
+            userId: user.id,
+            userName: user.full_name || user.email || 'Người dùng',
+            taskId: selectedTaskId,
+            isTyping: false
+          }
+        })
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (typingBroadcastTimeoutRef.current) {
+        clearTimeout(typingBroadcastTimeoutRef.current)
+      }
+    }
 
     // Find @ mention
     const textBeforeCursor = value.substring(0, cursorPos)
@@ -691,20 +1380,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       })
     } catch {
       return 'Chưa có'
-    }
-  }
-
-
-  const getFileNameFromUrl = (url: string): string => {
-    try {
-      // Remove query parameters
-      const urlWithoutParams = url.split('?')[0]
-      // Get the last part of the path
-      const fileName = urlWithoutParams.split('/').pop() || 'File'
-      // Decode URL encoding
-      return decodeURIComponent(fileName)
-    } catch {
-      return 'File'
     }
   }
 
@@ -1241,29 +1916,32 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
 
   const uploadChatFile = async (file: File, taskId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) {
-        throw new Error('Thiếu token xác thực, vui lòng đăng nhập lại')
-      }
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch(`/api/tasks/${taskId}/attachments`, {
+      // Use apiPost with FormData - apiClient will handle authentication
+      const { apiClient } = await import('@/lib/api/client')
+      
+      const data = await apiClient.request(`/api/tasks/${taskId}/attachments`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
         body: formData
       })
 
-      if (!response.ok) {
-        throw new Error('Không thể tải file')
-      }
-      const data = await response.json()
       return data.file_url || data.url
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error uploading file:', err)
+      
+      // Handle authentication errors gracefully - don't redirect immediately
+      // Let the API client handle redirects, but provide user-friendly error
+      if (err?.status === 401 || err?.status === 403) {
+        const errorMessage = err?.message || err?.data?.detail || ''
+        if (errorMessage.toLowerCase().includes('not authenticated') || 
+            errorMessage.toLowerCase().includes('unauthorized') ||
+            errorMessage.toLowerCase().includes('token')) {
+          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+        }
+      }
+      
       throw err
     }
   }
@@ -1276,107 +1954,360 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     const trimmedMessage = chatMessage.trim()
     if (!trimmedMessage && pendingFiles.length === 0) return
 
+    // Create optimistic messages immediately (before API calls)
+    const tempMessageIds: string[] = []
+    const optimisticMessages: TaskComment[] = []
+
     try {
       setSendingMessage(true)
 
-      // Upload tất cả files trước
+      // Upload tất cả files song song (parallel) để tăng tốc
       const uploadedFiles: Array<{ file: File; url: string }> = []
-      for (const file of pendingFiles) {
-        try {
-          const fileUrl = await uploadChatFile(file, selectedTaskId)
-          uploadedFiles.push({ file, url: fileUrl })
-        } catch (fileError) {
-          console.error(`Error uploading file ${file.name}:`, fileError)
-          alert(`Không thể gửi file "${file.name}": ${getErrorMessage(fileError, 'Lỗi không xác định')}`)
-        }
+      if (pendingFiles.length > 0) {
+        const uploadPromises = pendingFiles.map(async (file) => {
+          try {
+            const fileUrl = await uploadChatFile(file, selectedTaskId)
+            return { file, url: fileUrl }
+          } catch (fileError) {
+            console.error(`Error uploading file ${file.name}:`, fileError)
+            alert(`Không thể gửi file "${file.name}": ${getErrorMessage(fileError, 'Lỗi không xác định')}`)
+            return null
+          }
+        })
+        
+        const results = await Promise.all(uploadPromises)
+        uploadedFiles.push(...results.filter((r): r is { file: File; url: string } => r !== null))
       }
 
       // Nếu có cả text và file: gộp thành 1 tin nhắn
       if (trimmedMessage && uploadedFiles.length > 0) {
-        // Gửi 1 comment với text và file đầu tiên
         const firstFile = uploadedFiles[0]
         const messageType: 'file' | 'image' = firstFile.file.type.startsWith('image/') ? 'image' : 'file'
+        const tempId = `temp-${Date.now()}-${Math.random()}`
+        tempMessageIds.push(tempId)
 
-        await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
+        const tempComment: TaskComment = {
+          id: tempId,
+          task_id: selectedTaskId,
+          user_id: user?.id,
           comment: trimmedMessage,
           type: messageType,
           file_url: firstFile.url,
-          is_pinned: false,
-          parent_id: replyingTo?.id || null
-        })
-
-        // Gửi các file còn lại (nếu có nhiều file) như các comment riêng
-        for (let i = 1; i < uploadedFiles.length; i++) {
-          const fileData = uploadedFiles[i]
-          const fileMessageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
-          await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
-            comment: fileData.file.name || 'File đính kèm',
-            type: fileMessageType,
-            file_url: fileData.url,
-            is_pinned: false,
-            parent_id: replyingTo?.id || null
-          })
-        }
-      } else if (trimmedMessage) {
-        // Chỉ có text, không có file
-        await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
-          comment: trimmedMessage,
-          type: 'text',
-          file_url: undefined,
-          is_pinned: false,
-          parent_id: replyingTo?.id || null
-        })
-      } else if (uploadedFiles.length > 0) {
-        // Chỉ có file, không có text - gửi từng file riêng
-        for (const fileData of uploadedFiles) {
-          const messageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
-          await apiPost(`/api/tasks/${selectedTaskId}/comments`, {
-            comment: fileData.file.name || 'File đính kèm',
-            type: messageType,
-            file_url: fileData.url,
-            is_pinned: false,
-            parent_id: replyingTo?.id || null
-          })
-        }
-      }
-
-      // Optimistic update - add message immediately (only if we have text or first file)
-      if (trimmedMessage || uploadedFiles.length > 0) {
-        const firstFile = uploadedFiles[0]
-        const tempComment: TaskComment = {
-          id: `temp-${Date.now()}`,
-          task_id: selectedTaskId,
-          user_id: user?.id,
-          comment: trimmedMessage || firstFile?.file.name || 'File đính kèm',
-          type: firstFile ? (firstFile.file.type.startsWith('image/') ? 'image' : 'file') : 'text',
-          file_url: firstFile?.url,
           is_pinned: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           user_name: user?.full_name,
           parent_id: replyingTo?.id || null
         }
+        optimisticMessages.push(tempComment)
 
-        // Add to top of comments list
-        setAllComments(prev => [tempComment, ...prev])
+        // ADD OPTIMISTIC MESSAGE IMMEDIATELY (before API call)
+        setSendingMessageIds(prev => {
+          const newSet = new Set(prev)
+          tempMessageIds.forEach(id => newSet.add(id))
+          return newSet
+        })
+        setAllComments(prev => {
+          const updated = [...prev, ...optimisticMessages]
+          allCommentsRef.current = updated
+          return updated
+        })
+        
+        // Scroll to show new message immediately
+        scrollToBottom('smooth')
+
+        // Gửi API request (không đợi, realtime sẽ update)
+        apiPost(`/api/tasks/${selectedTaskId}/comments`, {
+          comment: trimmedMessage,
+          type: messageType,
+          file_url: firstFile.url,
+          is_pinned: false,
+          parent_id: replyingTo?.id || null
+        }).catch(err => {
+          console.error('Error sending message:', err)
+          // Remove optimistic message on error
+          setAllComments(prev => prev.filter(c => !tempMessageIds.includes(c.id)))
+          setSendingMessageIds(prev => {
+            const newSet = new Set(prev)
+            tempMessageIds.forEach(id => newSet.delete(id))
+            return newSet
+          })
+          alert('Không thể gửi tin nhắn. Vui lòng thử lại.')
+        })
+
+        // Gửi các file còn lại song song (nếu có nhiều file)
+        if (uploadedFiles.length > 1) {
+          const additionalFilePromises = uploadedFiles.slice(1).map(async (fileData) => {
+            const fileMessageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
+            const tempId = `temp-${Date.now()}-${Math.random()}`
+            tempMessageIds.push(tempId)
+
+            const tempComment: TaskComment = {
+              id: tempId,
+              task_id: selectedTaskId,
+              user_id: user?.id,
+              comment: fileData.file.name || 'File đính kèm',
+              type: fileMessageType,
+              file_url: fileData.url,
+              is_pinned: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              user_name: user?.full_name,
+              parent_id: replyingTo?.id || null
+            }
+            optimisticMessages.push(tempComment)
+
+            // ADD OPTIMISTIC MESSAGE IMMEDIATELY
+            setSendingMessageIds(prev => {
+              const newSet = new Set(prev)
+              newSet.add(tempId)
+              return newSet
+            })
+            setAllComments(prev => {
+              const updated = [...prev, tempComment]
+              allCommentsRef.current = updated
+              return updated
+            })
+
+            // Gửi API request (không đợi)
+            return apiPost(`/api/tasks/${selectedTaskId}/comments`, {
+              comment: fileData.file.name || 'File đính kèm',
+              type: fileMessageType,
+              file_url: fileData.url,
+              is_pinned: false,
+              parent_id: replyingTo?.id || null
+            }).catch(err => {
+              console.error(`Error sending file message ${fileData.file.name}:`, err)
+              // Remove optimistic message on error
+              setAllComments(prev => prev.filter(c => c.id !== tempId))
+              setSendingMessageIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(tempId)
+                return newSet
+              })
+            })
+          })
+
+          // Gửi tất cả file messages song song (không đợi)
+          Promise.all(additionalFilePromises).catch(err => {
+            console.error('Error sending additional file messages:', err)
+          })
+        }
+      } else if (trimmedMessage) {
+        // Chỉ có text, không có file
+        const tempId = `temp-${Date.now()}-${Math.random()}`
+        tempMessageIds.push(tempId)
+
+        const tempComment: TaskComment = {
+          id: tempId,
+          task_id: selectedTaskId,
+          user_id: user?.id,
+          comment: trimmedMessage,
+          type: 'text',
+          file_url: undefined,
+          is_pinned: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_name: user?.full_name,
+          parent_id: replyingTo?.id || null
+        }
+        optimisticMessages.push(tempComment)
+
+        // ADD OPTIMISTIC MESSAGE IMMEDIATELY (before API call)
+        setSendingMessageIds(prev => {
+          const newSet = new Set(prev)
+          newSet.add(tempId)
+          return newSet
+        })
+        setAllComments(prev => {
+          const updated = [...prev, tempComment]
+          allCommentsRef.current = updated
+          return updated
+        })
+        // Scroll immediately
+        scrollToBottom('smooth')
+
+        // Gửi API request (không đợi, realtime sẽ update)
+        apiPost(`/api/tasks/${selectedTaskId}/comments`, {
+          comment: trimmedMessage,
+          type: 'text',
+          file_url: undefined,
+          is_pinned: false,
+          parent_id: replyingTo?.id || null
+        }).catch(err => {
+          console.error('Error sending message:', err)
+          // Remove optimistic message on error
+          setAllComments(prev => prev.filter(c => c.id !== tempId))
+          setSendingMessageIds(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(tempId)
+            return newSet
+          })
+          alert('Không thể gửi tin nhắn. Vui lòng thử lại.')
+        })
+      } else if (uploadedFiles.length > 0) {
+        // Chỉ có file, không có text - gửi tất cả file song song
+        const filePromises = uploadedFiles.map(async (fileData) => {
+          const messageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
+          const tempId = `temp-${Date.now()}-${Math.random()}`
+          tempMessageIds.push(tempId)
+
+          const tempComment: TaskComment = {
+            id: tempId,
+            task_id: selectedTaskId,
+            user_id: user?.id,
+            comment: fileData.file.name || 'File đính kèm',
+            type: messageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            user_name: user?.full_name,
+            parent_id: replyingTo?.id || null
+          }
+          optimisticMessages.push(tempComment)
+
+          // ADD OPTIMISTIC MESSAGE IMMEDIATELY
+          setSendingMessageIds(prev => {
+            const newSet = new Set(prev)
+            newSet.add(tempId)
+            return newSet
+          })
+          setAllComments(prev => {
+            const updated = [...prev, tempComment]
+            allCommentsRef.current = updated
+            return updated
+          })
+
+          // Gửi API request (không đợi)
+          return apiPost(`/api/tasks/${selectedTaskId}/comments`, {
+            comment: fileData.file.name || 'File đính kèm',
+            type: messageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            parent_id: replyingTo?.id || null
+          }).catch(err => {
+            console.error(`Error sending file message ${fileData.file.name}:`, err)
+            // Remove optimistic message on error
+            setAllComments(prev => prev.filter(c => c.id !== tempId))
+            setSendingMessageIds(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(tempId)
+              return newSet
+            })
+          })
+        })
+
+        // Gửi tất cả file messages song song (không đợi)
+        Promise.all(filePromises).catch(err => {
+          console.error('Error sending file messages:', err)
+        })
+        
+        // Scroll once after all optimistic messages added
+        scrollToBottom('smooth')
       }
 
-      // Scroll to top to show new message
-      setTimeout(() => {
-        const chatContainer = document.querySelector('[data-chat-container]')
-        if (chatContainer) {
-          chatContainer.scrollTop = 0
-        }
-      }, 100)
-
+      // Clear input and broadcast "stopped typing"
       setChatMessage('')
+      if (typingChannelRef.current && user && selectedTaskId) {
+        typingChannelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: {
+            userId: user.id,
+            userName: user.full_name || user.email || 'Người dùng',
+            taskId: selectedTaskId,
+            isTyping: false
+          }
+        })
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (typingBroadcastTimeoutRef.current) {
+        clearTimeout(typingBroadcastTimeoutRef.current)
+      }
       setPendingFiles([])
       setPendingPreview(null)
       setReplyingTo(null)
 
-      // Then fetch real comments
-      await fetchAllComments()
+      // Fallback mechanism: If realtime doesn't work, fetch comments after delay
+      // This ensures messages are synced even if realtime subscription fails
+      const fallbackTimeout = setTimeout(() => {
+        setSendingMessageIds(prev => {
+          const stillSending = tempMessageIds.filter(id => prev.has(id))
+          if (stillSending.length > 0) {
+            console.log('[Send] ⚠️ Fallback: Still have sending messages after 3s:', stillSending)
+            console.log('[Send] ⚠️ Realtime may not be working. Fetching comments as fallback...')
+            
+            // Fetch comments to sync with server
+            fetchAllComments(true).then(() => {
+              console.log('[Send] ✅ Fallback: Fetched comments, checking for matches...')
+              
+              // After fetch, check if real messages exist and match
+              setSendingMessageIds(prev2 => {
+                const newSet = new Set(prev2)
+                stillSending.forEach(tempId => {
+                  const tempMsg = allCommentsRef.current.find(c => c.id === tempId)
+                  if (tempMsg) {
+                    // Try to find matching real message
+                    // Match by: task_id + similar content + recent timestamp (within 10 seconds)
+                    const tempTime = new Date(tempMsg.created_at || Date.now()).getTime()
+                    const matchingReal = allCommentsRef.current.find(c => {
+                      if (c.id?.startsWith('temp-')) return false
+                      if (c.task_id !== tempMsg.task_id) return false
+                      
+                      const realTime = new Date(c.created_at).getTime()
+                      const timeDiff = Math.abs(realTime - tempTime)
+                      
+                      // Match by exact content OR by task_id + timestamp (within 10s)
+                      const contentMatch = c.comment === tempMsg.comment && c.type === tempMsg.type
+                      const timeMatch = timeDiff < 10000 // 10 seconds
+                      
+                      return contentMatch || (timeMatch && c.type === tempMsg.type)
+                    })
+                    
+                    if (matchingReal) {
+                      console.log('[Send] ✅ Fallback: Found matching real message:', matchingReal.id, 'for temp:', tempId)
+                      newSet.delete(tempId)
+                      
+                      // Also remove the temp message from comments
+                      setAllComments(prevComments => {
+                        const filtered = prevComments.filter(c => c.id !== tempId)
+                        allCommentsRef.current = filtered
+                        return filtered
+                      })
+                    }
+                  }
+                })
+                
+                if (newSet.size < prev2.size) {
+                  console.log('[Send] ✅ Fallback: Removed', prev2.size - newSet.size, 'temp IDs')
+                }
+                return newSet
+              })
+            }).catch(err => {
+              console.error('[Send] ❌ Fallback: Failed to fetch comments:', err)
+            })
+          }
+          return prev
+        })
+      }, 3000) // Fallback after 3 seconds
+      
+      // Store timeout for cleanup
+      return () => {
+        clearTimeout(fallbackTimeout)
+      }
     } catch (err: any) {
+      // Remove failed optimistic messages
+      const failedIds = optimisticMessages.map(m => m.id)
+      setAllComments(prev => prev.filter(c => !failedIds.includes(c.id)))
+      allCommentsRef.current = allCommentsRef.current.filter(c => !failedIds.includes(c.id))
+      setSendingMessageIds(prev => {
+        const newSet = new Set(prev)
+        tempMessageIds.forEach(id => newSet.delete(id))
+        return newSet
+      })
       alert(err?.message || 'Không thể gửi tin nhắn')
     } finally {
       setSendingMessage(false)
@@ -2748,6 +3679,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                       const isLastInGroup = !isGroupedWithNext
 
                       const task = tasks.find(t => t.id === comment.task_id)
+                      const isSending = comment.id?.startsWith('temp-') && sendingMessageIds.has(comment.id)
                       const isNewMessage = comment.id?.startsWith('temp-') || (index === arr.length - 1 && new Date(comment.created_at).getTime() > Date.now() - 10000)
 
                       // Parent comment for Quote logic
@@ -2790,7 +3722,8 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                       ? 'bg-blue-500 text-white rounded-2xl rounded-tr-sm'
                                       : 'bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-sm'
                                     }
-                                    ${isNewMessage ? 'animate-pulse ring-2 ring-blue-400' : ''}
+                                    ${isSending ? 'opacity-80 ring-1 ring-blue-300' : ''}
+                                    ${isNewMessage && !isSending ? 'animate-pulse ring-2 ring-blue-400' : ''}
                                     ${isMine && !isLastInGroup ? 'rounded-br-sm' : ''}
                                     ${isMine && !isFirstInGroup ? 'rounded-tr-sm' : ''}
                                     ${!isMine && !isLastInGroup ? 'rounded-bl-sm' : ''}
@@ -2991,11 +3924,24 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                 </div>
                               </div>
 
-                              {/* Footer - Time - Only show for last message in group or when hovering */}
+                              {/* Footer - Time or Sending Status - Only show for last message in group */}
                               {isLastInGroup && (
-                                <span className={`text-[10px] text-gray-400 mt-1 px-1 ${isMine ? 'text-right' : 'text-left'}`}>
-                                  {formatDate(comment.created_at, true)}
-                                </span>
+                                <div className={`flex items-center gap-1.5 mt-1 px-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                                  {isSending ? (
+                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                                      <div className="flex gap-0.5">
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                      </div>
+                                      <span className="text-blue-500 font-medium">Đang gửi...</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400">
+                                      {formatDate(comment.created_at, true)}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -3003,6 +3949,41 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                       )
                     })
                   }
+                  
+                  {/* Typing Indicator - Only show for OTHER users */}
+                  {typingUsers.size > 0 && Array.from(typingUsers.values()).map((typingUser) => {
+                    // Find user info from group members
+                    const member = groupMembersRef.current.find(m => m.employee_id === typingUser.userId)
+                    const displayName = member?.employee_name || typingUser.userName || 'Người dùng'
+                    
+                    return (
+                      <div key={typingUser.userId} className="flex w-full justify-start mb-1">
+                        <div className="flex max-w-[85%] md:max-w-[70%] flex-row items-end gap-2">
+                          <div className="w-8 shrink-0 flex flex-col items-center">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-xs font-bold text-white shadow-sm"
+                              title={displayName}>
+                              {displayName.charAt(0).toUpperCase()}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-start min-w-0">
+                            <div className="relative group">
+                              <div className="relative p-3 text-sm shadow-sm bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-sm">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex gap-0.5">
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                  </div>
+                                  <span className="text-xs text-gray-500 ml-1">{displayName} đang nhập...</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  
                   <div ref={messagesEndRef} />
                 </div>
               )}

@@ -143,3 +143,7 @@ Khi có version mới:
 **Giải pháp**: Upload file lên Supabase Storage hoặc external storage  
 **Kết quả**: Endpoint sẽ serve file từ storage thay vì local file system
 
+
+
+
+

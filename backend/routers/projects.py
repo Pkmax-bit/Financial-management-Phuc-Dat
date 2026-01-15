@@ -817,29 +817,25 @@ def check_user_has_project_access(supabase, current_user: User, project_id: Opti
         return True
 
     # Check if user is in project_team for this project
-    team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
-
-    # Match by user_id or email
-    or_conditions = []
-    if current_user.id:
-        or_conditions.append(f"user_id.eq.{current_user.id}")
-    if current_user.email:
-        or_conditions.append(f"email.eq.{current_user.email}")
-
-    if or_conditions:
-        if len(or_conditions) > 1:
-            team_query = team_query.or_(",".join(or_conditions))
-        else:
-            condition = or_conditions[0]
-            if condition.startswith("user_id.eq."):
-                team_query = team_query.eq("user_id", current_user.id)
-            elif condition.startswith("email.eq."):
-                team_query = team_query.eq("email", current_user.email)
-
-        team_result = team_query.execute()
-        return len(team_result.data) > 0
-
-    return False
+    # Query separately for user_id and email to avoid .or_() issues
+    try:
+        # Try querying by user_id first
+        if current_user.id:
+            team_result = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active").eq("user_id", current_user.id).execute()
+            if len(team_result.data) > 0:
+                return True
+        
+        # Try querying by email
+        if current_user.email:
+            team_result = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active").eq("email", current_user.email).execute()
+            if len(team_result.data) > 0:
+                return True
+        
+        return False
+    except Exception as e:
+        # Log error but don't crash - return False to deny access on error
+        print(f"[ERROR] check_user_has_project_access failed: {str(e)}")
+        return False
 
 def check_user_can_update_progress(supabase, current_user: User, project_id: str) -> bool:
     """Check if user can update project progress - allows all project team members"""
@@ -852,29 +848,20 @@ def check_user_can_update_progress(supabase, current_user: User, project_id: str
 
     # For other roles, check if user is any member of the project team (not just accountable/responsible)
     try:
-        team_query = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active")
-
-        # Match by user_id or email
-        or_conditions = []
+        # Query separately for user_id and email to avoid .or_() issues
+        # Try querying by user_id first
         if current_user.id:
-            or_conditions.append(f"user_id.eq.{current_user.id}")
+            team_result = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active").eq("user_id", current_user.id).execute()
+            if len(team_result.data) > 0:
+                return True
+        
+        # Try querying by email
         if current_user.email:
-            or_conditions.append(f"email.eq.{current_user.email}")
-
-        if or_conditions:
-            if len(or_conditions) > 1:
-                team_query = team_query.or_(",".join(or_conditions))
-            else:
-                condition = or_conditions[0]
-                if condition.startswith("user_id.eq."):
-                    team_query = team_query.eq("user_id", current_user.id)
-                elif condition.startswith("email.eq."):
-                    team_query = team_query.eq("email", current_user.email)
-
-            team_result = team_query.execute()
-
-            # If user is found in the project team, they can update progress
-            return len(team_result.data) > 0
+            team_result = supabase.table("project_team").select("id").eq("project_id", project_id).eq("status", "active").eq("email", current_user.email).execute()
+            if len(team_result.data) > 0:
+                return True
+        
+        return False
 
         return False
     except Exception as e:
@@ -2010,13 +1997,29 @@ async def get_project_financial_summary(
         # ============================================================================
         
         # Get all invoices for this project
-        invoices = supabase.table("invoices").select("*").eq("project_id", project_id).execute()
-        total_invoice_amount = sum(invoice["total_amount"] for invoice in invoices.data)
-        total_paid_invoices = sum(invoice["paid_amount"] for invoice in invoices.data)
+        invoices_result = supabase.table("invoices").select("*").eq("project_id", project_id).execute()
+        invoices = invoices_result.data or []
+        total_invoice_amount = sum(invoice.get("total_amount", 0) for invoice in invoices)
+        total_paid_invoices = sum(invoice.get("paid_amount", 0) for invoice in invoices)
         
         # Get all sales receipts for this project
-        sales_receipts = supabase.table("sales_receipts").select("*").eq("project_id", project_id).execute()
-        total_sales_receipts = sum(receipt["total_amount"] for receipt in sales_receipts.data)
+        # Note: sales_receipts table may not have project_id column in some databases
+        # Try querying by project_id first, if that fails, query by customer_id
+        sales_receipts = []
+        try:
+            receipts_result = supabase.table("sales_receipts").select("*").eq("project_id", project_id).execute()
+            sales_receipts = receipts_result.data or []
+        except Exception as e:
+            # If project_id column doesn't exist, try customer_id
+            if project.get("customer_id"):
+                try:
+                    receipts_result = supabase.table("sales_receipts").select("*").eq("customer_id", project["customer_id"]).execute()
+                    sales_receipts = receipts_result.data or []
+                except Exception:
+                    sales_receipts = []
+            else:
+                sales_receipts = []
+        total_sales_receipts = sum(receipt.get("total_amount", 0) for receipt in sales_receipts)
         
         # Total Income
         total_income = total_invoice_amount + total_sales_receipts
@@ -2027,22 +2030,25 @@ async def get_project_financial_summary(
         # ============================================================================
         
         # Get time entries and calculate labor costs
-        time_entries = supabase.table("time_entries").select("*").eq("project_id", project_id).execute()
-        total_hours = sum(entry["hours_worked"] for entry in time_entries.data)
+        time_entries_result = supabase.table("time_entries").select("*").eq("project_id", project_id).execute()
+        time_entries = time_entries_result.data or []
+        total_hours = sum(entry.get("hours_worked", 0) for entry in time_entries)
         total_labor_cost = 0
         
-        for entry in time_entries.data:
-            if entry["hourly_rate"]:
-                total_labor_cost += entry["hours_worked"] * entry["hourly_rate"]
+        for entry in time_entries:
+            if entry.get("hourly_rate"):
+                total_labor_cost += entry.get("hours_worked", 0) * entry.get("hourly_rate", 0)
         
         # Get direct project expenses
-        expenses = supabase.table("expenses").select("*").eq("project_id", project_id).execute()
-        total_expenses = sum(expense["amount"] for expense in expenses.data)
+        expenses_result = supabase.table("expenses").select("*").eq("project_id", project_id).execute()
+        expenses = expenses_result.data or []
+        total_expenses = sum(expense.get("amount", 0) for expense in expenses)
         
         # Get bills (vendor bills) for this project
-        bills = supabase.table("bills").select("*").eq("project_id", project_id).execute()
-        total_bills = sum(bill["amount"] for bill in bills.data)
-        total_paid_bills = sum(bill["paid_amount"] for bill in bills.data)
+        bills_result = supabase.table("bills").select("*").eq("project_id", project_id).execute()
+        bills = bills_result.data or []
+        total_bills = sum(bill.get("amount", 0) for bill in bills)
+        total_paid_bills = sum(bill.get("paid_amount", 0) for bill in bills)
         
         # Total Costs
         total_costs = total_labor_cost + total_expenses + total_bills
@@ -2068,25 +2074,46 @@ async def get_project_financial_summary(
         # ============================================================================
         
         # Get recent invoices (last 10)
-        recent_invoices = supabase.table("invoices").select("*").eq("project_id", project_id).order("issue_date", desc=True).limit(10).execute()
+        recent_invoices_result = supabase.table("invoices").select("*").eq("project_id", project_id).order("issue_date", desc=True).limit(10).execute()
+        recent_invoices = recent_invoices_result.data or []
         
         # Get recent sales receipts (last 10)
-        recent_sales_receipts = supabase.table("sales_receipts").select("*").eq("project_id", project_id).order("issue_date", desc=True).limit(10).execute()
+        # Try querying by project_id first, if that fails, query by customer_id
+        recent_sales_receipts_data = []
+        try:
+            receipts_result = supabase.table("sales_receipts").select("*").eq("project_id", project_id).order("issue_date", desc=True).limit(10).execute()
+            recent_sales_receipts_data = receipts_result.data or []
+        except Exception:
+            # If project_id column doesn't exist, try customer_id
+            if project.get("customer_id"):
+                try:
+                    receipts_result = supabase.table("sales_receipts").select("*").eq("customer_id", project["customer_id"]).order("issue_date", desc=True).limit(10).execute()
+                    recent_sales_receipts_data = receipts_result.data or []
+                except Exception:
+                    recent_sales_receipts_data = []
+        # Create a mock result object to match expected structure
+        class MockResult:
+            def __init__(self, data):
+                self.data = data
+        recent_sales_receipts = MockResult(recent_sales_receipts_data)
         
         # Get recent expenses (last 10)
-        recent_expenses = supabase.table("expenses").select("*").eq("project_id", project_id).order("expense_date", desc=True).limit(10).execute()
+        recent_expenses_result = supabase.table("expenses").select("*").eq("project_id", project_id).order("expense_date", desc=True).limit(10).execute()
+        recent_expenses = recent_expenses_result.data or []
         
         # Get recent bills (last 10)
-        recent_bills = supabase.table("bills").select("*").eq("project_id", project_id).order("issue_date", desc=True).limit(10).execute()
+        recent_bills_result = supabase.table("bills").select("*").eq("project_id", project_id).order("issue_date", desc=True).limit(10).execute()
+        recent_bills = recent_bills_result.data or []
         
         # Get recent time entries (last 10)
-        recent_time_entries = supabase.table("time_entries").select("*").eq("project_id", project_id).order("date", desc=True).limit(10).execute()
+        recent_time_entries_result = supabase.table("time_entries").select("*").eq("project_id", project_id).order("date", desc=True).limit(10).execute()
+        recent_time_entries = recent_time_entries_result.data or []
         
         # Combine and sort recent transactions
         recent_transactions = []
         
         # Add invoices
-        for invoice in recent_invoices.data:
+        for invoice in recent_invoices:
             recent_transactions.append({
                 "type": "invoice",
                 "id": invoice["id"],
@@ -2108,7 +2135,7 @@ async def get_project_financial_summary(
             })
         
         # Add expenses
-        for expense in recent_expenses.data:
+        for expense in recent_expenses:
             recent_transactions.append({
                 "type": "expense",
                 "id": expense["id"],
@@ -2119,7 +2146,7 @@ async def get_project_financial_summary(
             })
         
         # Add bills
-        for bill in recent_bills.data:
+        for bill in recent_bills:
             recent_transactions.append({
                 "type": "bill",
                 "id": bill["id"],
@@ -2162,11 +2189,11 @@ async def get_project_financial_summary(
                     "total_amount": total_invoice_amount,
                     "paid_amount": total_paid_invoices,
                     "outstanding": total_invoice_amount - total_paid_invoices,
-                    "count": len(invoices.data)
+                    "count": len(invoices)
                 },
                 "sales_receipts": {
                     "total_amount": total_sales_receipts,
-                    "count": len(sales_receipts.data)
+                    "count": len(sales_receipts)  # sales_receipts is already a list, not an object with .data
                 }
             },
             "costs_breakdown": {
@@ -2177,13 +2204,13 @@ async def get_project_financial_summary(
                 },
                 "expenses": {
                     "total_cost": total_expenses,
-                    "count": len(expenses.data)
+                    "count": len(expenses)
                 },
                 "bills": {
                     "total_amount": total_bills,
                     "paid_amount": total_paid_bills,
                     "outstanding": total_bills - total_paid_bills,
-                    "count": len(bills.data)
+                    "count": len(bills)
                 }
             },
             "budget_analysis": {
@@ -2234,18 +2261,22 @@ async def get_project_dashboard(
         # Get recent transactions (last 30 days)
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).date()
         
-        recent_invoices = supabase.table("invoices").select("*").eq("project_id", project_id).gte("issue_date", thirty_days_ago).execute()
-        recent_time_entries = supabase.table("time_entries").select("*").eq("project_id", project_id).gte("date", thirty_days_ago).execute()
-        recent_expenses = supabase.table("expenses").select("*").eq("project_id", project_id).gte("expense_date", thirty_days_ago).execute()
+        recent_invoices_result = supabase.table("invoices").select("*").eq("project_id", project_id).gte("issue_date", thirty_days_ago).execute()
+        recent_invoices = recent_invoices_result.data or []
+        recent_time_entries_result = supabase.table("time_entries").select("*").eq("project_id", project_id).gte("date", thirty_days_ago).execute()
+        recent_time_entries = recent_time_entries_result.data or []
+        recent_expenses_result = supabase.table("expenses").select("*").eq("project_id", project_id).gte("expense_date", thirty_days_ago).execute()
+        recent_expenses = recent_expenses_result.data or []
         
         # Calculate quick metrics
-        total_hours_this_month = sum(te["hours_worked"] for te in recent_time_entries.data)
-        total_expenses_this_month = sum(exp["amount"] for exp in recent_expenses.data)
-        total_invoices_this_month = sum(inv["total_amount"] for inv in recent_invoices.data)
+        total_hours_this_month = sum(te.get("hours_worked", 0) for te in recent_time_entries)
+        total_expenses_this_month = sum(exp.get("amount", 0) for exp in recent_expenses)
+        total_invoices_this_month = sum(inv.get("total_amount", 0) for inv in recent_invoices)
         
         # Get project team (employees who have logged time)
-        team_members = supabase.table("time_entries").select("employee_id").eq("project_id", project_id).execute()
-        unique_employees = list(set(te["employee_id"] for te in team_members.data if te["employee_id"]))
+        team_members_result = supabase.table("time_entries").select("employee_id").eq("project_id", project_id).execute()
+        team_members = team_members_result.data or []
+        unique_employees = list(set(te.get("employee_id") for te in team_members if te.get("employee_id")))
         
         return {
             "project": {
@@ -2263,9 +2294,9 @@ async def get_project_dashboard(
                 "team_members": len(unique_employees)
             },
             "recent_activity": {
-                "invoices": recent_invoices.data[:5],  # Last 5 invoices
-                "time_entries": recent_time_entries.data[:10],  # Last 10 time entries
-                "expenses": recent_expenses.data[:5]  # Last 5 expenses
+                "invoices": recent_invoices[:5],  # Last 5 invoices
+                "time_entries": recent_time_entries[:10],  # Last 10 time entries
+                "expenses": recent_expenses[:5]  # Last 5 expenses
             }
         }
         

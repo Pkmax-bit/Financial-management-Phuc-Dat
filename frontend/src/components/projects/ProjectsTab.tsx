@@ -289,8 +289,14 @@ export default function ProjectsTab({
     try {
       const customersData = await customerApi.getCustomers({ limit: 1000 })
       setCustomers(customersData || [])
-    } catch (error) {
-      console.error('Error fetching customers:', error)
+    } catch (error: any) {
+      // Handle 403 gracefully - user may not have permission to view customers
+      if (error?.status === 403) {
+        console.warn('No permission to view customers list')
+        setCustomers([])
+      } else {
+        console.error('Error fetching customers:', error)
+      }
     }
   }
 

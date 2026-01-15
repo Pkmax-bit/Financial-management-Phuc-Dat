@@ -108,3 +108,7 @@ COMMENT ON FUNCTION auto_update_project_status_by_progress() IS
     'Tự động cập nhật status/status_id của projects dựa trên % progress (0 -> planning, 0<x<1 -> active, >=1 -> completed).';
 
 
+
+
+
+
