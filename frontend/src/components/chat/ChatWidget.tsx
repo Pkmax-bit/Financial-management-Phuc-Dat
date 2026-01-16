@@ -461,6 +461,35 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
     },
   })
 
+  // Polling fallback: Poll for new messages every 2 seconds if realtime is not connected
+  // This ensures messages are received even if realtime fails (20-45s delay issue)
+  useEffect(() => {
+    if (!selectedConversation) return
+    
+    // Only poll if realtime is not connected or has errors
+    // This prevents unnecessary API calls when realtime is working
+    if (isConnected && connectionStatus === 'connected') {
+      console.log('✅ Realtime connected, skipping polling fallback (widget)')
+      return
+    }
+    
+    console.warn('⚠️ Realtime not connected, using polling fallback (every 2s) - widget')
+    
+    // Poll every 2 seconds to get new messages
+    const pollingInterval = setInterval(() => {
+      if (selectedConversation && (!isConnected || connectionStatus !== 'connected')) {
+        console.log('🔄 Polling for new messages (realtime fallback - widget)')
+        loadMessages(selectedConversation.id).catch(err => {
+          console.error('Error polling messages:', err)
+        })
+      }
+    }, 2000) // Poll every 2 seconds (faster fallback)
+    
+    return () => {
+      clearInterval(pollingInterval)
+    }
+  }, [selectedConversation?.id, isConnected, connectionStatus, loadMessages])
+
   // Auto scroll to bottom
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

@@ -149,39 +149,65 @@ export function useRealtimeChat({
           totalDelay = broadcastReceiveTimestamp - messageTime
         }
         
-        // Enrich with sender info (async but don't block)
-        enrichMessageWithSender(messageData as Message).then(enrichedMessage => {
-          const processingTime = performance.now() - broadcastReceiveTime
+        // Check if sender_name is already in the payload (from database trigger)
+        // If yes, use it directly without enrichment (OPTIMIZATION)
+        const hasSenderName = !!(messageData as any).sender_name
+        
+        if (hasSenderName) {
+          // Sender info already included in broadcast - use directly (0ms delay)
           const finalReceiveTime = Date.now()
-          
-          // Calculate final delay including processing
           let finalDelay = null
-          if (enrichedMessage.created_at) {
-            const messageTime = new Date(enrichedMessage.created_at).getTime()
+          if (messageData.created_at) {
+            const messageTime = new Date(messageData.created_at).getTime()
             finalDelay = finalReceiveTime - messageTime
           }
           
-          console.log('⏱️ Message Delivery Timing:', {
-            messageId: enrichedMessage.id,
+          console.log('⏱️ Message Delivery Timing (with sender info):', {
+            messageId: messageData.id,
             totalDelay: totalDelay ? `${totalDelay}ms (${(totalDelay/1000).toFixed(2)}s)` : 'unknown',
             finalDelay: finalDelay ? `${finalDelay}ms (${(finalDelay/1000).toFixed(2)}s)` : 'unknown',
-            processingTime: `${processingTime.toFixed(2)}ms`,
-            messageCreatedAt: enrichedMessage.created_at,
+            processingTime: '0ms (sender info included)',
+            messageCreatedAt: messageData.created_at,
             broadcastReceivedAt: new Date(broadcastReceiveTimestamp).toISOString(),
             finalReceivedAt: new Date(finalReceiveTime).toISOString()
           })
           
-          onNewMessage?.(enrichedMessage)
-          
-          const duration = performance.now() - startTime
-          if (duration > 100) {
-            console.warn(`⚠️ Slow broadcast handling: ${duration.toFixed(2)}ms`)
-          }
-        }).catch(err => {
-          console.error('Error enriching message:', err)
-          // Fallback: call with original message if enrichment fails
           onNewMessage?.(messageData as Message)
-        })
+        } else {
+          // Fallback: Enrich with sender info if not included (backward compatibility)
+          enrichMessageWithSender(messageData as Message).then(enrichedMessage => {
+            const processingTime = performance.now() - broadcastReceiveTime
+            const finalReceiveTime = Date.now()
+            
+            // Calculate final delay including processing
+            let finalDelay = null
+            if (enrichedMessage.created_at) {
+              const messageTime = new Date(enrichedMessage.created_at).getTime()
+              finalDelay = finalReceiveTime - messageTime
+            }
+            
+            console.log('⏱️ Message Delivery Timing (enriched):', {
+              messageId: enrichedMessage.id,
+              totalDelay: totalDelay ? `${totalDelay}ms (${(totalDelay/1000).toFixed(2)}s)` : 'unknown',
+              finalDelay: finalDelay ? `${finalDelay}ms (${(finalDelay/1000).toFixed(2)}s)` : 'unknown',
+              processingTime: `${processingTime.toFixed(2)}ms`,
+              messageCreatedAt: enrichedMessage.created_at,
+              broadcastReceivedAt: new Date(broadcastReceiveTimestamp).toISOString(),
+              finalReceivedAt: new Date(finalReceiveTime).toISOString()
+            })
+            
+            onNewMessage?.(enrichedMessage)
+            
+            const duration = performance.now() - startTime
+            if (duration > 100) {
+              console.warn(`⚠️ Slow broadcast handling: ${duration.toFixed(2)}ms`)
+            }
+          }).catch(err => {
+            console.error('Error enriching message:', err)
+            // Fallback: call with original message if enrichment fails
+            onNewMessage?.(messageData as Message)
+          })
+        }
       } else if (eventType === 'UPDATE') {
         enrichMessageWithSender(messageData as Message).then(enrichedMessage => {
           onMessageUpdate?.(enrichedMessage)
@@ -275,17 +301,9 @@ export function useRealtimeChat({
         }
       })
       
-      // Also listen to specific events (in case they work) - Optimized without heavy logging
-      channel
-        .on('broadcast', { event: 'INSERT' }, (payload) => {
-          handleBroadcastMessage(payload, 'INSERT')
-        })
-        .on('broadcast', { event: 'UPDATE' }, (payload) => {
-          handleBroadcastMessage(payload, 'UPDATE')
-        })
-        .on('broadcast', { event: 'DELETE' }, (payload) => {
-          handleBroadcastMessage(payload, 'DELETE')
-        })
+      // Note: We only listen to generic broadcast event above
+      // Specific events are handled by the generic listener with fast path detection
+      // This prevents duplicate processing and improves performance
         .subscribe((status, err) => {
           if (isUnmountingRef.current) return
 
@@ -304,9 +322,9 @@ export function useRealtimeChat({
               lastSeen: new Date().toISOString()
             })
             
-            // Very aggressive presence update to keep connection alive (every 10 seconds)
+            // Very aggressive presence update to keep connection alive (every 5 seconds)
             // Supabase tenant may shutdown after 20-30s of inactivity
-            // Reduced to 10s to absolutely prevent any shutdown delays
+            // Reduced to 5s to absolutely prevent any shutdown delays
             if (presenceUpdateIntervalRef.current) {
               clearInterval(presenceUpdateIntervalRef.current)
             }
@@ -336,14 +354,14 @@ export function useRealtimeChat({
                   console.warn('⚠️ Ping broadcast failed:', err)
                 }
                 
-                console.log('🔄 Presence + ping updated (every 10s to prevent delays)')
+                console.log('🔄 Presence + ping updated (every 5s to prevent delays)')
               } else {
                 if (presenceUpdateIntervalRef.current) {
                   clearInterval(presenceUpdateIntervalRef.current)
                   presenceUpdateIntervalRef.current = null
                 }
               }
-            }, 10000) // Update every 10 seconds (very aggressive to prevent any shutdown)
+            }, 5000) // Update every 5 seconds (very aggressive to prevent any shutdown)
             
             console.log('✅ Realtime chat connected:', conversationId)
             console.log('📡 Channel name:', `conversation:${conversationId}:messages`)

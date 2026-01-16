@@ -130,7 +130,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     }
     loadConversationsDebounceRef.current = setTimeout(() => {
       loadConversations()
-    }, 500) // Debounce 500ms
+    }, 200) // Debounce 200ms (faster update)
   }, [loadConversations])
 
   const handleSelectConversationById = useCallback(async (conversationId: string) => {
@@ -574,7 +574,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
           console.error('Error polling messages:', err)
         })
       }
-    }, 3000) // Poll every 3 seconds
+    }, 2000) // Poll every 2 seconds (faster fallback)
     
     return () => {
       clearInterval(pollingInterval)
