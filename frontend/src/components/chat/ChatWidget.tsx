@@ -385,13 +385,26 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
 
   // Handlers for realtime messages
   const handleNewMessage = useCallback((message: Message) => {
+    const receiveTime = performance.now()
+    const receiveTimestamp = Date.now()
+    
+    // Calculate delay if message has created_at timestamp
+    let delay = null
+    if (message.created_at) {
+      const messageTime = new Date(message.created_at).getTime()
+      delay = receiveTimestamp - messageTime
+    }
+    
     console.log('📨 handleNewMessage called (widget) with:', {
       messageId: message.id,
       conversationId: message.conversation_id,
       currentConversationId: selectedConversation?.id,
       senderId: message.sender_id,
       currentUserId,
-      messageText: message.message_text?.substring(0, 50)
+      messageText: message.message_text?.substring(0, 50),
+      delay: delay ? `${delay}ms (${(delay/1000).toFixed(2)}s)` : 'unknown',
+      messageCreatedAt: message.created_at,
+      receiveTimestamp
     })
     
     // Only process messages for current conversation
@@ -651,13 +664,20 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
           message_text: messageTextToSend,
           reply_to_id: replyingToToClear?.id
         }
+        const sendStartTime = performance.now()
+        const sendTimestamp = Date.now()
+        
         const response = await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
+        
+        const apiResponseTime = performance.now() - sendStartTime
         
         console.log('📤 API Response after sending message (widget):', {
           response,
           hasId: !!response?.id,
           responseKeys: response ? Object.keys(response) : [],
-          tempMessageId
+          tempMessageId,
+          apiResponseTime: `${apiResponseTime.toFixed(2)}ms`,
+          sendTimestamp
         })
         
         // Replace optimistic message with real message from server

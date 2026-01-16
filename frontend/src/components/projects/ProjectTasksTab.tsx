@@ -835,10 +835,10 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       }
 
       // Calculate polling interval with exponential backoff
-      // Start at 5 seconds, increase to max 15 seconds
-      const baseInterval = 5000 // 5 seconds
-      const maxInterval = 15000 // 15 seconds
-      const backoffMultiplier = Math.min(1 + (pollingAttemptsRef.current * 0.5), 3) // Max 3x
+      // REDUCED: Giảm interval để giảm delay xuống tối đa 3s
+      const baseInterval = 1000 // 1 second (faster)
+      const maxInterval = 3000 // 3 seconds (reduced to minimize delay)
+      const backoffMultiplier = Math.min(1 + (pollingAttemptsRef.current * 0.2), 1.5) // Max 1.5x
       const pollingInterval = Math.min(baseInterval * backoffMultiplier, maxInterval)
 
       pollingIntervalRef.current = setInterval(() => {

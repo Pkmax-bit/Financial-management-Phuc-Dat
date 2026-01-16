@@ -40,19 +40,25 @@ export function useRealtimeChat({
   
   const channelRef = useRef<RealtimeChannel | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const presenceUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const retryCountRef = useRef(0)
   const isUnmountingRef = useRef(false)
   const senderInfoCacheRef = useRef<Map<string, string>>(new Map())
   
   const MAX_RETRY_ATTEMPTS = 5
   const RETRY_DELAY_BASE = 1000 // 1 second
-  const MAX_RETRY_DELAY = 30000 // 30 seconds
+  const MAX_RETRY_DELAY = 3000 // 3 seconds (reduced to minimize delay)
 
   // Cleanup function
   const cleanup = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current)
       reconnectTimeoutRef.current = null
+    }
+    
+    if (presenceUpdateIntervalRef.current) {
+      clearInterval(presenceUpdateIntervalRef.current)
+      presenceUpdateIntervalRef.current = null
     }
     
     if (channelRef.current) {
@@ -133,9 +139,40 @@ export function useRealtimeChat({
       
       // For INSERT: Enrich and call callback immediately (don't await if not needed)
       if (eventType === 'INSERT') {
+        const broadcastReceiveTime = performance.now()
+        const broadcastReceiveTimestamp = Date.now()
+        
+        // Calculate total delay from message creation to broadcast receive
+        let totalDelay = null
+        if (messageData.created_at) {
+          const messageTime = new Date(messageData.created_at).getTime()
+          totalDelay = broadcastReceiveTimestamp - messageTime
+        }
+        
         // Enrich with sender info (async but don't block)
         enrichMessageWithSender(messageData as Message).then(enrichedMessage => {
+          const processingTime = performance.now() - broadcastReceiveTime
+          const finalReceiveTime = Date.now()
+          
+          // Calculate final delay including processing
+          let finalDelay = null
+          if (enrichedMessage.created_at) {
+            const messageTime = new Date(enrichedMessage.created_at).getTime()
+            finalDelay = finalReceiveTime - messageTime
+          }
+          
+          console.log('⏱️ Message Delivery Timing:', {
+            messageId: enrichedMessage.id,
+            totalDelay: totalDelay ? `${totalDelay}ms (${(totalDelay/1000).toFixed(2)}s)` : 'unknown',
+            finalDelay: finalDelay ? `${finalDelay}ms (${(finalDelay/1000).toFixed(2)}s)` : 'unknown',
+            processingTime: `${processingTime.toFixed(2)}ms`,
+            messageCreatedAt: enrichedMessage.created_at,
+            broadcastReceivedAt: new Date(broadcastReceiveTimestamp).toISOString(),
+            finalReceivedAt: new Date(finalReceiveTime).toISOString()
+          })
+          
           onNewMessage?.(enrichedMessage)
+          
           const duration = performance.now() - startTime
           if (duration > 100) {
             console.warn(`⚠️ Slow broadcast handling: ${duration.toFixed(2)}ms`)
@@ -179,7 +216,9 @@ export function useRealtimeChat({
 
       if (isUnmountingRef.current) return
 
-      // Create channel
+      // Create channel with presence to keep connection alive
+      // Presence helps prevent tenant from being stopped
+      // Aggressive configuration to prevent any shutdown delays
       const channel = supabase.channel(
         `conversation:${conversationId}:messages`,
         {
@@ -188,6 +227,10 @@ export function useRealtimeChat({
             broadcast: {
               self: true,
               ack: false,
+            },
+            presence: {
+              key: currentUserId,
+              // Presence will be updated every 15s via setInterval
             },
           },
         }
@@ -252,11 +295,62 @@ export function useRealtimeChat({
             setError(null)
             retryCountRef.current = 0 // Reset retry count on success
             onConnectionChange?.(true)
+            
+            // Track presence to keep connection alive and prevent tenant from stopping
+            // This helps prevent "Stop tenant because of no connected users"
+            channel.track({
+              userId: currentUserId,
+              online: true,
+              lastSeen: new Date().toISOString()
+            })
+            
+            // Very aggressive presence update to keep connection alive (every 10 seconds)
+            // Supabase tenant may shutdown after 20-30s of inactivity
+            // Reduced to 10s to absolutely prevent any shutdown delays
+            if (presenceUpdateIntervalRef.current) {
+              clearInterval(presenceUpdateIntervalRef.current)
+            }
+            presenceUpdateIntervalRef.current = setInterval(() => {
+              if (channelRef.current && !isUnmountingRef.current) {
+                // Update presence to keep connection alive
+                channelRef.current.track({
+                  userId: currentUserId,
+                  online: true,
+                  lastSeen: new Date().toISOString()
+                })
+                
+                // Also send a lightweight ping broadcast to ensure connection is active
+                // This double-checks that the connection is truly alive
+                try {
+                  channelRef.current.send({
+                    type: 'broadcast',
+                    event: 'ping',
+                    payload: { 
+                      userId: currentUserId, 
+                      timestamp: Date.now(),
+                      keepAlive: true 
+                    }
+                  })
+                } catch (err) {
+                  // Ignore ping errors, presence update is more important
+                  console.warn('⚠️ Ping broadcast failed:', err)
+                }
+                
+                console.log('🔄 Presence + ping updated (every 10s to prevent delays)')
+              } else {
+                if (presenceUpdateIntervalRef.current) {
+                  clearInterval(presenceUpdateIntervalRef.current)
+                  presenceUpdateIntervalRef.current = null
+                }
+              }
+            }, 10000) // Update every 10 seconds (very aggressive to prevent any shutdown)
+            
             console.log('✅ Realtime chat connected:', conversationId)
             console.log('📡 Channel name:', `conversation:${conversationId}:messages`)
             console.log('🔐 Channel config:', {
               private: true,
-              broadcast: { self: true, ack: false }
+              broadcast: { self: true, ack: false },
+              presence: { key: currentUserId }
             })
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             setIsConnected(false)
