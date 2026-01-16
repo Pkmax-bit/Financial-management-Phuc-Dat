@@ -12,6 +12,7 @@ import { Conversation, Message, MessageCreate, ConversationWithParticipants } fr
 import { formatDistanceToNow } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import MessageBubble from './MessageBubble'
+import { useRealtimeChat } from '@/hooks/useRealtimeChat'
 
 interface ChatWidgetProps {
   currentUserId: string
@@ -48,6 +49,13 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  
+  // Typing indicator state
+  const [typingUsers, setTypingUsers] = useState<Map<string, { userId: string; userName: string; timestamp: number }>>(new Map())
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const typingBroadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastTypingBroadcastRef = useRef<number>(0)
 
   // Load conversations
   const loadConversations = useCallback(async () => {
@@ -79,6 +87,17 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
       setLoading(false)
     }
   }, [conversationId])
+  
+  // Debounce loadConversations to avoid too many calls
+  const loadConversationsDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const debouncedLoadConversations = useCallback(() => {
+    if (loadConversationsDebounceRef.current) {
+      clearTimeout(loadConversationsDebounceRef.current)
+    }
+    loadConversationsDebounceRef.current = setTimeout(() => {
+      loadConversations()
+    }, 500) // Debounce 500ms
+  }, [loadConversations])
 
   // Load messages - Optimized with parallel loading and caching
   const loadMessages = useCallback(async (conversationId: string) => {
@@ -364,93 +383,70 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
     }
   }, [loadMessages, loadConversations])
 
-  // Subscribe to real-time messages
-  useEffect(() => {
-    if (!selectedConversation) return
-
-    const channel = supabase
-      .channel(`conversation-widget:${selectedConversation.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'internal_messages',
-        filter: `conversation_id=eq.${selectedConversation.id}`
-      }, async (payload) => {
-        // Immediately add new message to state for instant display
-        const newMessage = payload.new as any
-        if (newMessage) {
-          // Check if message already exists to avoid duplicates
-          setMessages(prev => {
-            const exists = prev.find(m => m.id === newMessage.id)
-            if (exists) {
-              return prev // Message already exists, don't add duplicate
-            }
-            
-            // Add new message to the end (newest messages at the end)
-            // We'll enrich it with sender info below
-            return [...prev, newMessage as Message]
-          })
-          
-          // Enrich message with sender info without reloading all messages
-          try {
-            // Get sender name from users table
-            const { data: userData } = await supabase
-              .from('users')
-              .select('full_name')
-              .eq('id', newMessage.sender_id)
-              .single()
-            
-            if (userData) {
-              setMessages(prev => prev.map(msg => 
-                msg.id === newMessage.id 
-                  ? { ...msg, sender_name: userData.full_name || 'Unknown' }
-                  : msg
-              ))
-            }
-          } catch (error) {
-            console.error('Error enriching message with sender info:', error)
-          }
-          
-          // Update conversations list
-          loadConversations()
-        }
+  // Handlers for realtime messages
+  const handleNewMessage = useCallback((message: Message) => {
+    console.log('📨 handleNewMessage called (widget) with:', {
+      messageId: message.id,
+      conversationId: message.conversation_id,
+      currentConversationId: selectedConversation?.id,
+      senderId: message.sender_id,
+      currentUserId,
+      messageText: message.message_text?.substring(0, 50)
+    })
+    
+    // Only process messages for current conversation
+    if (message.conversation_id !== selectedConversation?.id) {
+      console.log('⚠️ Ignoring message from different conversation (widget):', {
+        messageConversationId: message.conversation_id,
+        currentConversationId: selectedConversation?.id
       })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'internal_messages',
-        filter: `conversation_id=eq.${selectedConversation.id}`
-      }, (payload) => {
-        // Update message in real-time (for edits/deletes)
-        const updatedMessage = payload.new as any
-        setMessages(prev => prev.map(msg => 
-          msg.id === updatedMessage.id ? { ...msg, ...updatedMessage } : msg
-        ))
-        loadConversations() // Update conversation list
-      })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'internal_messages',
-        filter: `conversation_id=eq.${selectedConversation.id}`
-      }, (payload) => {
-        // Remove deleted message
-        const deletedId = payload.old.id
-        setMessages(prev => prev.filter(msg => msg.id !== deletedId))
-        loadConversations()
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Real-time subscription active for conversation:', selectedConversation.id)
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Real-time subscription error for conversation:', selectedConversation.id)
-        }
-      })
-
-    return () => {
-      supabase.removeChannel(channel)
+      return
     }
-  }, [selectedConversation, messages, fetchMessageDetails, loadConversations])
+    
+    // Check if message already exists to avoid duplicates
+    setMessages(prev => {
+      const exists = prev.find(m => m.id === message.id)
+      if (exists) {
+        console.log('⚠️ Message already exists, updating instead (widget):', message.id)
+        // Update existing message instead of ignoring (in case data changed)
+        return prev.map(m => m.id === message.id ? { ...m, ...message } : m)
+      }
+      console.log('✅ Adding new message to list (widget):', message.id)
+      // Add new message to the end (newest messages at the end)
+      return [...prev, message]
+    })
+    
+    // Debounced reload conversations to update last_message_at and sort order
+    debouncedLoadConversations()
+  }, [debouncedLoadConversations, selectedConversation?.id, currentUserId])
+
+  const handleMessageUpdate = useCallback((message: Message) => {
+    setMessages(prev => prev.map(msg => 
+      msg.id === message.id ? { ...msg, ...message } : msg
+    ))
+    debouncedLoadConversations()
+  }, [debouncedLoadConversations])
+
+  const handleMessageDelete = useCallback((messageId: string) => {
+    setMessages(prev => prev.filter(msg => msg.id !== messageId))
+    debouncedLoadConversations()
+  }, [debouncedLoadConversations])
+
+  // Use optimized realtime chat hook
+  const { isConnected, connectionStatus, error: realtimeError } = useRealtimeChat({
+    conversationId: selectedConversation?.id || null,
+    currentUserId,
+    onNewMessage: handleNewMessage,
+    onMessageUpdate: handleMessageUpdate,
+    onMessageDelete: handleMessageDelete,
+    onConnectionChange: (connected) => {
+      if (connected) {
+        console.log('✅ Realtime chat connected (widget)')
+      } else {
+        console.warn('⚠️ Realtime chat disconnected (widget)')
+      }
+    },
+  })
 
   // Auto scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -462,6 +458,122 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
       scrollToBottom()
     }
   }, [messages, isMinimized, scrollToBottom])
+
+  // Setup typing indicator channel for realtime typing status
+  useEffect(() => {
+    if (!selectedConversation || !currentUserId) {
+      // Cleanup typing channel when no conversation selected
+      if (typingChannelRef.current) {
+        typingChannelRef.current.unsubscribe()
+        supabase.removeChannel(typingChannelRef.current)
+        typingChannelRef.current = null
+      }
+      setTypingUsers(new Map())
+      return
+    }
+
+    const setupTypingChannel = async () => {
+      try {
+        await supabase.realtime.setAuth()
+        
+        // Create typing channel for this conversation
+        const typingChannel = supabase.channel(`typing:conversation:${selectedConversation.id}`, {
+          config: {
+            broadcast: {
+              self: false, // Don't receive own typing broadcasts
+              ack: false
+            }
+          }
+        })
+
+        // Listen for typing events from other users
+        typingChannel
+          .on('broadcast', { event: 'typing' }, (payload) => {
+            const { userId, userName, isTyping: typingStatus } = payload.payload as any
+            
+            // Only show typing indicator for other users
+            if (userId !== currentUserId && typingStatus) {
+              setTypingUsers(prev => {
+                const newMap = new Map(prev)
+                newMap.set(userId, {
+                  userId,
+                  userName: userName || 'Người dùng',
+                  timestamp: Date.now()
+                })
+                return newMap
+              })
+            } else if (userId !== currentUserId && !typingStatus) {
+              // Remove typing indicator when user stops typing
+              setTypingUsers(prev => {
+                const newMap = new Map(prev)
+                newMap.delete(userId)
+                return newMap
+              })
+            }
+          })
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Typing indicator channel subscribed (widget):', selectedConversation.id)
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('❌ Typing indicator channel error (widget):', selectedConversation.id)
+            }
+          })
+
+        typingChannelRef.current = typingChannel
+
+        return () => {
+          if (typingChannelRef.current) {
+            typingChannelRef.current.unsubscribe()
+            supabase.removeChannel(typingChannelRef.current)
+            typingChannelRef.current = null
+          }
+        }
+      } catch (error) {
+        console.error('Error setting up typing channel (widget):', error)
+      }
+    }
+
+    setupTypingChannel()
+
+    // Cleanup on unmount or conversation change
+    return () => {
+      if (typingChannelRef.current) {
+        typingChannelRef.current.unsubscribe()
+        supabase.removeChannel(typingChannelRef.current)
+        typingChannelRef.current = null
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (typingBroadcastTimeoutRef.current) {
+        clearTimeout(typingBroadcastTimeoutRef.current)
+      }
+      setTypingUsers(new Map())
+    }
+  }, [selectedConversation?.id, currentUserId])
+
+  // Cleanup old typing indicators (older than 3 seconds)
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      setTypingUsers(prev => {
+        const newMap = new Map(prev)
+        const now = Date.now()
+        let hasChanges = false
+        
+        newMap.forEach((value, key) => {
+          // Remove typing indicator if it's older than 3 seconds (user likely stopped typing)
+          if (now - value.timestamp > 3000) {
+            newMap.delete(key)
+            hasChanges = true
+          }
+        })
+        
+        return hasChanges ? newMap : prev
+      })
+    }, 1000) // Check every second
+
+    return () => clearInterval(cleanupInterval)
+  }, [])
 
   const handleSendMessage = async () => {
     if (!selectedConversation || (!messageText.trim() && selectedFiles.length === 0 && !replyingTo)) return
@@ -499,6 +611,25 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
     setMessageText('')
     const replyingToToClear = replyingTo
     setReplyingTo(null)
+    
+    // Clear typing indicator and broadcast "stopped typing"
+    if (typingChannelRef.current && selectedConversation) {
+      typingChannelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+          userId: currentUserId,
+          userName: currentUserName,
+          isTyping: false
+        }
+      })
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    if (typingBroadcastTimeoutRef.current) {
+      clearTimeout(typingBroadcastTimeoutRef.current)
+    }
 
     try {
       setSending(true)
@@ -520,10 +651,47 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
           message_text: messageTextToSend,
           reply_to_id: replyingToToClear?.id
         }
-        await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
+        const response = await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
+        
+        console.log('📤 API Response after sending message (widget):', {
+          response,
+          hasId: !!response?.id,
+          responseKeys: response ? Object.keys(response) : [],
+          tempMessageId
+        })
+        
+        // Replace optimistic message with real message from server
+        // IMPORTANT: Always add the real message even if realtime might deliver it
+        // This ensures User A sees their own message immediately
+        if (response && response.id) {
+          setMessages(prev => {
+            // Remove optimistic message (temp ID)
+            const filtered = prev.filter(msg => msg.id !== tempMessageId)
+            // Check if real message already exists (from realtime broadcast - unlikely but possible)
+            const exists = filtered.find(msg => msg.id === response.id)
+            if (exists) {
+              console.log('✅ Message already exists from realtime, updating (widget):', response.id)
+              // Message already exists from realtime, just update it with server response
+              return filtered.map(msg => 
+                msg.id === response.id ? { ...msg, ...response } : msg
+              )
+            } else {
+              console.log('✅ Adding real message from API response (widget):', response.id)
+              // Add real message immediately - this ensures User A sees their message
+              // Realtime will also deliver it, but we handle duplicates in handleNewMessage
+              return [...filtered, response as Message]
+            }
+          })
+        } else {
+          console.warn('⚠️ No valid response from API (widget), keeping optimistic message and waiting for realtime')
+          // Don't remove optimistic message if API response is invalid
+          // Keep it and wait for realtime broadcast to deliver the real message
+          // This prevents message from disappearing
+        }
       }
       
-      await loadMessages(selectedConversation.id)
+      // Don't reload all messages - realtime will handle new messages
+      // Only reload conversations list to update last_message_at
       await loadConversations()
     } catch (error) {
       console.error('Error sending message:', error)
@@ -944,6 +1112,22 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
                   <div ref={messagesEndRef} />
                 </div>
               )}
+              
+              {/* Typing Indicator - Show who is typing */}
+              {typingUsers.size > 0 && (
+                <div className="px-3 py-1.5 bg-white border-t border-gray-100">
+                  {Array.from(typingUsers.values()).map((typingUser) => (
+                    <div key={typingUser.userId} className="flex items-center gap-2 text-xs text-gray-500 italic">
+                      <div className="flex gap-0.5">
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                      <span>{typingUser.userName} đang soạn...</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Input Area */}
@@ -1089,7 +1273,87 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
                 
                 <textarea
                   value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setMessageText(value)
+                    
+                    // Broadcast typing status to other users (throttled to avoid spam)
+                    if (value.trim().length > 0 && selectedConversation && typingChannelRef.current) {
+                      const now = Date.now()
+                      // Throttle: only broadcast every 1 second
+                      if (now - lastTypingBroadcastRef.current > 1000) {
+                        lastTypingBroadcastRef.current = now
+                        
+                        // Broadcast typing status
+                        typingChannelRef.current.send({
+                          type: 'broadcast',
+                          event: 'typing',
+                          payload: {
+                            userId: currentUserId,
+                            userName: currentUserName,
+                            isTyping: true
+                          }
+                        })
+                      } else {
+                        // Schedule a delayed broadcast if we're throttling
+                        if (typingBroadcastTimeoutRef.current) {
+                          clearTimeout(typingBroadcastTimeoutRef.current)
+                        }
+                        typingBroadcastTimeoutRef.current = setTimeout(() => {
+                          if (messageText.trim().length > 0 && selectedConversation && typingChannelRef.current) {
+                            lastTypingBroadcastRef.current = Date.now()
+                            typingChannelRef.current.send({
+                              type: 'broadcast',
+                              event: 'typing',
+                              payload: {
+                                userId: currentUserId,
+                                userName: currentUserName,
+                                isTyping: true
+                              }
+                            })
+                          }
+                        }, 1000 - (now - lastTypingBroadcastRef.current))
+                      }
+                      
+                      // Clear existing timeout
+                      if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current)
+                      }
+                      // Broadcast "stopped typing" after 2 seconds of no typing
+                      typingTimeoutRef.current = setTimeout(() => {
+                        if (typingChannelRef.current && selectedConversation) {
+                          typingChannelRef.current.send({
+                            type: 'broadcast',
+                            event: 'typing',
+                            payload: {
+                              userId: currentUserId,
+                              userName: currentUserName,
+                              isTyping: false
+                            }
+                          })
+                        }
+                      }, 2000)
+                    } else {
+                      // User stopped typing - broadcast immediately
+                      if (typingChannelRef.current && selectedConversation) {
+                        typingChannelRef.current.send({
+                          type: 'broadcast',
+                          event: 'typing',
+                          payload: {
+                            userId: currentUserId,
+                            userName: currentUserName,
+                            isTyping: false
+                          }
+                        })
+                      }
+                      if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current)
+                      }
+                      if (typingBroadcastTimeoutRef.current) {
+                        clearTimeout(typingBroadcastTimeoutRef.current)
+                      }
+                    }
+                  }}
                   onKeyDown={handleKeyPress}
                   placeholder={editingMessage ? "Chỉnh sửa tin nhắn..." : replyingTo ? "Trả lời..." : "Nhập tin nhắn..."}
                   className="flex-1 px-2 py-1.5 bg-gray-100 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0068ff] resize-none text-sm"

@@ -1930,81 +1930,175 @@ async def cleanup_deleted_items(
 @router.get("/project/{project_id}/comments", response_model=List[TaskComment])
 async def get_project_comments(
     project_id: str,
+    limit: int = Query(2000, ge=1, le=5000, description="Maximum number of comments to return"),
     current_user: User = Depends(get_current_user)
 ):
     """Get all comments for all tasks in a project, optimized for chat timeline"""
     try:
         supabase = get_supabase_client()
         
-        # 1. Get all task IDs for this project
-        tasks_result = supabase.table("tasks").select("id, title").eq("project_id", project_id).is_("deleted_at", "null").execute()
-        task_info_map = {t["id"]: t["title"] for t in tasks_result.data or []}
-        task_ids = list(task_info_map.keys())
+        # 1. Get all task IDs for this project (with timeout protection)
+        try:
+            tasks_result = supabase.table("tasks").select("id, title").eq("project_id", project_id).is_("deleted_at", "null").limit(1000).execute()
+            if not tasks_result.data:
+                logger.info(f"No tasks found for project {project_id}")
+                return []
+            task_info_map = {t["id"]: t["title"] for t in tasks_result.data}
+            task_ids = list(task_info_map.keys())
+            logger.info(f"Found {len(task_ids)} tasks for project {project_id}")
+        except Exception as e:
+            logger.error(f"Error fetching tasks for project {project_id}: {str(e)}", exc_info=True)
+            return []
         
         if not task_ids:
             return []
             
-        # 2. Get all comments for these tasks
-        comments_result = supabase.table("task_comments").select("""
-            *,
-            users:user_id(id, full_name),
-            employees:employee_id(id, first_name, last_name)
-        """).in_("task_id", task_ids).order("created_at", desc=False).execute()
+        # 2. Get all comments for these tasks in batches
+        # Optimized: Use smaller batches and limit per batch to avoid timeout
+        try:
+            BATCH_SIZE = 50  # Reduced from 100 to avoid query timeout
+            COMMENTS_PER_BATCH = 300  # Reduced from 500 to improve performance
+            all_comments = []
+            max_batches = 20  # Limit total batches to prevent infinite loops
+            
+            for batch_num, i in enumerate(range(0, min(len(task_ids), BATCH_SIZE * max_batches), BATCH_SIZE), 1):
+                batch_task_ids = task_ids[i:i + BATCH_SIZE]
+                if not batch_task_ids:
+                    break
+                    
+                try:
+                    # Get comments with joins to reduce fallback queries
+                    comments_result = supabase.table("task_comments").select("""
+                        *,
+                        users:user_id(id, full_name),
+                        employees:employee_id(id, first_name, last_name)
+                    """).in_("task_id", batch_task_ids)\
+                        .order("created_at", desc=True)\
+                        .limit(COMMENTS_PER_BATCH)\
+                        .execute()
+                    
+                    if comments_result.data:
+                        all_comments.extend(comments_result.data)
+                        logger.debug(f"Batch {batch_num}: Got {len(comments_result.data)} comments (total: {len(all_comments)})")
+                        
+                        # Early exit if we already have enough comments
+                        if len(all_comments) >= limit:
+                            logger.info(f"Reached limit of {limit} comments, stopping early at batch {batch_num}")
+                            break
+                except Exception as batch_error:
+                    logger.warning(f"Error fetching comments for batch {batch_num}: {str(batch_error)}")
+                    # Continue with next batch instead of failing completely
+                    continue
+            
+            if not all_comments:
+                logger.info(f"No comments found for tasks in project {project_id}")
+                return []
+            
+            # Sort all comments by created_at ascending (oldest first)
+            all_comments.sort(key=lambda x: x.get("created_at", "") or "")
+            
+            # Apply limit to final result
+            if len(all_comments) > limit:
+                all_comments = all_comments[-limit:]  # Take last N comments (most recent)
+                logger.info(f"Limited comments to {limit}")
+            
+            logger.info(f"Returning {len(all_comments)} comments for {len(task_ids)} tasks in project {project_id}")
+        except Exception as e:
+            logger.error(f"Error fetching comments for tasks: {str(e)}", exc_info=True)
+            return []
         
         # 3. Enrich comments with names and task_title
+        # Optimized: Batch fetch missing user/employee names instead of individual queries
         enriched_comments = []
-        for comment in comments_result.data or []:
+        
+        # Collect all unique user_ids and employee_ids that need fallback lookup
+        missing_user_ids = set()
+        missing_employee_ids = set()
+        
+        for comment in all_comments:
             # Add task title context
-            comment["task_title"] = task_info_map.get(comment["task_id"])
+            comment["task_title"] = task_info_map.get(comment["task_id"], "Unknown Task")
             
-            # Get user name
+            # Get user name from join
             usr = comment.get("users")
             if usr:
-                if isinstance(usr, list): usr = usr[0] if usr else None
-                if usr: comment["user_name"] = usr.get("full_name")
+                if isinstance(usr, list): 
+                    usr = usr[0] if usr else None
+                if usr: 
+                    comment["user_name"] = usr.get("full_name")
             
-            # Get employee name
+            # Get employee name from join
             emp = comment.get("employees")
             if emp:
-                if isinstance(emp, list): emp = emp[0] if emp else None
-                if emp: comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
+                if isinstance(emp, list): 
+                    emp = emp[0] if emp else None
+                if emp: 
+                    comment["employee_name"] = f"{emp.get('first_name', '')} {emp.get('last_name', '')}".strip()
             
-            # Fallback for employee name by employee_id then user_id
-            if not comment.get("employee_name"):
-                employee_id = comment.get("employee_id")
-                if employee_id:
-                    try:
-                        emp_res = supabase.table("employees").select("first_name, last_name").eq("id", employee_id).single().execute()
-                        if emp_res.data:
-                            comment["employee_name"] = f"{emp_res.data.get('first_name', '')} {emp_res.data.get('last_name', '')}".strip()
-                    except: pass
-                
-                if not comment.get("employee_name") and comment.get("user_id"):
-                    try:
-                        emp_res = supabase.table("employees").select("first_name, last_name").eq("user_id", comment.get("user_id")).single().execute()
-                        if emp_res.data:
-                            comment["employee_name"] = f"{emp_res.data.get('first_name', '')} {emp_res.data.get('last_name', '')}".strip()
-                    except: pass
-
-            # Fallback for user_name
+            # Track missing names for batch lookup
             if not comment.get("user_name") and comment.get("user_id"):
-                try:
-                    usr_res = supabase.table("users").select("full_name").eq("id", comment.get("user_id")).single().execute()
-                    if usr_res.data:
-                        comment["user_name"] = usr_res.data.get("full_name")
-                except: pass
+                missing_user_ids.add(comment.get("user_id"))
+            if not comment.get("employee_name"):
+                if comment.get("employee_id"):
+                    missing_employee_ids.add(comment.get("employee_id"))
+                elif comment.get("user_id"):
+                    missing_user_ids.add(comment.get("user_id"))  # Will lookup employee by user_id
+        
+        # Batch fetch missing user names (only if needed)
+        user_map = {}
+        if missing_user_ids:
+            try:
+                user_ids_list = list(missing_user_ids)[:100]  # Limit to 100 to avoid query timeout
+                users_result = supabase.table("users").select("id, full_name").in_("id", user_ids_list).execute()
+                if users_result.data:
+                    user_map = {u["id"]: u.get("full_name") for u in users_result.data}
+            except Exception as e:
+                logger.debug(f"Could not batch fetch users: {str(e)}")
+        
+        # Batch fetch missing employee names (only if needed)
+        employee_map = {}
+        if missing_employee_ids:
+            try:
+                emp_ids_list = list(missing_employee_ids)[:100]  # Limit to 100
+                emp_result = supabase.table("employees").select("id, first_name, last_name").in_("id", emp_ids_list).execute()
+                if emp_result.data:
+                    employee_map = {
+                        e["id"]: f"{e.get('first_name', '')} {e.get('last_name', '')}".strip() 
+                        for e in emp_result.data
+                    }
+            except Exception as e:
+                logger.debug(f"Could not batch fetch employees: {str(e)}")
+        
+        # Apply batch-fetched data to comments
+        for comment in all_comments:
+            # Fill in missing user_name
+            if not comment.get("user_name") and comment.get("user_id"):
+                comment["user_name"] = user_map.get(comment.get("user_id"), "Unknown")
+            
+            # Fill in missing employee_name
+            if not comment.get("employee_name"):
+                if comment.get("employee_id") and comment.get("employee_id") in employee_map:
+                    comment["employee_name"] = employee_map[comment.get("employee_id")]
+                elif comment.get("user_id") and comment.get("user_id") in user_map:
+                    # Try to get employee by user_id (single query only if really needed)
+                    try:
+                        emp_res = supabase.table("employees").select("first_name, last_name").eq("user_id", comment.get("user_id")).maybe_single().execute()
+                        if emp_res.data:
+                            comment["employee_name"] = f"{emp_res.data.get('first_name', '')} {emp_res.data.get('last_name', '')}".strip()
+                    except Exception:
+                        pass  # Skip if fails
             
             # We return flat list for sequential chat, but keep replies empty to match model
             comment["replies"] = []
             enriched_comments.append(comment)
             
         return enriched_comments
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error fetching project comments: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch project comments: {str(e)}"
-        )
+        logger.error(f"Unhandled error fetching project comments: {str(e)}", exc_info=True)
+        # Return empty list instead of raising 500 error to prevent frontend retry loops
+        return []
 
 
 def _has_comment_moderation_rights(current_user: User) -> bool:

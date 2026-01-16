@@ -145,3 +145,4 @@ COMMENT ON COLUMN public.app_versions.is_active IS 'Only one version can be acti
 
 
 
+

@@ -38,7 +38,7 @@ class ApiClient {
   private cache: Map<string, CacheEntry<any>>
   private pendingRequests: Map<string, Promise<any>>
   private defaultCacheTTL: number = 30000 // 30 seconds
-  private defaultRetries: number = 3
+  private defaultRetries: number = 5 // Tăng từ 3 lên 5 để xử lý backend quá tải
 
   // Token refresh state
   private refreshPromise: Promise<any> | null = null
@@ -450,6 +450,68 @@ class ApiClient {
               continue
             }
           }
+
+          // Retry for 5xx errors (server errors) - có thể là temporary
+          if (response.status >= 500 && response.status < 600) {
+            // Check if this is a persistent error (same error message across attempts)
+            // For some endpoints, we should reduce retries or skip retry entirely
+            const isHeavyEndpoint = url.includes('/project/') && url.includes('/comments')
+            const maxRetriesForHeavyEndpoint = 2 // Reduce retries for heavy endpoints
+            
+            // Skip retry if it's a heavy endpoint and we've already tried enough
+            if (isHeavyEndpoint && attempt >= maxRetriesForHeavyEndpoint) {
+              console.warn(`[API] Skipping further retries for heavy endpoint after ${attempt + 1} attempts:`, url)
+              errorData = { 
+                ...errorData, 
+                detailedMessage: 'Endpoint này có thể mất nhiều thời gian để xử lý. Vui lòng thử lại sau hoặc refresh trang.',
+                retryAttempts: attempt + 1,
+                skippedRetries: true
+              }
+              break // Exit retry loop
+            }
+            
+            if (attempt < retries - 1) {
+              // Exponential backoff với jitter để tránh thundering herd
+              const baseDelay = Math.min(Math.pow(2, attempt) * 1000, 5000) // Max 5s
+              const jitter = Math.random() * 500 // Random 0-500ms
+              const waitTime = baseDelay + jitter
+              
+              console.warn(`[API] Server error ${response.status}, retrying ${attempt + 1}/${retries} after ${Math.round(waitTime)}ms...`, {
+                error: errorMessage,
+                endpoint: url,
+                attempt: attempt + 1,
+                isHeavyEndpoint,
+                errorData: errorData
+              })
+              await new Promise(resolve => setTimeout(resolve, waitTime))
+              continue // Retry request
+            }
+            // After all retries failed, log detailed error
+            // Try to get response body for better error info (safely)
+            let responseBodyPreview = 'Unable to read response body'
+            try {
+              const clonedResponse = response.clone()
+              const bodyText = await clonedResponse.text()
+              responseBodyPreview = bodyText ? bodyText.substring(0, 200) : 'Empty response body'
+            } catch (e) {
+              responseBodyPreview = `Error reading body: ${(e as Error).message}`
+            }
+            
+            console.error(`[API] Server error ${response.status} after ${retries} attempts:`, {
+              error: errorMessage,
+              endpoint: url,
+              errorData: errorData,
+              attempts: retries,
+              isHeavyEndpoint,
+              responseBodyPreview
+            })
+            
+            // Thêm thông tin chi tiết vào error message
+            const detailedMessage = isHeavyEndpoint 
+              ? `Endpoint này có thể mất nhiều thời gian để xử lý (${response.status}). Vui lòng thử lại sau hoặc refresh trang.`
+              : `Backend server error (${response.status}). Đã thử ${retries} lần nhưng không thành công. Vui lòng thử lại sau vài giây hoặc liên hệ admin nếu vấn đề tiếp tục.`
+            errorData = { ...errorData, detailedMessage, retryAttempts: retries, isHeavyEndpoint }
+          }
           
           // If authentication error and in browser, redirect to login
           // Only redirect if we haven't already initiated a redirect
@@ -503,9 +565,25 @@ class ApiClient {
           }
         }
 
-        // Exponential backoff
+        // Retry for network errors (socket hang up, ECONNRESET, etc.)
+        const isNetworkError = 
+          error instanceof TypeError ||
+          (error as any)?.message?.includes('socket') ||
+          (error as any)?.message?.includes('ECONNRESET') ||
+          (error as any)?.message?.includes('hang up') ||
+          (error as any)?.message?.includes('Failed to fetch') ||
+          (error as any)?.code === 'ECONNRESET'
+
+        if (isNetworkError && attempt < retries - 1) {
+          const waitTime = Math.min(Math.pow(2, attempt) * 1000, 5000) // Exponential backoff, max 5s
+          console.warn(`[API] Network error, retrying ${attempt + 1}/${retries} after ${waitTime}ms:`, (error as Error).message)
+          await new Promise(resolve => setTimeout(resolve, waitTime))
+          continue // Retry request
+        }
+
+        // Exponential backoff for other errors
         if (attempt < retries - 1) {
-          const waitTime = Math.pow(2, attempt) * 1000
+          const waitTime = Math.min(Math.pow(2, attempt) * 1000, 5000)
           await new Promise(resolve => setTimeout(resolve, waitTime))
         }
       }

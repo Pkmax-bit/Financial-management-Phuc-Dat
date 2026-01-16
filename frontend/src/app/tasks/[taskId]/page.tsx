@@ -692,19 +692,220 @@ export default function TaskDetailPage() {
     }
   }, [taskId, loadProjectInfo])
 
-  const loadComments = useCallback(async () => {
+  // Track loading state to prevent concurrent calls
+  const loadingCommentsRef = useRef(false)
+  const lastLoadTimeRef = useRef(0)
+
+  const loadComments = useCallback(async (skipOptimistic = false) => {
     if (!taskId) return
+    
+    // Prevent concurrent calls - nếu đang load, đợi
+    if (loadingCommentsRef.current) {
+      console.log('⏳ loadComments already in progress, skipping...')
+      return
+    }
+    
+    // Throttle: không load quá nhiều lần trong 1 giây
+    const now = Date.now()
+    const timeSinceLastLoad = now - lastLoadTimeRef.current
+    if (timeSinceLastLoad < 500 && !skipOptimistic) {
+      console.log('⏳ loadComments throttled, waiting...')
+      return
+    }
+    
+    loadingCommentsRef.current = true
+    lastLoadTimeRef.current = now
+    
     try {
       const comments = await apiGet(`/api/tasks/${taskId}/comments`)
-      setTaskData(prev => prev ? { ...prev, comments } : null)
+      
+      setTaskData(prev => {
+        if (!prev) return null
+        
+        // If skipOptimistic is true, merge với optimistic messages để replace chúng
+        if (skipOptimistic) {
+          // Lấy optimistic messages hiện tại (chỉ từ user hiện tại)
+          const optimisticMessages = (prev.comments || []).filter((c: any) => {
+            if (!c.isSending) return false
+            // Chỉ giữ optimistic messages từ user hiện tại
+            if (user) {
+              return (c.user_id === user.id) || 
+                     (c.employee_id && (c.employee_id === user.employee_id || c.employee_id === user.id))
+            }
+            return true // Nếu không có user info, giữ tất cả
+          })
+          
+          // Lấy confirmed message IDs từ server
+          const confirmedIds = new Set(comments.map((c: any) => c.id))
+          
+          console.log('🔄 loadComments with skipOptimistic:', {
+            totalComments: comments.length,
+            optimisticMessages: optimisticMessages.length,
+            confirmedIds: confirmedIds.size,
+            currentUserId: user?.id
+          })
+          
+          // Nếu không có optimistic messages, chỉ replace
+          if (optimisticMessages.length === 0) {
+            return { ...prev, comments }
+          }
+          
+          // Kiểm tra xem optimistic messages đã được confirm chưa
+          const stillOptimistic = optimisticMessages.filter((opt: any) => {
+            // Nếu optimistic message đã có real message với cùng id, không giữ lại
+            if (opt.id && confirmedIds.has(opt.id)) {
+              return false
+            }
+            
+            // Kiểm tra xem có real message match với optimistic message không
+            const hasRealMatch = comments.some((real: any) => {
+              // Match bằng content, type, và timestamp
+              const contentMatch = (real.comment || '') === (opt.comment || '') &&
+                                   (real.type || 'text') === (opt.type || 'text') &&
+                                   (real.file_url || '') === (opt.file_url || '')
+              if (!contentMatch) return false
+              
+              // Match bằng user_id/employee_id
+              const userMatch = opt.user_id && real.user_id && opt.user_id === real.user_id
+              const employeeMatch = opt.employee_id && real.employee_id && opt.employee_id === real.employee_id
+              
+              // Match bằng timestamp (within 30 seconds)
+              const optTime = new Date(opt.created_at).getTime()
+              const realTime = new Date(real.created_at).getTime()
+              const timeDiff = Math.abs(realTime - optTime)
+              
+              return (userMatch || employeeMatch) && timeDiff < 30000
+            })
+            
+            return !hasRealMatch // Giữ lại nếu chưa có real match
+          })
+          
+          console.log(`🔄 After matching: ${stillOptimistic.length} optimistic messages still pending`)
+          
+          if (stillOptimistic.length === 0) {
+            // Tất cả optimistic messages đã được confirm, chỉ return real comments
+            return { ...prev, comments }
+          }
+          
+          // Giữ lại optimistic messages chưa được match
+          // Nhưng remove isSending flag nếu đã quá 10 giây (có thể đã được gửi nhưng chưa match được)
+          const now = Date.now()
+          const stillOptimisticWithTimeout = stillOptimistic.map((opt: any) => {
+            // Nếu optimistic message đã quá 10 giây, remove isSending flag
+            const optTime = new Date(opt.created_at).getTime()
+            const age = now - optTime
+            if (age > 10000) { // 10 seconds
+              console.log(`⏰ Removing isSending flag from old optimistic message: ${opt.id || opt.tempId}`)
+              return { ...opt, isSending: false }
+            }
+            return opt
+          })
+          
+          // Combine: real comments + still optimistic messages
+          // Đảm bảo không có duplicate (theo id)
+          const commentMap = new Map()
+          
+          // Thêm real comments trước
+          comments.forEach((c: any) => {
+            if (c.id) {
+              commentMap.set(c.id, c)
+            }
+          })
+          
+          // Thêm optimistic messages chưa được match (không duplicate với real)
+          stillOptimisticWithTimeout.forEach((opt: any) => {
+            // Chỉ thêm nếu không có real message với cùng id hoặc content
+            const hasRealMatchById = confirmedIds.has(opt.id)
+            const hasRealMatchByContent = comments.some((real: any) => {
+              const contentMatch = (real.comment || '') === (opt.comment || '') &&
+                                   (real.type || 'text') === (opt.type || 'text') &&
+                                   (real.file_url || '') === (opt.file_url || '')
+              if (!contentMatch) return false
+              
+              // Match bằng user_id/employee_id
+              const userMatch = opt.user_id && real.user_id && opt.user_id === real.user_id
+              const employeeMatch = opt.employee_id && real.employee_id && opt.employee_id === real.employee_id
+              
+              const optTime = new Date(opt.created_at).getTime()
+              const realTime = new Date(real.created_at).getTime()
+              const timeDiff = Math.abs(realTime - optTime)
+              
+              return (userMatch || employeeMatch) && timeDiff < 30000
+            })
+            
+            if (!hasRealMatchById && !hasRealMatchByContent) {
+              // Dùng tempId làm key để tránh duplicate
+              const key = opt.id || opt.tempId || `temp-${Date.now()}`
+              if (!commentMap.has(key)) {
+                commentMap.set(key, opt)
+              }
+            }
+          })
+          
+          const mergedComments = Array.from(commentMap.values()).sort((a: any, b: any) => {
+            const timeA = new Date(a.created_at).getTime()
+            const timeB = new Date(b.created_at).getTime()
+            return timeA - timeB
+          })
+          
+          console.log(`🔄 Merged comments: ${comments.length} real + ${stillOptimistic.length} optimistic = ${mergedComments.length} total (after deduplication)`)
+          
+          return { ...prev, comments: mergedComments }
+        }
+        
+        // Otherwise, preserve optimistic messages that haven't been confirmed yet
+        if (prev.comments) {
+          const optimisticMessages = prev.comments.filter((c: any) => c.isSending)
+          if (optimisticMessages.length > 0) {
+            // Create a map of confirmed comments by their content/timestamp to match optimistic ones
+            const confirmedCommentsMap = new Map()
+            comments.forEach((c: any) => {
+              // Try to match by content and recent timestamp (within 5 seconds)
+              const key = `${c.comment || ''}_${c.file_url || ''}_${c.type || 'text'}`
+              confirmedCommentsMap.set(key, c)
+            })
+            
+            // Filter out optimistic messages that have been confirmed
+            const stillOptimistic = optimisticMessages.filter((optMsg: any) => {
+              const key = `${optMsg.comment || ''}_${optMsg.file_url || ''}_${optMsg.type || 'text'}`
+              const confirmed = confirmedCommentsMap.get(key)
+              if (confirmed) {
+                // Check if timestamp is close (within 10 seconds)
+                const optTime = new Date(optMsg.created_at).getTime()
+                const confTime = new Date(confirmed.created_at).getTime()
+                const timeDiff = Math.abs(confTime - optTime)
+                // If confirmed message is within 10 seconds, consider it matched
+                if (timeDiff < 10000) {
+                  return false // This optimistic message has been confirmed
+                }
+              }
+              return true // Still optimistic
+            })
+            
+            // Combine: confirmed comments + still optimistic messages
+            // Sort by created_at to maintain chronological order
+            const allComments = [...comments, ...stillOptimistic].sort((a: any, b: any) => {
+              const timeA = new Date(a.created_at).getTime()
+              const timeB = new Date(b.created_at).getTime()
+              return timeA - timeB
+            })
+            
+            return { ...prev, comments: allComments }
+          }
+        }
+        
+        return { ...prev, comments }
+      })
     } catch (err) {
-      console.error('Failed to load comments', err)
+      console.error('❌ Failed to load comments', err)
       // Fallback: reload full task if comments endpoint fails
       if (taskData) {
         loadTaskDetails()
       }
+    } finally {
+      loadingCommentsRef.current = false
     }
-  }, [taskId, loadTaskDetails])
+  }, [taskId, taskData, loadTaskDetails])
 
   const handleUpdateProjectStatus = useCallback(async (statusId: string) => {
     if (!project || !project.id || updatingProjectStatus) return
@@ -732,9 +933,23 @@ export default function TaskDetailPage() {
   useEffect(() => {
     if (!taskId) return
 
+    let debounceTimer: NodeJS.Timeout | null = null
+    let isReloading = false
+    let pendingUpdates: any[] = []
+    let lastReloadTime = 0
+
     // Subscribe to task_comments changes for this specific task
+    // Sử dụng unique channel name để tránh conflict
+    const channelName = `task-comments-${taskId}-${Date.now()}`
+    console.log('🔌 Setting up realtime subscription:', channelName, 'for task:', taskId)
+    
     const channel = supabase
-      .channel(`task-comments-${taskId}`)
+      .channel(channelName, {
+        config: {
+          broadcast: { self: false }, // Không nhận events từ chính mình qua broadcast
+          presence: { key: taskId }
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -744,25 +959,251 @@ export default function TaskDetailPage() {
           filter: `task_id=eq.${taskId}` // Filter by task_id
         },
         (payload) => {
-          console.log('Realtime comment update:', payload)
+          console.log('📨 Realtime comment update:', payload.eventType, payload)
           
-          // Reload comments to get latest data including joined fields (user_name, employee_name, etc.)
-          loadComments()
+          const newComment = payload.new as any
+          const oldComment = payload.old as any
+          const eventType = payload.eventType
+          
+          // Xử lý INSERT event ngay lập tức (không debounce)
+          if (eventType === 'INSERT' && newComment) {
+            const commentTaskId = newComment.task_id
+            if (commentTaskId === taskId) {
+              console.log('✅ New comment received via realtime:', newComment.id)
+              
+              // Kiểm tra xem comment này có phải từ user hiện tại không
+              // Cần kiểm tra cả user_id và employee_id
+              const isFromCurrentUser = user && (
+                (newComment.user_id && user.id === newComment.user_id) ||
+                (newComment.employee_id && (user.employee_id === newComment.employee_id || user.id === newComment.employee_id))
+              )
+              
+              console.log('🔍 Checking comment ownership:', {
+                commentId: newComment.id,
+                commentUserId: newComment.user_id,
+                commentEmployeeId: newComment.employee_id,
+                currentUserId: user?.id,
+                currentUserEmployeeId: user?.employee_id,
+                isFromCurrentUser
+              })
+              
+              if (isFromCurrentUser) {
+                // Nếu là từ user hiện tại, replace optimistic message
+                // NHƯNG chỉ nếu message chưa được confirm (còn isSending)
+                console.log('🔄 Realtime event from current user, checking if needs to replace optimistic message')
+                setTaskData(prev => {
+                  if (!prev) return prev
+                  
+                  // Kiểm tra xem đã có real message này chưa (theo id)
+                  const alreadyExists = (prev.comments || []).some((c: any) => c.id === newComment.id && !c.isSending)
+                  if (alreadyExists) {
+                    console.log('✅ Real message already exists, skipping realtime update:', newComment.id)
+                    return prev
+                  }
+                  
+                  // Tìm và replace optimistic message
+                  let found = false
+                  const updatedComments = (prev.comments || []).map((c: any) => {
+                    // Nếu đã có real message với cùng id, giữ nguyên
+                    if (c.id === newComment.id && !c.isSending) {
+                      return c
+                    }
+                    
+                    // Match optimistic message với real message
+                    if (c.isSending && (
+                      (c.comment === newComment.comment && c.type === (newComment.type || 'text')) ||
+                      (c.file_url === newComment.file_url && newComment.file_url)
+                    )) {
+                      found = true
+                      console.log('✅ Matched optimistic message:', c.id, 'with real:', newComment.id)
+                      return { ...newComment, isSending: false }
+                    }
+                    return c
+                  })
+                  
+                  // Nếu không tìm thấy optimistic message và chưa có real message, thêm vào
+                  if (!found && !alreadyExists) {
+                    console.log('⚠️ Optimistic message not found, adding real message from realtime:', newComment.id)
+                    updatedComments.push({ ...newComment, isSending: false })
+                  }
+                  
+                  // Sort và remove duplicates (ưu tiên real messages theo id)
+                  const commentMap = new Map()
+                  updatedComments.forEach((c: any) => {
+                    const key = c.id || c.tempId
+                    // Nếu đã có message với cùng id, ưu tiên real message (không có isSending)
+                    if (commentMap.has(key)) {
+                      const existing = commentMap.get(key)
+                      if (existing.isSending && !c.isSending) {
+                        commentMap.set(key, c) // Replace optimistic với real
+                      }
+                    } else {
+                      commentMap.set(key, c)
+                    }
+                  })
+                  
+                  const uniqueComments = Array.from(commentMap.values()).sort((a: any, b: any) => {
+                    const timeA = new Date(a.created_at).getTime()
+                    const timeB = new Date(b.created_at).getTime()
+                    return timeA - timeB
+                  })
+                  
+                  return { ...prev, comments: uniqueComments }
+                })
+                
+                // Remove from sendingMessageIds
+                setSendingMessageIds(prev => {
+                  const newSet = new Set(prev)
+                  // Remove all temp IDs that might match this comment
+                  prev.forEach(tempId => {
+                    const tempComment = (taskData?.comments || []).find((c: any) => c.id === tempId)
+                    if (tempComment && tempComment.isSending) {
+                      const contentMatch = (tempComment.comment || '') === (newComment.comment || '') &&
+                                           (tempComment.type || 'text') === (newComment.type || 'text') &&
+                                           (tempComment.file_url || '') === (newComment.file_url || '')
+                      if (contentMatch) {
+                        newSet.delete(tempId)
+                      }
+                    }
+                  })
+                  return newSet
+                })
+                
+                // Không cần reload, đã xử lý xong
+                return
+              } else {
+                // Nếu là từ user khác, thêm vào danh sách ngay lập tức
+                console.log('📥 New comment from other user, adding immediately:', newComment.id, {
+                  fromUserId: newComment.user_id,
+                  fromEmployeeId: newComment.employee_id,
+                  comment: newComment.comment?.substring(0, 50)
+                })
+                
+                setTaskData(prev => {
+                  if (!prev) {
+                    console.warn('⚠️ No taskData, cannot add comment')
+                    return null
+                  }
+                  
+                  // Kiểm tra xem đã có comment này chưa (theo id hoặc content + timestamp)
+                  const exists = (prev.comments || []).some((c: any) => {
+                    // Match theo id
+                    if (c.id === newComment.id) return true
+                    
+                    // Match theo content + timestamp (trong vòng 5 giây) để tránh duplicate
+                    if (c.comment === newComment.comment && 
+                        c.type === (newComment.type || 'text') &&
+                        c.file_url === newComment.file_url) {
+                      const timeDiff = Math.abs(
+                        new Date(c.created_at).getTime() - new Date(newComment.created_at).getTime()
+                      )
+                      if (timeDiff < 5000) return true // Within 5 seconds
+                    }
+                    
+                    return false
+                  })
+                  
+                  if (exists) {
+                    console.log('⚠️ Comment already exists, skipping:', newComment.id)
+                    return prev
+                  }
+                  
+                  // Thêm comment mới, giữ lại optimistic messages
+                  const updatedComments = [...(prev.comments || []), { ...newComment, isSending: false }]
+                    .sort((a: any, b: any) => {
+                      const timeA = new Date(a.created_at).getTime()
+                      const timeB = new Date(b.created_at).getTime()
+                      return timeA - timeB
+                    })
+                  
+                  console.log('✅ Added comment from other user, total comments:', updatedComments.length)
+                  return { ...prev, comments: updatedComments }
+                })
+                
+                // Không cần reload, đã xử lý xong
+                return
+              }
+            }
+          }
+          
+          // Xử lý UPDATE và DELETE events với debounce
+          if (eventType === 'UPDATE' || eventType === 'DELETE') {
+            // Track pending updates
+            pendingUpdates.push({
+              event: eventType,
+              timestamp: Date.now(),
+              payload
+            })
+            
+            // Debounce với thời gian ngắn hơn cho UPDATE/DELETE
+            if (debounceTimer) {
+              clearTimeout(debounceTimer)
+            }
+            
+            const waitTime = isReloading ? 300 : 200
+            const timeSinceLastReload = Date.now() - lastReloadTime
+            const adjustedWaitTime = timeSinceLastReload < 500 ? Math.max(waitTime, 500 - timeSinceLastReload) : waitTime
+            
+            debounceTimer = setTimeout(async () => {
+              if (isReloading) {
+                console.log('⏳ Skipping reload - already in progress')
+                return
+              }
+              
+              isReloading = true
+              const updatesToProcess = [...pendingUpdates]
+              pendingUpdates = []
+              
+              try {
+                console.log(`🔄 Reloading comments for ${updatesToProcess.length} UPDATE/DELETE events`)
+                lastReloadTime = Date.now()
+                
+                // Reload comments với skipOptimistic = true để replace optimistic messages
+                await loadComments(true)
+                
+                console.log('✅ Comments reloaded successfully')
+              } catch (error) {
+                console.error('❌ Error reloading comments:', error)
+                setTimeout(() => {
+                  if (!isReloading) {
+                    loadComments(true).catch(err => console.error('Retry failed:', err))
+                  }
+                }, 1000)
+              } finally {
+                isReloading = false
+              }
+            }, adjustedWaitTime)
+          }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
-          console.log('Subscribed to task comments realtime for task:', taskId)
+          console.log('✅ Subscribed to task comments realtime for task:', taskId, 'channel:', channelName)
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('Error subscribing to task comments realtime')
+          console.error('❌ Error subscribing to task comments realtime:', err)
+          // Retry subscription after 2 seconds
+          setTimeout(() => {
+            console.log('🔄 Retrying realtime subscription...')
+            // The useEffect will re-run and create a new subscription
+          }, 2000)
+        } else if (status === 'TIMED_OUT') {
+          console.warn('⚠️ Realtime subscription timed out, reconnecting...')
+        } else if (status === 'CLOSED') {
+          console.warn('⚠️ Realtime subscription closed')
+        } else {
+          console.log('ℹ️ Realtime subscription status:', status, err ? `Error: ${err}` : '')
         }
       })
 
     // Cleanup: unsubscribe when component unmounts or taskId changes
     return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
       supabase.removeChannel(channel)
+      console.log('🧹 Cleaned up realtime subscription for task:', taskId)
     }
-  }, [taskId, loadComments])
+  }, [taskId, loadComments, user, taskData])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -1211,10 +1652,88 @@ export default function TaskDetailPage() {
     }
   }
 
+  // Track đang gửi để tránh gửi đồng thời nhiều tin nhắn
+  const isSendingRef = useRef(false)
+  const lastSendTimeRef = useRef(0)
+  const MIN_SEND_INTERVAL = 300 // Minimum 300ms between sends
+
+  // Helper function để gửi comment với retry logic và rate limiting
+  const sendCommentWithRetry = async (commentData: any, maxRetries = 5): Promise<any> => {
+    let retryCount = 0
+    
+    // Thêm delay nhỏ trước khi gửi để tránh quá tải backend khi nhiều người gửi cùng lúc
+    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200)) // Random 100-300ms
+    
+    while (retryCount < maxRetries) {
+      try {
+        const result = await apiPost(`/api/tasks/${taskId}/comments`, commentData)
+        return result
+      } catch (error: any) {
+        retryCount++
+        
+        // Chỉ retry nếu là lỗi network hoặc 5xx
+        const shouldRetry = 
+          error?.status >= 500 || 
+          error?.status === undefined || // Network error không có status
+          error?.message?.includes('socket') ||
+          error?.message?.includes('ECONNRESET') ||
+          error?.message?.includes('hang up') ||
+          error?.message?.includes('Internal Server Error') ||
+          error?.message?.includes('Failed to fetch')
+        
+        if (shouldRetry && retryCount < maxRetries) {
+          // Exponential backoff với jitter để tránh thundering herd
+          const baseDelay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000)
+          const jitter = Math.random() * 500 // Random 0-500ms
+          const delay = baseDelay + jitter
+          
+          console.warn(`⚠️ Retry ${retryCount}/${maxRetries} after ${Math.round(delay)}ms:`, error.message || error)
+          await new Promise(resolve => setTimeout(resolve, delay))
+        } else {
+          // Log error chi tiết trước khi throw
+          console.error(`❌ Failed to send comment after ${retryCount} attempts:`, {
+            error: error.message || error,
+            status: error?.status,
+            data: error?.data
+          })
+          throw error // Không retry hoặc đã hết retries
+        }
+      }
+    }
+    
+    throw new Error('Failed after all retries')
+  }
+
   const handleSendMessage = async () => {
     const trimmedMessage = chatMessage.trim()
     if (!trimmedMessage && pendingFiles.length === 0) return
+    
+    // Rate limiting: Đảm bảo không gửi quá nhanh
+    const now = Date.now()
+    const timeSinceLastSend = now - lastSendTimeRef.current
+    if (timeSinceLastSend < MIN_SEND_INTERVAL) {
+      const waitTime = MIN_SEND_INTERVAL - timeSinceLastSend
+      console.log(`⏳ Rate limiting: waiting ${waitTime}ms before sending`)
+      setTimeout(() => {
+        handleSendMessage()
+      }, waitTime)
+      return
+    }
+    
+    // Nếu đang gửi, đợi một chút rồi thử lại
+    if (isSendingRef.current) {
+      console.log('⏳ Already sending, waiting...')
+      setTimeout(() => {
+        if (!isSendingRef.current) {
+          handleSendMessage()
+        }
+      }, 500)
+      return
+    }
+
     try {
+      isSendingRef.current = true
+      lastSendTimeRef.current = Date.now()
       setSendingMessage(true)
 
       // Parse mentions from message
@@ -1246,47 +1765,311 @@ export default function TaskDetailPage() {
         }
       }
 
+      // Tạo optimistic messages (hiển thị ngay lập tức)
+      const optimisticMessages: any[] = []
+      const tempIds: string[] = []
+
       // Nếu có cả text và file: gộp thành 1 tin nhắn
       let createdComment: any = null
       if (trimmedMessage && uploadedFiles.length > 0) {
         // Gửi 1 comment với text và file đầu tiên
         const firstFile = uploadedFiles[0]
         const messageType: 'file' | 'image' = firstFile.file.type.startsWith('image/') ? 'image' : 'file'
+        const tempId = `temp-${Date.now()}-${Math.random()}`
+        tempIds.push(tempId)
 
-        createdComment = await apiPost(`/api/tasks/${taskId}/comments`, {
+        // Optimistic update: thêm tin nhắn vào UI ngay lập tức
+        const optimisticComment: any = {
+          id: tempId,
+          tempId: tempId,
+          task_id: taskId,
+          comment: trimmedMessage,
+          type: messageType,
+          file_url: firstFile.url,
+          is_pinned: false,
+          parent_id: replyingTo?.id || null,
+          created_at: new Date().toISOString(),
+          isSending: true,
+          user_id: user?.id,
+          employee_id: user?.employee_id,
+          user_name: user?.full_name,
+          employee_name: user?.employee_name
+        }
+        optimisticMessages.push(optimisticComment)
+
+        // Update UI ngay lập tức với optimistic message
+        setTaskData(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            comments: [...(prev.comments || []), optimisticComment]
+          }
+        })
+
+        // Gửi với retry logic
+        createdComment = await sendCommentWithRetry({
           comment: trimmedMessage,
           type: messageType,
           file_url: firstFile.url,
           is_pinned: false,
           parent_id: replyingTo?.id || null
         })
+        
+        // Replace optimistic message với real message ngay lập tức
+        if (createdComment && optimisticComment) {
+          console.log('✅ Message with file sent successfully, replacing optimistic:', optimisticComment.id, 'with real:', createdComment.id)
+          setTaskData(prev => {
+            if (!prev) return prev
+            let found = false
+            const updatedComments = (prev.comments || []).map((c: any) => {
+              // Replace optimistic message với real message
+              if (c.id === optimisticComment.id || c.tempId === optimisticComment.tempId) {
+                found = true
+                console.log('🔄 Replacing optimistic message with real message:', c.id, '->', createdComment.id)
+                return { ...createdComment, isSending: false }
+              }
+              return c
+            })
+            
+            // Nếu không tìm thấy optimistic message, thêm real message vào
+            if (!found) {
+              console.log('⚠️ Optimistic message not found, adding real message:', createdComment.id)
+              updatedComments.push({ ...createdComment, isSending: false })
+            }
+            
+            // Sort để đảm bảo thứ tự đúng
+            updatedComments.sort((a: any, b: any) => {
+              const timeA = new Date(a.created_at).getTime()
+              const timeB = new Date(b.created_at).getTime()
+              return timeA - timeB
+            })
+            
+            return { ...prev, comments: updatedComments }
+          })
+        } else if (createdComment) {
+          // Nếu không có optimistic comment nhưng có createdComment, thêm vào
+          console.log('⚠️ No optimistic comment but message created, adding:', createdComment.id)
+          setTaskData(prev => {
+            if (!prev) return prev
+            // Kiểm tra xem đã có message này chưa
+            const exists = (prev.comments || []).some((c: any) => c.id === createdComment.id)
+            if (!exists) {
+              return {
+                ...prev,
+                comments: [...(prev.comments || []), { ...createdComment, isSending: false }].sort((a: any, b: any) => {
+                  const timeA = new Date(a.created_at).getTime()
+                  const timeB = new Date(b.created_at).getTime()
+                  return timeA - timeB
+                })
+              }
+            }
+            return prev
+          })
+        }
 
         // Gửi các file còn lại (nếu có nhiều file) như các comment riêng
         for (let i = 1; i < uploadedFiles.length; i++) {
           const fileData = uploadedFiles[i]
           const fileMessageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
-          await apiPost(`/api/tasks/${taskId}/comments`, {
+          const fileTempId = `temp-${Date.now()}-${Math.random()}-${i}`
+          tempIds.push(fileTempId)
+
+          const fileOptimisticComment: any = {
+            id: fileTempId,
+            tempId: fileTempId,
+            task_id: taskId,
+            comment: fileData.file.name || 'File đính kèm',
+            type: fileMessageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            parent_id: replyingTo?.id || null,
+            created_at: new Date().toISOString(),
+            isSending: true,
+            user_id: user?.id,
+            employee_id: user?.employee_id,
+            user_name: user?.full_name,
+            employee_name: user?.employee_name
+          }
+          optimisticMessages.push(fileOptimisticComment)
+
+          // Update UI ngay lập tức
+          setTaskData(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              comments: [...(prev.comments || []), fileOptimisticComment]
+            }
+          })
+
+          // Retry logic cho file messages (multiple files case)
+          let retryCount = 0
+          const maxRetries = 3
+          
+          while (retryCount < maxRetries) {
+            try {
+          // Gửi file với retry logic
+          await sendCommentWithRetry({
             comment: fileData.file.name || 'File đính kèm',
             type: fileMessageType,
             file_url: fileData.url,
             is_pinned: false,
             parent_id: replyingTo?.id || null
           })
+              break // Success
+            } catch (error: any) {
+              retryCount++
+              const shouldRetry = 
+                error?.status >= 500 || 
+                error?.message?.includes('socket') ||
+                error?.message?.includes('ECONNRESET')
+              
+              if (shouldRetry && retryCount < maxRetries) {
+                const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000)
+                console.warn(`⚠️ Retry file ${retryCount}/${maxRetries}:`, error.message)
+                await new Promise(resolve => setTimeout(resolve, delay))
+              } else {
+                throw error
+              }
+            }
+          }
         }
       } else if (trimmedMessage) {
         // Chỉ có text, không có file
-        createdComment = await apiPost(`/api/tasks/${taskId}/comments`, {
+        const tempId = `temp-${Date.now()}-${Math.random()}`
+        tempIds.push(tempId)
+
+        const optimisticComment: any = {
+          id: tempId,
+          tempId: tempId,
+          task_id: taskId,
+          comment: trimmedMessage,
+          type: 'text',
+          file_url: null,
+          is_pinned: false,
+          parent_id: replyingTo?.id || null,
+          created_at: new Date().toISOString(),
+          isSending: true,
+          user_id: user?.id,
+          employee_id: user?.employee_id,
+          user_name: user?.full_name,
+          employee_name: user?.employee_name
+        }
+        optimisticMessages.push(optimisticComment)
+
+        // Update UI ngay lập tức
+        setTaskData(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            comments: [...(prev.comments || []), optimisticComment]
+          }
+        })
+
+        // Gửi text message với retry logic
+        createdComment = await sendCommentWithRetry({
           comment: trimmedMessage,
           type: 'text',
           file_url: undefined,
           is_pinned: false,
           parent_id: replyingTo?.id || null
         })
+        
+        // Replace optimistic message với real message ngay lập tức
+        if (createdComment && optimisticComment) {
+          console.log('✅ Text message sent successfully, replacing optimistic:', optimisticComment.id, 'with real:', createdComment.id)
+          setTaskData(prev => {
+            if (!prev) return prev
+            let found = false
+            const updatedComments = (prev.comments || []).map((c: any) => {
+              // Replace optimistic message với real message
+              if (c.id === optimisticComment.id || c.tempId === optimisticComment.tempId) {
+                found = true
+                console.log('🔄 Replacing optimistic text message with real message:', c.id, '->', createdComment.id)
+                return { ...createdComment, isSending: false }
+              }
+              return c
+            })
+            
+            // Nếu không tìm thấy optimistic message, thêm real message vào
+            if (!found) {
+              console.log('⚠️ Optimistic text message not found, adding real message:', createdComment.id)
+              updatedComments.push({ ...createdComment, isSending: false })
+            }
+            
+            // Sort để đảm bảo thứ tự đúng
+            updatedComments.sort((a: any, b: any) => {
+              const timeA = new Date(a.created_at).getTime()
+              const timeB = new Date(b.created_at).getTime()
+              return timeA - timeB
+            })
+            
+            return { ...prev, comments: updatedComments }
+          })
+          
+          // Remove from sendingMessageIds ngay lập tức
+          setSendingMessageIds(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(optimisticComment.id)
+            newSet.delete(optimisticComment.tempId)
+            return newSet
+          })
+        } else if (createdComment) {
+          // Nếu không có optimistic comment nhưng có createdComment, thêm vào
+          console.log('⚠️ No optimistic text comment but message created, adding:', createdComment.id)
+          setTaskData(prev => {
+            if (!prev) return prev
+            // Kiểm tra xem đã có message này chưa
+            const exists = (prev.comments || []).some((c: any) => c.id === createdComment.id)
+            if (!exists) {
+              return {
+                ...prev,
+                comments: [...(prev.comments || []), { ...createdComment, isSending: false }].sort((a: any, b: any) => {
+                  const timeA = new Date(a.created_at).getTime()
+                  const timeB = new Date(b.created_at).getTime()
+                  return timeA - timeB
+                })
+              }
+            }
+            return prev
+          })
+        }
       } else if (uploadedFiles.length > 0) {
         // Chỉ có file, không có text - gửi từng file riêng
-        for (const fileData of uploadedFiles) {
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const fileData = uploadedFiles[i]
           const messageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
-          await apiPost(`/api/tasks/${taskId}/comments`, {
+          const fileTempId = `temp-${Date.now()}-${Math.random()}-${i}`
+          tempIds.push(fileTempId)
+
+          const fileOptimisticComment: any = {
+            id: fileTempId,
+            tempId: fileTempId,
+            task_id: taskId,
+            comment: fileData.file.name || 'File đính kèm',
+            type: messageType,
+            file_url: fileData.url,
+            is_pinned: false,
+            parent_id: replyingTo?.id || null,
+            created_at: new Date().toISOString(),
+            isSending: true,
+            user_id: user?.id,
+            employee_id: user?.employee_id,
+            user_name: user?.full_name,
+            employee_name: user?.employee_name
+          }
+          optimisticMessages.push(fileOptimisticComment)
+
+          // Update UI ngay lập tức
+          setTaskData(prev => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              comments: [...(prev.comments || []), fileOptimisticComment]
+            }
+          })
+
+          // Gửi file với retry logic (files only case)
+          await sendCommentWithRetry({
             comment: fileData.file.name || 'File đính kèm',
             type: messageType,
             file_url: fileData.url,
@@ -1338,20 +2121,73 @@ export default function TaskDetailPage() {
       }
 
       // Clear messages and files only if at least one message or file was sent successfully
-      if (uploadedFiles.length > 0 || createdComment) {
+      if (uploadedFiles.length > 0 || createdComment || optimisticMessages.length > 0) {
         setChatMessage('')
         // Clear all files since they've been uploaded
         setPendingFiles([])
         setPendingPreview(null)
         setReplyingTo(null)
-        // Only reload comments, not the entire task
-        await loadComments()
+        
+        // Không cần reload ngay vì:
+        // 1. Optimistic update đã hiển thị tin nhắn
+        // 2. Realtime subscription sẽ tự động update khi database commit
+        // 3. Reload ngay có thể gây conflict với realtime update
+        // KHÔNG reload ngay vì:
+        // 1. Optimistic update đã hiển thị tin nhắn
+        // 2. Realtime subscription sẽ tự động update khi database commit
+        // 3. API response đã replace optimistic message
+        // 4. Reload ngay có thể gây conflict và xóa messages
+        
+        // Chỉ reload nếu realtime không hoạt động sau 3 giây (fallback)
+        setTimeout(async () => {
+          // Kiểm tra xem optimistic messages đã được confirm chưa
+          setTaskData(prev => {
+            if (!prev) return prev
+            const stillOptimistic = prev.comments?.filter((c: any) => c.isSending) || []
+            // Nếu vẫn còn optimistic messages sau 2 giây, reload để sync
+            if (stillOptimistic.length > 0) {
+              console.log('🔄 Fallback: Reloading comments (optimistic messages not confirmed)')
+              loadComments(true).catch(err => console.error('Fallback reload failed:', err))
+            }
+            return prev
+          })
+        }, 2000)
       }
     } catch (err) {
-      console.error('Error sending message:', err)
-      alert(getErrorMessage(err, 'Không thể gửi tin nhắn'))
+      console.error('❌ Error sending message:', err)
+      
+      // Rollback optimistic updates nếu có lỗi
+      setTaskData(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          comments: (prev.comments || []).filter((c: any) => !c.isSending)
+        }
+      })
+      
+      // Hiển thị error message chi tiết hơn
+      const errorMsg = getErrorMessage(err, 'Không thể gửi tin nhắn')
+      if (err && typeof err === 'object' && 'status' in err) {
+        const status = (err as any).status
+        const errorData = (err as any).data || {}
+        const detailedMessage = errorData.detailedMessage || errorMsg
+        
+        if (status >= 500) {
+          // Hiển thị thông báo chi tiết cho server errors
+          const retryInfo = errorData.retryAttempts 
+            ? `\n\nĐã thử gửi lại ${errorData.retryAttempts} lần nhưng không thành công.`
+            : ''
+          
+          alert(`⚠️ Lỗi server (${status})\n\n${detailedMessage}${retryInfo}\n\nVui lòng:\n- Đợi vài giây rồi thử lại\n- Kiểm tra kết nối mạng\n- Liên hệ admin nếu vấn đề tiếp tục`)
+        } else {
+          alert(errorMsg)
+        }
+      } else {
+        alert(errorMsg)
+      }
     } finally {
       setSendingMessage(false)
+      isSendingRef.current = false
     }
   }
 
@@ -3637,7 +4473,14 @@ export default function TaskDetailPage() {
                                 )}
                                 <div className={`flex items-center gap-2 text-xs mb-1 px-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                                   <span className="font-medium text-gray-700">{c.user_name || c.employee_name || 'Người dùng'}</span>
-                                  <span className="text-gray-400">{formatDate(c.created_at, true)}</span>
+                                  {(c as any).isSending ? (
+                                    <span className="text-gray-400 italic flex items-center gap-1">
+                                      <span className="inline-block w-2 h-2 bg-gray-400 rounded-full animate-pulse"></span>
+                                      Đang gửi...
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">{formatDate(c.created_at, true)}</span>
+                                  )}
                                   {c.is_pinned && (
                                     <Pin className="h-3 w-3 text-blue-500 fill-current" title="Đã ghim" />
                                   )}
@@ -3658,7 +4501,7 @@ export default function TaskDetailPage() {
                                   className={`relative px-3 py-2.5 text-sm shadow-sm ${isOwnMessage
                                     ? 'bg-[#00B2FF] text-white rounded-2xl rounded-tr-none'
                                     : 'bg-white text-gray-900 rounded-2xl rounded-tl-none shadow-[0_1px_2px_rgba(0,0,0,0.1)]'
-                                    } ${hasTaskMention ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+                                    } ${hasTaskMention ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''} ${(c as any).isSending ? 'opacity-70' : ''}`}
                                   style={isOwnMessage ? {} : { boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}
                                   title={hasTaskMention ? 'Click để xem nhiệm vụ được mention' : undefined}
                                 >

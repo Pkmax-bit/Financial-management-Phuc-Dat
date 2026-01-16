@@ -19,6 +19,8 @@
     "test": "npm run test:backend && npm run test:frontend",
     "test:backend": "cd backend && python -m pytest",
     "test:frontend": "cd frontend && npm run test",
+    "test:chat": "npx playwright test test-chat-automated.ts --headed",
+    "test:chat:headless": "npx playwright test test-chat-automated.ts",
     "lint": "npm run lint:backend && npm run lint:frontend",
     "lint:backend": "cd backend && python -m flake8 .",
     "lint:frontend": "cd frontend && npm run lint"
@@ -33,6 +35,8 @@
   "author": "Phuc Dat",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@playwright/test": "^1.57.0",
+    "concurrently": "^8.2.2",
+    "playwright": "^1.57.0"
   }
 }

@@ -283,39 +283,61 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
         }
       }
 
-      // Merge with optimistic messages (keep sending messages)
+      // Merge with existing state (preserve all real messages, add new ones, keep optimistic)
       setAllComments(prev => {
-        // Keep ALL optimistic messages that are still in sendingMessageIds
+        // Create a map of existing real messages (by ID) to preserve them
+        const existingRealMessages = new Map<string, TaskComment>()
+        prev.forEach(c => {
+          // Keep all real messages (not temp IDs)
+          if (!c.id?.startsWith('temp-')) {
+            existingRealMessages.set(c.id, c)
+          }
+        })
+        
+        // Add/update with messages from server
+        allCommentsFlat.forEach(serverComment => {
+          existingRealMessages.set(serverComment.id, serverComment)
+        })
+        
+        // Keep optimistic messages that are still being sent
         const optimisticMessages = prev.filter(c => 
           c.id?.startsWith('temp-') && sendingMessageIds.has(c.id)
         )
         
-        // Combine with real messages, avoiding duplicates by ID
-        const realMessageIds = new Set(allCommentsFlat.map(c => c.id))
-        
-        // Also check for optimistic messages that match real messages by content
-        // (in case realtime already replaced them but we haven't updated sendingMessageIds yet)
-        const merged = [...allCommentsFlat]
-        
-        // Add optimistic messages that don't have a real replacement yet
+        // Check which optimistic messages have been replaced by real messages
         optimisticMessages.forEach(optMsg => {
-          // Check if there's a real message with same content
+          // Check if there's a real message with same content and task_id
           const hasRealMatch = allCommentsFlat.some(real => 
             real.comment === optMsg.comment &&
             real.task_id === optMsg.task_id &&
-            real.type === optMsg.type
+            real.type === (optMsg.type || 'text')
           )
           
-          // Only add if no real match found
-          if (!hasRealMatch) {
-            merged.push(optMsg)
-          } else {
+          if (hasRealMatch) {
             // Real message exists, remove from sendingMessageIds
             setSendingMessageIds(prev => {
               const newSet = new Set(prev)
               newSet.delete(optMsg.id)
               return newSet
             })
+          }
+        })
+        
+        // Combine: real messages + optimistic messages that haven't been replaced
+        const merged: TaskComment[] = []
+        
+        // Add all real messages
+        existingRealMessages.forEach(msg => merged.push(msg))
+        
+        // Add optimistic messages that don't have a real replacement yet
+        optimisticMessages.forEach(optMsg => {
+          const hasRealMatch = allCommentsFlat.some(real => 
+            real.comment === optMsg.comment &&
+            real.task_id === optMsg.task_id &&
+            real.type === (optMsg.type || 'text')
+          )
+          if (!hasRealMatch) {
+            merged.push(optMsg)
           }
         })
         
@@ -329,6 +351,16 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         )
         allCommentsRef.current = unique
+        console.log('[fetchAllComments] Merged comments. Total:', unique.length, 
+          'Real:', existingRealMessages.size, 
+          'Optimistic:', optimisticMessages.filter(opt => {
+            const hasRealMatch = allCommentsFlat.some(real => 
+              real.comment === opt.comment &&
+              real.task_id === opt.task_id &&
+              real.type === (opt.type || 'text')
+            )
+            return !hasRealMatch
+          }).length)
         return unique
       })
     } catch (err: any) {
@@ -453,10 +485,10 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
           return
         }
 
-        const taskIds = tasks.map(t => t.id)
+    const taskIds = tasks.map(t => t.id)
         console.log('[Realtime] Setting up subscription for project:', projectId, 'Tasks:', taskIds)
 
-        // Subscribe to task_comments changes for all tasks in this project
+    // Subscribe to task_comments changes for all tasks in this project
         // Note: Subscribe to each event type separately to avoid "mismatch" error
         // Supabase Realtime doesn't support IN filter, so we filter in callback
         channel = supabase
@@ -467,14 +499,14 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
             }
           })
           // Subscribe to INSERT events
-          .on(
-            'postgres_changes',
-            {
+      .on(
+        'postgres_changes',
+        {
               event: 'INSERT',
-              schema: 'public',
-              table: 'task_comments'
-            },
-            (payload) => {
+          schema: 'public',
+          table: 'task_comments'
+        },
+        (payload) => {
               console.log('[Realtime] Comment INSERT event received:', payload)
               const newComment = payload.new as any
               const taskId = newComment?.task_id
@@ -537,14 +569,18 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                     // Find optimistic messages that match this real comment
                     const matchingTempIds: string[] = []
                     const filtered = prev.filter(c => {
-                      if (!c.id?.startsWith('temp-')) {
-                        // Skip if this is the real comment we're adding
-                        if (c.id === newComment.id) {
-                          return false // Remove old instance if exists
-                        }
+                      // If this is the real comment we're adding, keep it (update if exists)
+                      if (c.id === newComment.id) {
+                        // Don't remove - we'll update it below
                         return true
                       }
-                      // Check if optimistic message matches
+                      
+                      // Keep all real messages (not temp IDs)
+                      if (!c.id?.startsWith('temp-')) {
+                        return true
+                      }
+                      
+                      // Check if optimistic message matches this real comment
                       // Match by exact content OR by task_id + timestamp (within 10s)
                       const contentMatch = c.comment === newComment.comment && 
                                          c.task_id === newComment.task_id &&
@@ -567,8 +603,15 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                       return !matches
                     })
                     
-                    // Add the new real comment
-                    filtered.push(newComment as TaskComment)
+                    // Check if real comment already exists
+                    const existingRealCommentIndex = filtered.findIndex(c => c.id === newComment.id)
+                    if (existingRealCommentIndex !== -1) {
+                      // Update existing comment with new data
+                      filtered[existingRealCommentIndex] = { ...filtered[existingRealCommentIndex], ...newComment } as TaskComment
+                    } else {
+                      // Add the new real comment if it doesn't exist
+                      filtered.push(newComment as TaskComment)
+                    }
                     
                     // Sort by created_at
                     filtered.sort((a: TaskComment, b: TaskComment) =>
@@ -594,10 +637,17 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                   // Add immediately to state
                   setAllComments(prev => {
                     // Check if comment already exists
-                    const exists = prev.find(c => c.id === newComment.id)
-                    if (exists) {
-                      console.log('[Realtime] ⚠️ Comment already exists, skipping:', newComment.id)
-                      return prev
+                    const existingIndex = prev.findIndex(c => c.id === newComment.id)
+                    if (existingIndex !== -1) {
+                      // Update existing comment instead of skipping (to preserve state and prevent disappearing)
+                      const updated = [...prev]
+                      updated[existingIndex] = { ...updated[existingIndex], ...newComment } as TaskComment
+                      updated.sort((a: TaskComment, b: TaskComment) =>
+                        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                      )
+                      allCommentsRef.current = updated
+                      console.log('[Realtime] ✅ Updated existing comment in state:', newComment.id)
+                      return updated
                     }
                     
                     // Add new comment immediately
@@ -630,13 +680,21 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                     }, 5000)
                   }
                   
-                  // Fetch full comment data in background to update user_name, employee_name if missing
-                  // Use a short delay to avoid race conditions
-                  setTimeout(() => {
-                    fetchAllComments(true).catch(err => {
-                      console.warn('[Realtime] Failed to fetch full comments after new message:', err)
-                    })
-                  }, 1000)
+                  // DON'T call fetchAllComments here - it will overwrite the state and cause messages to disappear
+                  // The Realtime event already has all the data we need
+                  // Only fetch if we're missing user_name or employee_name, and do it carefully
+                  if (!newComment.user_name && !newComment.employee_name) {
+                    // Only fetch if we're missing display names, and do it after a delay to avoid race conditions
+                    setTimeout(() => {
+                      // Check if comment still exists before fetching
+                      const commentStillExists = allCommentsRef.current.find(c => c.id === newComment.id)
+                      if (commentStillExists) {
+                        fetchAllComments(true).catch(err => {
+                          console.warn('[Realtime] Failed to fetch full comments after new message:', err)
+                        })
+                      }
+                    }, 2000) // Increased delay to avoid race conditions
+                  }
                 }
               }
             }
@@ -651,12 +709,36 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
             },
             (payload) => {
               console.log('[Realtime] Comment UPDATE in project:', payload)
-              const newComment = payload.new as any
+          const newComment = payload.new as any
               const taskId = newComment?.task_id
 
               if (taskId && taskIds.includes(taskId)) {
-                // Refresh comments to get latest data including joined fields
-                fetchAllComments(true)
+                // Update the specific comment in state instead of fetching all
+                // This prevents overwriting the entire state and losing messages
+                setAllComments(prev => {
+                  const updated = prev.map(c => {
+                    if (c.id === newComment.id) {
+                      // Merge new data with existing comment
+                      return { ...c, ...newComment } as TaskComment
+                    }
+                    return c
+                  })
+                  
+                  // If comment doesn't exist yet, add it
+                  const exists = updated.find(c => c.id === newComment.id)
+                  if (!exists) {
+                    updated.push(newComment as TaskComment)
+                    updated.sort((a: TaskComment, b: TaskComment) =>
+                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    )
+                  }
+                  
+                  allCommentsRef.current = updated
+                  return updated
+                })
+                
+                // Update last realtime update time
+                lastRealtimeUpdateRef.current = Date.now()
               }
             }
           )
@@ -670,24 +752,32 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
             },
             (payload) => {
               console.log('[Realtime] Comment DELETE in project:', payload)
-              const oldComment = payload.old as any
+          const oldComment = payload.old as any
               const taskId = oldComment?.task_id
 
-              if (taskId && taskIds.includes(taskId)) {
-                // Refresh comments to get latest data including joined fields
-                fetchAllComments(true)
+          if (taskId && taskIds.includes(taskId)) {
+                // Remove the specific comment from state instead of fetching all
+                // This prevents overwriting the entire state and losing messages
+                setAllComments(prev => {
+                  const filtered = prev.filter(c => c.id !== oldComment.id)
+                  allCommentsRef.current = filtered
+                  return filtered
+                })
+                
+                // Update last realtime update time
+                lastRealtimeUpdateRef.current = Date.now()
               }
             }
-          )
+      )
           .subscribe((status, err) => {
             console.log('[Realtime] 📡 Subscription status changed:', status, err)
-            if (status === 'SUBSCRIBED') {
+        if (status === 'SUBSCRIBED') {
               console.log('[Realtime] ✅ Successfully subscribed to project comments for project:', projectId)
               console.log('[Realtime] ✅ Listening for INSERT, UPDATE, DELETE events on task_comments table')
               console.log('[Realtime] ✅ Task IDs being monitored:', taskIds)
               // Reset last update time when subscribed
               lastRealtimeUpdateRef.current = Date.now()
-            } else if (status === 'CHANNEL_ERROR') {
+        } else if (status === 'CHANNEL_ERROR') {
               // Log error but don't spam console - polling will handle it
               console.warn('[Realtime] ⚠️ Realtime subscription failed, using polling fallback:', err?.message || err)
               console.info('[Realtime] 💡 Polling will check for new messages every 3 seconds')
@@ -715,7 +805,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     return () => {
       if (channel) {
         console.log('[Realtime] Unsubscribing from project comments for project:', projectId)
-        supabase.removeChannel(channel)
+      supabase.removeChannel(channel)
       }
     }
   }, [tasks, projectId, fetchAllComments])
@@ -1965,14 +2055,14 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       const uploadedFiles: Array<{ file: File; url: string }> = []
       if (pendingFiles.length > 0) {
         const uploadPromises = pendingFiles.map(async (file) => {
-          try {
-            const fileUrl = await uploadChatFile(file, selectedTaskId)
+        try {
+          const fileUrl = await uploadChatFile(file, selectedTaskId)
             return { file, url: fileUrl }
-          } catch (fileError) {
-            console.error(`Error uploading file ${file.name}:`, fileError)
-            alert(`Không thể gửi file "${file.name}": ${getErrorMessage(fileError, 'Lỗi không xác định')}`)
+        } catch (fileError) {
+          console.error(`Error uploading file ${file.name}:`, fileError)
+          alert(`Không thể gửi file "${file.name}": ${getErrorMessage(fileError, 'Lỗi không xác định')}`)
             return null
-          }
+        }
         })
         
         const results = await Promise.all(uploadPromises)
@@ -2016,15 +2106,66 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
         // Scroll to show new message immediately
         scrollToBottom('smooth')
 
-        // Gửi API request (không đợi, realtime sẽ update)
+        // Gửi API request và xử lý response ngay lập tức
+        // Không chỉ dựa vào realtime - thêm real message từ API response
         apiPost(`/api/tasks/${selectedTaskId}/comments`, {
           comment: trimmedMessage,
           type: messageType,
           file_url: firstFile.url,
           is_pinned: false,
           parent_id: replyingTo?.id || null
+        }).then(response => {
+          console.log('[Send] ✅ API Response received:', {
+            response,
+            hasId: !!response?.id,
+            responseKeys: response ? Object.keys(response) : [],
+            tempMessageIds
+          })
+          
+          // Handle different response formats
+          let realComment: TaskComment | null = null
+          if (response) {
+            if (response.id) {
+              realComment = response as TaskComment
+            } else if (Array.isArray(response) && response.length > 0 && response[0]?.id) {
+              realComment = response[0] as TaskComment
+            } else if (response.data && response.data.id) {
+              realComment = response.data as TaskComment
+            } else if (response.comment && response.comment.id) {
+              realComment = response.comment as TaskComment
+            }
+          }
+          
+          if (realComment && realComment.id) {
+            console.log('[Send] ✅ Found real comment from API, replacing optimistic:', realComment.id)
+            
+            // Remove from sendingMessageIds
+            setSendingMessageIds(prev => {
+              const newSet = new Set(prev)
+              tempMessageIds.forEach(id => newSet.delete(id))
+              return newSet
+            })
+            
+            // Replace optimistic with real message
+            setAllComments(prev => {
+              // Remove optimistic messages
+              const filtered = prev.filter(c => !tempMessageIds.includes(c.id))
+              // Check if real comment already exists (from realtime)
+              const exists = filtered.find(c => c.id === realComment!.id)
+              if (exists) {
+                // Update existing
+                return filtered.map(c => c.id === realComment!.id ? { ...c, ...realComment } : c)
+              } else {
+                // Add real comment
+                return [...filtered, realComment!]
+              }
+            })
+          } else {
+            console.warn('[Send] ⚠️ No valid comment in API response, keeping optimistic and waiting for realtime')
+            // Don't remove optimistic - wait for realtime
+          }
         }).catch(err => {
-          console.error('Error sending message:', err)
+          console.error('[Send] ❌ Error sending message:', err)
           // Remove optimistic message on error
           setAllComments(prev => prev.filter(c => !tempMessageIds.includes(c.id)))
           setSendingMessageIds(prev => {
@@ -2038,7 +2179,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
         // Gửi các file còn lại song song (nếu có nhiều file)
         if (uploadedFiles.length > 1) {
           const additionalFilePromises = uploadedFiles.slice(1).map(async (fileData) => {
-            const fileMessageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
+          const fileMessageType: 'file' | 'image' = fileData.file.type.startsWith('image/') ? 'image' : 'file'
             const tempId = `temp-${Date.now()}-${Math.random()}`
             tempMessageIds.push(tempId)
 
@@ -2046,14 +2187,14 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
               id: tempId,
               task_id: selectedTaskId,
               user_id: user?.id,
-              comment: fileData.file.name || 'File đính kèm',
-              type: fileMessageType,
-              file_url: fileData.url,
-              is_pinned: false,
+            comment: fileData.file.name || 'File đính kèm',
+            type: fileMessageType,
+            file_url: fileData.url,
+            is_pinned: false,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               user_name: user?.full_name,
-              parent_id: replyingTo?.id || null
+            parent_id: replyingTo?.id || null
             }
             optimisticMessages.push(tempComment)
 
@@ -2069,15 +2210,59 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
               return updated
             })
 
-            // Gửi API request (không đợi)
+            // Gửi API request và xử lý response
             return apiPost(`/api/tasks/${selectedTaskId}/comments`, {
               comment: fileData.file.name || 'File đính kèm',
               type: fileMessageType,
               file_url: fileData.url,
               is_pinned: false,
               parent_id: replyingTo?.id || null
+            }).then(response => {
+              console.log('[Send] ✅ API Response for file:', {
+                response,
+                hasId: !!response?.id,
+                tempId
+              })
+              
+              // Handle different response formats
+              let realComment: TaskComment | null = null
+              if (response) {
+                if (response.id) {
+                  realComment = response as TaskComment
+                } else if (Array.isArray(response) && response.length > 0 && response[0]?.id) {
+                  realComment = response[0] as TaskComment
+                } else if (response.data && response.data.id) {
+                  realComment = response.data as TaskComment
+                } else if (response.comment && response.comment.id) {
+                  realComment = response.comment as TaskComment
+                }
+              }
+              
+              if (realComment && realComment.id) {
+                console.log('[Send] ✅ Found real comment for file, replacing optimistic:', realComment.id)
+                
+                // Remove from sendingMessageIds
+                setSendingMessageIds(prev => {
+                  const newSet = new Set(prev)
+                  newSet.delete(tempId)
+                  return newSet
+                })
+                
+                // Replace optimistic with real message
+                setAllComments(prev => {
+                  const filtered = prev.filter(c => c.id !== tempId)
+                  const exists = filtered.find(c => c.id === realComment!.id)
+                  if (exists) {
+                    return filtered.map(c => c.id === realComment!.id ? { ...c, ...realComment } : c)
+                  } else {
+                    return [...filtered, realComment!]
+                  }
+                })
+              } else {
+                console.warn('[Send] ⚠️ No valid comment in API response for file, keeping optimistic')
+              }
             }).catch(err => {
-              console.error(`Error sending file message ${fileData.file.name}:`, err)
+              console.error(`[Send] ❌ Error sending file message ${fileData.file.name}:`, err)
               // Remove optimistic message on error
               setAllComments(prev => prev.filter(c => c.id !== tempId))
               setSendingMessageIds(prev => {
@@ -2127,15 +2312,59 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
         // Scroll immediately
         scrollToBottom('smooth')
 
-        // Gửi API request (không đợi, realtime sẽ update)
+        // Gửi API request và xử lý response ngay lập tức
         apiPost(`/api/tasks/${selectedTaskId}/comments`, {
           comment: trimmedMessage,
           type: 'text',
           file_url: undefined,
-          is_pinned: false,
-          parent_id: replyingTo?.id || null
+            is_pinned: false,
+            parent_id: replyingTo?.id || null
+        }).then(response => {
+          console.log('[Send] ✅ API Response for text:', {
+            response,
+            hasId: !!response?.id,
+            tempId
+          })
+          
+          // Handle different response formats
+          let realComment: TaskComment | null = null
+          if (response) {
+            if (response.id) {
+              realComment = response as TaskComment
+            } else if (Array.isArray(response) && response.length > 0 && response[0]?.id) {
+              realComment = response[0] as TaskComment
+            } else if (response.data && response.data.id) {
+              realComment = response.data as TaskComment
+            } else if (response.comment && response.comment.id) {
+              realComment = response.comment as TaskComment
+            }
+          }
+          
+          if (realComment && realComment.id) {
+            console.log('[Send] ✅ Found real comment for text, replacing optimistic:', realComment.id)
+            
+            // Remove from sendingMessageIds
+            setSendingMessageIds(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(tempId)
+              return newSet
+            })
+            
+            // Replace optimistic with real message
+            setAllComments(prev => {
+              const filtered = prev.filter(c => c.id !== tempId)
+              const exists = filtered.find(c => c.id === realComment!.id)
+              if (exists) {
+                return filtered.map(c => c.id === realComment!.id ? { ...c, ...realComment } : c)
+              } else {
+                return [...filtered, realComment!]
+              }
+            })
+          } else {
+            console.warn('[Send] ⚠️ No valid comment in API response for text, keeping optimistic')
+          }
         }).catch(err => {
-          console.error('Error sending message:', err)
+          console.error('[Send] ❌ Error sending message:', err)
           // Remove optimistic message on error
           setAllComments(prev => prev.filter(c => c.id !== tempId))
           setSendingMessageIds(prev => {
@@ -2152,19 +2381,19 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
           const tempId = `temp-${Date.now()}-${Math.random()}`
           tempMessageIds.push(tempId)
 
-          const tempComment: TaskComment = {
+        const tempComment: TaskComment = {
             id: tempId,
-            task_id: selectedTaskId,
-            user_id: user?.id,
+          task_id: selectedTaskId,
+          user_id: user?.id,
             comment: fileData.file.name || 'File đính kèm',
             type: messageType,
             file_url: fileData.url,
-            is_pinned: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            user_name: user?.full_name,
-            parent_id: replyingTo?.id || null
-          }
+          is_pinned: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_name: user?.full_name,
+          parent_id: replyingTo?.id || null
+        }
           optimisticMessages.push(tempComment)
 
           // ADD OPTIMISTIC MESSAGE IMMEDIATELY
@@ -3938,8 +4167,8 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                     </div>
                                   ) : (
                                     <span className="text-[10px] text-gray-400">
-                                      {formatDate(comment.created_at, true)}
-                                    </span>
+                                  {formatDate(comment.created_at, true)}
+                                </span>
                                   )}
                                 </div>
                               )}

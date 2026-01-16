@@ -129,3 +129,4 @@ Khi mở chat, kiểm tra console:
 - Polling sẽ tự động chạy để đảm bảo tin nhắn vẫn được nhận
 - Khi Realtime hoạt động lại, polling sẽ tự động dừng
 
+

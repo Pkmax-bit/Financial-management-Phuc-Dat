@@ -57,3 +57,4 @@ COMMENT ON TABLE typing_indicators IS 'Tracks when users are typing in chat (aut
 
 
 
+

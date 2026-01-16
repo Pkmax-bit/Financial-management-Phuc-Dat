@@ -20,6 +20,15 @@ const nextConfig: NextConfig = {
       }
     ]
   },
+  // Tăng timeout và connection settings để tránh socket hang up
+  httpAgentOptions: {
+    keepAlive: true,
+    keepAliveMsecs: 1000,
+    maxSockets: 50,
+    maxFreeSockets: 10,
+    timeout: 60000, // 60 seconds timeout
+    freeSocketTimeout: 30000, // 30 seconds
+  },
   webpack: (config, { isServer }) => {
     // Add path alias support for webpack
     if (!config.resolve) {

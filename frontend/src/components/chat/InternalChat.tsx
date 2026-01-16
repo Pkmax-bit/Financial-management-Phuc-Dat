@@ -39,6 +39,7 @@ import {
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Conversation, Message, ConversationWithParticipants, MessageCreate, ConversationCreate } from '@/types/chat'
 import { supabase } from '@/lib/supabase'
+import { useRealtimeChat } from '@/hooks/useRealtimeChat'
 import { formatDistanceToNow } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import MessageBubble from './MessageBubble'
@@ -97,7 +98,14 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-
+  
+  // Typing indicator state
+  const [typingUsers, setTypingUsers] = useState<Map<string, { userId: string; userName: string; timestamp: number }>>(new Map())
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const typingBroadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastTypingBroadcastRef = useRef<number>(0)
+  
   const loadConversations = useCallback(async () => {
     try {
       setLoading(true)
@@ -113,6 +121,17 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       setLoading(false)
     }
   }, [])
+  
+  // Debounce loadConversations to avoid too many calls
+  const loadConversationsDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const debouncedLoadConversations = useCallback(() => {
+    if (loadConversationsDebounceRef.current) {
+      clearTimeout(loadConversationsDebounceRef.current)
+    }
+    loadConversationsDebounceRef.current = setTimeout(() => {
+      loadConversations()
+    }, 500) // Debounce 500ms
+  }, [loadConversations])
 
   const handleSelectConversationById = useCallback(async (conversationId: string) => {
     try {
@@ -427,6 +446,78 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     }
   }, [currentUserId, loadConversations])
 
+  // Handlers for realtime messages
+  const handleNewMessage = useCallback((message: Message) => {
+    console.log('📨 handleNewMessage called with:', {
+      messageId: message.id,
+      conversationId: message.conversation_id,
+      currentConversationId: selectedConversation?.id,
+      senderId: message.sender_id,
+      currentUserId,
+      isOwnMessage: message.sender_id === currentUserId,
+      messageText: message.message_text?.substring(0, 50)
+    })
+    
+    // Only process messages for current conversation
+    if (message.conversation_id !== selectedConversation?.id) {
+      console.log('⚠️ Ignoring message from different conversation:', {
+        messageConversationId: message.conversation_id,
+        currentConversationId: selectedConversation?.id
+      })
+      return
+    }
+    
+    // Check if message already exists to avoid duplicates
+    // IMPORTANT: Always update/add message even if it's from the current user
+    // This ensures messages appear even if API response was missing
+    setMessages(prev => {
+      const exists = prev.find(m => m.id === message.id)
+      if (exists) {
+        console.log('⚠️ Message already exists, updating instead:', message.id)
+        // Update existing message instead of ignoring (in case data changed)
+        // This is important for self-messages that might have been added from API response
+        return prev.map(m => m.id === message.id ? { ...m, ...message } : m)
+      }
+      console.log('✅ Adding new message to list (from realtime):', message.id, {
+        isOwnMessage: message.sender_id === currentUserId
+      })
+      // Add new message to the end (newest messages at the end)
+      // This ensures User A sees their own message even if API response failed
+      return [...prev, message]
+    })
+    
+    // Debounced reload conversations to update last_message_at and sort order
+    debouncedLoadConversations()
+  }, [debouncedLoadConversations, selectedConversation?.id, currentUserId])
+
+  const handleMessageUpdate = useCallback((message: Message) => {
+    setMessages(prev => prev.map(msg => 
+      msg.id === message.id ? { ...msg, ...message } : msg
+    ))
+    debouncedLoadConversations()
+  }, [debouncedLoadConversations])
+
+  const handleMessageDelete = useCallback((messageId: string) => {
+    setMessages(prev => prev.filter(msg => msg.id !== messageId))
+    debouncedLoadConversations()
+  }, [debouncedLoadConversations])
+
+  // Use optimized realtime chat hook
+  const { isConnected, connectionStatus, error: realtimeError } = useRealtimeChat({
+    conversationId: selectedConversation?.id || null,
+    currentUserId,
+    onNewMessage: handleNewMessage,
+    onMessageUpdate: handleMessageUpdate,
+    onMessageDelete: handleMessageDelete,
+    onConnectionChange: (connected) => {
+      if (connected) {
+        console.log('✅ Realtime chat connected')
+      } else {
+        console.warn('⚠️ Realtime chat disconnected')
+      }
+    },
+  })
+
   // Load messages when conversation changes - Optimized parallel loading
   useEffect(() => {
     if (selectedConversation) {
@@ -445,92 +536,8 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       if (typeof window !== 'undefined') {
         localStorage.setItem('internal_chat_selected_conversation', selectedConversation.id)
       }
-      
-      // Subscribe to real-time messages
-      const channel = supabase
-        .channel(`conversation:${selectedConversation.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'internal_messages',
-          filter: `conversation_id=eq.${selectedConversation.id}`
-        }, async (payload) => {
-          // Immediately add new message to list for instant display
-          const newMessage = payload.new as any
-          if (newMessage) {
-            // Check if message already exists to avoid duplicates
-            setMessages(prev => {
-              const exists = prev.find(m => m.id === newMessage.id)
-              if (exists) {
-                return prev // Message already exists, don't add duplicate
-              }
-              
-              // Add new message to the end (newest messages at the end)
-              // We'll enrich it with sender info below
-              return [...prev, newMessage as Message]
-            })
-            
-            // Enrich message with sender info without reloading all messages
-            try {
-              // Get sender name from users table
-              const { data: userData } = await supabase
-                .from('users')
-                .select('full_name')
-                .eq('id', newMessage.sender_id)
-                .single()
-              
-              if (userData) {
-                setMessages(prev => prev.map(msg => 
-                  msg.id === newMessage.id 
-                    ? { ...msg, sender_name: userData.full_name || 'Unknown' }
-                    : msg
-                ))
-              }
-            } catch (error) {
-              console.error('Error enriching message with sender info:', error)
-            }
-            
-            // Reload conversations to update last_message_at and sort order
-            loadConversations()
-          }
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'internal_messages',
-          filter: `conversation_id=eq.${selectedConversation.id}`
-        }, (payload) => {
-          // Update message in real-time (for edits/deletes)
-          const updatedMessage = payload.new as any
-          setMessages(prev => prev.map(msg => 
-            msg.id === updatedMessage.id ? { ...msg, ...updatedMessage } : msg
-          ))
-          loadConversations() // Update conversation list
-        })
-        .on('postgres_changes', {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'internal_messages',
-          filter: `conversation_id=eq.${selectedConversation.id}`
-        }, (payload) => {
-          // Remove deleted message
-          const deletedId = payload.old.id
-          setMessages(prev => prev.filter(msg => msg.id !== deletedId))
-          loadConversations()
-        })
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Real-time subscription active for conversation:', selectedConversation.id)
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ Real-time subscription error for conversation:', selectedConversation.id)
-          }
-        })
-
-      return () => {
-        supabase.removeChannel(channel)
-      }
     }
-  }, [selectedConversation?.id, loadMessages, markAsRead, fetchMessageDetails, loadConversations])
+  }, [selectedConversation?.id, loadMessages, markAsRead])
 
   // Auto scroll to bottom when messages change
   useEffect(() => {
@@ -618,6 +625,25 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
     const replyingToToClear = replyingTo
     setMessageText('')
     setReplyingTo(null)
+    
+    // Clear typing indicator and broadcast "stopped typing"
+    if (typingChannelRef.current && selectedConversation) {
+      typingChannelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+          userId: currentUserId,
+          userName: currentUserName,
+          isTyping: false
+        }
+      })
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    if (typingBroadcastTimeoutRef.current) {
+      clearTimeout(typingBroadcastTimeoutRef.current)
+    }
 
     try {
       setSending(true)
@@ -626,14 +652,75 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
       if (selectedFiles.length > 0) {
         await handleUploadFiles()
         // If there's also text, send it separately
+        let textMessageSent = false
+        let textMessageResponse: Message | null = null
+        
         if (textToClear) {
           const messageData: MessageCreate = {
             message_text: textToClear,
             reply_to_id: replyingToToClear?.id
           }
-          await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
+          const response = await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
+          
+          console.log('📤 API Response after sending message (with files):', {
+            response,
+            hasId: !!response?.id,
+            responseKeys: response ? Object.keys(response) : [],
+            tempMessageId
+          })
+          
+          // Replace optimistic message with real message from server
+          // Handle different response formats
+          let realMessage: Message | null = null
+          if (response) {
+            if (response.id) {
+              realMessage = response as Message
+            } else if (Array.isArray(response) && response.length > 0 && response[0]?.id) {
+              realMessage = response[0] as Message
+            } else if (response.data && response.data.id) {
+              realMessage = response.data as Message
+            } else if (response.message && response.message.id) {
+              realMessage = response.message as Message
+            }
+          }
+          
+          textMessageResponse = realMessage
+          textMessageSent = true
+          
+          if (realMessage && realMessage.id) {
+            console.log('✅ Found real message (with files), replacing optimistic:', realMessage.id)
+            setMessages(prev => {
+              const filtered = prev.filter(msg => msg.id !== tempMessageId)
+              const exists = filtered.find(msg => msg.id === realMessage!.id)
+              if (exists) {
+                console.log('✅ Message already exists, updating (with files):', realMessage.id)
+                return filtered.map(msg => 
+                  msg.id === realMessage!.id ? { ...msg, ...realMessage } : msg
+                )
+              } else {
+                console.log('✅ Adding real message from API response (with files):', realMessage.id)
+                return [...filtered, realMessage]
+              }
+            })
+          } else {
+            console.warn('⚠️ No valid message in API response (with files), keeping optimistic message:', {
+              response,
+              realMessage,
+              tempMessageId
+            })
+            // Don't remove optimistic message - wait for realtime
+          }
         }
         setSelectedFiles([])
+        // Don't reload all messages - it will remove optimistic messages
+        // File URLs will be available from API response or realtime broadcast
+        // Only reload if we didn't get a valid response for text message
+        if (textMessageSent && !textMessageResponse) {
+          console.warn('⚠️ No valid response after file upload with text, reloading messages')
+          await loadMessages(selectedConversation.id)
+        } else {
+          console.log('✅ Got response after file upload, not reloading messages')
+        }
       } else {
         // Send text message only
         const messageData: MessageCreate = {
@@ -641,11 +728,45 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
           reply_to_id: replyingToToClear?.id
         }
 
-        await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
+        const response = await apiPost(`/api/chat/conversations/${selectedConversation.id}/messages`, messageData)
+        
+        console.log('📤 API Response after sending message:', {
+          response,
+          hasId: !!response?.id,
+          responseKeys: response ? Object.keys(response) : [],
+          tempMessageId
+        })
+        
+        // Replace optimistic message with real message from server
+        // IMPORTANT: Always add the real message even if realtime might deliver it
+        // This ensures User A sees their own message immediately
+        if (response && response.id) {
+          setMessages(prev => {
+            // Remove optimistic message (temp ID)
+            const filtered = prev.filter(msg => msg.id !== tempMessageId)
+            // Check if real message already exists (from realtime broadcast - unlikely but possible)
+            const exists = filtered.find(msg => msg.id === response.id)
+            if (exists) {
+              console.log('✅ Message already exists from realtime, updating:', response.id)
+              // Message already exists from realtime, just update it with server response
+              return filtered.map(msg => 
+                msg.id === response.id ? { ...msg, ...response } : msg
+              )
+            } else {
+              console.log('✅ Adding real message from API response:', response.id)
+              // Add real message immediately - this ensures User A sees their message
+              // Realtime will also deliver it, but we handle duplicates in handleNewMessage
+              return [...filtered, response as Message]
+            }
+          })
+        } else {
+          console.warn('⚠️ No valid response from API, keeping optimistic message and waiting for realtime')
+          // Don't remove optimistic message if API response is invalid
+          // Keep it and wait for realtime broadcast to deliver the real message
+          // This prevents message from disappearing
+        }
       }
       
-      // Reload messages to get the real message from server (replaces optimistic one)
-      await loadMessages(selectedConversation.id)
       await loadConversations() // Refresh conversation list to update last message
     } catch (error) {
       console.error('Error sending message:', error)
@@ -1421,6 +1542,22 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                   <div ref={messagesEndRef} />
                 </div>
               )}
+              
+              {/* Typing Indicator - Show who is typing */}
+              {typingUsers.size > 0 && (
+                <div className="px-4 py-2 bg-white border-t border-gray-100">
+                  {Array.from(typingUsers.values()).map((typingUser) => (
+                    <div key={typingUser.userId} className="flex items-center gap-2 text-sm text-gray-500 italic">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                      <span>{typingUser.userName} đang soạn...</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               </div>
             </div>
 
@@ -1558,7 +1695,87 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                 <div className="flex-1 relative">
                   <textarea
                     value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setMessageText(value)
+                      
+                      // Broadcast typing status to other users (throttled to avoid spam)
+                      if (value.trim().length > 0 && selectedConversation && typingChannelRef.current) {
+                        const now = Date.now()
+                        // Throttle: only broadcast every 1 second
+                        if (now - lastTypingBroadcastRef.current > 1000) {
+                          lastTypingBroadcastRef.current = now
+                          
+                          // Broadcast typing status
+                          typingChannelRef.current.send({
+                            type: 'broadcast',
+                            event: 'typing',
+                            payload: {
+                              userId: currentUserId,
+                              userName: currentUserName,
+                              isTyping: true
+                            }
+                          })
+                        } else {
+                          // Schedule a delayed broadcast if we're throttling
+                          if (typingBroadcastTimeoutRef.current) {
+                            clearTimeout(typingBroadcastTimeoutRef.current)
+                          }
+                          typingBroadcastTimeoutRef.current = setTimeout(() => {
+                            if (messageText.trim().length > 0 && selectedConversation && typingChannelRef.current) {
+                              lastTypingBroadcastRef.current = Date.now()
+                              typingChannelRef.current.send({
+                                type: 'broadcast',
+                                event: 'typing',
+                                payload: {
+                                  userId: currentUserId,
+                                  userName: currentUserName,
+                                  isTyping: true
+                                }
+                              })
+                            }
+                          }, 1000 - (now - lastTypingBroadcastRef.current))
+                        }
+                        
+                        // Clear existing timeout
+                        if (typingTimeoutRef.current) {
+                          clearTimeout(typingTimeoutRef.current)
+                        }
+                        // Broadcast "stopped typing" after 2 seconds of no typing
+                        typingTimeoutRef.current = setTimeout(() => {
+                          if (typingChannelRef.current && selectedConversation) {
+                            typingChannelRef.current.send({
+                              type: 'broadcast',
+                              event: 'typing',
+                              payload: {
+                                userId: currentUserId,
+                                userName: currentUserName,
+                                isTyping: false
+                              }
+                            })
+                          }
+                        }, 2000)
+                      } else {
+                        // User stopped typing - broadcast immediately
+                        if (typingChannelRef.current && selectedConversation) {
+                          typingChannelRef.current.send({
+                            type: 'broadcast',
+                            event: 'typing',
+                            payload: {
+                              userId: currentUserId,
+                              userName: currentUserName,
+                              isTyping: false
+                            }
+                          })
+                        }
+                        if (typingTimeoutRef.current) {
+                          clearTimeout(typingTimeoutRef.current)
+                        }
+                        if (typingBroadcastTimeoutRef.current) {
+                          clearTimeout(typingBroadcastTimeoutRef.current)
+                        }
+                      }
+                    }}
                     onKeyPress={handleKeyPress}
                     placeholder={editingMessage ? "Chỉnh sửa tin nhắn..." : `Nhập @, tin nhắn tới ${selectedConversation.name || 'người dùng'}...`}
                     className="w-full px-4 py-2.5 bg-[#f0f2f5] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0068ff] focus:bg-white resize-none transition-all text-gray-900 placeholder:text-gray-400"

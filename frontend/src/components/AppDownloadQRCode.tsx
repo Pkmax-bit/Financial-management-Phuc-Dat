@@ -22,3 +22,4 @@ export default function AppDownloadQRCode({ value, size = 200 }: AppDownloadQRCo
 
 
 
+

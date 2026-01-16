@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft, Calculator, QrCode } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, AlertCircle, User, Crown, DollarSign, Wrench, Truck, Users, Home, ArrowLeft, Calculator, QrCode, Briefcase, UserCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { QRCodeSVG } from 'qrcode.react'
@@ -81,6 +81,24 @@ const testAccounts = [
     icon: Calculator,
     color: 'bg-emerald-500',
     description: 'Kế toán - Quản lý tài chính và báo cáo (dùng tài khoản Sales)'
+  },
+  {
+    name: 'Dương',
+    email: 'phucdatdoors7@gmail.com',
+    password: '123456',
+    role: 'USER',
+    icon: Briefcase,
+    color: 'bg-cyan-500',
+    description: 'Tài khoản Dương'
+  },
+  {
+    name: 'Quân',
+    email: 'tranhoangquan2707@gmail.com',
+    password: '123456',
+    role: 'USER',
+    icon: UserCircle,
+    color: 'bg-teal-500',
+    description: 'Tài khoản Quân'
   }
 ]
 
@@ -610,46 +628,62 @@ export default function LoginPage() {
             Tài khoản Test
           </h3>
           
-          {/* Featured Accountant Account */}
+          {/* Featured Accounts - Hoàn and Quân */}
           <div className="mb-6">
             <h4 className="text-sm font-medium text-gray-700 mb-3 text-center">⭐ Tài khoản nổi bật</h4>
-            {(() => {
-              const accountantAccount = testAccounts.find(acc => acc.role === 'SALES' && acc.email === 'sales@example.com')!
-              const IconComponent = accountantAccount.icon
-              return (
-                <button
-                  onClick={() => handleTestAccountClick(accountantAccount)}
-                  className={`relative w-full flex items-center p-4 rounded-xl border-2 border-emerald-200 hover:border-emerald-400 hover:shadow-lg transition-all duration-200 ${
-                    formData.email === accountantAccount.email ? 'border-emerald-500 bg-emerald-50' : 'bg-gradient-to-r from-emerald-50 to-green-50'
-                  }`}
-                >
-                  <div className={`flex-shrink-0 w-12 h-12 ${accountantAccount.color} rounded-full flex items-center justify-center text-white shadow-lg`}>
-                    <IconComponent className="h-6 w-6" />
-                  </div>
-                  <div className="ml-4 flex-1 text-left">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-base font-semibold text-gray-900">{accountantAccount.name}</h4>
-                      <span className="text-xs font-mono text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">{accountantAccount.role}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {testAccounts.filter(acc => acc.isFeatured).map((account, index) => {
+                const IconComponent = account.icon
+                return (
+                  <button
+                    key={`featured-${index}`}
+                    onClick={() => handleTestAccountClick(account)}
+                    className={`relative w-full flex items-center p-4 rounded-xl border-2 hover:shadow-lg transition-all duration-200 ${
+                      formData.email === account.email 
+                        ? account.color === 'bg-cyan-500' 
+                          ? 'border-cyan-500 bg-cyan-50' 
+                          : 'border-teal-500 bg-teal-50'
+                        : account.color === 'bg-cyan-500'
+                          ? 'border-cyan-200 bg-gradient-to-r from-cyan-50 to-blue-50'
+                          : 'border-teal-200 bg-gradient-to-r from-teal-50 to-green-50'
+                    }`}
+                  >
+                    <div className={`flex-shrink-0 w-12 h-12 ${account.color} rounded-full flex items-center justify-center text-white shadow-lg`}>
+                      <IconComponent className="h-6 w-6" />
                     </div>
-                    <p className="text-sm text-gray-700 mt-1 font-medium">{accountantAccount.description}</p>
-                    <p className="text-xs text-gray-500 mt-1 font-mono">
-                      {accountantAccount.email} / {accountantAccount.password}
-                    </p>
-                  </div>
-                  {formData.email === accountantAccount.email && (
-                    <div className="absolute top-3 right-3">
-                      <div className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center">
-                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                    <div className="ml-4 flex-1 text-left">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-base font-semibold text-gray-900">{account.name}</h4>
+                        <span className={`text-xs font-mono px-2 py-1 rounded-full ${
+                          account.color === 'bg-cyan-500' 
+                            ? 'text-cyan-600 bg-cyan-100' 
+                            : 'text-teal-600 bg-teal-100'
+                        }`}>
+                          {account.role}
+                        </span>
                       </div>
+                      <p className="text-sm text-gray-700 mt-1 font-medium">{account.description}</p>
+                      <p className="text-xs text-gray-500 mt-1 font-mono">
+                        {account.email} / {account.password}
+                      </p>
                     </div>
-                  )}
-                </button>
-              )
-            })()}
+                    {formData.email === account.email && (
+                      <div className="absolute top-3 right-3">
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                          account.color === 'bg-cyan-500' ? 'bg-cyan-500' : 'bg-teal-500'
+                        }`}>
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </div>
           
           <div className="grid grid-cols-1 gap-3">
-            {testAccounts.filter(acc => !(acc.role === 'SALES' && acc.email === 'sales@example.com')).map((account, index) => {
+            {testAccounts.filter(acc => !acc.isFeatured).map((account, index) => {
               const IconComponent = account.icon
               return (
                 <button

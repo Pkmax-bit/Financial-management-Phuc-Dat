@@ -262,5 +262,9 @@ if __name__ == "__main__":
         host="localhost",
         port=8000,
         reload=True,
-        log_level="info"
+        log_level="info",
+        timeout_keep_alive=75,  # Tăng timeout để tránh socket hang up
+        timeout_graceful_shutdown=30,  # Graceful shutdown timeout
+        limit_concurrency=100,  # Limit concurrent connections
+        limit_max_requests=1000,  # Restart worker sau 1000 requests để tránh memory leak
     )
