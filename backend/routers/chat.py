@@ -358,12 +358,13 @@ async def get_messages(
     try:
         supabase = get_supabase_client()
         
-        # Verify user is participant
+        # Verify user is participant (optimized with index and limit)
         participant_check = (
             supabase.table("internal_conversation_participants")
             .select("id")
             .eq("conversation_id", conversation_id)
             .eq("user_id", current_user.id)
+            .limit(1)  # Only need to check existence, not fetch all
             .execute()
         )
         
@@ -373,13 +374,14 @@ async def get_messages(
                 detail="You don't have access to this conversation"
             )
         
-        # Get messages
+        # Get messages (optimized: order by created_at DESC for newest first, then reverse for display)
+        # Using DESC order with index idx_internal_messages_conv_created_desc for better performance
         messages_result = (
             supabase.table("internal_messages")
             .select("*")
             .eq("conversation_id", conversation_id)
             .eq("is_deleted", False)
-            .order("created_at", desc=False)
+            .order("created_at", desc=True)  # DESC for index optimization
             .range(skip, skip + limit - 1)
             .execute()
         )
@@ -438,6 +440,9 @@ async def get_messages(
                 msg["reply_to"] = reply_map[msg["reply_to_id"]]
             
             enriched_messages.append(Message(**msg))
+        
+        # Reverse messages to show oldest first (since we queried DESC for index optimization)
+        enriched_messages.reverse()
         
         return MessageListResponse(
             messages=enriched_messages,

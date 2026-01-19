@@ -9,15 +9,19 @@ from typing import List, Optional
 from datetime import datetime, date, timedelta
 import uuid
 import asyncio
+import re
+import logging
 from pydantic import BaseModel
 
 from models.project import Project, ProjectCreate, ProjectUpdate
-from models.user import User
+from models.user import User, UserRole
 from utils.auth import get_current_user, require_manager_or_admin, security
 from services.supabase_client import get_supabase_client
 from services.project_profitability_service import ProjectProfitabilityService
+from services.project_default_tasks_service import create_default_tasks_for_project
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 def sanitize_search_input(search: str) -> str:
     """Sanitize search input to prevent SQL injection and DoS attacks
@@ -216,6 +220,44 @@ async def get_projects(
             # Add all categories from project_category_members
             project_id = project.get('id')
             project_data['categories'] = project_categories_map.get(project_id, [])
+            
+            # Fix invalid date formats (e.g., '12026-03-10' -> '2026-03-10')
+            def fix_invalid_date(date_value):
+                """Fix invalid date format if year is too long (e.g., 12026 -> 2026)"""
+                if not date_value:
+                    return date_value
+                date_str = str(date_value)
+                try:
+                    # Check if date string has invalid year (more than 4 digits)
+                    if '-' in date_str:
+                        parts = date_str.split('-')
+                        if len(parts) == 3 and len(parts[0]) > 4:
+                            # Year is too long, fix it
+                            year_str = parts[0]
+                            # Remove leading '1' if year starts with '1' and is too long
+                            if year_str.startswith('1') and len(year_str) > 4:
+                                year = year_str.lstrip('1')[:4]
+                                if len(year) < 4:
+                                    # If still invalid, try to extract valid 4-digit year
+                                    year = year_str[-4:] if len(year_str) >= 4 else '2026'
+                                # Ensure year is reasonable (1900-2100)
+                                try:
+                                    year_int = int(year)
+                                    if year_int < 1900 or year_int > 2100:
+                                        year = '2026'  # Default to 2026 if out of range
+                                except:
+                                    year = '2026'
+                                return f"{year}-{parts[1]}-{parts[2]}"
+                except:
+                    pass
+                return date_value
+            
+            if 'start_date' in project_data:
+                project_data['start_date'] = fix_invalid_date(project_data['start_date'])
+            
+            if 'end_date' in project_data:
+                project_data['end_date'] = fix_invalid_date(project_data['end_date'])
+            
             processed_projects.append(Project(**project_data))
         
         return processed_projects
@@ -921,6 +963,60 @@ def calculate_progress_from_status(supabase, project_id: str, new_status_id: str
 # This comment ensures /categories doesn't conflict with /{project_id}
 # The actual routes are in routers/project_categories.py
 
+@router.get("/generate-code")
+async def generate_project_code(
+    current_user: User = Depends(get_current_user)
+):
+    """Generate a unique project code"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get all project codes to find the highest number
+        all_projects = supabase.table("projects").select("project_code").execute()
+        
+        max_number = 0
+        
+        # Find the maximum number from all project codes
+        if all_projects.data:
+            for proj in all_projects.data:
+                if proj.get('project_code'):
+                    code = proj['project_code']
+                    # Extract number from formats: PRJ001, #PRJ001, PRJ-001, etc.
+                    match = re.search(r'#?PRJ[-_]?(\d+)', code, re.IGNORECASE)
+                    if match:
+                        num = int(match.group(1))
+                        if num > max_number:
+                            max_number = num
+        
+        # Generate next code and check if it exists
+        attempts = 0
+        new_code = ''
+        
+        while attempts < 100:  # Max 100 attempts to avoid infinite loop
+            next_number = max_number + 1 + attempts
+            new_code = f"PRJ{next_number:03d}"
+            
+            # Check if code already exists
+            check_result = supabase.table("projects").select("id").eq("project_code", new_code).limit(1).execute()
+            if not check_result.data or len(check_result.data) == 0:
+                # Code is available
+                break
+            attempts += 1
+        
+        # If still can't find unique code, use timestamp
+        if attempts >= 100 or not new_code:
+            timestamp = int(datetime.utcnow().timestamp() * 1000) % 1000000
+            new_code = f"PRJ{timestamp:06d}"
+        
+        return {"project_code": new_code}
+        
+    except Exception as e:
+        logger.error(f"Error generating project code: {str(e)}")
+        # Fallback to timestamp-based code
+        timestamp = int(datetime.utcnow().timestamp() * 1000) % 1000000
+        random_suffix = str(uuid.uuid4())[:3].replace('-', '')
+        return {"project_code": f"PRJ{timestamp}{random_suffix}"}
+
 @router.get("/{project_id}", response_model=Project)
 async def get_project(
     project_id: str,
@@ -977,6 +1073,43 @@ async def get_project(
         project_data['manager_name'] = manager_name
         project_data['category_name'] = category_name
         project_data['category_color'] = category_color
+        
+        # Fix invalid date formats (e.g., '12026-03-10' -> '2026-03-10')
+        def fix_invalid_date(date_value):
+            """Fix invalid date format if year is too long (e.g., 12026 -> 2026)"""
+            if not date_value:
+                return date_value
+            date_str = str(date_value)
+            try:
+                # Check if date string has invalid year (more than 4 digits)
+                if '-' in date_str:
+                    parts = date_str.split('-')
+                    if len(parts) == 3 and len(parts[0]) > 4:
+                        # Year is too long, fix it
+                        year_str = parts[0]
+                        # Remove leading '1' if year starts with '1' and is too long
+                        if year_str.startswith('1') and len(year_str) > 4:
+                            year = year_str.lstrip('1')[:4]
+                            if len(year) < 4:
+                                # If still invalid, try to extract valid 4-digit year
+                                year = year_str[-4:] if len(year_str) >= 4 else '2026'
+                            # Ensure year is reasonable (1900-2100)
+                            try:
+                                year_int = int(year)
+                                if year_int < 1900 or year_int > 2100:
+                                    year = '2026'  # Default to 2026 if out of range
+                            except:
+                                year = '2026'
+                            return f"{year}-{parts[1]}-{parts[2]}"
+            except:
+                pass
+            return date_value
+        
+        if 'start_date' in project_data:
+            project_data['start_date'] = fix_invalid_date(project_data['start_date'])
+        
+        if 'end_date' in project_data:
+            project_data['end_date'] = fix_invalid_date(project_data['end_date'])
         
         return Project(**project_data)
         
@@ -1207,26 +1340,169 @@ async def create_project(
     try:
         supabase = get_supabase_client()
         
+        # Validate foreign key references before inserting
+        # This prevents foreign key constraint violations
+        if project_data.customer_id:
+            customer_check = supabase.table("customers").select("id").eq("id", project_data.customer_id).limit(1).execute()
+            if not customer_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Customer with ID {project_data.customer_id} does not exist"
+                )
+        
+        if project_data.manager_id:
+            manager_check = supabase.table("employees").select("id").eq("id", project_data.manager_id).limit(1).execute()
+            if not manager_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Employee (manager) with ID {project_data.manager_id} does not exist"
+                )
+        
+        if project_data.category_id:
+            category_check = supabase.table("project_categories").select("id").eq("id", project_data.category_id).limit(1).execute()
+            if not category_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Project category with ID {project_data.category_id} does not exist"
+                )
+        
+        if project_data.status_id:
+            status_check = supabase.table("project_statuses").select("id").eq("id", project_data.status_id).limit(1).execute()
+            if not status_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Project status with ID {project_data.status_id} does not exist"
+                )
+        
         # Create project record
-        project_dict = project_data.dict()
+        project_dict = project_data.dict(exclude_none=True)
         project_dict["id"] = str(uuid.uuid4())
-        project_dict["created_by"] = current_user.id  # Set created_by
+        # Note: projects table doesn't have created_by column, so we don't set it
+        # created_by is stored in project_team instead
         project_dict["created_at"] = datetime.utcnow().isoformat()
         project_dict["updated_at"] = datetime.utcnow().isoformat()
+        
+        # Ensure project_code is unique
+        original_code = project_dict.get('project_code', '')
+        if original_code:
+            # Check if code already exists
+            check_result = supabase.table("projects").select("id").eq("project_code", original_code).limit(1).execute()
+            
+            if check_result.data and len(check_result.data) > 0:
+                # Code exists, generate a new unique code
+                # Get all project codes to find max number
+                all_projects = supabase.table("projects").select("project_code").execute()
+                max_number = 0
+                
+                if all_projects.data:
+                    for proj in all_projects.data:
+                        if proj.get('project_code'):
+                            code = proj['project_code']
+                            # Extract number from formats: PRJ001, #PRJ001, PRJ-001, etc.
+                            match = re.search(r'#?PRJ[-_]?(\d+)', code, re.IGNORECASE)
+                            if match:
+                                num = int(match.group(1))
+                                if num > max_number:
+                                    max_number = num
+                
+                # Generate new unique code
+                attempts = 0
+                new_code = original_code
+                while attempts < 100:
+                    next_number = max_number + 1 + attempts
+                    new_code = f"PRJ{next_number:03d}"
+                    
+                    # Check if new code exists
+                    check_new = supabase.table("projects").select("id").eq("project_code", new_code).limit(1).execute()
+                    if not check_new.data or len(check_new.data) == 0:
+                        break
+                    attempts += 1
+                
+                # If still can't find unique, use timestamp
+                if attempts >= 100:
+                    timestamp = int(datetime.utcnow().timestamp() * 1000) % 1000000
+                    new_code = f"PRJ{timestamp:06d}"
+                
+                project_dict['project_code'] = new_code
         
         # Convert date objects to strings for JSON serialization
         if 'start_date' in project_dict and isinstance(project_dict['start_date'], date):
             project_dict['start_date'] = project_dict['start_date'].isoformat()
         if 'end_date' in project_dict and isinstance(project_dict['end_date'], date):
             project_dict['end_date'] = project_dict['end_date'].isoformat()
-            
-        # Convert enum objects to strings for JSON serialization
-        if 'status' in project_dict and hasattr(project_dict['status'], 'value'):
-            project_dict['status'] = project_dict['status'].value
+        
+        # Handle status: if status_id is provided, use it and set status enum to default
+        # If status_id is not provided, use status enum
+        if project_dict.get('status_id'):
+            # If status_id is provided, set status enum to default (will be overridden by status_id)
+            # Don't include status enum if status_id is present
+            if 'status' in project_dict:
+                del project_dict['status']
+        else:
+            # Convert enum objects to strings for JSON serialization
+            if 'status' in project_dict and hasattr(project_dict['status'], 'value'):
+                project_dict['status'] = project_dict['status'].value
+            elif 'status' not in project_dict:
+                # Default to planning if no status and no status_id
+                project_dict['status'] = 'planning'
+        
         if 'priority' in project_dict and hasattr(project_dict['priority'], 'value'):
             project_dict['priority'] = project_dict['priority'].value
         
-        result = supabase.table("projects").insert(project_dict).execute()
+        # Ensure actual_cost is set (default to 0.0 if not provided)
+        if 'actual_cost' not in project_dict or project_dict.get('actual_cost') is None:
+            project_dict['actual_cost'] = 0.0
+        
+        # Remove any fields that don't exist in the database schema
+        # Keep only valid columns: id, project_code, name, description, customer_id, manager_id,
+        # start_date, end_date, budget, actual_cost, status, status_id, priority, progress,
+        # billing_type, hourly_rate, category_id, created_at, updated_at
+        valid_columns = {
+            'id', 'project_code', 'name', 'description', 'customer_id', 'manager_id',
+            'start_date', 'end_date', 'budget', 'actual_cost', 'status', 'status_id',
+            'priority', 'progress', 'billing_type', 'hourly_rate', 'category_id',
+            'created_at', 'updated_at'
+        }
+        project_dict = {k: v for k, v in project_dict.items() if k in valid_columns}
+        
+        # Insert project - backend uses service role key
+        # RLS is disabled on projects table, so this should work
+        try:
+            logger.info(f"Inserting project: {project_dict.get('name', 'N/A')} (code: {project_dict.get('project_code', 'N/A')})")
+            logger.info(f"Using Supabase client with service role key")
+            logger.info(f"Project data keys: {list(project_dict.keys())}")
+            result = supabase.table("projects").insert(project_dict).execute()
+            
+            if result.data:
+                logger.info(f"✅ Project inserted successfully: {result.data[0].get('id', 'N/A')}")
+            else:
+                logger.warning("⚠️ Project insert returned no data")
+                
+        except Exception as insert_error:
+            error_msg = str(insert_error)
+            logger.error(f"❌ Failed to insert project: {error_msg}")
+            logger.error(f"   Project data keys: {list(project_dict.keys())}")
+            logger.error(f"   Project code: {project_dict.get('project_code', 'N/A')}")
+            
+            # Check if it's an RLS error
+            if "row-level security" in error_msg.lower() or "42501" in error_msg:
+                logger.error("⚠️ RLS error detected! Even though RLS should be disabled.")
+                logger.error("   This might indicate:")
+                logger.error("   1. RLS was re-enabled after migration")
+                logger.error("   2. Service key is not being used correctly")
+                logger.error("   3. Need to restart backend server")
+            
+            # Re-raise to return proper error to frontend
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create project: {error_msg}"
+            )
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create project: No data returned"
+            )
         
         if result.data:
             project = result.data[0]
@@ -1328,19 +1604,302 @@ async def create_project(
                 # Log error nhưng không fail project creation
                 print(f"Warning: Failed to add manager to project team: {str(team_error)}")
             
+            # Tự động tạo các nhiệm vụ mặc định cho dự án
+            # Đảm bảo logic này LUÔN được gọi, không bị skip
+            logger.info(f"🔵 Starting to create default tasks for project {project_id}")
+            logger.info(f"   Project name: {project.get('name', 'N/A')}")
+            logger.info(f"   Created by user ID: {current_user.id}")
+            
+            try:
+                # Đợi một chút để trigger hoàn thành (nếu có)
+                await asyncio.sleep(0.2)
+                
+                # Kiểm tra xem đã có tasks chưa (có thể trigger đã tạo)
+                existing_tasks = supabase.table("tasks").select("id, title, parent_id").eq("project_id", project_id).execute()
+                existing_task_count = len(existing_tasks.data) if existing_tasks.data else 0
+                
+                logger.info(f"   Existing tasks count: {existing_task_count}")
+                
+                # Nếu có tasks từ trigger (cấu trúc cũ), xóa chúng trước
+                # Trigger tạo tasks với parent_id = NULL (4 parent tasks: Kế hoạch, Sản xuất, etc.)
+                # Backend code tạo 1 main parent task (tên dự án) + sub-tasks (cấu trúc mới)
+                if existing_task_count > 0:
+                    # Check if these are old trigger tasks
+                    # Trigger creates tasks with parent_id = NULL and specific titles
+                    trigger_task_titles = ["Kế hoạch", "Sản xuất", "Vận chuyển / lắp đặt", "Chăm sóc khách hàng"]
+                    has_trigger_tasks = False
+                    
+                    for task in existing_tasks.data:
+                        if task.get("parent_id") is None and task.get("title") in trigger_task_titles:
+                            has_trigger_tasks = True
+                            break
+                    
+                    # Also check if there are multiple parent tasks with same title (project name)
+                    # This indicates both trigger and backend created tasks
+                    parent_tasks = [t for t in existing_tasks.data if t.get("parent_id") is None]
+                    if len(parent_tasks) > 1:
+                        # Multiple parent tasks = both trigger and backend created tasks
+                        has_trigger_tasks = True
+                    
+                    if has_trigger_tasks:
+                        logger.info(f"   Found old trigger tasks, deleting all tasks for this project...")
+                        # Delete ALL tasks for this project (both trigger and backend tasks)
+                        # We'll recreate them with the correct structure
+                        try:
+                            delete_result = supabase.table("tasks").delete().eq("project_id", project_id).execute()
+                            deleted_count = len(delete_result.data) if delete_result.data else 0
+                            logger.info(f"   Deleted {deleted_count} old tasks")
+                            await asyncio.sleep(0.3)  # Wait for deletion to complete
+                            
+                            # Verify deletion
+                            verify_tasks = supabase.table("tasks").select("id").eq("project_id", project_id).execute()
+                            remaining_count = len(verify_tasks.data) if verify_tasks.data else 0
+                            if remaining_count > 0:
+                                logger.warning(f"   ⚠️  Still have {remaining_count} tasks after deletion. Retrying...")
+                                # Try one more time
+                                await asyncio.sleep(0.2)
+                                supabase.table("tasks").delete().eq("project_id", project_id).execute()
+                                logger.info(f"   Retry deletion completed")
+                        except Exception as delete_error:
+                            logger.error(f"   Error deleting old tasks: {str(delete_error)}")
+                            import traceback
+                            logger.error(f"   Traceback: {traceback.format_exc()}")
+                            # Continue anyway - backend will try to create tasks
+                
+                # Tạo tasks mẫu với template đầy đủ (cấu trúc mới)
+                # Đảm bảo đã xóa tasks cũ (nếu có) trước khi gọi service
+                # Service sẽ kiểm tra lại nhưng nếu router đã xóa thì sẽ tạo mới
+                logger.info(f"   Calling create_default_tasks_for_project()...")
+                
+                # Đợi một chút để đảm bảo deletion hoàn thành
+                await asyncio.sleep(0.2)
+                
+                task_ids = create_default_tasks_for_project(
+                    supabase=supabase,
+                    project_id=project_id,
+                    created_by=current_user.id,
+                    default_responsibles=None  # Có thể mở rộng sau để cho phép truyền từ request
+                )
+                
+                logger.info(f"   Function returned {len(task_ids)} task IDs")
+                
+                # Nếu không có tasks được tạo, thử lại một lần nữa (có thể do race condition)
+                if len(task_ids) == 0:
+                    logger.warning(f"⚠️ WARNING: No tasks were created for project {project_id}!")
+                    logger.warning(f"   Retrying task creation...")
+                    await asyncio.sleep(0.5)  # Đợi lâu hơn
+                    
+                    # Thử lại một lần nữa
+                    task_ids = create_default_tasks_for_project(
+                        supabase=supabase,
+                        project_id=project_id,
+                        created_by=current_user.id,
+                        default_responsibles=None
+                    )
+                    logger.info(f"   Retry returned {len(task_ids)} task IDs")
+                
+                if len(task_ids) == 0:
+                    logger.error(f"❌ ERROR: Failed to create tasks after retry for project {project_id}!")
+                    logger.error(f"   This indicates a serious issue with task creation logic")
+                    # Vẫn tiếp tục để project được tạo, nhưng log error rõ ràng
+                else:
+                    # Verify tasks were actually created in database
+                    await asyncio.sleep(0.3)  # Đợi database commit
+                    final_tasks = supabase.table("tasks").select("id, title, parent_id").eq("project_id", project_id).execute()
+                    final_task_count = len(final_tasks.data) if final_tasks.data else 0
+                    
+                    logger.info(f"✅ VERIFIED: Total tasks in database: {final_task_count}")
+                    
+                    if final_task_count == 0:
+                        logger.error(f"❌ ERROR: Tasks were not actually created in database!")
+                        logger.error(f"   Function returned {len(task_ids)} IDs but database has 0 tasks")
+                        # Thử tạo lại một lần nữa
+                        logger.warning(f"   Attempting final retry...")
+                        await asyncio.sleep(0.5)
+                        final_retry_ids = create_default_tasks_for_project(
+                            supabase=supabase,
+                            project_id=project_id,
+                            created_by=current_user.id,
+                            default_responsibles=None
+                        )
+                        await asyncio.sleep(0.3)
+                        final_retry_check = supabase.table("tasks").select("id").eq("project_id", project_id).execute()
+                        final_retry_count = len(final_retry_check.data) if final_retry_check.data else 0
+                        if final_retry_count > 0:
+                            logger.info(f"   ✅ Final retry succeeded: {final_retry_count} tasks created")
+                            final_task_count = final_retry_count
+                            final_tasks = supabase.table("tasks").select("id, title, parent_id").eq("project_id", project_id).execute()
+                        else:
+                            logger.error(f"   ❌ Final retry also failed. Tasks not created.")
+                    else:
+                        parent_tasks = [t for t in final_tasks.data if t.get('parent_id') is None]
+                        sub_tasks = [t for t in final_tasks.data if t.get('parent_id') is not None]
+                        logger.info(f"   Parent tasks: {len(parent_tasks)}, Sub tasks: {len(sub_tasks)}")
+                        
+                        # Đếm checklists và checklist items để trả về cho frontend
+                        checklists_count = 0
+                        checklist_items_count = 0
+                        if parent_tasks:
+                            parent_task_id = parent_tasks[0].get('id')
+                            checklists_result = supabase.table("task_checklists").select("id").eq("task_id", parent_task_id).execute()
+                            checklists_count = len(checklists_result.data) if checklists_result.data else 0
+                            
+                            for checklist in (checklists_result.data or []):
+                                items_result = supabase.table("task_checklist_items").select("id").eq("checklist_id", checklist.get('id')).execute()
+                                items = items_result.data if items_result.data else []
+                                checklist_items_count += len(items)
+                        
+                        # Lưu thông tin tasks đã tạo vào project dict để trả về
+                        project["tasks_created"] = {
+                            "count": final_task_count,
+                            "checklists": checklists_count,
+                            "checklist_items": checklist_items_count
+                        }
+                        
+                        logger.info(f"   ✅✅✅ TASKS CREATED SUCCESSFULLY: {final_task_count} tasks, {checklists_count} checklists, {checklist_items_count} checklist items")
+                        logger.info(f"   ✅ Project {project_id} now has complete task structure with sample tasks")
+                        
+                        if final_tasks.data:
+                            # Log some task titles for verification
+                            task_titles = [t.get('title', 'N/A') for t in final_tasks.data[:5]]
+                            logger.info(f"   Sample task titles: {task_titles}")
+                    
+            except Exception as tasks_error:
+                # Log error chi tiết để debug - QUAN TRỌNG: Không được bỏ qua lỗi này
+                import traceback
+                error_details = traceback.format_exc()
+                logger.error(f"❌ CRITICAL ERROR: Failed to create default tasks for project {project_id}")
+                logger.error(f"   Error message: {str(tasks_error)}")
+                logger.error(f"   Error type: {type(tasks_error).__name__}")
+                logger.error(f"   Full traceback:\n{error_details}")
+                
+                # Kiểm tra xem có phải RLS error không
+                error_msg = str(tasks_error).lower()
+                if "row-level security" in error_msg or "42501" in error_msg or "rls" in error_msg:
+                    logger.error("⚠️ RLS ERROR DETECTED!")
+                    logger.error("   Backend should use service_role key to bypass RLS")
+                    logger.error("   Check if supabase client is using service_role key")
+                    logger.error("   Check RLS policies for tasks and task_participants tables")
+                
+                # Log error nhưng không fail project creation để user vẫn có thể tạo project
+                # User có thể tạo tasks thủ công sau nếu cần
+                # Tuy nhiên, cần log rõ ràng để developer biết có vấn đề
+                # Tuy nhiên, cần log rõ ràng để debug
+                # Đảm bảo project dict có tasks_created = None để frontend biết tasks không được tạo
+                if "tasks_created" not in project:
+                    project["tasks_created"] = None
+            
+            # Đảm bảo luôn có thông tin tasks_created trong response (ngay cả khi None)
+            # Frontend sẽ hiển thị thông báo phù hợp
+            logger.info(f"📋 Final project response includes tasks_created: {project.get('tasks_created')}")
+            
             return Project(**project)
         
+        # If we reach here, project creation failed
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to create project"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create project: No data returned"
         )
         
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Error creating project: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create project: {str(e)}"
+        )
+
+@router.post("/{project_id}/create-default-tasks")
+async def create_default_tasks_for_existing_project(
+    project_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Create default tasks for an existing project"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if project exists
+        project_result = supabase.table("projects").select("id, name").eq("id", project_id).single().execute()
+        if not project_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+        
+        project = project_result.data
+        logger.info(f"🔵 Creating default tasks for existing project {project_id}: {project.get('name', 'N/A')}")
+        
+        # Check if tasks already exist
+        existing_tasks = supabase.table("tasks").select("id, title, parent_id").eq("project_id", project_id).execute()
+        existing_task_count = len(existing_tasks.data) if existing_tasks.data else 0
+        
+        if existing_task_count > 0:
+            # Check if already has complete structure
+            parent_tasks = [t for t in existing_tasks.data if t.get('parent_id') is None]
+            if len(parent_tasks) > 0:
+                parent_task_id = parent_tasks[0].get('id')
+                checklists_check = supabase.table("task_checklists").select("id").eq("task_id", parent_task_id).execute()
+                checklists_count = len(checklists_check.data) if checklists_check.data else 0
+                
+                if len(parent_tasks) == 1 and checklists_count >= 4:
+                    # Already has complete structure
+                    return {
+                        "success": True,
+                        "message": "Project already has default tasks",
+                        "tasks_count": existing_task_count,
+                        "checklists": checklists_count
+                    }
+        
+        # Create default tasks
+        task_ids = create_default_tasks_for_project(
+            supabase=supabase,
+            project_id=project_id,
+            created_by=current_user.id,
+            default_responsibles=None
+        )
+        
+        # Verify tasks were created
+        await asyncio.sleep(0.3)
+        final_tasks = supabase.table("tasks").select("id, title, parent_id").eq("project_id", project_id).execute()
+        final_task_count = len(final_tasks.data) if final_tasks.data else 0
+        
+        # Count checklists and items
+        checklists_count = 0
+        checklist_items_count = 0
+        if final_task_count > 0:
+            parent_tasks = [t for t in final_tasks.data if t.get('parent_id') is None]
+            if parent_tasks:
+                parent_task_id = parent_tasks[0].get('id')
+                checklists_result = supabase.table("task_checklists").select("id").eq("task_id", parent_task_id).execute()
+                checklists_count = len(checklists_result.data) if checklists_result.data else 0
+                
+                for checklist in (checklists_result.data or []):
+                    items_result = supabase.table("task_checklist_items").select("id").eq("checklist_id", checklist.get('id')).execute()
+                    items = items_result.data if items_result.data else []
+                    checklist_items_count += len(items)
+        
+        logger.info(f"✅ Created {final_task_count} tasks, {checklists_count} checklists, {checklist_items_count} items for project {project_id}")
+        
+        return {
+            "success": True,
+            "message": "Default tasks created successfully",
+            "tasks_count": final_task_count,
+            "checklists": checklists_count,
+            "checklist_items": checklist_items_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error creating default tasks for project {project_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create default tasks: {str(e)}"
         )
 
 @router.put("/{project_id}", response_model=Project)
@@ -1544,6 +2103,124 @@ async def update_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update project: {str(e)}"
+        )
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: str,
+    current_user: User = Depends(require_manager_or_admin)
+):
+    """Delete a project and all related data"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Check if project exists
+        existing = supabase.table("projects").select("id, name, manager_id").eq("id", project_id).execute()
+        if not existing.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+        
+        project = existing.data[0]
+        
+        # Check permissions: Only admin, hr_manager, accountant, or project manager can delete
+        is_manager = False
+        if project.get("manager_id"):
+            # Check if current user is the manager
+            manager_employee = supabase.table("employees").select("user_id").eq("id", project["manager_id"]).execute()
+            if manager_employee.data and manager_employee.data[0].get("user_id") == current_user.id:
+                is_manager = True
+        
+        # Check if user is admin, hr_manager, or accountant
+        user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+        is_authorized = (
+            user_role in ['admin', 'hr_manager', 'accountant'] or 
+            is_manager
+        )
+        
+        if not is_authorized:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to delete this project. Only admins, HR managers, accountants, or project managers can delete projects."
+            )
+        
+        # Delete related data first (to avoid foreign key constraint violations)
+        # Note: Some tables may have ON DELETE CASCADE, but we'll be explicit here
+        
+        # 1. Delete task participants
+        try:
+            # Get all tasks for this project
+            tasks_result = supabase.table("tasks").select("id").eq("project_id", project_id).execute()
+            if tasks_result.data:
+                task_ids = [task["id"] for task in tasks_result.data]
+                # Delete task participants
+                for task_id in task_ids:
+                    supabase.table("task_participants").delete().eq("task_id", task_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting task participants: {str(e)}")
+        
+        # 2. Delete tasks (may have CASCADE, but we'll do it explicitly)
+        try:
+            supabase.table("tasks").delete().eq("project_id", project_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting tasks: {str(e)}")
+        
+        # 3. Delete task groups
+        try:
+            supabase.table("task_groups").delete().eq("project_id", project_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting task groups: {str(e)}")
+        
+        # 4. Delete project team members
+        try:
+            supabase.table("project_team").delete().eq("project_id", project_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting project team: {str(e)}")
+        
+        # 5. Delete project category members
+        try:
+            supabase.table("project_category_members").delete().eq("project_id", project_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting project category members: {str(e)}")
+        
+        # 6. Delete time entries (if exists)
+        try:
+            supabase.table("time_entries").delete().eq("project_id", project_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting time entries: {str(e)}")
+        
+        # 7. Delete expenses (may have ON DELETE SET NULL, but we'll try to delete)
+        try:
+            supabase.table("expenses").delete().eq("project_id", project_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting expenses: {str(e)}")
+        
+        # 8. Delete invoices (may have ON DELETE SET NULL, but we'll try to delete)
+        try:
+            supabase.table("invoices").delete().eq("project_id", project_id).execute()
+        except Exception as e:
+            logger.warning(f"Error deleting invoices: {str(e)}")
+        
+        # 9. Finally, delete the project itself
+        result = supabase.table("projects").delete().eq("id", project_id).execute()
+        
+        if result.data:
+            logger.info(f"Project {project_id} ({project.get('name', 'N/A')}) deleted by user {current_user.id}")
+            return {"message": "Project deleted successfully", "project_id": project_id}
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to delete project"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting project {project_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete project: {str(e)}"
         )
 
 @router.get("/{project_id}/time-entries", response_model=List[TimeEntry])
@@ -2311,7 +2988,8 @@ async def get_project_dashboard(
 @router.put("/{project_id}/status")
 async def update_project_status(
     project_id: str,
-    status: str,
+    status_name: Optional[str] = Query(None, description="Status name to update to"),
+    status_id: Optional[str] = Query(None, description="Status ID to update to (preferred)"),
     current_user: User = Depends(get_current_user)
 ):
     """Update project status"""
@@ -2326,34 +3004,142 @@ async def update_project_status(
                 detail="Project not found"
             )
 
-        # Check if user can update progress (since status changes automatically update progress)
-        if not check_user_can_update_progress(supabase, current_user, project_id):
+        # Check if user can update status: Admin hoặc người chịu trách nhiệm (accountable)
+        role_value = current_user.role.value if isinstance(current_user.role, UserRole) else str(current_user.role)
+        role_value = role_value.lower()
+        
+        is_admin = role_value == "admin"
+        is_accountable = False
+        
+        # Kiểm tra xem user có phải accountable member của project không
+        if not is_admin:
+            try:
+                # Tìm employee_id từ user_id
+                employee_result = supabase.table("employees").select("id").eq("user_id", current_user.id).limit(1).execute()
+                if employee_result.data:
+                    employee_id = employee_result.data[0].get('id')
+                    
+                    # Kiểm tra trong project_team với responsibility_type = 'accountable'
+                    team_result = supabase.table("project_team")\
+                        .select("id, responsibility_type")\
+                        .eq("project_id", project_id)\
+                        .eq("status", "active")\
+                        .eq("user_id", current_user.id)\
+                        .execute()
+                    
+                    # Nếu không tìm thấy bằng user_id, thử tìm bằng employee_id qua employees table
+                    if not team_result.data:
+                        # Tìm project_team members có employee_id tương ứng
+                        # Note: project_team có thể không có employee_id trực tiếp, cần check qua employees
+                        team_by_email = supabase.table("project_team")\
+                            .select("id, responsibility_type")\
+                            .eq("project_id", project_id)\
+                            .eq("status", "active")\
+                            .eq("email", current_user.email)\
+                            .execute()
+                        team_result = team_by_email
+                    
+                    # Kiểm tra xem có member nào với responsibility_type = 'accountable' không
+                    for member in (team_result.data or []):
+                        if member.get('responsibility_type') == 'accountable':
+                            is_accountable = True
+                            break
+            except Exception as e:
+                logger.error(f"Error checking accountable permission: {str(e)}")
+        
+        if not is_admin and not is_accountable:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to update project status. Only project team members can change status."
+                detail="You don't have permission to update project status. Only admin or accountable members can change status."
             )
 
         old_status_id = existing.data[0].get('status_id')
         
-        # Get status_id from status name if needed
-        status_result = supabase.table("project_statuses")\
-            .select("id")\
-            .ilike("name", f"%{status}%")\
-            .limit(1)\
-            .execute()
+        # Validate: Phải có status_id hoặc status_name
+        if not status_id and not status_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either 'status_id' or 'status_name' must be provided"
+            )
         
         new_status_id = None
+        found_status_name = None
         update_dict = {
-            "status": status,
             "updated_at": datetime.utcnow().isoformat()
         }
         
-        if status_result.data:
-            new_status_id = status_result.data[0].get('id')
-            update_dict["status_id"] = new_status_id
+        # Ưu tiên dùng status_id nếu có (chính xác hơn)
+        if status_id:
+            # Verify status_id exists
+            status_result = supabase.table("project_statuses")\
+                .select("id, name")\
+                .eq("id", status_id)\
+                .limit(1)\
+                .execute()
+            
+            if status_result.data:
+                new_status_id = status_result.data[0].get('id')
+                found_status_name = status_result.data[0].get('name')
+                update_dict["status_id"] = new_status_id
+                logger.info(f"✅ Using provided status_id {new_status_id} (status: '{found_status_name}')")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Status ID '{status_id}' not found. Please use a valid status ID."
+                )
+        else:
+            # Fallback: Map status_name to status_id
+            # Normalize status_name: trim whitespace và chuẩn hóa
+            normalized_status_name = status_name.strip()
+            
+            # Thử tìm exact match (case-sensitive) trước
+            status_result = supabase.table("project_statuses")\
+                .select("id, name")\
+                .eq("name", normalized_status_name)\
+                .limit(1)\
+                .execute()
+            
+            # Nếu không tìm thấy exact match, thử case-insensitive match
+            # Lấy tất cả statuses và so sánh case-insensitive trong Python
+            if not status_result.data:
+                all_statuses_result = supabase.table("project_statuses")\
+                    .select("id, name")\
+                    .execute()
+                
+                if all_statuses_result.data:
+                    # Tìm exact match case-insensitive
+                    for status in all_statuses_result.data:
+                        if status.get('name', '').strip().lower() == normalized_status_name.lower():
+                            status_result.data = [status]
+                            break
+            
+            if status_result.data:
+                new_status_id = status_result.data[0].get('id')
+                found_status_name = status_result.data[0].get('name')
+                update_dict["status_id"] = new_status_id
+                # Chỉ update status_id, KHÔNG update status enum (tránh lỗi enum)
+                logger.info(f"✅ Found status_id {new_status_id} for status name '{normalized_status_name}' (matched: '{found_status_name}')")
+                
+                # Verify: Nếu tên không khớp chính xác (case-insensitive), log warning
+                if found_status_name.strip().lower() != normalized_status_name.lower():
+                    logger.warning(f"⚠️  Status name mismatch: requested '{normalized_status_name}' but matched '{found_status_name}'")
+            else:
+                logger.warning(f"⚠️  Could not find status_id for status name '{normalized_status_name}'. Cannot update status without status_id.")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Status '{normalized_status_name}' not found. Please use a valid status name."
+                )
         
         # Update project status
         result = supabase.table("projects").update(update_dict).eq("id", project_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update project status: No data returned"
+            )
+        
+        logger.info(f"✅ Successfully updated project {project_id} status to '{normalized_status_name}' (status_id: {new_status_id})")
 
         # Auto-calculate and update progress based on new status position
         if new_status_id and new_status_id != old_status_id:
@@ -2437,17 +3223,31 @@ async def update_project_status(
                                 .execute()
         
         if result.data:
-            return {"message": "Project status updated successfully"}
+            updated_project = result.data[0]
+            logger.info(f"✅ Project {project_id} status updated successfully to '{status_name}' (status_id: {new_status_id})")
+            return {
+                "message": "Project status updated successfully",
+                "project_id": project_id,
+                "status": status_name,
+                "status_id": new_status_id
+            }
         
+        logger.error(f"❌ Failed to update project {project_id} status: No data returned from update")
+        # Use status module from fastapi (not the parameter)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to update project status"
+            detail="Failed to update project status: No data returned"
         )
         
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Error updating project status: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Use status module from fastapi, not the parameter 'status'
+        from fastapi import status as http_status
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update project status: {str(e)}"
         )

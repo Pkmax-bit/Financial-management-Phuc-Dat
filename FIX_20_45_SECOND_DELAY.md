@@ -180,3 +180,4 @@ Nếu vẫn còn delay > 3 giây:
 4. Kiểm tra Supabase Realtime logs trong dashboard
 5. Có thể cần giảm polling interval xuống 2 giây
 
+

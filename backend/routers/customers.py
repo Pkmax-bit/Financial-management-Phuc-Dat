@@ -180,6 +180,31 @@ async def get_customers_public_list():
             "status": "error"
         }
 
+@router.get("/dropdown")
+async def get_customers_dropdown(
+    current_user: User = Depends(get_current_user)
+):
+    """Get customers list for dropdown selection - simplified endpoint with authentication"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get basic customer info for dropdown
+        result = supabase.table("customers").select("""
+            id,
+            customer_code,
+            name,
+            email
+        """).eq("status", "active").order("name").limit(500).execute()
+        
+        # Return as array (not wrapped in object) for easier frontend consumption
+        return result.data or []
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch customers: {str(e)}"
+        )
+
 
 @router.get("/", response_model=List[Customer])
 async def get_customers(

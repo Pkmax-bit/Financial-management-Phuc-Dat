@@ -108,3 +108,4 @@ WHERE schemaname = 'realtime'
 -- 3. Kiểm tra publication: SELECT * FROM pg_publication WHERE pubname LIKE '%realtime%';
 -- =====================================================
 
+

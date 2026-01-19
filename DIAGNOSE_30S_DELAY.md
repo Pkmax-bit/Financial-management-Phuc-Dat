@@ -104,3 +104,4 @@ Nếu thấy nhiều → Tenant bị stop thường xuyên
 2. **Cải thiện realtime connection** - keep alive
 3. **Monitor tenant status** - đảm bảo không bị stop
 
+

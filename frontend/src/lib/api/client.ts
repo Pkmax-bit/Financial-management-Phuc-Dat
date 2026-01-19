@@ -37,7 +37,7 @@ class ApiClient {
   private baseUrl: string
   private cache: Map<string, CacheEntry<any>>
   private pendingRequests: Map<string, Promise<any>>
-  private defaultCacheTTL: number = 30000 // 30 seconds
+  private defaultCacheTTL: number = 5000 // 10 seconds (reduced for fresher data, but still cache for performance)
   private defaultRetries: number = 5 // Tăng từ 3 lên 5 để xử lý backend quá tải
 
   // Token refresh state

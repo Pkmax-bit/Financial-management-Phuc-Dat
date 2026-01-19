@@ -132,3 +132,4 @@ Expected: X < 5s
 2. Kiểm tra console logs
 3. Verify message đến <1s (thay vì 30s)
 
+

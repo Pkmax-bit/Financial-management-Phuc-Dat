@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { Search, Eye, Edit, Trash2, Calendar, DollarSign, Users, Target, MoreVertical, Filter, X, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { projectCategoryApi, customerApi, apiGet } from '@/lib/api'
@@ -39,6 +39,10 @@ interface ProjectsTabProps {
   customerId?: string
 }
 
+export interface ProjectsTabRef {
+  refresh: () => Promise<void>
+}
+
 const statusColors: Record<string, string> = {
   planning: 'bg-gray-100 text-gray-700',
   active: 'bg-green-100 text-green-700',
@@ -69,13 +73,13 @@ const priorityLabels: Record<string, string> = {
   urgent: 'Khẩn cấp'
 }
 
-export default function ProjectsTab({
+const ProjectsTab = forwardRef<ProjectsTabRef, ProjectsTabProps>(({
   onCreateProject,
   onEditProject,
   onViewProject,
   onDeleteProject,
   customerId
-}: ProjectsTabProps) {
+}, ref) => {
   const [projects, setProjects] = useState<Project[]>([])
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -1330,5 +1334,9 @@ export default function ProjectsTab({
       />
     </div>
   )
-}
+})
+
+ProjectsTab.displayName = 'ProjectsTab'
+
+export default ProjectsTab
 

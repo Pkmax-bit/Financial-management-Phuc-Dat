@@ -238,3 +238,4 @@ Nếu vẫn còn delay > 2 giây:
 3. Kiểm tra database query performance
 4. Kiểm tra RLS policies performance
 
+

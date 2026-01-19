@@ -201,3 +201,4 @@ Nếu vẫn có vấn đề:
 3. Kiểm tra realtime broadcast có hoạt động không
 4. Kiểm tra `handleNewMessage` có được gọi không
 
+

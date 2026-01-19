@@ -16,7 +16,15 @@ export default function NotificationBell() {
       setIsLoading(true)
       setHasError(false)
       
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('Error getting session:', sessionError)
+        setUnreadCount(0)
+        setHasError(false) // Don't show error for session issues
+        return
+      }
+      
       if (!session) {
         setUnreadCount(0)
         return
@@ -31,22 +39,46 @@ export default function NotificationBell() {
         .eq('user_id', session.user.id)
 
       if (error) {
-        console.error('Error fetching notifications from database:', error)
-        console.error('Error details:', {
-          message: (error as any)?.message,
+        // Chỉ log error nếu không phải lỗi "relation does not exist" hoặc RLS
+        // Vì có thể bảng notifications chưa được tạo hoặc RLS chưa được setup
+        const errorCode = (error as any)?.code
+        const errorMessage = (error as any)?.message || String(error)
+        
+        // Bỏ qua lỗi nếu bảng không tồn tại hoặc RLS chưa setup
+        if (errorCode === '42P01' || errorMessage.includes('does not exist') || errorMessage.includes('permission denied')) {
+          console.warn('Notifications table may not exist or RLS not configured:', errorMessage)
+          setUnreadCount(0)
+          setHasError(false) // Don't show error UI for missing table
+          return
+        }
+        
+        console.error('Error fetching notifications from database:', {
+          error,
+          code: errorCode,
+          message: errorMessage,
           details: (error as any)?.details,
-          hint: (error as any)?.hint,
-          code: (error as any)?.code
+          hint: (error as any)?.hint
         })
         setHasError(true)
         return
       }
 
       setUnreadCount(notifications?.length || 0)
+      setHasError(false)
     } catch (error: any) {
-      console.error('Error fetching unread count:', error)
+      console.error('Unexpected error fetching unread count:', error)
+      console.error('Error type:', typeof error)
       console.error('Error message:', error?.message)
-      setHasError(true)
+      console.error('Error stack:', error?.stack)
+      
+      // Chỉ set error nếu không phải lỗi về missing table
+      const errorMessage = error?.message || String(error)
+      if (!errorMessage.includes('does not exist') && !errorMessage.includes('permission denied')) {
+        setHasError(true)
+      } else {
+        setUnreadCount(0)
+        setHasError(false)
+      }
     } finally {
       setIsLoading(false)
     }

@@ -54,3 +54,4 @@ WHERE schemaname = 'realtime'
 -- 3. Kiểm tra xem publication có được setup đúng không
 -- =====================================================
 
+

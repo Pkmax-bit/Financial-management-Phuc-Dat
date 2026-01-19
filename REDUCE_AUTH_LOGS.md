@@ -47,3 +47,4 @@ if AUTH_VERBOSE_LOGGING:
 
 - ✅ `backend/utils/auth.py` (UPDATED)
 
+

@@ -170,3 +170,4 @@ Sau khi fix:
 2. `frontend/src/components/chat/InternalChat.tsx` - Thêm logging
 3. `database/migrations/diagnose_realtime_delay.sql` - Diagnostic script
 
+

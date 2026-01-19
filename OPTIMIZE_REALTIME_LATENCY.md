@@ -198,3 +198,4 @@ Code đã thêm `performance.now()` để đo:
 - **User Experience**: Tin nhắn đến ngay lập tức
 - **Performance**: Không có warnings trong console
 
+

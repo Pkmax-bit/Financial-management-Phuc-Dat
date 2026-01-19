@@ -1,12 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { CheckCircle, ArrowRight, X, Clock } from 'lucide-react'
+import { CheckCircle, X } from 'lucide-react'
 
 interface ProjectSuccessModalProps {
   isVisible: boolean
   projectName: string
   projectCode: string
+  tasksCreated?: {
+    count: number
+    checklists: number
+    checklistItems: number
+  }
   onContinue: () => void
   onCancel: () => void
 }
@@ -14,41 +18,12 @@ interface ProjectSuccessModalProps {
 export default function ProjectSuccessModal({ 
   isVisible, 
   projectName, 
-  projectCode, 
+  projectCode,
+  tasksCreated,
   onContinue,
   onCancel
 }: ProjectSuccessModalProps) {
-  const [countdown, setCountdown] = useState(3)
-  const [isAutoRedirect, setIsAutoRedirect] = useState(true)
-
-  useEffect(() => {
-    if (!isVisible) return
-
-    setCountdown(3)
-    setIsAutoRedirect(true)
-
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (isAutoRedirect) {
-            onContinue()
-          }
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [isVisible, isAutoRedirect, onContinue])
-
-  const handleContinue = () => {
-    setIsAutoRedirect(false)
-    onContinue()
-  }
-
-  const handleCancel = () => {
-    setIsAutoRedirect(false)
+  const handleClose = () => {
     onCancel()
   }
 
@@ -78,41 +53,63 @@ export default function ProjectSuccessModal({
               <p className="text-sm text-gray-600 mb-1 mt-2">Mã dự án:</p>
               <p className="font-semibold text-blue-600">{projectCode}</p>
             </div>
+            
+            {/* Thông báo về nhiệm vụ được tạo tự động */}
+            {tasksCreated ? (
+              <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 mb-3 shadow-sm">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1 ml-3">
+                    <p className="text-sm font-bold text-green-800 mb-2">
+                      ✅ Đã tạo nhiệm vụ mẫu tự động thành công!
+                    </p>
+                    <div className="bg-white rounded-md p-2 mb-2">
+                      <ul className="text-xs text-green-700 space-y-1.5">
+                        <li className="flex items-center">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2"></span>
+                          <strong>1 nhiệm vụ chính:</strong> "{projectName}"
+                        </li>
+                        <li className="flex items-center">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2"></span>
+                          <strong>{tasksCreated.checklists} danh sách công việc:</strong> Kế hoạch, Sản xuất, Vận chuyển, Chăm sóc
+                        </li>
+                        <li className="flex items-center">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2"></span>
+                          <strong>{tasksCreated.checklistItems} việc cần làm</strong> với checkbox hoàn thành
+                        </li>
+                      </ul>
+                    </div>
+                    <p className="text-xs text-green-600 font-medium">
+                      💡 Bạn có thể xem và quản lý các nhiệm vụ này trong trang chi tiết dự án
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                <div className="flex items-start">
+                  <CheckCircle className="w-4 h-4 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs text-yellow-700">
+                      ⚠️ Nhiệm vụ mẫu chưa được tạo tự động. Bạn có thể tạo thủ công trong trang chi tiết dự án.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-                 {/* Countdown */}
-                 {isAutoRedirect && (
-                   <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                     <div className="flex items-center justify-center mb-2">
-                       <Clock className="w-4 h-4 text-blue-500 mr-2" />
-                       <span className="text-sm font-medium text-blue-700">
-                         Chuẩn bị sang trang báo giá trong {countdown}s
-                       </span>
-                     </div>
-                     <div className="w-full bg-blue-200 rounded-full h-1.5">
-                       <div
-                         className="bg-blue-500 h-1.5 rounded-full transition-all duration-1000"
-                         style={{ width: `${((3 - countdown) / 3) * 100}%` }}
-                       />
-                     </div>
-                   </div>
-                 )}
-
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex justify-end">
             <button
-              onClick={handleCancel}
-              className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm font-medium"
+              onClick={handleClose}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
             >
-              <X className="w-3 h-3 inline mr-1" />
-              Ở lại
-            </button>
-            <button
-              onClick={handleContinue}
-              className="flex-1 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
-            >
-              <ArrowRight className="w-3 h-3 inline mr-1" />
-              Chuyển
+              Đóng
             </button>
           </div>
         </div>

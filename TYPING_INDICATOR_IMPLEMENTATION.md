@@ -149,3 +149,4 @@ const typingChannel = supabase.channel(`typing:conversation:${conversationId}`, 
 - Broadcast event: `typing`
 - Payload: `{ userId, userName, isTyping: boolean }`
 
+

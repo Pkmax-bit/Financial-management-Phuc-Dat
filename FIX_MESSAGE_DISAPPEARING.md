@@ -141,3 +141,4 @@ Tương tự như InternalChat.tsx
    - User B nhận message ngay lập tức (không cần refresh)
    - Kiểm tra console logs
 
+

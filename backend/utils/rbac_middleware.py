@@ -23,6 +23,7 @@ class RBACManager:
     def __init__(self):
         self.role_hierarchy = {
             UserRole.ADMIN: 100,
+            UserRole.HR_MANAGER: 85,  # Cao hơn ACCOUNTANT vì có thêm quyền quản lý nhân viên
             UserRole.SALES: 80,
             UserRole.ACCOUNTANT: 70,
             UserRole.WORKSHOP_EMPLOYEE: 60,
@@ -179,8 +180,8 @@ def require_manager_or_admin(current_user: User = Depends(get_current_user)) -> 
     user_role_str = str(current_user.role.value) if isinstance(current_user.role, UserRole) else str(current_user.role)
     print(f"[RBAC] Checking permissions for user: {current_user.email}, Role: {current_user.role} (value: {user_role_str})")
     
-    allowed_roles = [UserRole.ADMIN, UserRole.SALES, UserRole.ACCOUNTANT]
-    allowed_role_values = [role.value for role in allowed_roles]  # Get string values: ["admin", "sales", "accountant"]
+    allowed_roles = [UserRole.ADMIN, UserRole.HR_MANAGER, UserRole.SALES, UserRole.ACCOUNTANT]
+    allowed_role_values = [role.value for role in allowed_roles]  # Get string values: ["admin", "hr_manager", "sales", "accountant"]
     
     # Compare by value (string) instead of enum object
     if user_role_str not in allowed_role_values:
@@ -195,7 +196,7 @@ def require_manager_or_admin(current_user: User = Depends(get_current_user)) -> 
 def require_employee_or_higher(current_user: User = Depends(get_current_user)) -> User:
     """Require employee role or higher"""
     allowed_roles = [
-        UserRole.ADMIN, UserRole.SALES, UserRole.ACCOUNTANT,
+        UserRole.ADMIN, UserRole.HR_MANAGER, UserRole.SALES, UserRole.ACCOUNTANT,
         UserRole.WORKSHOP_EMPLOYEE, UserRole.WORKER, UserRole.TRANSPORT, UserRole.EMPLOYEE
     ]
     if current_user.role not in allowed_roles:
@@ -230,7 +231,7 @@ def require_project_management(current_user: User = Depends(get_current_user)) -
 
 def require_financial_access(current_user: User = Depends(get_current_user)) -> User:
     """Require permission to access financial data"""
-    allowed_roles = [UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.SALES]
+    allowed_roles = [UserRole.ADMIN, UserRole.HR_MANAGER, UserRole.ACCOUNTANT, UserRole.SALES]
     if current_user.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -268,7 +269,7 @@ def get_user_role_info(user: User) -> Dict[str, Any]:
         "permissions": [perm.value for perm in permissions],
         "can_manage_customers": rbac_manager.can_access_feature(user, 'customers'),
         "can_manage_projects": rbac_manager.can_access_feature(user, 'projects'),
-        "can_access_financial": user.role in [UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.SALES],
+        "can_access_financial": user.role in [UserRole.ADMIN, UserRole.HR_MANAGER, UserRole.ACCOUNTANT, UserRole.SALES],
         "can_view_reports": rbac_manager.can_access_feature(user, 'reports'),
         "can_manage_users": rbac_manager.can_access_feature(user, 'users')
     }

@@ -201,6 +201,49 @@ ROLE_PERMISSIONS = {
         }
     ),
     
+    UserRole.HR_MANAGER: RolePermissions(
+        role=UserRole.HR_MANAGER,
+        permissions=[
+            # Tất cả permissions của ACCOUNTANT
+            Permission.VIEW_PROJECT,
+            Permission.CREATE_INVOICE,
+            Permission.VIEW_INVOICE,
+            Permission.EDIT_INVOICE,
+            Permission.CREATE_COST,
+            Permission.VIEW_COST,
+            Permission.EDIT_COST,
+            Permission.APPROVE_COST,
+            Permission.VIEW_REPORTS,
+            Permission.CREATE_REPORTS,
+            # Quyền quản lý nhân viên
+            Permission.MANAGE_USERS,
+            # Quyền xem khách hàng (để có thể tạo dự án)
+            Permission.VIEW_CUSTOMER_PROGRESS,
+            Permission.VIEW_CUSTOMER_PROJECTS
+        ],
+        project_stage_access={
+            ProjectStage.PLANNING: [
+                Permission.VIEW_PROJECT,
+                Permission.CREATE_INVOICE,
+                Permission.VIEW_INVOICE,
+                Permission.EDIT_INVOICE
+            ],
+            ProjectStage.EXECUTION: [
+                Permission.VIEW_PROJECT,
+                Permission.CREATE_COST,
+                Permission.VIEW_COST,
+                Permission.EDIT_COST,
+                Permission.APPROVE_COST
+            ],
+            ProjectStage.COMPLETION: [
+                Permission.VIEW_PROJECT,
+                Permission.VIEW_COST,
+                Permission.VIEW_REPORTS,
+                Permission.CREATE_REPORTS
+            ]
+        }
+    ),
+    
     UserRole.WORKSHOP_EMPLOYEE: RolePermissions(
         role=UserRole.WORKSHOP_EMPLOYEE,
         permissions=[
@@ -348,6 +391,7 @@ def get_role_hierarchy() -> Dict[UserRole, int]:
     """Get role hierarchy for permission inheritance"""
     return {
         UserRole.ADMIN: 100,
+        UserRole.HR_MANAGER: 85,  # Cao hơn ACCOUNTANT vì có thêm quyền quản lý nhân viên
         UserRole.ACCOUNTANT: 80,
         UserRole.SALES: 70,
         UserRole.WORKSHOP_EMPLOYEE: 60,

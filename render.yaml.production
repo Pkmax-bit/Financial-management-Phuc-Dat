@@ -1,0 +1,80 @@
+# Render Blueprint for Financial Management System - Production (100 Users)
+# Cấu hình tối ưu cho 100 người dùng đồng thời
+
+services:
+  # Backend API Service - Tối ưu cho 100 users
+  - type: web
+    name: financial-management-backend-prod
+    env: python
+    region: singapore  # Hoặc chọn region gần bạn nhất (singapore, frankfurt, oregon)
+    plan: standard  # Standard plan cho 100 users (không bị sleep, mạnh hơn)
+    buildCommand: pip install -r backend/requirements.txt
+    # Tăng số workers và timeout cho 100 users
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT --workers 3 --timeout-keep-alive 60 --timeout-graceful-shutdown 30 --limit-concurrency 50 --backlog 100
+    healthCheckPath: /health
+    # Tăng health check interval
+    healthCheckInterval: 300
+    # Auto-deploy từ main branch
+    autoDeploy: true
+    branch: main
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SUPABASE_URL
+        sync: false  # Thêm trong Render Dashboard
+      - key: SUPABASE_KEY
+        sync: false  # Thêm trong Render Dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false  # Thêm trong Render Dashboard
+      - key: JWT_SECRET
+        generateValue: true  # Auto-generate secret key
+      - key: ENVIRONMENT
+        value: production
+      - key: FRONTEND_URL
+        sync: false  # URL frontend (ví dụ: https://phucdat.com.vn)
+      - key: CORS_ORIGINS
+        value: https://phucdat.com.vn,https://www.phucdat.com.vn
+      - key: LOG_LEVEL
+        value: INFO
+      # Tối ưu database connection
+      - key: DATABASE_POOL_SIZE
+        value: 10
+      - key: DATABASE_MAX_OVERFLOW
+        value: 20
+    
+  # Frontend Service - Có thể host trên Render hoặc Vercel (khuyến nghị Vercel)
+  - type: web
+    name: financial-management-frontend-prod
+    env: node
+    region: singapore  # Cùng region với backend
+    plan: standard  # Standard plan cho production
+    buildCommand: cd frontend && npm ci && npm run build
+    startCommand: cd frontend && npm start
+    healthCheckPath: /
+    healthCheckInterval: 300
+    autoDeploy: true
+    branch: main
+    envVars:
+      - key: NODE_VERSION
+        value: 20.x
+      - key: NEXT_PUBLIC_API_URL
+        sync: false  # URL backend (ví dụ: https://api.phucdat.com.vn)
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false  # Supabase URL
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false  # Supabase Anon Key
+      - key: NEXT_PUBLIC_ENVIRONMENT
+        value: production
+      # Tối ưu Next.js
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: 1
+
+# Lưu ý:
+# 1. Thay đổi plan từ "free" sang "standard" hoặc "starter" cho production
+# 2. Tăng số workers trong startCommand (--workers 3) cho 100 users
+# 3. Cấu hình CORS_ORIGINS với domain thực tế
+# 4. Thêm custom domain trong Render Dashboard
+# 5. Setup SSL certificate (tự động với Render)
+# 6. Monitor logs và metrics trong Render Dashboard

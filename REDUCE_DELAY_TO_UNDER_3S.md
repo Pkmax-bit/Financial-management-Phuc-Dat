@@ -145,3 +145,4 @@ Nếu vẫn còn delay > 3 giây:
 3. Kiểm tra RLS policies performance với EXPLAIN ANALYZE
 4. Kiểm tra database load
 
+

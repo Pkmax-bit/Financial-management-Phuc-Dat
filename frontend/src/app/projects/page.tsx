@@ -17,9 +17,10 @@ import {
   CircleHelp
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { apiGet } from '@/lib/api'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import StickyTopNav from '@/components/StickyTopNav'
-import ProjectsTab from '@/components/projects/ProjectsTab'
+import ProjectsTab, { ProjectsTabRef } from '@/components/projects/ProjectsTab'
 import CreateProjectModal from '@/components/projects/CreateProjectModal'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 import ProjectDetailSidebar from '@/components/projects/ProjectDetailSidebar'
@@ -93,6 +94,7 @@ export default function ProjectsPage() {
   const shepherdRef = useRef<ProjectsShepherdType | null>(null)
   const tourRef = useRef<ProjectsShepherdTour | null>(null)
   const kanbanBoardRef = useRef<KanbanBoardRef>(null)
+  const projectsTabRef = useRef<ProjectsTabRef>(null)
   const autoStartAttemptedRef = useRef(false)
   const currentTourModeRef = useRef<'auto' | 'manual'>('manual')
   const isBrowser = typeof window !== 'undefined'
@@ -621,7 +623,72 @@ export default function ProjectsPage() {
     }
 
     window.addEventListener('projectUpdated', handleProjectUpdate)
-    return () => window.removeEventListener('projectUpdated', handleProjectUpdate)
+    
+    // Listen for project status updates
+    const handleProjectStatusUpdate = async (event: any) => {
+      if (event.detail?.projectId) {
+        // Refresh the selected project data if it's the currently selected project
+        if (selectedProject && selectedProject.id === event.detail.projectId) {
+          try {
+            const updatedProject = await apiGet(`/api/projects/${event.detail.projectId}`)
+            setSelectedProject(updatedProject)
+            console.log('✅ Project data refreshed after status update:', updatedProject)
+          } catch (error) {
+            console.error('Failed to refresh project data:', error)
+          }
+        }
+        
+        // Refresh projects list
+        if (projectsTabRef.current) {
+          await projectsTabRef.current.refresh()
+        }
+        if (kanbanBoardRef.current) {
+          await kanbanBoardRef.current.refresh()
+        }
+        // Refresh stats
+        await fetchStats()
+      }
+    }
+    
+    // Listen for project created event
+    const handleProjectCreated = async (event: any) => {
+      if (event.detail?.projectId) {
+        // Refresh projects list
+        if (projectsTabRef.current) {
+          await projectsTabRef.current.refresh()
+        }
+        if (kanbanBoardRef.current) {
+          await kanbanBoardRef.current.refresh()
+        }
+        // Refresh stats
+        await fetchStats()
+      }
+    }
+    
+    window.addEventListener('projectStatusUpdated', handleProjectStatusUpdate)
+    window.addEventListener('projectCreated', handleProjectCreated)
+    
+    // Listen for project statuses updates (when status is added/updated/deleted)
+    const handleProjectStatusesUpdate = async () => {
+      // Refresh projects list to show updated statuses
+      if (projectsTabRef.current) {
+        await projectsTabRef.current.refresh()
+      }
+      if (kanbanBoardRef.current) {
+        await kanbanBoardRef.current.refresh()
+      }
+      // Refresh stats
+      await fetchStats()
+    }
+    
+    window.addEventListener('projectStatusesUpdated', handleProjectStatusesUpdate)
+    
+    return () => {
+      window.removeEventListener('projectUpdated', handleProjectUpdate)
+      window.removeEventListener('projectStatusUpdated', handleProjectStatusUpdate)
+      window.removeEventListener('projectStatusesUpdated', handleProjectStatusesUpdate)
+      window.removeEventListener('projectCreated', handleProjectCreated)
+    }
   }, [selectedProject])
 
   // Handle action=create and customer_id from query parameters
@@ -759,10 +826,21 @@ export default function ProjectsPage() {
     console.log('Delete project:', project)
   }
 
-  const handleProjectSuccess = () => {
+  const handleProjectSuccess = async () => {
     // Refresh stats when project is created/updated
-    fetchStats()
-    console.log('Project operation successful')
+    await fetchStats()
+    
+    // Refresh projects list in ProjectsTab (if in list view)
+    if (projectsTabRef.current) {
+      await projectsTabRef.current.refresh()
+    }
+    
+    // Refresh projects in KanbanBoard (if in kanban view)
+    if (kanbanBoardRef.current) {
+      await kanbanBoardRef.current.refresh()
+    }
+    
+    console.log('Project operation successful - data refreshed')
   }
 
   if (loading) {
@@ -906,6 +984,7 @@ export default function ProjectsPage() {
             <div className="bg-white rounded-lg shadow-sm border" data-tour-id="projects-tab">
               {activeTab === 'projects' && (
                 <ProjectsTab
+                  ref={projectsTabRef}
                   onCreateProject={handleCreateProject}
                   onEditProject={handleEditProject}
                   onViewProject={handleViewProject}

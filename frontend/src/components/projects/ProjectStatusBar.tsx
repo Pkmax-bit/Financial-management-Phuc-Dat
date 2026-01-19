@@ -167,21 +167,44 @@ export default function ProjectStatusBar({
 
     try {
       // Gọi API để cập nhật trạng thái dự án
-      // Endpoint: PUT /api/projects/{project_id}/status?status={status_name}
-      // API sẽ tự động map status name sang status_id
-      await apiPut(
-        `/api/projects/${projectId}/status?status=${encodeURIComponent(status.name)}`,
+      // Ưu tiên dùng status_id (chính xác hơn) thay vì status_name
+      // Log để debug: gửi status.name và status.id
+      console.log('🔄 Updating status:', {
+        statusId: status.id,
+        statusName: status.name,
+        projectId: projectId
+      })
+      
+      // Gửi status_id thay vì status_name để tránh mapping sai
+      const response = await apiPut(
+        `/api/projects/${projectId}/status?status_id=${encodeURIComponent(status.id)}`,
         {}
       )
+
+      console.log('✅ Status updated successfully:', {
+        requestedStatusName: status.name,
+        requestedStatusId: status.id,
+        response: response
+      })
+      
+      // Dispatch custom event để refresh data mà không reload trang
+      window.dispatchEvent(new CustomEvent('projectStatusUpdated', {
+        detail: { projectId, statusId: status.id, statusName: status.name }
+      }))
 
       if (onStatusChange) {
         onStatusChange(status.name)
       }
     } catch (error: any) {
-      console.error('Failed to update project status:', error)
+      console.error('❌ Failed to update project status:', error)
       const errorMessage =
-        error?.data?.detail || error?.message || 'Không thể cập nhật trạng thái. Vui lòng thử lại.'
-      alert(errorMessage)
+        error?.response?.data?.detail || 
+        error?.data?.detail || 
+        error?.message || 
+        'Không thể cập nhật trạng thái. Vui lòng thử lại.'
+      
+      // Hiển thị error message tốt hơn
+      alert(`Lỗi: ${errorMessage}`)
     } finally {
       setUpdating(null)
     }

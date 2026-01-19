@@ -103,3 +103,4 @@ const isHeavyEndpoint =
 2. Có thể thêm configuration để customize retries per endpoint
 3. Có thể thêm circuit breaker pattern cho heavy endpoints
 
+

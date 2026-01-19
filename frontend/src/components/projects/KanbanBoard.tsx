@@ -580,6 +580,11 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Clear any error state on success
       setError(null)
+      
+      // Dispatch event to notify other components (without reloading page)
+      window.dispatchEvent(new CustomEvent('projectStatusUpdated', {
+        detail: { projectId: project.id, statusId: targetStatus.id }
+      }))
 
       console.log(`Project ${project.name} moved to ${newStatusName}${newStatusName === 'Hoàn thành' || newStatusName === 'completed' ? ' with 100% progress' : ''}`)
     } catch (err: any) {
@@ -747,6 +752,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Refresh statuses with current category filter
       await fetchStatuses()
+      
+      // Refresh projects to show updated statuses (without reloading page)
+      await fetchData()
+      
+      // Dispatch event to notify parent components
+      window.dispatchEvent(new CustomEvent('projectStatusesUpdated'))
 
       setShowStatusModal(false)
       setShowOrderConflictDialog(false)
@@ -976,6 +987,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       // Refresh statuses to get updated list
       await fetchStatuses()
+      
+      // Refresh projects to show updated statuses (without reloading page)
+      await fetchData()
+      
+      // Dispatch event to notify parent components
+      window.dispatchEvent(new CustomEvent('projectStatusesUpdated'))
 
       setIsDeletingStatus(false)
       setDeletingStatusId(null)

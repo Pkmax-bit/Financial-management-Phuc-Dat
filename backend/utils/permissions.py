@@ -147,9 +147,11 @@ class RoleChecker:
 require_admin = RoleChecker([UserRole.ADMIN])
 require_sales = RoleChecker([UserRole.SALES])
 require_accountant = RoleChecker([UserRole.ACCOUNTANT])
+require_hr_manager = RoleChecker([UserRole.HR_MANAGER])
 require_employee = RoleChecker([
     UserRole.SALES, 
-    UserRole.ACCOUNTANT, 
+    UserRole.ACCOUNTANT,
+    UserRole.HR_MANAGER,
     UserRole.WORKSHOP_EMPLOYEE, 
     UserRole.WORKER, 
     UserRole.TRANSPORT

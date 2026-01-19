@@ -179,3 +179,4 @@ Nếu không thấy logs này, có vấn đề với trigger hoặc subscription
 3. Nếu vẫn không hoạt động, kiểm tra RLS policies
 4. Test với 2 users khác nhau để xác nhận broadcast hoạt động
 
+

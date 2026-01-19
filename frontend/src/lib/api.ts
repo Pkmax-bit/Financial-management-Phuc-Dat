@@ -77,13 +77,24 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api'
 
 export const employeeApi = {
   // Get all employees with authentication
-  getEmployees: (params?: {
+  getEmployees: async (params?: {
     skip?: number
     limit?: number
     search?: string
     department_id?: string
     status?: string
   }) => {
+    try {
+      // Try dropdown endpoint first (simpler, faster)
+      const dropdownData = await apiGet('/api/employees/dropdown')
+      if (dropdownData && Array.isArray(dropdownData)) {
+        return dropdownData
+      }
+    } catch (dropdownError) {
+      console.log('Dropdown endpoint failed, trying full endpoint:', dropdownError)
+    }
+    
+    // Fallback to full endpoint
     const searchParams = new URLSearchParams()
     if (params?.skip) searchParams.append('skip', params.skip.toString())
     if (params?.limit) searchParams.append('limit', params.limit.toString())
@@ -93,6 +104,7 @@ export const employeeApi = {
     
     const query = searchParams.toString()
     // Use relative path - apiClient will add baseUrl
+    // Remove trailing slash to avoid redirect issues
     return apiGet(`/api/employees${query ? '?' + query : ''}`)
   },
 
@@ -307,13 +319,24 @@ export const vendorsApi = {
 // Customer API functions
 export const customerApi = {
   // Get all customers with authentication
-  getCustomers: (params?: {
+  getCustomers: async (params?: {
     skip?: number
     limit?: number
     search?: string
     type?: string
     status?: string
   }) => {
+    try {
+      // Try dropdown endpoint first (simpler, faster)
+      const dropdownData = await apiGet('/api/customers/dropdown')
+      if (dropdownData && Array.isArray(dropdownData)) {
+        return dropdownData
+      }
+    } catch (dropdownError) {
+      console.log('Dropdown endpoint failed, trying full endpoint:', dropdownError)
+    }
+    
+    // Fallback to full endpoint
     const searchParams = new URLSearchParams()
     if (params?.skip) searchParams.append('skip', params.skip.toString())
     if (params?.limit) searchParams.append('limit', params.limit.toString())
@@ -323,6 +346,7 @@ export const customerApi = {
     
     const query = searchParams.toString()
     // Use relative path - apiClient will add baseUrl
+    // Remove trailing slash to avoid redirect issues
     return apiGet(`/api/customers${query ? '?' + query : ''}`)
   },
 
@@ -651,6 +675,11 @@ export const projectApi = {
       ? `/api/projects/statuses?category_id=${categoryId}`
       : '/api/projects/statuses'
     return apiGet(url)
+  },
+
+  // Generate unique project code (backend only)
+  generateProjectCode: () => {
+    return apiGet('/api/projects/generate-code')
   }
 }
 

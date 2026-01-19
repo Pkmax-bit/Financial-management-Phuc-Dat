@@ -408,17 +408,27 @@ export default function ProjectDetailSidebar(props: ProjectDetailSidebarProps) {
               currentStatusName={project.status}
               categoryId={project.category_id}
               onStatusChange={async (newStatus) => {
-                console.log('Status changed to:', newStatus)
+                console.log('✅ Status changed to:', newStatus)
                 // Refresh project data to show updated status and progress
                 try {
+                  // Fetch lại project data từ API
                   const updatedProject = await apiGet(`/api/projects/${project.id}`)
-                  // Update the project prop if the parent component supports it
-                  // For now, we'll reload the page to ensure all data is updated
-                  window.location.reload()
+                  console.log('✅ Fetched updated project:', updatedProject)
+                  
+                  // Dispatch event để parent component refresh project data
+                  window.dispatchEvent(new CustomEvent('projectStatusUpdated', {
+                    detail: { 
+                      projectId: project.id, 
+                      statusName: newStatus,
+                      project: updatedProject  // Include updated project data
+                    }
+                  }))
                 } catch (error) {
-                  console.error('Failed to refresh project data:', error)
-                  // Fallback to page reload
-                  window.location.reload()
+                  console.error('❌ Failed to refresh project data:', error)
+                  // Fallback: dispatch event anyway để refresh UI
+                  window.dispatchEvent(new CustomEvent('projectStatusUpdated', {
+                    detail: { projectId: project.id, statusName: newStatus }
+                  }))
                 }
               }}
             />

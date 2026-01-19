@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Calendar, DollarSign, Users, Target, Clock, AlertCircle, Plus } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { projectApi, customerApi, employeeApi, projectCategoryApi, apiPost, apiGet } from '@/lib/api'
 import ProjectSuccessModal from '../ProjectSuccessModal'
 
@@ -59,7 +58,40 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [createdProject, setCreatedProject] = useState({ name: '', code: '' })
+  const [createdProject, setCreatedProject] = useState<{ 
+    name: string
+    code: string
+    tasksCreated?: {
+      count: number
+      checklists: number
+      checklist_items: number
+    }
+  }>({ name: '', code: '' })
+
+  // Hàm reset form về trạng thái ban đầu
+  const resetForm = () => {
+    setFormData({
+      project_code: '',
+      name: '',
+      description: '',
+      customer_id: '',
+      manager_id: '',
+      category_id: '',
+      start_date: '',
+      end_date: '',
+      budget: '',
+      status: 'planning',
+      status_id: '',
+      priority: 'medium',
+      progress: 0,
+      billing_type: 'fixed',
+      hourly_rate: ''
+    })
+    setSelectedTaskGroupId('')
+    setStatuses([])
+    setError(null)
+    setSuccess(false)
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -69,6 +101,9 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
       fetchTaskGroups()
       fetchStatuses() // Fetch statuses toàn cục khi mở modal
       generateProjectCode()
+    } else {
+      // Reset form khi đóng modal
+      resetForm()
     }
   }, [isOpen])
 
@@ -129,44 +164,25 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
   const generateProjectCode = async () => {
     try {
-      // Get the last project code from database ordered by created_at
-      const { data, error } = await supabase
-        .from('projects')
-        .select('project_code')
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (error) throw error
-
-      let nextNumber = 1
+      // Use backend API to generate project code (backend only approach)
+      const result = await projectApi.generateProjectCode()
       
-      if (data && data.length > 0 && data[0].project_code) {
-        // Extract number from the last project code
-        const lastCode = data[0].project_code
-        const match1 = lastCode.match(/#PRJ(\d+)/)
-        const match2 = lastCode.match(/PRJ(\d+)/)
-        
-        if (match1) {
-          nextNumber = parseInt(match1[1]) + 1
-        } else if (match2) {
-          nextNumber = parseInt(match2[1]) + 1
-        }
+      if (result && result.project_code) {
+        setFormData(prev => ({
+          ...prev,
+          project_code: result.project_code
+        }))
+      } else {
+        throw new Error('No project code returned from API')
       }
-
-      // Format as PRJXXX (3 digits)
-      const newCode = `PRJ${nextNumber.toString().padStart(3, '0')}`
-      
-      setFormData(prev => ({
-        ...prev,
-        project_code: newCode
-      }))
     } catch (error) {
       console.error('Error generating project code:', error)
-      // Fallback to timestamp-based code
-      const timestamp = Date.now().toString().slice(-6)
+      // Fallback to timestamp-based code with random suffix
+      const timestamp = Date.now().toString().slice(-8)
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
       setFormData(prev => ({
         ...prev,
-        project_code: `PRJ${timestamp}`
+        project_code: `PRJ${timestamp}${random}`
       }))
     }
   }
@@ -260,7 +276,9 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
     setError(null)
 
     try {
-      const submitData = {
+      // Prepare submit data - remove status if status_id is provided
+      // Backend will handle status_id and set status enum automatically
+      const submitData: any = {
         ...formData,
         budget: formData.budget ? parseFloat(formData.budget) : null,
         hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
@@ -269,30 +287,22 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         actual_cost: 0.0  // Add default actual_cost
       }
       
+      // If status_id is provided, don't send status (enum) - backend will handle it
+      // If no status_id, use default status enum value
+      if (submitData.status_id) {
+        delete submitData.status  // Remove status enum, use status_id instead
+      } else {
+        // Fallback to default enum value if no status_id
+        submitData.status = 'planning'
+      }
+      
       console.log('Submitting project data:', submitData)
 
-      // Try API first, fallback to Supabase
-      let createdProjectData: any = null
-      try {
-        console.log('Trying API first...')
-        createdProjectData = await projectApi.createProject(submitData)
-        console.log('API success')
-      } catch (apiError) {
-        console.log('API failed, falling back to Supabase:', apiError)
-        
-        const { data, error } = await supabase
-          .from('projects')
-          .insert(submitData)
-          .select()
-
-        if (error) {
-          console.error('Supabase error:', error)
-          throw new Error(`Database error: ${error.message}`)
-        }
-        
-        createdProjectData = data?.[0]
-        console.log('Supabase success:', data)
-      }
+      // Always use backend API - don't fallback to Supabase direct insert
+      // This ensures RLS policies are respected and tasks are created automatically
+      console.log('Creating project via backend API...')
+      const createdProjectData = await projectApi.createProject(submitData)
+      console.log('✅ Project created successfully via API')
 
       // Task sẽ được tự động tạo bởi database trigger khi project có category_id
       // Không cần tạo task thủ công ở đây nữa
@@ -302,8 +312,24 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
 
       // Show success notification
       setSuccess(true)
-      setCreatedProject({ name: formData.name, code: formData.project_code })
+      const tasksCreated = (createdProjectData as any).tasks_created
+      setCreatedProject({ 
+        name: formData.name, 
+        code: formData.project_code,
+        tasksCreated: tasksCreated || undefined
+      })
       setShowSuccessModal(true)
+      
+      // Log thông tin về tasks đã tạo
+      if (tasksCreated) {
+        console.log('✅ Tasks created successfully:', {
+          count: tasksCreated.count,
+          checklists: tasksCreated.checklists,
+          checklistItems: tasksCreated.checklist_items
+        })
+      } else {
+        console.warn('⚠️ No tasks were created automatically')
+      }
       
       // Play success sound (if available)
       try {
@@ -315,29 +341,16 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         // Ignore audio errors
       }
       
+      // Dispatch custom event to refresh project data (without reloading page)
+      window.dispatchEvent(new CustomEvent('projectCreated', { 
+        detail: { projectId: createdProjectData.id } 
+      }))
+      
       // Call onSuccess to reload data
       onSuccess()
       
-      // Reset form
-      setFormData({
-        project_code: '',
-        name: '',
-        description: '',
-        customer_id: '',
-        manager_id: '',
-        category_id: '',
-        start_date: '',
-        end_date: '',
-        budget: '',
-        status: 'planning',
-        status_id: '',
-        priority: 'medium',
-        progress: 0,
-        billing_type: 'fixed',
-        hourly_rate: ''
-      })
-      setStatuses([]) // Reset statuses
-      // selectedTaskGroupId sẽ được tự động set khi chọn category
+      // Reset form ngay sau khi tạo thành công
+      resetForm()
       
       // Don't auto-close modal, let success modal handle it
     } catch (error) {
@@ -480,13 +493,19 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
         isVisible={showSuccessModal}
         projectName={createdProject.name}
         projectCode={createdProject.code}
+        tasksCreated={createdProject.tasksCreated ? {
+          count: createdProject.tasksCreated.count,
+          checklists: createdProject.tasksCreated.checklists,
+          checklistItems: createdProject.tasksCreated.checklist_items
+        } : undefined}
         onContinue={() => {
           setShowSuccessModal(false)
+          resetForm() // Reset form khi đóng modal thành công
           onClose()
-          router.push('/sales?tab=quotes')
         }}
         onCancel={() => {
           setShowSuccessModal(false)
+          resetForm() // Reset form khi đóng modal thành công
           onClose()
         }}
       />
@@ -525,21 +544,11 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: Creat
                 </div>
                 <div className="ml-3">
                   <h3 className="text-lg font-bold text-green-800">
-                    🎉 Dự án đã được tạo thành công!
+                    ✅ Dự án đã được tạo thành công!
                   </h3>
                   <p className="text-sm text-green-700 mt-1">
-                    Dự án <strong>"{formData.name}"</strong> với mã <strong>"{formData.project_code}"</strong> đã được tạo thành công.
+                    <strong>"{formData.name}"</strong> (Mã: <strong>"{formData.project_code}"</strong>)
                   </p>
-                  <p className="text-sm text-green-600 mt-2 font-medium">
-                    📋 Đang chuyển sang trang báo giá để tạo báo giá cho dự án mới...
-                  </p>
-                  <div className="mt-3 flex items-center text-sm text-green-600 bg-green-100 rounded-lg p-2">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="font-medium">Vui lòng chờ trong giây lát...</span>
-                  </div>
                 </div>
               </div>
             </div>

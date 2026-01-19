@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import ProjectExpensesTab from '../components/expenses/ProjectExpensesTab';
 import { ProjectTeamTab } from '../components/projects/ProjectTeamTab';
+import ProjectTasksTab from '../components/projects/ProjectTasksTab';
 import { getApiEndpoint } from '@/lib/apiUrl'
 
 interface TabPanelProps {
@@ -81,6 +82,7 @@ const ProjectDetail = () => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={value} onChange={handleChange} aria-label="project tabs">
           <Tab label="Overview" />
+          <Tab label="Tasks" />
           <Tab label="Team" />
           <Tab label="Expenses" />
         </Tabs>
@@ -94,10 +96,14 @@ const ProjectDetail = () => {
       </TabPanel>
 
       <TabPanel value={value} index={1}>
-        <ProjectTeamTab projectId={projectId} />
+        {projectId && <ProjectTasksTab projectId={projectId} projectName={project.name} />}
       </TabPanel>
 
       <TabPanel value={value} index={2}>
+        <ProjectTeamTab projectId={projectId} />
+      </TabPanel>
+
+      <TabPanel value={value} index={3}>
         <ProjectExpensesTab projectId={projectId} />
       </TabPanel>
     </Box>

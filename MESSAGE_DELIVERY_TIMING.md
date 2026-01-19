@@ -115,3 +115,4 @@
 - ✅ `frontend/src/components/chat/ChatWidget.tsx`
 - ✅ `frontend/src/hooks/useRealtimeChat.ts`
 
+

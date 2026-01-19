@@ -147,3 +147,4 @@ const handleNewMessage = useCallback((message: Message) => {
 - Sender info cache được clear khi unmount để tránh memory leaks
 - Debounce 500ms là balance tốt giữa responsiveness và performance
 
+

@@ -216,6 +216,11 @@ export default function EditProjectSidebar({ isOpen, onClose, project, onSuccess
 
       await projectApi.updateProject(project.id, updateData)
       
+      // Dispatch custom event to refresh project data (without reloading page)
+      window.dispatchEvent(new CustomEvent('projectUpdated', { 
+        detail: { projectId: project.id } 
+      }))
+      
       // Show success message
       alert('Dự án đã được cập nhật thành công!')
       

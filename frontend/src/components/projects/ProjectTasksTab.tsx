@@ -30,6 +30,8 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   User as UserIcon,
   Download,
   Info
@@ -67,6 +69,7 @@ interface Task {
   checklists?: TaskChecklist[]
   parent_id?: string | null
   created_at: string
+  children?: Task[] // For hierarchical display
 }
 
 const statusConfig = {
@@ -145,6 +148,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   const [newMessageNotification, setNewMessageNotification] = useState<{ id: string; message: string } | null>(null)
   const mentionInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [creatingDefaultTasks, setCreatingDefaultTasks] = useState(false)
   const [quickTaskTitle, setQuickTaskTitle] = useState('')
   const [quickTaskDescription, setQuickTaskDescription] = useState('')
   const [quickCreating, setQuickCreating] = useState(false)
@@ -225,6 +229,9 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   // Multi-assignment states for checklist items
   const [checklistItemAssignments, setChecklistItemAssignments] = useState<Record<string, Array<{ employee_id: string; responsibility_type: 'accountable' | 'responsible' | 'consulted' | 'informed' }>>>({})
   const [showAssignmentDropdown, setShowAssignmentDropdown] = useState<Record<string, boolean>>({})
+  
+  // Expand/collapse state for checklists
+  const [expandedChecklists, setExpandedChecklists] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetchUser()
@@ -1176,14 +1183,77 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     }
   }, [allComments])
 
-  // Filter tasks: only show top-level tasks (no parent_id) and group subtasks with their parents
-  const filteredTasks = tasks.filter(task => {
-    // Only show top-level tasks (no parent_id)
-    if (task.parent_id) return false
-    // Apply status filter
-    if (statusFilter === 'all') return true
-    return task.status === statusFilter
+  // Filter tasks: show all tasks with hierarchy
+  // Build task tree structure for better display
+  const taskMap = new Map<string, Task>()
+  const rootTasks: Task[] = []
+  const processedTaskIds = new Set<string>() // Track processed tasks to avoid duplicates
+  
+  // First, create a map of all tasks and initialize children arrays
+  tasks.forEach(task => {
+    // Create a copy to avoid mutating original
+    const taskCopy = { ...task, children: [] as Task[] }
+    taskMap.set(task.id, taskCopy)
   })
+  
+  // Then, build hierarchy and filter by status
+  tasks.forEach(task => {
+    // Apply status filter
+    if (statusFilter !== 'all' && task.status !== statusFilter) {
+      return
+    }
+    
+    // Skip if already processed
+    if (processedTaskIds.has(task.id)) {
+      return
+    }
+    
+    if (!task.parent_id) {
+      // Root task
+      const rootTask = taskMap.get(task.id)
+      if (rootTask) {
+        rootTasks.push(rootTask)
+        processedTaskIds.add(task.id)
+      }
+    } else {
+      // Sub-task - add to parent's children if parent exists
+      const parent = taskMap.get(task.parent_id)
+      const childTask = taskMap.get(task.id)
+      
+      if (parent && childTask) {
+        // Check if child is not already in parent's children
+        if (!parent.children) {
+          parent.children = []
+        }
+        // Only add if not already in children
+        const alreadyExists = parent.children.some(t => t.id === childTask.id)
+        if (!alreadyExists) {
+          parent.children.push(childTask)
+          processedTaskIds.add(task.id)
+        }
+      } else if (childTask) {
+        // Parent not found, treat as root
+        rootTasks.push(childTask)
+        processedTaskIds.add(task.id)
+      }
+    }
+  })
+  
+  // Sort root tasks by created_at
+  rootTasks.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  
+  // Sort children within each parent and recursively sort sub-children
+  const sortTaskChildren = (task: Task) => {
+    if (task.children) {
+      task.children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      // Recursively sort sub-children
+      task.children.forEach(sortTaskChildren)
+    }
+  }
+  
+  rootTasks.forEach(sortTaskChildren)
+  
+  const filteredTasks = rootTasks
 
   const fetchUser = async () => {
     try {
@@ -1230,10 +1300,12 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       await apiPut(`/api/projects/${projectId}`, {
         status_id: statusId
       })
-      // Refresh project data
+      // Refresh project data without reloading page
       await fetchProject()
-      // Optionally refresh page to show updated status
-      window.location.reload()
+      // Dispatch custom event to notify other components
+      window.dispatchEvent(new CustomEvent('projectStatusUpdated', {
+        detail: { projectId, statusId }
+      }))
     } catch (err: any) {
       console.error('Error updating project status:', err)
       alert(err.message || 'Không thể cập nhật trạng thái dự án')
@@ -1252,6 +1324,25 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
       }
       const data = await apiGet(`/api/tasks?${queryParams.toString()}`)
       setTasks(data || [])
+      
+      // Debug: Log tasks and checklists
+      console.log('📋 Fetched tasks:', data?.length || 0)
+      if (data && data.length > 0) {
+        data.forEach((task: any) => {
+          console.log(`  Task: ${task.title}`, {
+            id: task.id,
+            checklists: task.checklists?.length || 0,
+            checklistItems: task.checklists?.reduce((sum: number, cl: any) => sum + (cl.items?.length || 0), 0) || 0
+          })
+          if (task.checklists && task.checklists.length > 0) {
+            task.checklists.forEach((cl: any) => {
+              console.log(`    Checklist: ${cl.title}`, {
+                items: cl.items?.length || 0
+              })
+            })
+          }
+        })
+      }
     } catch (err) {
       console.error('Error fetching tasks:', err)
       setError('Không thể tải danh sách nhiệm vụ')
@@ -1745,6 +1836,32 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     } catch (error) {
       console.error('Error updating checklist item assignee:', error)
       alert('Không thể cập nhật người được gán')
+    }
+  }
+
+  const handleCreateDefaultTasks = async () => {
+    if (!confirm('Bạn có chắc muốn tạo nhiệm vụ mẫu tự động? Nếu đã có nhiệm vụ mẫu, hệ thống sẽ bỏ qua.')) {
+      return
+    }
+    
+    setCreatingDefaultTasks(true)
+    try {
+      const result = await apiPost(`/api/projects/${projectId}/create-default-tasks`, {})
+      
+      if (result.success) {
+        alert(`✅ Đã tạo nhiệm vụ mẫu thành công!\n\n• ${result.tasks_count} nhiệm vụ\n• ${result.checklists} danh sách công việc\n• ${result.checklist_items} việc cần làm`)
+        // Refresh tasks
+        await fetchTasks()
+      } else {
+        alert(result.message || 'Đã tạo nhiệm vụ mẫu')
+        await fetchTasks()
+      }
+    } catch (error: any) {
+      console.error('Failed to create default tasks:', error)
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Không thể tạo nhiệm vụ mẫu'
+      alert(`Lỗi: ${errorMessage}`)
+    } finally {
+      setCreatingDefaultTasks(false)
     }
   }
 
@@ -2679,6 +2796,24 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                 </div>
               )}
               <button
+                onClick={handleCreateDefaultTasks}
+                disabled={creatingDefaultTasks}
+                className="flex items-center gap-2 px-4 py-2 border border-green-200 text-green-700 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Tạo nhiệm vụ mẫu tự động (1 nhiệm vụ chính + 4 danh sách công việc + 15 việc cần làm)"
+              >
+                {creatingDefaultTasks ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
+                    <span className="text-sm font-medium">Đang tạo...</span>
+                  </>
+                ) : (
+                  <>
+                    <ListChecks className="h-4 w-4" />
+                    <span className="text-sm font-medium">Tạo nhiệm vụ mẫu</span>
+                  </>
+                )}
+              </button>
+              <button
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowCreateTodoModal(true)
@@ -3027,10 +3162,31 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                           const totalItems = checklist.items?.length || 0
                           const progress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0
 
+                          const isExpanded = expandedChecklists[checklist.id] === true // Default to collapsed (hidden)
+                          
                           return (
                             <div key={checklist.id} className="bg-white border border-gray-200 rounded-lg p-4">
                               <div className="flex items-center justify-between mb-3">
-                                <span className="font-semibold text-gray-800 text-sm">{checklist.title}</span>
+                                <div className="flex items-center gap-2 flex-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setExpandedChecklists(prev => ({
+                                        ...prev,
+                                        [checklist.id]: !isExpanded
+                                      }))
+                                    }}
+                                    className="flex items-center justify-center w-5 h-5 text-gray-500 hover:text-gray-700 transition-colors"
+                                    title={isExpanded ? "Thu gọn" : "Mở rộng"}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                  <span className="font-semibold text-gray-800 text-sm">{checklist.title}</span>
+                                </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-gray-500">{Math.round(progress)}%</span>
                                   <button
@@ -3297,7 +3453,7 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                 />
                               </div>
 
-                              {checklist.items && checklist.items.length > 0 && (
+                              {isExpanded && checklist.items && checklist.items.length > 0 && (
                                 <div className="space-y-2">
                                   {checklist.items.map((item: TaskChecklistItem) => {
                                     // Parse file URLs from content (similar to task detail page)
@@ -3836,6 +3992,81 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                     <ArrowRight className="h-5 w-5 text-gray-400 hover:text-blue-600" />
                   </button>
                 </div>
+                
+                {/* Render sub-tasks (children) if any */}
+                {task.children && task.children.length > 0 && (
+                  <div className="mt-4 ml-8 space-y-3 border-l-2 border-gray-200 pl-4">
+                    {task.children.map((subTask) => {
+                      const subStatusInfo = statusConfig[subTask.status]
+                      const subPriorityInfo = priorityConfig[subTask.priority]
+                      const SubStatusIcon = subStatusInfo.icon
+                      
+                      return (
+                        <div
+                          key={subTask.id}
+                          className="bg-gray-50 rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <SubStatusIcon className={`h-4 w-4 ${subStatusInfo.color.replace('bg-', 'text-').replace('-100', '-600')}`} />
+                                <h5 className="text-base font-medium text-gray-900">{subTask.title}</h5>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${subStatusInfo.color}`}>
+                                  {subStatusInfo.label}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${subPriorityInfo.color}`}>
+                                  {subPriorityInfo.label}
+                                </span>
+                              </div>
+                              
+                              {subTask.description && (
+                                <p className="text-sm text-gray-600 mb-2 line-clamp-2">{subTask.description}</p>
+                              )}
+                              
+                              {/* Render sub-sub-tasks if any */}
+                              {subTask.children && subTask.children.length > 0 && (
+                                <div className="mt-3 ml-4 space-y-2 border-l-2 border-gray-300 pl-3">
+                                  {subTask.children.map((subSubTask) => {
+                                    const subSubStatusInfo = statusConfig[subSubTask.status]
+                                    const SubSubStatusIcon = subSubStatusInfo.icon
+                                    
+                                    return (
+                                      <div
+                                        key={subSubTask.id}
+                                        className="bg-white rounded border border-gray-200 p-3"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <SubSubStatusIcon className={`h-3.5 w-3.5 ${subSubStatusInfo.color.replace('bg-', 'text-').replace('-100', '-600')}`} />
+                                          <span className="text-sm font-medium text-gray-800">{subSubTask.title}</span>
+                                          <span className={`px-1.5 py-0.5 rounded text-xs ${subSubStatusInfo.color}`}>
+                                            {subSubStatusInfo.label}
+                                          </span>
+                                        </div>
+                                        {subSubTask.description && (
+                                          <p className="text-xs text-gray-600 mt-1">{subSubTask.description}</p>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleTaskClick(subTask.id)
+                              }}
+                              className="ml-4 p-1 hover:bg-gray-100 rounded transition-colors"
+                              title="Xem chi tiết nhiệm vụ"
+                            >
+                              <ArrowRight className="h-4 w-4 text-gray-400 hover:text-blue-600" />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}

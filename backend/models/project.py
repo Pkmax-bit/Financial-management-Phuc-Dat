@@ -58,7 +58,9 @@ class ProjectCreate(BaseModel):
     start_date: date
     end_date: Optional[date] = None
     budget: Optional[float] = None
-    status: ProjectStatus = ProjectStatus.PLANNING
+    actual_cost: Optional[float] = 0.0  # Allow actual_cost in create request
+    status: Optional[ProjectStatus] = ProjectStatus.PLANNING  # Optional - can use status_id instead
+    status_id: Optional[str] = None  # Reference to project_statuses table (preferred)
     priority: ProjectPriority = ProjectPriority.MEDIUM
     progress: float = 0.0
     billing_type: str = "fixed"

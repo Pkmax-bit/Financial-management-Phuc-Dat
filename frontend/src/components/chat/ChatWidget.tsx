@@ -38,7 +38,7 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
   
   // Message cache to avoid reloading
   const messageCacheRef = useRef<Map<string, { messages: Message[], timestamp: number }>>(new Map())
-  const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+  const CACHE_TTL = 2 * 60 * 1000 // 2 minutes (reduced for fresher data, but still cache for performance)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
@@ -117,7 +117,8 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
       console.log(`🔄 Loading messages for conversation ${conversationId}...`)
       
       // Load first batch immediately (most recent messages)
-      const firstBatch = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=100`)
+      // Optimized: Load 50 messages first for faster initial render
+      const firstBatch = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=50`)
       const firstMessages = firstBatch.messages || []
       
       console.log(`📥 First batch: ${firstMessages.length} messages, total: ${firstBatch.total || 0}, has_more: ${firstBatch.has_more}`)
@@ -133,7 +134,7 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
         } : 'No messages')
         setMessages(firstMessages)
         // Don't set loading to false yet if there are more messages to load
-        if (!firstBatch.has_more || firstMessages.length < 100) {
+        if (!firstBatch.has_more || firstMessages.length < 50) {
           setLoadingMessages(false)
         }
       } else {
@@ -149,17 +150,18 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
       }
 
       // If there are more messages, load them in parallel batches
-      if (firstBatch.has_more && firstMessages.length === 100) {
+      // Optimized: Load in smaller batches (50) for faster progressive loading
+      if (firstBatch.has_more && firstMessages.length === 50) {
         const totalCount = firstBatch.total || 0
         const remainingMessages = totalCount - firstMessages.length
         
         if (remainingMessages > 0) {
-          // Calculate how many batches we need
-          const batchesNeeded = Math.ceil(remainingMessages / 100)
+          // Calculate how many batches we need (50 messages per batch)
+          const batchesNeeded = Math.ceil(remainingMessages / 50)
           
           // Load all remaining batches in parallel (but limit to reasonable number to avoid overwhelming)
-          // Load in chunks of 5 batches at a time
-          const MAX_PARALLEL_BATCHES = 5
+          // Load in chunks of 10 batches at a time (increased for faster loading)
+          const MAX_PARALLEL_BATCHES = 10
           let allMessages = [...firstMessages]
           
           // Load batches in chunks
@@ -167,11 +169,11 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
             const chunkEnd = Math.min(chunkStart + MAX_PARALLEL_BATCHES - 1, batchesNeeded)
             const batchPromises: Promise<any>[] = []
             
-            // Create promises for this chunk
+            // Create promises for this chunk (50 messages per batch)
             for (let i = chunkStart; i <= chunkEnd; i++) {
-              const skip = i * 100
+              const skip = i * 50
               batchPromises.push(
-                apiGet(`/api/chat/conversations/${conversationId}/messages?skip=${skip}&limit=100`)
+                apiGet(`/api/chat/conversations/${conversationId}/messages?skip=${skip}&limit=50`)
                   .catch(err => {
                     console.error(`Error loading batch ${i}:`, err)
                     return { messages: [], has_more: false }
@@ -242,7 +244,7 @@ export default function ChatWidget({ currentUserId, currentUserName, conversatio
   // Load messages in background to update cache
   const loadMessagesInBackground = useCallback(async (conversationId: string) => {
     try {
-      const response = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=100`)
+      const response = await apiGet(`/api/chat/conversations/${conversationId}/messages?skip=0&limit=50`)
       const messages = response.messages || []
       
       if (messages.length > 0) {

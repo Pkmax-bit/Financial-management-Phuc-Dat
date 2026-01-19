@@ -134,6 +134,55 @@ async def get_positions_public():
             "status": "error"
         }
 
+@router.get("/dropdown")
+async def get_employees_dropdown(
+    current_user: User = Depends(get_current_user)
+):
+    """Get employees list for dropdown selection - simplified endpoint with authentication"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get basic employee info for dropdown with user full_name
+        result = supabase.table("employees").select("""
+            id,
+            employee_code,
+            first_name,
+            last_name,
+            email,
+            users:user_id(id, full_name)
+        """).eq("status", "active").order("first_name").limit(500).execute()
+        
+        # Process to add full_name
+        employees = []
+        for emp in result.data or []:
+            emp_data = {
+                "id": emp.get("id"),
+                "employee_code": emp.get("employee_code"),
+                "first_name": emp.get("first_name", ""),
+                "last_name": emp.get("last_name", ""),
+                "email": emp.get("email"),
+                "full_name": None
+            }
+            
+            # Get full_name from users table if available
+            users = emp.get("users")
+            if users and isinstance(users, dict):
+                emp_data["full_name"] = users.get("full_name")
+            else:
+                # Fallback to constructing from first/last name
+                emp_data["full_name"] = f"{emp_data['first_name']} {emp_data['last_name']}".strip()
+            
+            employees.append(emp_data)
+        
+        # Return as array (not wrapped in object) for easier frontend consumption
+        return employees
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch employees: {str(e)}"
+        )
+
 @router.get("/")
 async def get_employees(
     skip: int = Query(0, ge=0),
