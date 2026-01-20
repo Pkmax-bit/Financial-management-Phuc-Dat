@@ -9,40 +9,41 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Định nghĩa cấu trúc nhiệm vụ mặc định
+# Mapping status cho từng checklist item dựa trên STT và tên nhiệm vụ
 DEFAULT_TASKS_TEMPLATE = [
     {
         "title": "Kế hoạch",
         "sub_tasks": [
-            {"title": "Đo đạt", "default_responsible": None},  # STT 1
-            {"title": "Thiết kế / cập nhật bản vẽ", "default_responsible": None},
-            {"title": "Kế hoạch vật tư", "default_responsible": None},
-            {"title": "Kế hoạch sản xuất", "default_responsible": None},
-            {"title": "Kế hoạch lắp đặt", "default_responsible": None},
+            {"title": "Đo đạt", "default_responsible": None, "status": "THỎA THUẬN"},  # STT 1
+            {"title": "Thiết kế / cập nhật bản vẽ", "default_responsible": None, "status": None},
+            {"title": "Kế hoạch vật tư", "default_responsible": None, "status": None},
+            {"title": "Kế hoạch sản xuất", "default_responsible": None, "status": None},
+            {"title": "Kế hoạch lắp đặt", "default_responsible": None, "status": None},
         ]
     },
     {
         "title": "Sản xuất",
         "sub_tasks": [
-            {"title": "Mua hàng", "default_responsible": None},  # STT 6
-            {"title": "Sản xuất", "default_responsible": None},
-            {"title": "Hoàn thành", "default_responsible": None},
+            {"title": "Mua hàng", "default_responsible": None, "status": "XƯỞNG SẢN XUẤT"},  # STT 6
+            {"title": "Sản xuất", "default_responsible": None, "status": None},
+            {"title": "Hoàn thành", "default_responsible": None, "status": None},
         ]
     },
     {
         "title": "Vận chuyển / lắp đặt",
         "sub_tasks": [
-            {"title": "Vận chuyển", "default_responsible": None},  # STT 9
-            {"title": "Lắp đặt", "default_responsible": None},
-            {"title": "Nghiệm thu bàn giao", "default_responsible": None},
-            {"title": "Thu tiền", "default_responsible": None},
+            {"title": "Vận chuyển", "default_responsible": None, "status": "VẬN CHUYỂN"},  # STT 9
+            {"title": "Lắp đặt", "default_responsible": None, "status": "LẮP ĐẶT"},  # STT 10
+            {"title": "Nghiệm thu bàn giao", "default_responsible": None, "status": None},
+            {"title": "Thu tiền", "default_responsible": None, "status": "CHĂM SÓC KHÁCH HÀNG"},  # STT 12
         ]
     },
     {
         "title": "Chăm sóc khách hàng",
         "sub_tasks": [
-            {"title": "Đánh giá khách hàng", "default_responsible": None},  # STT 13
-            {"title": "Báo cáo / sửa chữa", "default_responsible": None},
-            {"title": "Nghiệm thu tính lương", "default_responsible": None},
+            {"title": "Đánh giá khách hàng", "default_responsible": None, "status": "CHĂM SÓC KHÁCH HÀNG"},  # STT 13
+            {"title": "Báo cáo / sửa chữa", "default_responsible": None, "status": "BÁO CÁO / SỬA CHỮA"},  # STT 14
+            {"title": "Nghiệm thu tính lương", "default_responsible": None, "status": "HOÀN THÀNH"},  # STT 15
         ]
     },
 ]
@@ -202,6 +203,7 @@ def create_default_tasks_for_project(
             checklist_items = []
             for idx, sub_task in enumerate(sub_tasks):
                 sub_task_title = sub_task["title"]
+                sub_task_status = sub_task.get("status")  # Lấy status từ template
                 checklist_item_id = str(uuid.uuid4())
                 checklist_item_data = {
                     "id": checklist_item_id,
@@ -212,6 +214,10 @@ def create_default_tasks_for_project(
                     "created_at": datetime.utcnow().isoformat()
                     # Note: task_checklist_items table doesn't have updated_at or created_by columns
                 }
+                # Thêm status nếu có trong template
+                if sub_task_status:
+                    checklist_item_data["status"] = sub_task_status
+                    logger.info(f"  Adding status '{sub_task_status}' to checklist item: {sub_task_title}")
                 checklist_items.append(checklist_item_data)
             
             # Insert tất cả checklist items cùng lúc

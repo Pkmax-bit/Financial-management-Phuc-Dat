@@ -10,6 +10,9 @@ from datetime import datetime
 
 from models.user import User
 from services.supabase_client import get_supabase_client
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -87,18 +90,21 @@ async def get_project_team(
                     email_value = (employee.get("email") or "").lower()
                     if email_value:
                         employees_by_email[email_value] = employee
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error loading employees by user_id: {str(e)}")
 
         if emails:
             try:
-                email_employees_result = supabase.table("employees").select("id, email, first_name, last_name").in_("email", emails).execute()
+                email_employees_result = supabase.table("employees").select("id, user_id, email, first_name, last_name").in_("email", emails).execute()
                 for employee in email_employees_result.data or []:
                     email_value = (employee.get("email") or "").lower()
                     if email_value and email_value not in employees_by_email:
                         employees_by_email[email_value] = employee
-            except Exception:
-                pass
+                    # Also add to user_id map if has user_id
+                    if employee.get("user_id") and employee["user_id"] not in employees_by_user_id:
+                        employees_by_user_id[employee["user_id"]] = employee
+            except Exception as e:
+                logger.warning(f"Error loading employees by email: {str(e)}")
 
         def build_employee_name(employee: dict) -> str:
             first_name = (employee or {}).get("first_name") or ""
@@ -123,6 +129,22 @@ async def get_project_team(
                     generated_name = build_employee_name(linked_employee)
                     if generated_name:
                         member["name"] = generated_name
+            else:
+                # If no linked employee found, try one more time with a broader search
+                # This handles cases where the link might have been missed
+                if user_id:
+                    try:
+                        # Try direct lookup by user_id
+                        direct_emp_result = supabase.table("employees").select("id, first_name, last_name").eq("user_id", user_id).limit(1).execute()
+                        if direct_emp_result.data and len(direct_emp_result.data) > 0:
+                            linked_employee = direct_emp_result.data[0]
+                            member["employee_id"] = linked_employee.get("id")
+                            if not member.get("name") or not member.get("name").strip():
+                                generated_name = build_employee_name(linked_employee)
+                                if generated_name:
+                                    member["name"] = generated_name
+                    except Exception:
+                        pass  # If lookup fails, continue without employee_id
 
             # Normalize nullable fields from DB
             if member.get("skills") is None:

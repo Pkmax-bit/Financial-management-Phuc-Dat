@@ -149,35 +149,137 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
       const existingTeamUserIds = new Set((teamMembersData || []).map(tm => tm.user_id).filter(Boolean));
       const existingTeamEmails = new Set((teamMembersData || []).map(tm => tm.email).filter(Boolean));
 
-      // Query TẤT CẢ nhân viên (active) - không filter gì thêm
-      const { data: employeesData, error: employeesError } = await supabase
+      // Query TẤT CẢ nhân viên - thử nhiều cách
+      console.log('📋 Đang query employees từ Supabase...');
+      let employeesData: any[] | null = null;
+      let employeesError: any = null;
+      
+      // Thử 1: Query đơn giản nhất - chỉ lấy id và name
+      console.log('🔄 Thử 1: Query đơn giản (id, first_name, last_name, email)...');
+      const { data: simpleData, error: simpleError } = await supabase
         .from('employees')
-        .select(`
-          id, 
-          user_id, 
-          employee_code, 
-          first_name, 
-          last_name, 
-          email, 
-          phone,
-          department_id,
-          position_id,
-          hire_date, 
-          status, 
-          avatar_url, 
-          address,
-          manager_id,
-          salary
-        `)
-        .eq('status', 'active')
-        .order('first_name', { ascending: true });
+        .select('id, first_name, last_name, email, status')
+        .order('first_name', { ascending: true })
+        .limit(100);
 
-      if (employeesError) {
-        console.error('❌ Error fetching employees:', employeesError);
-        throw new Error(`Error fetching employees: ${employeesError.message}`);
+      if (!simpleError && simpleData && simpleData.length > 0) {
+        console.log(`✅ Thử 1 thành công: Lấy được ${simpleData.length} nhân viên`);
+        // Nếu query đơn giản thành công, query đầy đủ
+        console.log('🔄 Query đầy đủ thông tin...');
+        const { data: fullData, error: fullError } = await supabase
+          .from('employees')
+          .select(`
+            id, 
+            user_id, 
+            employee_code, 
+            first_name, 
+            last_name, 
+            email, 
+            phone,
+            department_id,
+            position_id,
+            hire_date, 
+            status, 
+            avatar_url, 
+            address,
+            manager_id,
+            salary
+          `)
+          .order('first_name', { ascending: true });
+        
+        if (!fullError && fullData) {
+          employeesData = fullData;
+          console.log(`✅ Query đầy đủ thành công: ${employeesData.length} nhân viên`);
+        } else {
+          // Nếu query đầy đủ lỗi, dùng dữ liệu đơn giản và bổ sung sau
+          console.warn('⚠️ Query đầy đủ lỗi, dùng dữ liệu đơn giản:', fullError);
+          employeesData = simpleData.map((emp: any) => ({
+            id: emp.id,
+            first_name: emp.first_name,
+            last_name: emp.last_name,
+            email: emp.email,
+            status: emp.status,
+            user_id: null,
+            employee_code: null,
+            phone: null,
+            department_id: null,
+            position_id: null,
+            hire_date: null,
+            avatar_url: null,
+            address: null,
+            manager_id: null,
+            salary: null
+          }));
+        }
+      } else {
+        console.error('❌ Thử 1 thất bại:', simpleError);
+        employeesError = simpleError;
+        
+        // Thử 2: Query với filter active
+        console.log('🔄 Thử 2: Query với filter status = active...');
+        const { data: activeData, error: activeError } = await supabase
+          .from('employees')
+          .select('id, first_name, last_name, email, status')
+          .eq('status', 'active')
+          .order('first_name', { ascending: true })
+          .limit(100);
+        
+        if (!activeError && activeData && activeData.length > 0) {
+          console.log(`✅ Thử 2 thành công: Lấy được ${activeData.length} nhân viên active`);
+          employeesData = activeData.map((emp: any) => ({
+            id: emp.id,
+            first_name: emp.first_name,
+            last_name: emp.last_name,
+            email: emp.email,
+            status: emp.status,
+            user_id: null,
+            employee_code: null,
+            phone: null,
+            department_id: null,
+            position_id: null,
+            hire_date: null,
+            avatar_url: null,
+            address: null,
+            manager_id: null,
+            salary: null
+          }));
+          employeesError = null;
+        } else {
+          console.error('❌ Thử 2 thất bại:', activeError);
+          employeesError = activeError || simpleError;
+        }
       }
 
-      console.log(`✅ Lấy được ${employeesData?.length || 0} nhân viên từ database`);
+      if (employeesError) {
+        console.error('❌ Tất cả các thử nghiệm đều thất bại');
+        console.error('   Error code:', employeesError.code);
+        console.error('   Error message:', employeesError.message);
+        console.error('   Error details:', employeesError.details);
+        console.error('   Error hint:', employeesError.hint);
+        console.error('   💡 Có thể do RLS policies chặn. Kiểm tra RLS policies cho bảng employees.');
+        throw new Error(`Error fetching employees: ${employeesError.message || 'Unknown error'}. Có thể do RLS policies.`);
+      }
+
+      // Log thêm thông tin debug
+      if (employeesData && employeesData.length > 0) {
+        const statusCounts = employeesData.reduce((acc: any, emp: any) => {
+          const status = emp.status || 'null';
+          acc[status] = (acc[status] || 0) + 1;
+          return acc;
+        }, {});
+        console.log('📊 Phân bố status:', statusCounts);
+        console.log('📋 Sample employees:', employeesData.slice(0, 3).map((e: any) => ({
+          id: e.id,
+          name: `${e.first_name} ${e.last_name}`,
+          email: e.email,
+          status: e.status
+        })));
+      } else {
+        console.warn('⚠️ Không có nhân viên nào được trả về.');
+        console.warn('   - Kiểm tra RLS policies trong Supabase');
+        console.warn('   - Kiểm tra xem có dữ liệu nhân viên trong database không');
+        console.warn('   - Kiểm tra xem user hiện tại có quyền đọc bảng employees không');
+      }
 
       // Lấy TẤT CẢ departments (không chỉ những cái có trong employees)
       const { data: allDeptData, error: deptError } = await supabase
@@ -598,18 +700,31 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           const responsibilityKey = employeeResponsibilities[employee.id] || 'informed';
           const responsibility = RESPONSIBILITY_TYPES[responsibilityKey];
 
-          return {
+          // Đảm bảo tất cả required fields đều có giá trị
+          const memberData: any = {
             project_id: projectId,
-            name: employee.name,
-            email: employee.email,
-            role: responsibility.label,
+            name: employee.name || 'Chưa có tên',
+            role: responsibility.label || 'member', // Required field, không được null
             responsibility_type: responsibilityKey,
-            start_date: startDate,
-            user_id: employee.user_id,
+            start_date: startDate || new Date().toISOString().split('T')[0], // Required field
             status: 'active',
-            phone: employee.phone,
-            avatar: employee.avatar_url
           };
+          
+          // Optional fields
+          if (employee.email) {
+            memberData.email = employee.email;
+          }
+          if (employee.user_id) {
+            memberData.user_id = employee.user_id;
+          }
+          if (employee.phone) {
+            memberData.phone = employee.phone;
+          }
+          if (employee.avatar_url) {
+            memberData.avatar = employee.avatar_url;
+          }
+          
+          return memberData;
         });
 
       // Nếu không có thành viên nào để thêm
@@ -638,11 +753,24 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
       }
 
       // Thêm những thành viên chưa tồn tại
-      const { error } = await supabase
+      console.log('📝 Đang thêm team members:', membersToAdd.length, 'thành viên');
+      console.log('📋 Dữ liệu:', JSON.stringify(membersToAdd, null, 2));
+      
+      const { data: insertedData, error } = await supabase
         .from('project_team')
-        .insert(membersToAdd);
+        .insert(membersToAdd)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Supabase insert error:', error);
+        console.error('   Error code:', error.code);
+        console.error('   Error message:', error.message);
+        console.error('   Error details:', error.details);
+        console.error('   Error hint:', error.hint);
+        throw error;
+      }
+      
+      console.log('✅ Đã thêm thành công:', insertedData?.length || 0, 'thành viên');
 
       const addedCount = membersToAdd.length;
       const skippedCount = duplicateMembers.length;
@@ -661,23 +789,58 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
       onSuccess();
       handleClose();
     } catch (error) {
-      console.error('Error adding team members:', error);
-      console.error('Error details:', {
-        message: (error as any)?.message,
-        details: (error as any)?.details,
-        hint: (error as any)?.hint,
-        code: (error as any)?.code
-      });
+      console.error('❌ Error adding team members:', error);
+      
+      // Log error với nhiều cách khác nhau
+      if (error instanceof Error) {
+        console.error('   Error type: Error');
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
+      } else if (typeof error === 'object' && error !== null) {
+        console.error('   Error type: Object');
+        console.error('   Error keys:', Object.keys(error));
+        console.error('   Error stringified:', JSON.stringify(error, null, 2));
+        
+        const err = error as any;
+        console.error('   Error details:', {
+          message: err.message,
+          details: err.details,
+          hint: err.hint,
+          code: err.code,
+          name: err.name
+        });
+      } else {
+        console.error('   Error type: Other');
+        console.error('   Error value:', error);
+      }
 
       // Try to provide more specific error message
-      let errorMessage = 'Unknown error';
+      let errorMessage = 'Lỗi không xác định';
       if (error instanceof Error) {
-        errorMessage = error.message;
+        errorMessage = error.message || 'Lỗi không xác định';
       } else if (typeof error === 'object' && error !== null) {
         const err = error as any;
-        if (err.message) errorMessage = err.message;
-        if (err.details) errorMessage += ` - ${err.details}`;
-        if (err.hint) errorMessage += ` (Hint: ${err.hint})`;
+        if (err.message) {
+          errorMessage = err.message;
+        } else if (err.details) {
+          errorMessage = err.details;
+        } else if (err.hint) {
+          errorMessage = err.hint;
+        } else {
+          // Try to stringify the error
+          try {
+            errorMessage = JSON.stringify(error);
+          } catch {
+            errorMessage = 'Lỗi không xác định (không thể serialize error object)';
+          }
+        }
+        
+        if (err.details && err.message !== err.details) {
+          errorMessage += ` - ${err.details}`;
+        }
+        if (err.hint) {
+          errorMessage += ` (Gợi ý: ${err.hint})`;
+        }
       }
 
       alert('Lỗi khi thêm thành viên: ' + errorMessage);
@@ -874,73 +1037,75 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
                   return (
                     <div
                       key={employee.id}
-                      className={`flex items-start p-4 cursor-pointer hover:bg-blue-50/50 transition-colors ${
+                      className={`flex items-start p-2 cursor-pointer hover:bg-blue-50/50 transition-colors ${
                         isSelected ? 'bg-blue-50 border-blue-200' : ''
                       }`}
                       onClick={() => handleEmployeeSelect(employee)}
                     >
                       <div className="flex-1">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           {employee.avatar_url ? (
                             <img 
                               src={employee.avatar_url} 
                               alt={employee.name}
-                              className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                              className="w-8 h-8 rounded-full object-cover border border-white shadow-sm"
                             />
                           ) : (
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-white shadow-sm">
-                              <span className="text-blue-700 text-lg font-medium">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border border-white shadow-sm">
+                              <span className="text-blue-700 text-sm font-medium">
                                 {employee.name.charAt(0)}
                               </span>
                             </div>
                           )}
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-medium text-black text-lg">{employee.name}</p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-medium text-black text-sm truncate">{employee.name}</p>
                               {employee.type === 'employee' && employee.department && (
-                                <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
+                                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-800 rounded-full">
                                   {employee.department}
                                 </span>
                               )}
                             </div>
-                            {employee.type === 'employee' && (
-                              <p className="text-sm font-medium text-blue-700 mt-1">Mã: {employee.employee_code}</p>
-                            )}
-                            <p className="text-sm font-medium text-black">{employee.email}</p>
+                            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                              {employee.type === 'employee' && (
+                                <p className="text-[10px] font-medium text-blue-700">Mã: {employee.employee_code}</p>
+                              )}
+                              <p className="text-[10px] font-medium text-gray-600 truncate">{employee.email}</p>
+                            </div>
                           </div>
                         </div>
                         
-                        <div className="mt-3 space-y-1.5">
+                        <div className="mt-2 space-y-1">
                           {employee.type === 'employee' && (
                             <>
-                              <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 {employee.department ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold text-gray-600">🏢</span>
-                                    <span className="text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded-md">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px]">🏢</span>
+                                    <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
                                       {employee.department}
                                     </span>
                                   </div>
                                 ) : employee.department_id ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold text-gray-600">🏢</span>
-                                    <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-md">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px]">🏢</span>
+                                    <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
                                       ID: {employee.department_id.substring(0, 8)}...
                                     </span>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold text-gray-600">🏢</span>
-                                    <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px]">🏢</span>
+                                    <span className="text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">
                                       Chưa được gán
                                     </span>
                                   </div>
                                 )}
                                 
                                 {employee.position && (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold text-gray-600">💼</span>
-                                    <span className="text-sm font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded-md">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px]">💼</span>
+                                    <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
                                       {employee.position}
                                     </span>
                                   </div>
@@ -948,7 +1113,7 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
                               </div>
                               
                               {employee.manager_name && (
-                                <p className="text-sm text-black">
+                                <p className="text-[10px] text-black">
                                   <span className="font-semibold">👤 Quản lý:</span> {employee.manager_name}
                                 </p>
                               )}
@@ -1001,25 +1166,25 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
           </div>
 
           {selectedEmployees.length > 0 && (
-            <div className="space-y-4 mb-8 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <div className="space-y-3 mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-black">Phân công vai trò</h3>
-                <span className="text-sm font-medium text-black">
-                  {selectedEmployees.length} thành viên được chọn
+                <h3 className="text-sm font-semibold text-black">Phân công vai trò</h3>
+                <span className="text-[10px] font-medium text-gray-600">
+                  {selectedEmployees.length} thành viên
                 </span>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {selectedEmployees.map((employee) => (
-                  <div key={employee.id} className="space-y-2">
-                    <label className="text-sm font-medium text-black flex items-center gap-2">
+                  <div key={employee.id} className="space-y-1.5">
+                    <label className="text-xs font-medium text-black flex items-center gap-1.5">
                       {employee.name}
                       {employee.type === 'employee' && (
-                        <span className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] font-medium text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full">
                           {employee.employee_code}
                         </span>
                       )}
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {RESPONSIBILITY_KEYS.map((responsibilityKey) => {
                         const responsibility = RESPONSIBILITY_TYPES[responsibilityKey];
                         const isSelected = employeeResponsibilities[employee.id] === responsibilityKey;
@@ -1029,19 +1194,19 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
                             key={responsibilityKey}
                             type="button"
                             onClick={() => handleEmployeeResponsibilityChange(employee.id, responsibilityKey)}
-                            className={`p-3 rounded-lg border-2 transition-all duration-200 text-left font-medium ${
+                            className={`p-2 rounded border transition-all duration-200 text-left ${
                               isSelected
-                                ? `${responsibility.bgColor} ${responsibility.borderColor} shadow-md ring-2 ring-opacity-50 ${responsibility.borderColor.replace('border-', 'ring-')}`
-                                : 'border-gray-200 hover:border-gray-300 bg-gray-50 hover:bg-gray-100 hover:shadow-sm'
+                                ? `${responsibility.bgColor} ${responsibility.borderColor} shadow-sm ring-1 ring-opacity-50 ${responsibility.borderColor.replace('border-', 'ring-')}`
+                                : 'border-gray-200 hover:border-gray-300 bg-gray-50 hover:bg-gray-100'
                             }`}
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{responsibility.icon}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{responsibility.icon}</span>
                               <div>
-                                <div className={`font-medium ${isSelected ? responsibility.textColor : 'text-gray-900'}`}>
+                                <div className={`text-[10px] font-medium ${isSelected ? responsibility.textColor : 'text-gray-900'}`}>
                                   {responsibility.label}
                                 </div>
-                                <div className={`text-xs ${isSelected ? responsibility.textColor : 'text-gray-500'}`}>
+                                <div className={`text-[9px] ${isSelected ? responsibility.textColor : 'text-gray-500'}`}>
                                   {responsibility.description}
                                 </div>
                               </div>

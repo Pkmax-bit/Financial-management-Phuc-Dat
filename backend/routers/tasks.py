@@ -213,10 +213,62 @@ def _fetch_task_checklists(supabase, task_id: str) -> List[TaskChecklist]:
             item["assignments"] = assignments_map.get(item["id"], [])
             items_map.setdefault(item["checklist_id"], []).append(item)
 
+    # Fetch assignments for all checklists
+    checklist_assignments_map = {}
+    if checklist_ids:
+        checklist_assignments_result = (
+            supabase.table("task_checklist_assignments")
+            .select("""
+                *,
+                employees:employee_id(id, first_name, last_name)
+            """)
+            .in_("checklist_id", checklist_ids)
+            .execute()
+        )
+        for assignment in checklist_assignments_result.data or []:
+            cl_id = assignment["checklist_id"]
+            if cl_id not in checklist_assignments_map:
+                checklist_assignments_map[cl_id] = []
+            employee = assignment.get("employees")
+            if isinstance(employee, list):
+                employee = employee[0] if employee else None
+            
+            assignment_data = {
+                "id": assignment["id"],
+                "employee_id": assignment["employee_id"],
+                "responsibility_type": assignment["responsibility_type"]
+            }
+            if employee:
+                name = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+                if not name:
+                    name = employee.get('full_name')
+                
+                if name:
+                    assignment_data["employee_name"] = name
+            
+            # Fallback: if join didn't work, query directly
+            if not assignment_data.get("employee_name") and assignment.get("employee_id"):
+                try:
+                    emp_result = supabase.table("employees").select("first_name, last_name").eq("id", assignment.get("employee_id")).single().execute()
+                    if emp_result.data:
+                        emp_data = emp_result.data
+                        name = f"{emp_data.get('first_name', '')} {emp_data.get('last_name', '')}".strip()
+                        if not name:
+                            name = emp_data.get('full_name')
+                        
+                        if name:
+                            assignment_data["employee_name"] = name
+                except Exception:
+                    pass
+
+            checklist_assignments_map[cl_id].append(assignment_data)
+
     enriched_checklists = []
     for checklist in checklists:
         items = items_map.get(checklist["id"], [])
         checklist["items"] = items
+        # Add assignments to checklist
+        checklist["assignments"] = checklist_assignments_map.get(checklist["id"], [])
         if items:
             completed_items = len([item for item in items if item.get("is_completed")])
             checklist["progress"] = round(completed_items / len(items), 2)
@@ -225,6 +277,59 @@ def _fetch_task_checklists(supabase, task_id: str) -> List[TaskChecklist]:
         enriched_checklists.append(checklist)
 
     return enriched_checklists
+
+
+def _can_manage_checklist_item(supabase, checklist_item_id: str, user_id: str) -> bool:
+    """Kiểm tra user có quyền quản lý checklist item không
+    
+    Quyền quản lý được cấp cho:
+    1. Admin/Manager
+    2. Người chịu trách nhiệm (accountable) cho trạng thái hiện tại của checklist item
+    3. Người có assignment với responsibility_type = 'accountable' cho checklist item này
+    """
+    try:
+        # Kiểm tra xem user có phải admin không
+        user_result = supabase.table("users").select("role").eq("id", user_id).single().execute()
+        if user_result.data:
+            role = (user_result.data.get("role") or "").lower()
+            if role in ["admin", "manager"]:
+                return True
+        
+        # Lấy employee_id từ user_id
+        emp_result = supabase.table("employees").select("id").eq("user_id", user_id).single().execute()
+        if not emp_result.data:
+            return False
+        
+        employee_id = emp_result.data["id"]
+        
+        # Lấy checklist item với status
+        item_result = supabase.table("task_checklist_items").select("status").eq("id", checklist_item_id).single().execute()
+        if not item_result.data:
+            return False
+        
+        item_status = item_result.data.get("status")
+        
+        # Kiểm tra xem employee có phải accountable cho status này không
+        if item_status:
+            mapping_result = supabase.table("checklist_status_responsible_mapping").select("employee_id").eq(
+                "status", item_status
+            ).eq("employee_id", employee_id).eq("responsibility_type", "accountable").eq("is_active", True).execute()
+            
+            if mapping_result.data and len(mapping_result.data) > 0:
+                return True
+        
+        # Kiểm tra xem employee có phải accountable trong assignments không
+        assignment_result = supabase.table("task_checklist_item_assignments").select("*").eq(
+            "checklist_item_id", checklist_item_id
+        ).eq("employee_id", employee_id).eq("responsibility_type", "accountable").execute()
+        
+        if assignment_result.data and len(assignment_result.data) > 0:
+            return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error checking checklist item permission: {str(e)}")
+        return False
 
 
 def _build_valid_assignment_records(
@@ -2608,6 +2713,169 @@ async def delete_task_checklist(
         )
 
 
+# ==================== Checklist Assignments ====================
+@router.post("/checklists/{checklist_id}/assignments", response_model=dict)
+async def create_checklist_assignment(
+    checklist_id: str,
+    assignment_data: ChecklistItemAssignment,
+    current_user: User = Depends(get_current_user)
+):
+    """Thêm nhân viên chịu trách nhiệm cho checklist"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Validate and find employee - don't use .single() to avoid PGRST116 error
+        actual_employee_id = None
+        
+        # First try to find by employee_id directly
+        emp_result = supabase.table("employees").select("id").eq("id", assignment_data.employee_id).execute()
+        if emp_result.data and len(emp_result.data) > 0:
+            actual_employee_id = emp_result.data[0]["id"]
+            logger.info(f"Found employee by employee_id: {assignment_data.employee_id}")
+        else:
+            # If not found, try to find by user_id (in case employee_id is actually a user_id)
+            emp_by_user_result = supabase.table("employees").select("id").eq("user_id", assignment_data.employee_id).execute()
+            if emp_by_user_result.data and len(emp_by_user_result.data) > 0:
+                actual_employee_id = emp_by_user_result.data[0]["id"]
+                logger.info(f"Found employee by user_id: {assignment_data.employee_id} -> {actual_employee_id}")
+            else:
+                # Try to find by email (if we have email in request)
+                # Note: We don't have email in ChecklistItemAssignment, but we can try to get it from project_team
+                # For now, raise error with helpful message
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Employee not found with ID: {assignment_data.employee_id}. Please ensure the team member is linked to an employee in the employees table. The team member must have a matching user_id or email in the employees table."
+                )
+        
+        # Use the actual employee_id found
+        if not actual_employee_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Could not resolve employee_id"
+            )
+        
+        # Check if assignment already exists
+        existing_result = supabase.table("task_checklist_assignments").select("id").eq(
+            "checklist_id", checklist_id
+        ).eq("employee_id", assignment_data.employee_id).execute()
+        
+        if existing_result.data and len(existing_result.data) > 0:
+            # Update existing assignment
+            update_result = supabase.table("task_checklist_assignments").update({
+                "responsibility_type": assignment_data.responsibility_type
+            }).eq("checklist_id", checklist_id).eq("employee_id", assignment_data.employee_id).execute()
+            
+            if update_result.data and len(update_result.data) > 0:
+                return {"message": "Assignment updated successfully", "data": update_result.data[0]}
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to update assignment"
+                )
+        
+        # Insert new assignment using the resolved employee_id
+        insert_data = {
+            "checklist_id": checklist_id,
+            "employee_id": actual_employee_id,  # Use resolved employee_id
+            "responsibility_type": assignment_data.responsibility_type
+        }
+        
+        result = supabase.table("task_checklist_assignments").insert(insert_data).execute()
+        if not result.data or len(result.data) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to create assignment - no data returned"
+            )
+        
+        return {"message": "Assignment created successfully", "data": result.data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating checklist assignment: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create assignment: {str(e)}"
+        )
+
+
+@router.put("/checklists/{checklist_id}/assignments/{assignment_id}", response_model=dict)
+async def update_checklist_assignment(
+    checklist_id: str,
+    assignment_id: str,
+    assignment_data: ChecklistItemAssignment,
+    current_user: User = Depends(get_current_user)
+):
+    """Cập nhật nhân viên chịu trách nhiệm cho checklist"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Validate employee exists
+        emp_result = supabase.table("employees").select("id").eq("id", assignment_data.employee_id).single().execute()
+        if not emp_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Employee not found"
+            )
+        
+        # Update assignment
+        update_data = {
+            "employee_id": assignment_data.employee_id,
+            "responsibility_type": assignment_data.responsibility_type
+        }
+        
+        result = supabase.table("task_checklist_assignments").update(update_data).eq("id", assignment_id).eq("checklist_id", checklist_id).execute()
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assignment not found"
+            )
+        
+        return {"message": "Assignment updated successfully", "data": result.data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update assignment: {str(e)}"
+        )
+
+
+@router.delete("/checklists/{checklist_id}/assignments/{assignment_id}")
+async def delete_checklist_assignment(
+    checklist_id: str,
+    assignment_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Xóa nhân viên chịu trách nhiệm cho checklist"""
+    try:
+        supabase = get_supabase_client()
+        supabase.table("task_checklist_assignments").delete().eq("id", assignment_id).eq("checklist_id", checklist_id).execute()
+        return {"message": "Assignment deleted successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete assignment: {str(e)}"
+        )
+
+
+@router.delete("/checklists/{checklist_id}/assignments-by-employee/{employee_id}")
+async def delete_checklist_assignment_by_employee(
+    checklist_id: str,
+    employee_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Xóa nhân viên chịu trách nhiệm cho checklist bằng employee_id"""
+    try:
+        supabase = get_supabase_client()
+        supabase.table("task_checklist_assignments").delete().eq("employee_id", employee_id).eq("checklist_id", checklist_id).execute()
+        return {"message": "Assignment deleted successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete assignment: {str(e)}"
+        )
+
+
 @router.post("/checklists/{checklist_id}/items", response_model=TaskChecklistItem)
 async def create_checklist_item(
     checklist_id: str,
@@ -2622,6 +2890,8 @@ async def create_checklist_item(
             "assignee_id": item_data.assignee_id,
             "sort_order": item_data.sort_order or 0
         }
+        if item_data.status:
+            insert_data["status"] = item_data.status
         result = supabase.table("task_checklist_items").insert(insert_data).execute()
         if not result.data:
             raise HTTPException(
@@ -2695,6 +2965,13 @@ async def update_checklist_item(
 ):
     try:
         supabase = get_supabase_client()
+        
+        # Kiểm tra quyền quản lý checklist item
+        if not _can_manage_checklist_item(supabase, item_id, current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền quản lý checklist item này. Chỉ người chịu trách nhiệm cho trạng thái hiện tại mới có quyền."
+            )
         update_data = {}
         if item_data.content is not None:
             update_data["content"] = item_data.content
@@ -2705,6 +2982,8 @@ async def update_checklist_item(
             update_data["assignee_id"] = item_data.assignee_id
         if item_data.sort_order is not None:
             update_data["sort_order"] = item_data.sort_order
+        if item_data.status is not None:
+            update_data["status"] = item_data.status
 
         if not update_data:
             raise HTTPException(
@@ -2787,6 +3066,14 @@ async def delete_checklist_item(
 ):
     try:
         supabase = get_supabase_client()
+        
+        # Kiểm tra quyền quản lý checklist item
+        if not _can_manage_checklist_item(supabase, item_id, current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền xóa checklist item này. Chỉ người chịu trách nhiệm cho trạng thái hiện tại mới có quyền."
+            )
+        
         supabase.table("task_checklist_items").delete().eq("id", item_id).execute()
         return {"message": "Checklist item deleted"}
     except Exception as e:
@@ -3811,3 +4098,67 @@ async def get_message_reactions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get reactions: {str(e)}"
         )
+
+
+@router.get("/checklist-status-mapping")
+async def get_checklist_status_mapping(
+    current_user: User = Depends(get_current_user)
+):
+    """Get mapping between checklist status and responsible person"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Query the table without join first to avoid RLS issues
+        try:
+            result = supabase.table("checklist_status_responsible_mapping").select(
+                "status, employee_id, responsibility_type, is_active"
+            ).eq("is_active", True).execute()
+        except Exception as query_error:
+            logger.error(f"Error querying checklist_status_responsible_mapping: {str(query_error)}")
+            # Return empty array if table doesn't exist or RLS blocks access
+            return []
+        
+        if not result.data:
+            return []
+        
+        # Get unique employee IDs
+        employee_ids = list(set([item.get("employee_id") for item in result.data if item.get("employee_id")]))
+        
+        # Fetch employees separately
+        employees_map = {}
+        if employee_ids:
+            try:
+                employees_result = supabase.table("employees").select(
+                    "id, first_name, last_name"
+                ).in_("id", employee_ids).execute()
+                
+                if employees_result.data:
+                    for emp in employees_result.data:
+                        employees_map[emp["id"]] = emp
+            except Exception as emp_error:
+                logger.warning(f"Error fetching employees for mapping: {str(emp_error)}")
+                # Continue without employee names
+        
+        mapping = []
+        for item in result.data:
+            employee_id = item.get("employee_id")
+            employee = employees_map.get(employee_id) if employee_id else None
+            
+            employee_name = None
+            if employee:
+                employee_name = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
+            
+            mapping.append({
+                "status": item.get("status"),
+                "employee_id": employee_id,
+                "employee_name": employee_name,
+                "responsibility_type": item.get("responsibility_type", "accountable")
+            })
+        
+        return mapping
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting checklist status mapping: {str(e)}", exc_info=True)
+        # Return empty array instead of raising error to prevent frontend crashes
+        return []

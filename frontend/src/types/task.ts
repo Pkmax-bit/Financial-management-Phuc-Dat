@@ -43,6 +43,14 @@ export interface TaskChecklistItem {
   assignee_name?: string
   sort_order: number
   assignments?: ChecklistItemAssignment[]
+  status?: string
+}
+
+export interface ChecklistAssignment {
+  id?: string
+  employee_id: string
+  employee_name?: string
+  responsibility_type: 'accountable' | 'responsible' | 'consulted' | 'informed'
 }
 
 export interface TaskChecklist {
@@ -51,6 +59,7 @@ export interface TaskChecklist {
   title: string
   progress?: number
   items: TaskChecklistItem[]
+  assignments?: ChecklistAssignment[]
 }
 
 export interface TaskAttachment {

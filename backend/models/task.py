@@ -262,6 +262,7 @@ class TaskChecklistItem(BaseModel):
     created_at: datetime
     assignee_name: Optional[str] = None
     assignments: Optional[List["ChecklistItemAssignment"]] = []
+    status: Optional[str] = None
 
 
 class ChecklistItemAssignment(BaseModel):
@@ -275,6 +276,7 @@ class TaskChecklistItemCreate(BaseModel):
     assignee_id: Optional[str] = None
     sort_order: Optional[int] = 0
     assignments: Optional[List[ChecklistItemAssignment]] = None
+    status: Optional[str] = None
 
 
 class TaskChecklistItemUpdate(BaseModel):
@@ -283,6 +285,13 @@ class TaskChecklistItemUpdate(BaseModel):
     assignee_id: Optional[str] = None
     sort_order: Optional[int] = None
     assignments: Optional[List[ChecklistItemAssignment]] = None
+    status: Optional[str] = None
+
+
+class ChecklistAssignment(BaseModel):
+    employee_id: str
+    responsibility_type: str  # 'accountable', 'responsible', 'consulted', 'informed'
+    employee_name: Optional[str] = None
 
 
 class TaskChecklist(BaseModel):
@@ -293,6 +302,7 @@ class TaskChecklist(BaseModel):
     created_at: datetime
     progress: Optional[float] = None
     items: List["TaskChecklistItem"] = []
+    assignments: Optional[List[ChecklistAssignment]] = []
 
 
 class TaskChecklistCreate(BaseModel):
