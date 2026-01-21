@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useImperativeHandle, forwardRef } 
 import KanbanColumn from './KanbanColumn'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, X, AlertTriangle, Plus, Edit2, Trash2, Settings, Tag, Filter, Users, Calendar, ChevronDown } from 'lucide-react'
+import { CheckCircle, X, AlertTriangle, Plus, Edit2, Trash2, Settings, Tag, Filter, Users, Calendar, ChevronDown, Search, User } from 'lucide-react'
 import { apiGet, apiPost, apiPut, apiDelete, projectCategoryApi } from '@/lib/api'
 import ProjectCategoriesManager from './ProjectCategoriesManager'
 
@@ -143,9 +143,15 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const setEndDate = onEndDateChange ?? setInternalEndDate
   const [filteredProjects, setFilteredProjects] = useState<ProjectItem[]>([])
   const [customers, setCustomers] = useState<Array<{ id: string; name: string }>>([])
+  const [employees, setEmployees] = useState<Array<{ id: string; name: string }>>([])
+  const [projectTeamMap, setProjectTeamMap] = useState<Record<string, string[]>>({}) // project_id -> employee_ids
   const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false)
   const [showDatePickerDialog, setShowDatePickerDialog] = useState<boolean>(false)
   const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start')
+  const [projectNameFilter, setProjectNameFilter] = useState<string>('')
+  const [employeeFilter, setEmployeeFilter] = useState<string>('all')
+  const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null)
+  const [hasAutoFiltered, setHasAutoFiltered] = useState<boolean>(false)
 
   // Predefined color options with Tailwind classes
   const colorOptions = [
@@ -208,7 +214,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     try {
       setLoading(true)
 
-      // Get current user role
+      // Get current user role and employee_id
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser) {
         const { data: userData } = await supabase
@@ -218,6 +224,18 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           .single()
         if (userData) {
           setUserRole(userData.role)
+        }
+        
+        // Find employee_id for current user
+        const { data: employeeData } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('user_id', authUser.id)
+          .eq('status', 'active')
+          .single()
+        
+        if (employeeData) {
+          setCurrentUserEmployeeId(employeeData.id)
         }
       }
 
@@ -330,9 +348,46 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       setProjects(mapped)
 
-      // Fetch invoices and quotes for all projects to calculate totals
+      // Fetch project_team data for all projects
       const projectIds = mapped.map(p => p.id)
       if (projectIds.length > 0) {
+        // Fetch project_team members
+        const { data: projectTeamData, error: projectTeamError } = await supabase
+          .from('project_team')
+          .select('project_id, employee_id, user_id, email, name')
+          .in('project_id', projectIds)
+          .eq('status', 'active')
+
+        if (!projectTeamError && projectTeamData) {
+          // Create map: project_id -> employee_ids
+          const teamMap: Record<string, string[]> = {}
+          
+          // Also collect all unique employee_ids and user_ids for fetching employee names
+          const employeeIdsSet = new Set<string>()
+          const userIdsSet = new Set<string>()
+          
+          projectTeamData.forEach((member: any) => {
+            const projectId = member.project_id
+            if (!teamMap[projectId]) {
+              teamMap[projectId] = []
+            }
+            
+            // Add employee_id if exists
+            if (member.employee_id) {
+              teamMap[projectId].push(member.employee_id)
+              employeeIdsSet.add(member.employee_id)
+            }
+            
+            // Add user_id if exists (for matching with employees table)
+            if (member.user_id) {
+              userIdsSet.add(member.user_id)
+            }
+          })
+          
+          setProjectTeamMap(teamMap)
+        }
+        
+        // Fetch invoices and quotes for all projects to calculate totals
         // Fetch invoices
         const { data: invoicesData, error: invoicesError } = await supabase
           .from('invoices')
@@ -416,9 +471,184 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     }
   }
 
-  // Filter projects by category, customer, and date
+  // Fetch employees for filter - from all projects' teams
+  // Use user login information (users table) for display names
+  const fetchEmployees = async () => {
+    try {
+      // Get all project_team members first
+      let projectTeamData: any[] = []
+      try {
+        const { data, error: projectTeamError } = await supabase
+          .from('project_team')
+          .select('employee_id, user_id, email, name')
+          .eq('status', 'active')
+        
+        if (projectTeamError) {
+          console.warn('Error fetching project_team (continuing without team data):', projectTeamError)
+          // Continue without project_team data - will only show managers
+        } else {
+          projectTeamData = data || []
+        }
+      } catch (err: any) {
+        console.warn('Exception fetching project_team (continuing without team data):', err)
+        // Continue without project_team data
+      }
+      
+      // Collect all unique employee_ids and user_ids from project_team
+      const teamEmployeeIds = new Set<string>()
+      const teamUserIds = new Set<string>()
+      
+      if (projectTeamData) {
+        projectTeamData.forEach((member: any) => {
+          if (member.employee_id) {
+            teamEmployeeIds.add(member.employee_id)
+          }
+          if (member.user_id) {
+            teamUserIds.add(member.user_id)
+          }
+        })
+      }
+      
+      // Get all active employees (managers and general employees)
+      const { data: allEmployeesData, error: allEmployeesError } = await supabase
+        .from('employees')
+        .select('id, first_name, last_name, employee_code, user_id')
+        .eq('status', 'active')
+        .order('first_name', { ascending: true })
+      
+      if (allEmployeesError) throw allEmployeesError
+      
+      // Collect all user_ids from employees
+      const allUserIds = new Set<string>()
+      if (allEmployeesData) {
+        allEmployeesData.forEach((emp: any) => {
+          if (emp.user_id) {
+            allUserIds.add(emp.user_id)
+          }
+        })
+      }
+      
+      // Add user_ids from project_team
+      teamUserIds.forEach((userId) => {
+        allUserIds.add(userId)
+      })
+      
+      // Fetch user information (login info) for all user_ids
+      const userIdsArray = Array.from(allUserIds)
+      let usersData: any[] = []
+      
+      if (userIdsArray.length > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, full_name, email')
+          .in('id', userIdsArray)
+          .eq('is_active', true)
+        
+        if (!usersError && users) {
+          usersData = users
+        }
+      }
+      
+      // Create map: user_id -> user info
+      const usersMap = new Map<string, { full_name?: string; email?: string }>()
+      usersData.forEach((user: any) => {
+        usersMap.set(user.id, {
+          full_name: user.full_name,
+          email: user.email
+        })
+      })
+      
+      // Combine all employees (managers + team members)
+      const allEmployeesMap = new Map<string, { id: string; name: string }>()
+      
+      // Add all active employees (managers)
+      if (allEmployeesData) {
+        allEmployeesData.forEach((emp: any) => {
+          // Priority: users.full_name > employees.first_name + last_name > employee_code > email
+          let displayName = ''
+          
+          if (emp.user_id && usersMap.has(emp.user_id)) {
+            const userInfo = usersMap.get(emp.user_id)!
+            displayName = userInfo.full_name || ''
+          }
+          
+          if (!displayName) {
+            displayName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
+          }
+          
+          if (!displayName) {
+            displayName = emp.employee_code || ''
+          }
+          
+          if (!displayName && emp.user_id && usersMap.has(emp.user_id)) {
+            displayName = usersMap.get(emp.user_id)!.email || ''
+          }
+          
+          if (!displayName) {
+            displayName = 'Không có tên'
+          }
+          
+          allEmployeesMap.set(emp.id, {
+            id: emp.id,
+            name: displayName
+          })
+        })
+      }
+      
+      // Also handle users in project_team that might not have employee record
+      if (projectTeamData) {
+        projectTeamData.forEach((member: any) => {
+          // If has employee_id, already handled above
+          if (member.employee_id && allEmployeesMap.has(member.employee_id)) {
+            return
+          }
+          
+          // If has user_id but no employee_id, try to find employee by user_id
+          if (member.user_id) {
+            const employeeByUserId = allEmployeesData?.find((emp: any) => emp.user_id === member.user_id)
+            
+            if (employeeByUserId) {
+              // Already handled above
+              return
+            }
+            
+            // User in project_team but no employee record - use user info
+            if (usersMap.has(member.user_id)) {
+              const userInfo = usersMap.get(member.user_id)!
+              const displayName = userInfo.full_name || member.name || userInfo.email || 'Không có tên'
+              
+              // Use a temporary ID based on user_id for filtering
+              // Note: This might need adjustment based on how project_team filtering works
+              // For now, we'll skip these as they don't have employee_id
+            }
+          }
+        })
+      }
+      
+      // Convert map to array and sort by name
+      const employeesList = Array.from(allEmployeesMap.values()).sort((a, b) => 
+        a.name.localeCompare(b.name)
+      )
+      
+      setEmployees(employeesList)
+    } catch (error: any) {
+      console.error('Error fetching employees:', error)
+      setEmployees([])
+    }
+  }
+
+  // Filter projects by category, customer, date, and project name
   const filterProjects = () => {
     let filtered = [...projects]
+
+    // Filter by project name
+    if (projectNameFilter.trim()) {
+      const searchTerm = projectNameFilter.toLowerCase().trim()
+      filtered = filtered.filter((p) => 
+        p.name.toLowerCase().includes(searchTerm) ||
+        p.project_code.toLowerCase().includes(searchTerm)
+      )
+    }
 
     // Filter by category
     if (categoryFilter !== 'all') {
@@ -428,6 +658,20 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     // Filter by customer
     if (customerFilter !== 'all') {
       filtered = filtered.filter((p) => p.customer_id === customerFilter)
+    }
+
+    // Filter by employee (manager or team member)
+    if (employeeFilter !== 'all') {
+      filtered = filtered.filter((p) => {
+        // Check if employee is the manager
+        if (p.manager_id === employeeFilter) {
+          return true
+        }
+        
+        // Check if employee is in project_team
+        const teamMembers = projectTeamMap[p.id] || []
+        return teamMembers.includes(employeeFilter)
+      })
     }
 
     // Filter by date range
@@ -499,7 +743,20 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   useEffect(() => {
     fetchCategories()
     fetchCustomers()
+    fetchEmployees()
   }, [])
+
+  // Auto-filter by current logged-in user's employee when component loads
+  useEffect(() => {
+    if (!hasAutoFiltered && currentUserEmployeeId && employees.length > 0) {
+      // Check if current user's employee_id exists in employees list
+      const userEmployee = employees.find(emp => emp.id === currentUserEmployeeId)
+      if (userEmployee) {
+        setEmployeeFilter(currentUserEmployeeId)
+        setHasAutoFiltered(true)
+      }
+    }
+  }, [currentUserEmployeeId, employees, hasAutoFiltered])
 
   // Fetch statuses when category filter changes
   useEffect(() => {
@@ -508,7 +765,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
   useEffect(() => {
     filterProjects()
-  }, [projects, categoryFilter, customerFilter, dateFilter, startDate, endDate])
+  }, [projects, categoryFilter, customerFilter, dateFilter, startDate, endDate, projectNameFilter, employeeFilter])
 
   const handleDragStart = (project: ProjectItem) => {
     setDraggedProject(project)
@@ -1110,6 +1367,19 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         {showAdvancedFilters && (
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Project Name Filter */}
+              <div className="flex items-center gap-2">
+                <Search className="h-5 w-5 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Tên dự án:</span>
+                <input
+                  type="text"
+                  value={projectNameFilter}
+                  onChange={(e) => setProjectNameFilter(e.target.value)}
+                  placeholder="Tìm kiếm theo tên hoặc mã dự án..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-sm"
+                />
+              </div>
+
               {/* Customer Filter */}
               <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-gray-500" />
@@ -1142,6 +1412,24 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   <option value="last_month">Tháng trước</option>
                   <option value="this_year">Năm nay</option>
                   <option value="custom">Tùy chỉnh</option>
+                </select>
+              </div>
+
+              {/* Employee Filter */}
+              <div className="flex items-center gap-2">
+                <User className="h-5 w-5 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Nhân viên:</span>
+                <select
+                  value={employeeFilter}
+                  onChange={(e) => setEmployeeFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black text-sm"
+                >
+                  <option value="all">Tất cả nhân viên</option>
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

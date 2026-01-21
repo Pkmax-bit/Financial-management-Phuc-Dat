@@ -157,43 +157,63 @@ export default function ProjectStatusBar({
       : null
   const currentOrder = currentStatus?.display_order || 0
 
-  const handleStatusClick = async (status: DatabaseProjectStatus) => {
+  const handleStatusClick = async (statusId: string, statusName: string, event?: React.MouseEvent) => {
+    // Ngăn event bubbling để tránh trigger nhiều lần
+    if (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.nativeEvent.stopImmediatePropagation()
+    }
+
     // Cho phép chuyển đến bất kỳ trạng thái nào (không giới hạn)
-    if (updating || status.id === currentStatusId) {
+    if (updating || statusId === currentStatusId) {
+      console.log('⏭️ Skipping status update:', { statusId, currentStatusId, updating })
       return // Không cho phép click vào trạng thái hiện tại hoặc khi đang update
     }
 
-    setUpdating(status.id)
+    // Lưu status_id và status_name vào biến local để tránh closure issue
+    const targetStatusId = statusId
+    const targetStatusName = statusName
+
+    console.log('🎯 Starting status update:', {
+      targetStatusId,
+      targetStatusName,
+      projectId,
+      currentStatusId
+    })
+
+    setUpdating(targetStatusId)
 
     try {
       // Gọi API để cập nhật trạng thái dự án
       // Ưu tiên dùng status_id (chính xác hơn) thay vì status_name
       // Log để debug: gửi status.name và status.id
       console.log('🔄 Updating status:', {
-        statusId: status.id,
-        statusName: status.name,
-        projectId: projectId
+        statusId: targetStatusId,
+        statusName: targetStatusName,
+        projectId: projectId,
+        allStatuses: statuses.map(s => ({ id: s.id, name: s.name, order: s.display_order }))
       })
       
       // Gửi status_id thay vì status_name để tránh mapping sai
       const response = await apiPut(
-        `/api/projects/${projectId}/status?status_id=${encodeURIComponent(status.id)}`,
+        `/api/projects/${projectId}/status?status_id=${encodeURIComponent(targetStatusId)}`,
         {}
       )
 
       console.log('✅ Status updated successfully:', {
-        requestedStatusName: status.name,
-        requestedStatusId: status.id,
+        requestedStatusName: targetStatusName,
+        requestedStatusId: targetStatusId,
         response: response
       })
       
       // Dispatch custom event để refresh data mà không reload trang
       window.dispatchEvent(new CustomEvent('projectStatusUpdated', {
-        detail: { projectId, statusId: status.id, statusName: status.name }
+        detail: { projectId, statusId: targetStatusId, statusName: targetStatusName }
       }))
 
       if (onStatusChange) {
-        onStatusChange(status.name)
+        onStatusChange(targetStatusName)
       }
     } catch (error: any) {
       console.error('❌ Failed to update project status:', error)
@@ -239,7 +259,7 @@ export default function ProjectStatusBar({
               ? status.name.toLowerCase() === currentStatusName.toLowerCase()
               : false
           // Cho phép click vào bất kỳ trạng thái nào (trừ trạng thái hiện tại)
-          const isClickable = !isCurrent
+          const isClickable = !isCurrent && !updating
           const isUpdating = updating === status.id
 
           // Parse màu từ color_class
@@ -247,12 +267,33 @@ export default function ProjectStatusBar({
           const completedBgColor = colors.bgColor
           const completedTextColor = colors.textColor
 
+          // Tạo handler với status cụ thể này - sử dụng status.id và status.name trực tiếp
+          const statusHandler = (e: React.MouseEvent) => {
+            e.preventDefault()
+            e.stopPropagation()
+            e.nativeEvent.stopImmediatePropagation()
+            
+            // Log để debug
+            console.log('🔵 Button clicked:', {
+              clickedStatusId: status.id,
+              clickedStatusName: status.name,
+              clickedIndex: index,
+              allStatuses: statuses.map(s => ({ id: s.id, name: s.name, order: s.display_order })),
+              currentStatusId,
+              updating
+            })
+            
+            // Gọi handler với status.id và status.name trực tiếp
+            handleStatusClick(status.id, status.name, e)
+          }
+
           return (
             <div key={status.id} className="flex items-center gap-0 flex-shrink-0">
               {/* Status Segment */}
               <button
-                onClick={() => handleStatusClick(status)}
-                disabled={isUpdating}
+                onClick={statusHandler}
+                disabled={isUpdating || !isClickable}
+                type="button"
                 className={`
                   relative px-4 py-2.5 rounded-lg font-semibold text-sm
                   transition-all duration-200 min-w-[120px] text-center

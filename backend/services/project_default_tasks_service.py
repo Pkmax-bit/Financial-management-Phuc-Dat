@@ -211,12 +211,11 @@ def create_default_tasks_for_project(
                     "content": sub_task_title,
                     "is_completed": False,
                     "sort_order": idx + 1,
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.utcnow().isoformat(),
+                    "status": sub_task_status  # Luôn thêm status (có thể là None) để đảm bảo tất cả items có cùng keys
                     # Note: task_checklist_items table doesn't have updated_at or created_by columns
                 }
-                # Thêm status nếu có trong template
                 if sub_task_status:
-                    checklist_item_data["status"] = sub_task_status
                     logger.info(f"  Adding status '{sub_task_status}' to checklist item: {sub_task_title}")
                 checklist_items.append(checklist_item_data)
             

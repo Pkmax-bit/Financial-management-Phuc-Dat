@@ -34,7 +34,9 @@ import {
   ChevronUp,
   User as UserIcon,
   Download,
-  Info
+  Info,
+  MoreVertical,
+  Settings
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
@@ -248,6 +250,9 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
   // Expand/collapse state for checklists
   const [expandedChecklists, setExpandedChecklists] = useState<Record<string, boolean>>({})
   
+  // Checklist management menu state
+  const [showChecklistMenu, setShowChecklistMenu] = useState<Record<string, boolean>>({})
+  
   // Checklist status states
   const [checklistItemStatus, setChecklistItemStatus] = useState<Record<string, string>>({}) // For creating new items: key = `create_${checklistId}`
   const [editingChecklistItemStatus, setEditingChecklistItemStatus] = useState<string>('') // For editing existing items
@@ -260,6 +265,22 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     fetchStatusResponsibleMapping()
     fetchProjectTeam()
   }, [projectId, statusFilter])
+
+  // Đóng menu checklist khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      // Kiểm tra xem click có phải ở ngoài menu không
+      if (!target.closest('.checklist-menu-container')) {
+        setShowChecklistMenu({})
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   // Fetch status to responsible person mapping
   const fetchStatusResponsibleMapping = async () => {
@@ -1888,13 +1909,12 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
 
       // Get assignments for this checklist item
       const assignments = checklistItemAssignments[`create_${checklistId}`] || []
-      const status = checklistItemStatus[`create_${checklistId}`] || null
 
       const newItem = await apiPost(`/api/tasks/checklists/${checklistId}/items`, {
         content: itemContent,
         assignee_id: selectedChecklistAssigneeId,
-        assignments: assignments.length > 0 ? assignments : undefined,
-        status: status || undefined
+        assignments: assignments.length > 0 ? assignments : undefined
+        // Đã bỏ status - không gửi status khi tạo item mới
       })
 
       // Reset states
@@ -2926,15 +2946,14 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     return role && ['admin', 'manager'].includes(role)
   }
 
-  // Check if user can manage checklist item based on status and responsible person
-  const canManageChecklistItem = (item: TaskChecklistItem) => {
+  // Check if user can manage checklist based on accountable assignments
+  const canManageChecklist = (checklist: TaskChecklist) => {
     if (!user) return false
     
     // Admin/Manager always have permission
     if (isAdminOrManager()) return true
     
     // Get current user's employee_id from groupMembers
-    // Try to find by email first, then by user id
     const currentEmployee = groupMembers.find(m => 
       (user.email && m.employee_email === user.email) ||
       (user.id && m.employee_id === (user as any).employee_id)
@@ -2943,19 +2962,39 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
     const currentEmployeeId = currentEmployee?.employee_id
     
     if (!currentEmployeeId) {
-      // If not found in groupMembers, user might not be in project team
-      // In this case, only admin/manager can manage
       return false
     }
     
-    // Check if user is the accountable person for this checklist item's status
-    const itemStatus = (item as any).status
-    if (itemStatus && statusResponsibleMapping[itemStatus]) {
-      // If status has a mapping, check if current user is the responsible person
-      const responsibleEmployeeId = statusResponsibleMapping[itemStatus]
-      if (currentEmployeeId === responsibleEmployeeId) {
+    // Check if user is in checklist assignments with accountable role
+    if (checklist.assignments && checklist.assignments.length > 0) {
+      const accountableAssignment = checklist.assignments.find((a: any) => 
+        a.responsibility_type === 'accountable' && a.employee_id === currentEmployeeId
+      )
+      if (accountableAssignment) {
         return true
       }
+    }
+    
+    return false
+  }
+
+  // Check if user can manage checklist item based on accountable assignments
+  const canManageChecklistItem = (item: TaskChecklistItem) => {
+    if (!user) return false
+    
+    // Admin/Manager always have permission
+    if (isAdminOrManager()) return true
+    
+    // Get current user's employee_id from groupMembers
+    const currentEmployee = groupMembers.find(m => 
+      (user.email && m.employee_email === user.email) ||
+      (user.id && m.employee_id === (user as any).employee_id)
+    )
+    
+    const currentEmployeeId = currentEmployee?.employee_id
+    
+    if (!currentEmployeeId) {
+      return false
     }
     
     // Check if user is in assignments with accountable role
@@ -3448,33 +3487,34 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                   </button>
                                   <span className="font-semibold text-gray-800 text-sm">{checklist.title}</span>
                                   
-                                  {/* Checklist Assignments Management */}
-                                  <div className="relative flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={async (e) => {
-                                        e.stopPropagation()
-                                        const isOpening = !showChecklistAssignmentDropdown[checklist.id]
-                                        
-                                        // Always load team members when opening dropdown to ensure fresh data
-                                        if (isOpening) {
-                                          console.log('🔄 Loading project team when opening dropdown...')
-                                          await fetchProjectTeam()
-                                        }
-                                        
-                                        setShowChecklistAssignmentDropdown(prev => ({ ...prev, [checklist.id]: !prev[checklist.id] }))
-                                      }}
-                                      className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700 transition-colors"
-                                      title="Quản lý nhân viên chịu trách nhiệm"
-                                    >
-                                      <UserIcon className="h-3.5 w-3.5" />
-                                      <span>Nhân viên</span>
-                                      {(checklist.assignments || []).length > 0 && (
-                                        <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                                          {(checklist.assignments || []).length}
-                                        </span>
-                                      )}
-                                    </button>
+                                  {/* Checklist Assignments Management - CHỈ hiển thị cho người accountable */}
+                                  {canManageChecklist(checklist) && (
+                                    <div className="relative flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={async (e) => {
+                                          e.stopPropagation()
+                                          const isOpening = !showChecklistAssignmentDropdown[checklist.id]
+                                          
+                                          // Always load team members when opening dropdown to ensure fresh data
+                                          if (isOpening) {
+                                            console.log('🔄 Loading project team when opening dropdown...')
+                                            await fetchProjectTeam()
+                                          }
+                                          
+                                          setShowChecklistAssignmentDropdown(prev => ({ ...prev, [checklist.id]: !prev[checklist.id] }))
+                                        }}
+                                        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700 transition-colors"
+                                        title="Quản lý nhân viên chịu trách nhiệm"
+                                      >
+                                        <UserIcon className="h-3.5 w-3.5" />
+                                        <span>Nhân viên</span>
+                                        {(checklist.assignments || []).length > 0 && (
+                                          <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                            {(checklist.assignments || []).length}
+                                          </span>
+                                        )}
+                                      </button>
                                     
                                     {/* Selected Assignments Display */}
                                     {(checklist.assignments || []).length > 0 && (
@@ -3665,28 +3705,87 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                         </div>
                                       </div>
                                     )}
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-gray-500">{Math.round(progress)}%</span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setShowCreateChecklistItem(checklist.id)
-                                      setChecklistItemContent('')
-                                      setChecklistItemFiles([])
-                                      setChecklistItemStatus(prev => {
-                                        const newStatus = { ...prev }
-                                        delete newStatus[`create_${checklist.id}`]
-                                        return newStatus
-                                      })
-                                    }}
-                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
-                                    title="Thêm việc cần làm nhỏ"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    <span>Thêm</span>
-                                  </button>
+                                  {/* Nút quản lý checklist - CHỈ hiển thị cho người accountable */}
+                                  {canManageChecklist(checklist) && (
+                                    <>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setShowCreateChecklistItem(checklist.id)
+                                          setChecklistItemContent('')
+                                          setChecklistItemFiles([])
+                                          setChecklistItemStatus(prev => {
+                                            const newStatus = { ...prev }
+                                            delete newStatus[`create_${checklist.id}`]
+                                            return newStatus
+                                          })
+                                        }}
+                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                                        title="Thêm việc cần làm nhỏ"
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                        <span>Thêm</span>
+                                      </button>
+                                      {/* Nút menu quản lý checklist */}
+                                      <div className="relative checklist-menu-container">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setShowChecklistMenu(prev => ({ ...prev, [checklist.id]: !prev[checklist.id] }))
+                                          }}
+                                          className="flex items-center justify-center w-6 h-6 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                          title="Quản lý checklist"
+                                        >
+                                          <MoreVertical className="h-4 w-4" />
+                                        </button>
+                                        {/* Dropdown menu */}
+                                        {showChecklistMenu[checklist.id] && (
+                                          <div 
+                                            className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-300 rounded-lg shadow-lg z-50 py-1"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                setShowCreateChecklistItem(checklist.id)
+                                                setChecklistItemContent('')
+                                                setChecklistItemFiles([])
+                                                setShowChecklistMenu(prev => ({ ...prev, [checklist.id]: false }))
+                                              }}
+                                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                            >
+                                              <Plus className="h-4 w-4" />
+                                              <span>Thêm item mới</span>
+                                            </button>
+                                            <button
+                                              onClick={async (e) => {
+                                                e.stopPropagation()
+                                                if (confirm('Bạn có chắc muốn xóa checklist này? Tất cả items trong checklist sẽ bị xóa.')) {
+                                                  try {
+                                                    await apiDelete(`/api/tasks/checklists/${checklist.id}`)
+                                                    // Refresh tasks
+                                                    await fetchTasks()
+                                                  } catch (error: any) {
+                                                    alert(error?.message || 'Không thể xóa checklist')
+                                                  }
+                                                }
+                                                setShowChecklistMenu(prev => ({ ...prev, [checklist.id]: false }))
+                                              }}
+                                              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                              <span>Xóa checklist</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               </div>
 
@@ -3710,21 +3809,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                         }
                                       }}
                                     />
-                                    
-                                    {/* Status selection */}
-                                    <div className="flex items-center gap-2">
-                                      <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Trạng thái:</label>
-                                      <select
-                                        value={checklistItemStatus[`create_${checklist.id}`] || ''}
-                                        onChange={(e) => handleStatusChange(e.target.value, checklist.id, false)}
-                                        className="flex-1 text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
-                                      >
-                                        <option value="">-- Chọn trạng thái --</option>
-                                        {CHECKLIST_STATUSES.map(status => (
-                                          <option key={status.value} value={status.value}>{status.label}</option>
-                                        ))}
-                                      </select>
-                                    </div>
 
                                     {/* Multi-assignment section */}
                                     <div className="relative flex items-center gap-2 flex-wrap">
@@ -4011,22 +4095,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                                 />
                                               </div>
 
-                                              {/* Status selection */}
-                                              <div className="flex items-center gap-2">
-                                                <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Trạng thái:</label>
-                                                <select
-                                                  value={editingChecklistItemStatus}
-                                                  onChange={(e) => handleStatusChange(e.target.value, '', true)}
-                                                  onClick={(e) => e.stopPropagation()}
-                                                  className="flex-1 text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
-                                                >
-                                                  <option value="">-- Chọn trạng thái --</option>
-                                                  {CHECKLIST_STATUSES.map(status => (
-                                                    <option key={status.value} value={status.value}>{status.label}</option>
-                                                  ))}
-                                                </select>
-                                              </div>
-
                                               {/* File management */}
                                               <div className="space-y-2">
                                                 <label className="text-xs font-medium text-gray-700">File đính kèm:</label>
@@ -4248,35 +4316,6 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                                     {displayContent}
                                                   </span>
                                                 )}
-                                                
-                                                {/* Hiển thị status nếu có */}
-                                                {(item as any).status && (
-                                                  <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-gray-500">Trạng thái:</span>
-                                                    <select
-                                                      value={(item as any).status || ''}
-                                                      onChange={(e) => {
-                                                        updateChecklistItemContent(
-                                                          item.id,
-                                                          item.content || '',
-                                                          task.id,
-                                                          undefined,
-                                                          undefined,
-                                                          undefined,
-                                                          undefined,
-                                                          e.target.value || null
-                                                        )
-                                                      }}
-                                                      onClick={(e) => e.stopPropagation()}
-                                                      className="text-xs border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
-                                                    >
-                                                      <option value="">-- Chọn trạng thái --</option>
-                                                      {CHECKLIST_STATUSES.map(status => (
-                                                        <option key={status.value} value={status.value}>{status.label}</option>
-                                                      ))}
-                                                    </select>
-                                                  </div>
-                                                )}
                                               </div>
 
                                               {/* Chỉ hiển thị select khi chưa gán nhân viên */}
@@ -4407,31 +4446,23 @@ export default function ProjectTasksTab({ projectId, projectName, mode = 'full' 
                                             </div>
                                           )}
 
-                                          {/* Display status and responsible person */}
-                                          {((item as any).status || (item.assignments && item.assignments.some((a: any) => a.responsibility_type === 'accountable'))) && (
+                                          {/* Display responsible person - Đã bỏ phần hiển thị status */}
+                                          {item.assignments && item.assignments.find((a: any) => a.responsibility_type === 'accountable') && (
                                             <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                              {(item as any).status && (
-                                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 border border-purple-200 rounded-md text-xs">
-                                                  <span className="text-purple-700 font-medium">Trạng thái:</span>
-                                                  <span className="text-purple-600">{(item as any).status}</span>
-                                                </div>
-                                              )}
-                                              {item.assignments && item.assignments.find((a: any) => a.responsibility_type === 'accountable') && (
-                                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded-md text-xs">
-                                                  <UserIcon className="h-3 w-3 text-green-600" />
-                                                  <span className="text-green-700 font-medium">Người chịu trách nhiệm:</span>
-                                                  <span className="text-green-600">
-                                                    {(() => {
-                                                      const accountable = item.assignments.find((a: any) => a.responsibility_type === 'accountable')
-                                                      return accountable?.employee_name || 
-                                                        (accountable?.employee_id 
-                                                          ? groupMembers.find(m => m.employee_id === accountable.employee_id)?.employee_name 
-                                                          : null) || 
-                                                        'Chưa gán'
-                                                    })()}
-                                                  </span>
-                                                </div>
-                                              )}
+                                              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded-md text-xs">
+                                                <UserIcon className="h-3 w-3 text-green-600" />
+                                                <span className="text-green-700 font-medium">Người chịu trách nhiệm:</span>
+                                                <span className="text-green-600">
+                                                  {(() => {
+                                                    const accountable = item.assignments.find((a: any) => a.responsibility_type === 'accountable')
+                                                    return accountable?.employee_name || 
+                                                      (accountable?.employee_id 
+                                                        ? groupMembers.find(m => m.employee_id === accountable.employee_id)?.employee_name 
+                                                        : null) || 
+                                                      'Chưa gán'
+                                                  })()}
+                                                </span>
+                                              </div>
                                             </div>
                                           )}
 

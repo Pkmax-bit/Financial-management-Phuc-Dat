@@ -879,6 +879,135 @@ def check_user_has_project_access(supabase, current_user: User, project_id: Opti
         print(f"[ERROR] check_user_has_project_access failed: {str(e)}")
         return False
 
+def _get_checklist_group_for_status(status_name: str) -> Optional[str]:
+    """
+    Map project status name to checklist group name
+    
+    Args:
+        status_name: Project status name (e.g., "THỎA THUẬN", "XƯỞNG SẢN XUẤT")
+    
+    Returns:
+        Checklist group name (e.g., "Kế hoạch", "Sản xuất") or None
+    """
+    status_to_group = {
+        "THỎA THUẬN": "Kế hoạch",
+        "XƯỞNG SẢN XUẤT": "Sản xuất",
+        "VẬN CHUYỂN": "Vận chuyển / lắp đặt",
+        "LẮP ĐẶT": "Vận chuyển / lắp đặt",
+        "CHĂM SÓC KHÁCH HÀNG": "Chăm sóc khách hàng",
+        "BÁO CÁO / SỬA CHỮA": "Chăm sóc khách hàng",
+        "HOÀN THÀNH": "Chăm sóc khách hàng",
+    }
+    # Case-insensitive lookup
+    status_name_upper = status_name.strip().upper()
+    return status_to_group.get(status_name_upper)
+
+
+def _auto_assign_checklist_permissions_for_status(supabase, project_id: str, status_name: str):
+    """
+    Tự động gán quyền quản lý checklist items cho nhân viên accountable của trạng thái mới
+    
+    Logic:
+    - Khi chuyển trạng thái dự án, tìm nhân viên accountable cho trạng thái đó
+    - Tìm checklist group tương ứng với trạng thái
+    - Gán quyền accountable cho tất cả checklist items trong nhóm đó
+    
+    Args:
+        supabase: Supabase client
+        project_id: Project ID
+        status_name: Project status name (e.g., "THỎA THUẬN", "XƯỞNG SẢN XUẤT")
+    """
+    try:
+        # 1. Map status name to checklist group
+        checklist_group_name = _get_checklist_group_for_status(status_name)
+        if not checklist_group_name:
+            logger.info(f"No checklist group mapping for status '{status_name}'. Skipping permission assignment.")
+            return
+        
+        logger.info(f"Mapping status '{status_name}' to checklist group '{checklist_group_name}'")
+        
+        # 2. Tìm nhân viên accountable cho trạng thái này
+        mapping_result = supabase.table("checklist_status_responsible_mapping").select(
+            "employee_id, status"
+        ).eq("status", status_name).eq("responsibility_type", "accountable").eq("is_active", True).execute()
+        
+        if not mapping_result.data or len(mapping_result.data) == 0:
+            logger.warning(f"No accountable employees found for status '{status_name}'. Skipping permission assignment.")
+            return
+        
+        accountable_employee_ids = [item.get("employee_id") for item in mapping_result.data if item.get("employee_id")]
+        if not accountable_employee_ids:
+            logger.warning(f"No valid employee IDs found for status '{status_name}'. Skipping permission assignment.")
+            return
+        
+        logger.info(f"Found {len(accountable_employee_ids)} accountable employee(s) for status '{status_name}'")
+        
+        # 3. Tìm parent task của project (nhiệm vụ lớn = tên dự án)
+        parent_tasks_result = supabase.table("tasks").select("id").eq(
+            "project_id", project_id
+        ).is_("parent_id", "null").is_("deleted_at", "null").limit(1).execute()
+        
+        if not parent_tasks_result.data:
+            logger.warning(f"No parent task found for project {project_id}. Skipping permission assignment.")
+            return
+        
+        parent_task_id = parent_tasks_result.data[0].get("id")
+        logger.info(f"Found parent task {parent_task_id} for project {project_id}")
+        
+        # 4. Tìm checklist trong nhóm tương ứng
+        checklists_result = supabase.table("task_checklists").select("id").eq(
+            "task_id", parent_task_id
+        ).eq("title", checklist_group_name).limit(1).execute()
+        
+        if not checklists_result.data:
+            logger.warning(f"No checklist found with title '{checklist_group_name}' for task {parent_task_id}. Skipping permission assignment.")
+            return
+        
+        checklist_id = checklists_result.data[0].get("id")
+        logger.info(f"Found checklist {checklist_id} with title '{checklist_group_name}'")
+        
+        # 5. Tìm tất cả checklist items trong checklist này
+        checklist_items_result = supabase.table("task_checklist_items").select("id").eq(
+            "checklist_id", checklist_id
+        ).execute()
+        
+        if not checklist_items_result.data:
+            logger.info(f"No checklist items found in checklist {checklist_id}. Nothing to assign.")
+            return
+        
+        checklist_item_ids = [item.get("id") for item in checklist_items_result.data if item.get("id")]
+        logger.info(f"Found {len(checklist_item_ids)} checklist items to assign permissions")
+        
+        # 6. Gán quyền accountable cho tất cả checklist items
+        assignments_to_insert = []
+        for item_id in checklist_item_ids:
+            for employee_id in accountable_employee_ids:
+                assignments_to_insert.append({
+                    "checklist_item_id": item_id,
+                    "employee_id": employee_id,
+                    "responsibility_type": "accountable"
+                })
+        
+        if assignments_to_insert:
+            # Xóa các assignments cũ của các items này (tránh duplicate)
+            for item_id in checklist_item_ids:
+                supabase.table("task_checklist_item_assignments").delete().eq(
+                    "checklist_item_id", item_id
+                ).eq("responsibility_type", "accountable").execute()
+            
+            # Insert assignments mới
+            supabase.table("task_checklist_item_assignments").insert(assignments_to_insert).execute()
+            logger.info(f"✅ Successfully assigned permissions to {len(assignments_to_insert)} checklist items for status '{status_name}'")
+        else:
+            logger.warning(f"No assignments to insert for status '{status_name}'")
+            
+    except Exception as e:
+        logger.error(f"Error in _auto_assign_checklist_permissions_for_status: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
+
+
 def check_user_can_update_progress(supabase, current_user: User, project_id: str) -> bool:
     """Check if user can update project progress - allows all project team members"""
     # Admin and manager roles can always update progress
@@ -3064,6 +3193,7 @@ async def update_project_status(
         
         new_status_id = None
         found_status_name = None
+        normalized_status_name = None
         update_dict = {
             "updated_at": datetime.utcnow().isoformat()
         }
@@ -3139,7 +3269,17 @@ async def update_project_status(
                 detail="Failed to update project status: No data returned"
             )
         
-        logger.info(f"✅ Successfully updated project {project_id} status to '{normalized_status_name}' (status_id: {new_status_id})")
+        # Use found_status_name if available, otherwise use normalized_status_name or status_name
+        final_status_name = found_status_name if found_status_name else (normalized_status_name if normalized_status_name else status_name)
+        logger.info(f"✅ Successfully updated project {project_id} status to '{final_status_name}' (status_id: {new_status_id})")
+
+        # Auto-assign checklist permissions based on new status
+        if new_status_id and new_status_id != old_status_id and final_status_name:
+            try:
+                _auto_assign_checklist_permissions_for_status(supabase, project_id, final_status_name)
+            except Exception as e:
+                logger.error(f"Error auto-assigning checklist permissions for project {project_id}: {str(e)}")
+                # Don't fail the status update if permission assignment fails
 
         # Auto-calculate and update progress based on new status position
         if new_status_id and new_status_id != old_status_id:
