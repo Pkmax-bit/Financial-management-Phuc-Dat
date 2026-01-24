@@ -58,6 +58,8 @@ from models.task import (
 from models.user import User
 from utils.auth import get_current_user, require_manager_or_admin
 from services.supabase_client import get_supabase_client
+from services.notification_service import notification_service
+import asyncio
 from services.file_upload_service import get_file_upload_service
 from services.task_cleanup_service import task_cleanup_service
 
@@ -1800,6 +1802,11 @@ async def update_task(
     try:
         supabase = get_supabase_client()
         
+        # Lấy trạng thái hiện tại của task để kiểm tra xem có thay đổi từ chưa completed sang completed không
+        current_task = supabase.table("tasks").select("status, project_id").eq("id", task_id).limit(1).execute()
+        old_status = current_task.data[0].get("status") if current_task.data else None
+        task_project_id = current_task.data[0].get("project_id") if current_task.data else None
+        
         update_data = {}
         if task_data.title is not None:
             update_data["title"] = task_data.title
@@ -1858,7 +1865,48 @@ async def update_task(
                 detail="Task not found"
             )
         
-        return result.data[0]
+        updated_task = result.data[0]
+        
+        # Tạo thông báo cho đội ngũ dự án khi nhiệm vụ được hoàn thành
+        # Chỉ gửi thông báo khi status thay đổi từ chưa completed sang completed
+        if (task_data.status and 
+            task_data.status.value == "completed" and 
+            old_status != "completed"):
+            try:
+                task_title = updated_task.get("title", "N/A")
+                project_id = updated_task.get("project_id") or task_project_id
+                
+                if project_id:
+                    # Lấy tên dự án
+                    project_result = supabase.table("projects").select("name").eq("id", project_id).limit(1).execute()
+                    project_name = project_result.data[0].get("name", "N/A") if project_result.data else "N/A"
+                    
+                    # Lấy tên người hoàn thành
+                    completed_by_name = None
+                    if current_user:
+                        user_result = supabase.table("users").select("full_name, email").eq("id", current_user.id).limit(1).execute()
+                        if user_result.data:
+                            completed_by_name = user_result.data[0].get("full_name") or user_result.data[0].get("email")
+                    
+                    # Gửi thông báo cho đội ngũ dự án
+                    # Await trực tiếp để đảm bảo thông báo được tạo
+                    try:
+                        await notification_service.notify_task_completed(
+                            task_id=task_id,
+                            task_title=task_title,
+                            project_id=project_id,
+                            project_name=project_name,
+                            completed_by_name=completed_by_name,
+                            completed_by_user_id=current_user.id if current_user else None
+                        )
+                        logger.info(f"✅ Notification sent for task completion: {task_title}")
+                    except Exception as notify_err:
+                        logger.warning(f"Failed to send task completion notification: {str(notify_err)}")
+            except Exception as notify_error:
+                # Log error nhưng không fail task update
+                logger.warning(f"Failed to send task completion notification: {str(notify_error)}")
+        
+        return updated_task
     except HTTPException:
         raise
     except Exception as e:
@@ -2787,6 +2835,57 @@ async def create_checklist_assignment(
                 detail="Failed to create assignment - no data returned"
             )
         
+        # Tạo thông báo cho đội ngũ dự án về việc gán nhân viên vào task
+        try:
+                # Lấy thông tin checklist để có task_id và checklist_title
+                checklist_result = supabase.table("task_checklists").select("task_id, title").eq("id", checklist_id).limit(1).execute()
+                checklist_title = None
+                if checklist_result.data:
+                    task_id = checklist_result.data[0].get("task_id")
+                    checklist_title = checklist_result.data[0].get("title")
+                
+                # Lấy thông tin task để có project_id
+                if task_id:
+                    task_result = supabase.table("tasks").select("id, title, project_id").eq("id", task_id).limit(1).execute()
+                    if task_result.data:
+                        task_title = task_result.data[0].get("title", "Nhiệm vụ")
+                        project_id = task_result.data[0].get("project_id")
+                        
+                        # Lấy thông tin project
+                        if project_id:
+                            project_result = supabase.table("projects").select("name").eq("id", project_id).limit(1).execute()
+                            project_name = project_result.data[0].get("name", "Dự án") if project_result.data else "Dự án"
+                            
+                            # Lấy thông tin employee
+                            employee_result = supabase.table("employees").select("id, first_name, last_name, user_id").eq("id", actual_employee_id).limit(1).execute()
+                            if employee_result.data:
+                                employee_name = f"{employee_result.data[0].get('first_name', '')} {employee_result.data[0].get('last_name', '')}".strip() or "Nhân viên"
+                                
+                                # Lấy tên người gán
+                                assigned_by_name = None
+                                assigned_by_user_id = None
+                                if current_user:
+                                    assigned_by_name = current_user.full_name or current_user.email
+                                    assigned_by_user_id = current_user.id
+                                
+                                # Gửi thông báo với thông tin checklist và vai trò để chỉ rõ nhiệm vụ được gán
+                                await notification_service.notify_employee_assigned_to_task(
+                                    task_id=task_id,
+                                    task_title=task_title,
+                                    project_id=project_id,
+                                    project_name=project_name,
+                                    employee_id=actual_employee_id,
+                                    employee_name=employee_name,
+                                    assigned_by_name=assigned_by_name,
+                                    assigned_by_user_id=assigned_by_user_id,
+                                    checklist_title=checklist_title,
+                                    responsibility_type=assignment_data.responsibility_type
+                                )
+                                logger.info(f"✅ Notification sent for employee assignment: {employee_name} to task {task_title}")
+        except Exception as notify_err:
+            # Log error nhưng không fail assignment creation
+            logger.warning(f"Failed to send employee assignment notification: {str(notify_err)}")
+        
         return {"message": "Assignment created successfully", "data": result.data[0]}
     except HTTPException:
         raise
@@ -3001,15 +3100,115 @@ async def update_checklist_item(
         item = result.data[0]
         
         # Handle assignments update if provided
+        old_assignments = []
         if item_data.assignments is not None:
+            # Lấy danh sách assignments cũ để so sánh
+            old_assignments_result = supabase.table("task_checklist_item_assignments")\
+                .select("employee_id, responsibility_type")\
+                .eq("checklist_item_id", item_id)\
+                .execute()
+            old_assignments = old_assignments_result.data if old_assignments_result.data else []
+            print(f"📋 Old assignments for checklist item {item_id}: {len(old_assignments)} - {old_assignments}")
+            logger.info(f"📋 Old assignments for checklist item {item_id}: {len(old_assignments)}")
+            
             # Delete existing assignments
             supabase.table("task_checklist_item_assignments").delete().eq("checklist_item_id", item_id).execute()
             
             # Insert new assignments
+            new_assignments = []
             if item_data.assignments:
                 assignment_records = _build_valid_assignment_records(supabase, item_id, item_data.assignments)
                 if assignment_records:
-                    supabase.table("task_checklist_item_assignments").insert(assignment_records).execute()
+                    result = supabase.table("task_checklist_item_assignments").insert(assignment_records).execute()
+                    new_assignments = result.data if result.data else []
+                    print(f"📋 New assignments for checklist item {item_id}: {len(new_assignments)} - {new_assignments}")
+                    logger.info(f"📋 New assignments for checklist item {item_id}: {len(new_assignments)}")
+                    
+                    # Tìm các assignments mới được thêm (không có trong old_assignments)
+                    # Convert sang string để so sánh chính xác
+                    old_assignment_keys = {(str(a.get("employee_id") or ""), str(a.get("responsibility_type") or "")) for a in old_assignments}
+                    new_assignment_keys = {(str(a.get("employee_id") or ""), str(a.get("responsibility_type") or "")) for a in new_assignments}
+                    added_assignments = new_assignment_keys - old_assignment_keys
+                    print(f"📋 Old keys: {old_assignment_keys}")
+                    print(f"📋 New keys: {new_assignment_keys}")
+                    print(f"📋 Added assignments (new - old): {len(added_assignments)} - {added_assignments}")
+                    logger.info(f"📋 Added assignments (new - old): {len(added_assignments)} - {added_assignments}")
+                    
+                    # Tạo thông báo cho các assignments mới
+                    if added_assignments:
+                        try:
+                            print(f"🔔 Starting notification for {len(added_assignments)} new assignments")
+                            # Lấy thông tin checklist item để có checklist_id và content
+                            # Lưu ý: task_checklist_items có checklist_id, không có task_id trực tiếp
+                            item_result = supabase.table("task_checklist_items").select("id, content, checklist_id").eq("id", item_id).limit(1).execute()
+                            print(f"📋 Item result: {item_result.data if item_result.data else 'No data'}")
+                            if item_result.data:
+                                checklist_item_content = item_result.data[0].get("content", "Nhiệm vụ")
+                                checklist_id = item_result.data[0].get("checklist_id")
+                                print(f"📋 Checklist item content: {checklist_item_content}, checklist_id: {checklist_id}")
+                                
+                                # Lấy task_id từ checklist (vì task_checklist_items không có task_id trực tiếp)
+                                task_id = None
+                                if checklist_id:
+                                    checklist_result = supabase.table("task_checklists").select("task_id").eq("id", checklist_id).limit(1).execute()
+                                    print(f"📋 Checklist result: {checklist_result.data if checklist_result.data else 'No data'}")
+                                    if checklist_result.data:
+                                        task_id = checklist_result.data[0].get("task_id")
+                                        print(f"📋 Task ID from checklist: {task_id}")
+                                
+                                # Lấy thông tin task để có project_id
+                                if task_id:
+                                    task_result = supabase.table("tasks").select("id, title, project_id").eq("id", task_id).limit(1).execute()
+                                    if task_result.data:
+                                        task_title = task_result.data[0].get("title", "Nhiệm vụ")
+                                        project_id = task_result.data[0].get("project_id")
+                                        
+                                        # Lấy thông tin project
+                                        if project_id:
+                                            project_result = supabase.table("projects").select("name").eq("id", project_id).limit(1).execute()
+                                            project_name = project_result.data[0].get("name", "Dự án") if project_result.data else "Dự án"
+                                            
+                                            # Lấy tên người gán
+                                            assigned_by_name = None
+                                            assigned_by_user_id = None
+                                            if current_user:
+                                                assigned_by_name = current_user.full_name or current_user.email
+                                                assigned_by_user_id = current_user.id
+                                            
+                                            # Tạo thông báo cho từng assignment mới
+                                            print(f"🔔 Processing {len(added_assignments)} new assignments for notifications")
+                                            for assignment_key in added_assignments:
+                                                employee_id_str, responsibility_type_str = assignment_key
+                                                employee_id = employee_id_str
+                                                responsibility_type = responsibility_type_str
+                                                # Lấy thông tin employee
+                                                employee_result = supabase.table("employees").select("id, first_name, last_name, user_id").eq("id", employee_id).limit(1).execute()
+                                                if employee_result.data:
+                                                    employee_name = f"{employee_result.data[0].get('first_name', '')} {employee_result.data[0].get('last_name', '')}".strip() or "Nhân viên"
+                                                    
+                                                    # Gửi thông báo
+                                                    print(f"🔔 Sending notification for checklist item assignment: {employee_name} ({responsibility_type}) to '{checklist_item_content}'")
+                                                    await notification_service.notify_employee_assigned_to_task(
+                                                        task_id=task_id,
+                                                        task_title=task_title,
+                                                        project_id=project_id,
+                                                        project_name=project_name,
+                                                        employee_id=employee_id,
+                                                        employee_name=employee_name,
+                                                        assigned_by_name=assigned_by_name,
+                                                        assigned_by_user_id=assigned_by_user_id,
+                                                        checklist_title=checklist_item_content,
+                                                        responsibility_type=responsibility_type
+                                                    )
+                                                    print(f"✅ Notification sent for checklist item assignment: {employee_name} ({responsibility_type}) to '{checklist_item_content}' in task {task_title}")
+                                                    logger.info(f"✅ Notification sent for checklist item assignment: {employee_name} ({responsibility_type}) to '{checklist_item_content}' in task {task_title}")
+                        except Exception as notify_err:
+                            # Log error nhưng không fail item update
+                            print(f"❌ Failed to send checklist item assignment notification: {str(notify_err)}")
+                            import traceback
+                            print(traceback.format_exc())
+                            logger.warning(f"Failed to send checklist item assignment notification: {str(notify_err)}")
+                            logger.warning(traceback.format_exc())
         
         # Fetch the item with assignments
         items_result = (

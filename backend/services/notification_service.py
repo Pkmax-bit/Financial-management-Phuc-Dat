@@ -264,6 +264,291 @@ class NotificationService:
         except Exception as e:
             print(f"Error notifying admins about quote creation: {e}")
             return {"created": 0, "errors": [str(e)]}
+    
+    async def get_project_team_user_ids(self, project_id: str) -> List[str]:
+        """Get list of user IDs from project team members (active members only)"""
+        try:
+            result = self.supabase.table("project_team")\
+                .select("user_id")\
+                .eq("project_id", project_id)\
+                .eq("status", "active")\
+                .not_.is_("user_id", "null")\
+                .execute()
+            
+            if result.data:
+                # Filter out None values and return unique user IDs
+                user_ids = list(set([member["user_id"] for member in result.data if member.get("user_id")]))
+                print(f"get_project_team_user_ids: Found {len(user_ids)} user IDs for project {project_id}: {user_ids}")
+                return user_ids
+            print(f"get_project_team_user_ids: No team members found for project {project_id}")
+            return []
+        except Exception as e:
+            print(f"Error getting project team user IDs: {e}")
+            import traceback
+            print(traceback.format_exc())
+            return []
+    
+    async def notify_project_team(self, project_id: str, title: str, message: str, notification_type: str, entity_type: Optional[str] = "project", entity_id: Optional[str] = None, action_url: Optional[str] = None, exclude_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Notify all project team members about a project event"""
+        try:
+            user_ids = await self.get_project_team_user_ids(project_id)
+            
+            if not user_ids:
+                print(f"No team members found for project {project_id}")
+                return {"created": 0, "errors": ["No team members found"]}
+            
+            # Exclude the user who triggered the event (if provided)
+            if exclude_user_id and exclude_user_id in user_ids:
+                user_ids = [uid for uid in user_ids if uid != exclude_user_id]
+            
+            if not user_ids:
+                print(f"No team members to notify after excluding user {exclude_user_id}")
+                return {"created": 0, "errors": ["No team members to notify"]}
+            
+            # Create notifications with specific type
+            results = {"created": 0, "emails_sent": 0, "errors": []}
+            try:
+                notifications_payload = []
+                for uid in user_ids:
+                    notifications_payload.append({
+                        "user_id": uid,
+                        "title": title,
+                        "message": message,
+                        "type": notification_type,
+                        "entity_type": entity_type,
+                        "entity_id": entity_id or project_id,
+                        "is_read": False,
+                        "action_url": action_url,
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+                if notifications_payload:
+                    result = self.supabase.table("notifications").insert(notifications_payload).execute()
+                    if result.data:
+                        results["created"] = len(result.data)
+                    else:
+                        results["errors"].append("Insert returned no data")
+            except Exception as e:
+                results["errors"].append(str(e))
+            return results
+        except Exception as e:
+            print(f"Error notifying project team: {e}")
+            return {"created": 0, "errors": [str(e)]}
+    
+    async def notify_project_created(self, project_data: Dict[str, Any], creator_name: Optional[str] = None, creator_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Notify project team when a new project is created"""
+        try:
+            project_id = project_data.get('id')
+            project_name = project_data.get('name', 'N/A')
+            project_code = project_data.get('project_code', '')
+            
+            if not project_id:
+                return {"created": 0, "errors": ["Project ID is required"]}
+            
+            creator_text = f" bởi {creator_name}" if creator_name else ""
+            title = f"Dự án mới: {project_name}"
+            message = f"Dự án {project_code} - {project_name}{creator_text} đã được tạo"
+            action_url = f"/projects/{project_id}" if project_id else None
+            
+            return await self.notify_project_team(
+                project_id=project_id,
+                title=title,
+                message=message,
+                notification_type="project_created",
+                entity_type="project",
+                entity_id=project_id,
+                action_url=action_url,
+                exclude_user_id=creator_user_id
+            )
+        except Exception as e:
+            print(f"Error notifying project creation: {e}")
+            return {"created": 0, "errors": [str(e)]}
+    
+    async def notify_project_status_changed(self, project_id: str, project_name: str, old_status: Optional[str], new_status: str, changed_by_name: Optional[str] = None, changed_by_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Notify project team when project status is changed"""
+        try:
+            status_text = f" từ '{old_status}'" if old_status else ""
+            changed_by_text = f" bởi {changed_by_name}" if changed_by_name else ""
+            
+            title = f"Cập nhật trạng thái dự án: {project_name}"
+            message = f"Trạng thái dự án {project_name} đã được chuyển{status_text} sang '{new_status}'{changed_by_text}"
+            action_url = f"/projects/{project_id}" if project_id else None
+            
+            return await self.notify_project_team(
+                project_id=project_id,
+                title=title,
+                message=message,
+                notification_type="project_status_changed",
+                entity_type="project",
+                entity_id=project_id,
+                action_url=action_url,
+                exclude_user_id=changed_by_user_id
+            )
+        except Exception as e:
+            print(f"Error notifying project status change: {e}")
+            return {"created": 0, "errors": [str(e)]}
+    
+    async def notify_team_member_added(self, project_id: str, project_name: str, member_name: str, added_by_name: Optional[str] = None, added_by_user_id: Optional[str] = None, new_member_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Notify project team when a new team member is added"""
+        try:
+            added_by_text = f" bởi {added_by_name}" if added_by_name else ""
+            
+            title = f"Thành viên mới: {project_name}"
+            message = f"{member_name} đã được thêm vào đội ngũ dự án {project_name}{added_by_text}"
+            action_url = f"/projects/{project_id}" if project_id else None
+            
+            # Get team user IDs
+            user_ids = await self.get_project_team_user_ids(project_id)
+            
+            if not user_ids:
+                print(f"No team members found for project {project_id}")
+                return {"created": 0, "errors": ["No team members found"]}
+            
+            # Exclude both the person who added and the new member
+            user_ids_to_notify = [uid for uid in user_ids if uid and uid != added_by_user_id and uid != new_member_user_id]
+            
+            if not user_ids_to_notify:
+                print(f"No team members to notify after excluding added_by_user_id={added_by_user_id} and new_member_user_id={new_member_user_id}")
+                return {"created": 0, "errors": ["No team members to notify"]}
+            
+            # Create notifications
+            results = {"created": 0, "emails_sent": 0, "errors": []}
+            try:
+                notifications_payload = []
+                for uid in user_ids_to_notify:
+                    notifications_payload.append({
+                        "user_id": uid,
+                        "title": title,
+                        "message": message,
+                        "type": "team_member_added",
+                        "entity_type": "project",
+                        "entity_id": project_id,
+                        "is_read": False,
+                        "action_url": action_url,
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+                
+                if notifications_payload:
+                    result = self.supabase.table("notifications").insert(notifications_payload).execute()
+                    if result.data:
+                        results["created"] = len(result.data)
+                        print(f"Created {len(result.data)} notifications for team member addition")
+                    else:
+                        results["errors"].append("Insert returned no data")
+                else:
+                    results["errors"].append("No notifications to create")
+            except Exception as e:
+                print(f"Error creating notifications: {e}")
+                results["errors"].append(str(e))
+            
+            return results
+        except Exception as e:
+            print(f"Error notifying team member addition: {e}")
+            return {"created": 0, "errors": [str(e)]}
+    
+    async def notify_employee_assigned_to_task(self, task_id: str, task_title: str, project_id: str, project_name: str, employee_id: str, employee_name: str, assigned_by_name: Optional[str] = None, assigned_by_user_id: Optional[str] = None, checklist_title: Optional[str] = None, responsibility_type: Optional[str] = None) -> Dict[str, Any]:
+        """Notify project team when an employee is assigned to a task"""
+        try:
+            # Get employee's user_id
+            emp_result = self.supabase.table("employees").select("user_id").eq("id", employee_id).limit(1).execute()
+            employee_user_id = emp_result.data[0].get("user_id") if emp_result.data else None
+            
+            assigned_by_text = f" bởi {assigned_by_name}" if assigned_by_name else ""
+            
+            # Map responsibility_type sang tiếng Việt
+            responsibility_labels = {
+                "accountable": "Chịu trách nhiệm",
+                "responsible": "Thực hiện",
+                "consulted": "Tư vấn",
+                "informed": "Thông báo"
+            }
+            responsibility_text = f" với vai trò {responsibility_labels.get(responsibility_type, responsibility_type)}" if responsibility_type else ""
+            
+            # Tạo message rõ ràng hơn về nhiệm vụ được gán
+            if checklist_title:
+                title = f"Gán nhân viên vào nhiệm vụ: {task_title}"
+                message = f"{employee_name} đã được gán vào nhiệm vụ '{task_title}' - công việc '{checklist_title}'{responsibility_text} trong dự án {project_name}{assigned_by_text}"
+            else:
+                title = f"Gán nhân viên vào nhiệm vụ: {task_title}"
+                message = f"{employee_name} đã được gán vào nhiệm vụ '{task_title}'{responsibility_text} trong dự án {project_name}{assigned_by_text}"
+            
+            action_url = f"/projects/{project_id}/tasks/{task_id}" if project_id and task_id else None
+            
+            # Get team user IDs
+            user_ids = await self.get_project_team_user_ids(project_id)
+            
+            if not user_ids:
+                print(f"No team members found for project {project_id}")
+                return {"created": 0, "errors": ["No team members found"]}
+            
+            # Exclude only the person who assigned (nhân viên được gán cũng nên nhận thông báo để biết họ đã được gán)
+            user_ids_to_notify = [uid for uid in user_ids if uid and uid != assigned_by_user_id]
+            
+            # Nhân viên được gán cũng nên nhận thông báo (nếu có user_id và là thành viên của đội ngũ)
+            if employee_user_id and employee_user_id in user_ids:
+                if employee_user_id not in user_ids_to_notify:
+                    user_ids_to_notify.append(employee_user_id)
+            
+            if not user_ids_to_notify:
+                print(f"No team members to notify after excluding assigned_by_user_id={assigned_by_user_id}")
+                return {"created": 0, "errors": ["No team members to notify"]}
+            
+            # Create notifications
+            results = {"created": 0, "emails_sent": 0, "errors": []}
+            try:
+                notifications_payload = []
+                for uid in user_ids_to_notify:
+                    notifications_payload.append({
+                        "user_id": uid,
+                        "title": title,
+                        "message": message,
+                        "type": "employee_assigned_to_task",
+                        "entity_type": "task",
+                        "entity_id": task_id,
+                        "is_read": False,
+                        "action_url": action_url,
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+                
+                if notifications_payload:
+                    result = self.supabase.table("notifications").insert(notifications_payload).execute()
+                    if result.data:
+                        results["created"] = len(result.data)
+                        print(f"Created {len(result.data)} notifications for employee assignment to task")
+                    else:
+                        results["errors"].append("Insert returned no data")
+                else:
+                    results["errors"].append("No notifications to create")
+            except Exception as e:
+                print(f"Error creating notifications: {e}")
+                results["errors"].append(str(e))
+            
+            return results
+        except Exception as e:
+            print(f"Error notifying employee assignment to task: {e}")
+            return {"created": 0, "errors": [str(e)]}
+    
+    async def notify_task_completed(self, task_id: str, task_title: str, project_id: str, project_name: str, completed_by_name: Optional[str] = None, completed_by_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Notify project team when a task is completed"""
+        try:
+            completed_by_text = f" bởi {completed_by_name}" if completed_by_name else ""
+            
+            title = f"Nhiệm vụ hoàn thành: {task_title}"
+            message = f"Nhiệm vụ '{task_title}' trong dự án {project_name} đã được hoàn thành{completed_by_text}"
+            action_url = f"/projects/{project_id}/tasks/{task_id}" if project_id and task_id else None
+            
+            return await self.notify_project_team(
+                project_id=project_id,
+                title=title,
+                message=message,
+                notification_type="task_completed",
+                entity_type="task",
+                entity_id=task_id,
+                action_url=action_url,
+                exclude_user_id=completed_by_user_id
+            )
+        except Exception as e:
+            print(f"Error notifying task completion: {e}")
+            return {"created": 0, "errors": [str(e)]}
 
 # Global notification service instance
 notification_service = NotificationService()

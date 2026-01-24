@@ -19,6 +19,7 @@ from utils.auth import get_current_user, require_manager_or_admin, security
 from services.supabase_client import get_supabase_client
 from services.project_profitability_service import ProjectProfitabilityService
 from services.project_default_tasks_service import create_default_tasks_for_project
+from services.notification_service import notification_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1922,6 +1923,32 @@ async def create_project(
             # Frontend sẽ hiển thị thông báo phù hợp
             logger.info(f"📋 Final project response includes tasks_created: {project.get('tasks_created')}")
             
+            # Tạo thông báo cho đội ngũ dự án về việc tạo dự án mới
+            try:
+                # Lấy tên người tạo dự án
+                creator_name = None
+                if current_user:
+                    user_result = supabase.table("users").select("full_name, email").eq("id", current_user.id).limit(1).execute()
+                    if user_result.data:
+                        creator_name = user_result.data[0].get("full_name") or user_result.data[0].get("email")
+                
+                # Gửi thông báo cho đội ngũ dự án
+                # Await trực tiếp để đảm bảo thông báo được tạo
+                try:
+                    await notification_service.notify_project_created(
+                        project_data=project,
+                        creator_name=creator_name,
+                        creator_user_id=current_user.id if current_user else None
+                    )
+                    logger.info(f"✅ Notification sent for project creation: {project.get('name', 'N/A')}")
+                except Exception as notify_err:
+                    logger.error(f"❌ Failed to send project creation notification: {str(notify_err)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            except Exception as notify_error:
+                # Log error nhưng không fail project creation
+                logger.warning(f"Failed to send project creation notification: {str(notify_error)}")
+            
             return Project(**project)
         
         # If we reach here, project creation failed
@@ -3365,6 +3392,46 @@ async def update_project_status(
         if result.data:
             updated_project = result.data[0]
             logger.info(f"✅ Project {project_id} status updated successfully to '{status_name}' (status_id: {new_status_id})")
+            
+            # Tạo thông báo cho đội ngũ dự án về việc thay đổi trạng thái
+            try:
+                # Lấy tên dự án
+                project_name = updated_project.get('name', 'N/A')
+                
+                # Lấy tên trạng thái cũ
+                old_status_name = None
+                if old_status_id:
+                    old_status_result = supabase.table("project_statuses").select("name").eq("id", old_status_id).limit(1).execute()
+                    if old_status_result.data:
+                        old_status_name = old_status_result.data[0].get('name')
+                
+                # Lấy tên người thay đổi
+                changed_by_name = None
+                if current_user:
+                    user_result = supabase.table("users").select("full_name, email").eq("id", current_user.id).limit(1).execute()
+                    if user_result.data:
+                        changed_by_name = user_result.data[0].get("full_name") or user_result.data[0].get("email")
+                
+                # Gửi thông báo cho đội ngũ dự án
+                # Await trực tiếp để đảm bảo thông báo được tạo
+                try:
+                    await notification_service.notify_project_status_changed(
+                        project_id=project_id,
+                        project_name=project_name,
+                        old_status=old_status_name,
+                        new_status=final_status_name,
+                        changed_by_name=changed_by_name,
+                        changed_by_user_id=current_user.id if current_user else None
+                    )
+                    logger.info(f"✅ Notification sent for project status change: {project_name} -> {final_status_name}")
+                except Exception as notify_err:
+                    logger.error(f"❌ Failed to send project status change notification: {str(notify_err)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            except Exception as notify_error:
+                # Log error nhưng không fail status update
+                logger.warning(f"Failed to send project status change notification: {str(notify_error)}")
+            
             return {
                 "message": "Project status updated successfully",
                 "project_id": project_id,

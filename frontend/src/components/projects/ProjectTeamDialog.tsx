@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Calendar, Search, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { apiPost } from '@/lib/api';
 
 interface Employee {
   id: string;
@@ -752,39 +753,71 @@ export const ProjectTeamDialog: React.FC<ProjectTeamDialogProps> = ({
         });
       }
 
-      // Thêm những thành viên chưa tồn tại
+      // Thêm những thành viên chưa tồn tại qua API backend để tạo thông báo
       console.log('📝 Đang thêm team members:', membersToAdd.length, 'thành viên');
       console.log('📋 Dữ liệu:', JSON.stringify(membersToAdd, null, 2));
       
-      const { data: insertedData, error } = await supabase
-        .from('project_team')
-        .insert(membersToAdd)
-        .select();
-
-      if (error) {
-        console.error('❌ Supabase insert error:', error);
-        console.error('   Error code:', error.code);
-        console.error('   Error message:', error.message);
-        console.error('   Error details:', error.details);
-        console.error('   Error hint:', error.hint);
-        throw error;
+      // Gọi API backend để thêm từng thành viên (để tạo thông báo)
+      const insertedData: any[] = [];
+      const errors: any[] = [];
+      
+      for (const member of membersToAdd) {
+        try {
+          // Loại bỏ project_id khỏi payload vì nó đã có trong URL
+          const { project_id, ...memberPayload } = member;
+          
+          const response = await apiPost(`/api/projects/${projectId}/team`, memberPayload);
+          // Backend trả về { "message": "...", "member": {...} }
+          if (response && response.member) {
+            insertedData.push(response.member);
+            console.log('✅ Đã thêm thành công:', response.member.name || response.member.id);
+          } else if (response) {
+            // Nếu response có data nhưng không có member, có thể là format khác
+            insertedData.push(response);
+            console.log('✅ Đã thêm thành công (format khác):', response.name || response.id);
+          } else {
+            errors.push({ member, error: 'No member data returned' });
+          }
+        } catch (error: any) {
+          console.error('❌ Error adding team member:', member.name, error);
+          errors.push({ member, error });
+        }
       }
       
-      console.log('✅ Đã thêm thành công:', insertedData?.length || 0, 'thành viên');
+      if (errors.length > 0 && insertedData.length === 0) {
+        // Nếu tất cả đều lỗi, throw error
+        throw new Error(`Không thể thêm thành viên: ${errors[0].error?.message || errors[0].error}`);
+      }
+      
+      console.log('✅ Đã thêm thành công:', insertedData.length, 'thành viên');
+      if (errors.length > 0) {
+        console.warn('⚠️ Có', errors.length, 'thành viên không thể thêm:', errors.map(e => e.member.name).join(', '));
+      }
 
-      const addedCount = membersToAdd.length;
+      const addedCount = insertedData.length;
       const skippedCount = duplicateMembers.length;
+      const failedCount = errors.length;
       
       // Hiển thị thông báo
+      let message = '';
+      if (addedCount > 0) {
+        message = `✅ Đã thêm ${addedCount} thành viên thành công.`;
+      }
+      if (failedCount > 0) {
+        message += `\n\n⚠️ Không thể thêm ${failedCount} thành viên.`;
+      }
       if (skippedCount > 0) {
         const duplicateNames = duplicateMembers.map(m => m.name).join(', ');
-        alert(`✅ Đã thêm ${addedCount} thành viên thành công.\n\n⚠️ Đã bỏ qua ${skippedCount} thành viên đã có trong dự án:\n${duplicateNames}`);
-      } else {
-        alert(`✅ Đã thêm ${addedCount} thành viên thành công.`);
+        message += `\n\n⚠️ Đã bỏ qua ${skippedCount} thành viên đã có trong dự án:\n${duplicateNames}`;
+      }
+      if (message) {
+        alert(message);
       }
       
-      // Sync team members with project tasks
-      await syncTeamMembersWithTasks(membersToAdd);
+      // Sync team members with project tasks (sử dụng insertedData thay vì membersToAdd)
+      if (insertedData.length > 0) {
+        await syncTeamMembersWithTasks(insertedData);
+      }
 
       onSuccess();
       handleClose();

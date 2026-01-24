@@ -3,13 +3,14 @@ Project Team Management API
 Handles team member CRUD operations
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.user import User
 from services.supabase_client import get_supabase_client
+from services.notification_service import notification_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,8 @@ async def add_team_member(
     # current_user: User = Depends(get_current_user)
 ):
     """Add a new team member to a project and automatically add them to all project tasks"""
+    print(f"🚀 add_team_member called: project_id={project_id}, member_data={member_data}")
+    logger.info(f"🚀 add_team_member called: project_id={project_id}, member_data={member_data}")
     try:
         supabase = get_supabase_client()
         
@@ -216,6 +219,8 @@ async def add_team_member(
             )
         
         created_member = result.data[0]
+        print(f"✅ Team member created: {created_member.get('id')} - {created_member.get('name')}")
+        logger.info(f"✅ Team member created: {created_member.get('id')} - {created_member.get('name')}")
         
         # Get employee_id from user_id if available
         employee_id = None
@@ -259,6 +264,76 @@ async def add_team_member(
             except Exception as task_error:
                 # Log error but don't fail the team member creation
                 print(f"Warning: Failed to add team member to tasks: {str(task_error)}")
+        
+        # Tạo thông báo cho đội ngũ dự án về việc thêm thành viên mới
+        print(f"🔔 ===== STARTING NOTIFICATION PROCESS =====")
+        print(f"   Project ID: {project_id}")
+        print(f"   Created member: {created_member.get('id')} - {created_member.get('name')}")
+        logger.info(f"🔔 ===== STARTING NOTIFICATION PROCESS =====")
+        logger.info(f"   Project ID: {project_id}")
+        logger.info(f"   Created member: {created_member.get('id')} - {created_member.get('name')}")
+        logger.info(f"   Member data: {member_data.model_dump() if hasattr(member_data, 'model_dump') else member_data}")
+        try:
+            # Lấy tên dự án
+            project_result = supabase.table("projects").select("name").eq("id", project_id).limit(1).execute()
+            project_name = project_result.data[0].get("name", "N/A") if project_result.data else "N/A"
+            logger.info(f"   Project name: {project_name}")
+            
+            # Lấy tên thành viên mới
+            member_name = created_member.get("name", "Thành viên mới")
+            
+            # Lấy tên người thêm (nếu có current_user, nhưng endpoint này không có auth hiện tại)
+            # Có thể lấy từ user_id nếu có trong member_data
+            added_by_name = None
+            added_by_user_id = None
+            if member_data.user_id:
+                user_result = supabase.table("users").select("full_name, email, id").eq("id", member_data.user_id).limit(1).execute()
+                if user_result.data:
+                    added_by_name = user_result.data[0].get("full_name") or user_result.data[0].get("email")
+                    added_by_user_id = user_result.data[0].get("id")
+            
+            # Lấy user_id của thành viên mới để exclude khỏi thông báo
+            new_member_user_id = created_member.get("user_id")
+            
+            # Gửi thông báo cho đội ngũ dự án
+            # Sử dụng hàm notify_team_member_added từ notification_service
+            try:
+                print(f"🔔 Starting notification process for team member addition: {member_name} to project {project_id}")
+                logger.info(f"🔔 Starting notification process for team member addition: {member_name} to project {project_id}")
+                
+                # Gọi hàm notify_team_member_added với exclude cả người thêm và thành viên mới
+                result = await notification_service.notify_team_member_added(
+                    project_id=project_id,
+                    project_name=project_name,
+                    member_name=member_name,
+                    added_by_name=added_by_name,
+                    added_by_user_id=added_by_user_id,
+                    new_member_user_id=new_member_user_id
+                )
+                
+                if result.get("created", 0) > 0:
+                    print(f"✅ Created {result.get('created')} notifications for team member addition: {member_name} to project {project_name}")
+                    logger.info(f"✅ Created {result.get('created')} notifications for team member addition: {member_name} to project {project_name}")
+                elif result.get("errors"):
+                    print(f"⚠️  Notification creation had errors: {result.get('errors')}")
+                    logger.warning(f"⚠️  Notification creation had errors: {result.get('errors')}")
+                else:
+                    print(f"ℹ️  No notifications created (no team members to notify)")
+                    logger.info(f"ℹ️  No notifications created (no team members to notify)")
+                    
+            except Exception as notify_err:
+                print(f"❌ Failed to send team member addition notification: {str(notify_err)}")
+                import traceback
+                print(traceback.format_exc())
+                logger.error(f"❌ Failed to send team member addition notification: {str(notify_err)}")
+                logger.error(traceback.format_exc())
+        except Exception as notify_error:
+            # Log error nhưng không fail team member creation
+            print(f"❌ Outer exception handler: Failed to send team member addition notification: {str(notify_error)}")
+            import traceback
+            print(f"Outer exception traceback:\n{traceback.format_exc()}")
+            logger.error(f"❌ Outer exception handler: Failed to send team member addition notification: {str(notify_error)}")
+            logger.error(f"Outer exception traceback:\n{traceback.format_exc()}")
         
         return {"message": "Team member added successfully", "member": created_member}
         
