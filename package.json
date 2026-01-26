@@ -7,7 +7,7 @@
     "dev:backend": "cd backend && ./venv/bin/python -m uvicorn main:app --reload --host 10.0.2.15 --port 8000",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:network": "python start_network.py",
-    "build": "npm run build:frontend",
+    "build": "npm run install:frontend && npm run build:frontend",
     "build:frontend": "cd frontend && npm run build",
     "start": "npm run start:backend",
     "start:backend": "cd backend && ./venv/bin/python -m uvicorn main:app --host 10.0.2.15 --port 8000",

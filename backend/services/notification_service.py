@@ -549,6 +549,30 @@ class NotificationService:
         except Exception as e:
             print(f"Error notifying task completion: {e}")
             return {"created": 0, "errors": [str(e)]}
+    
+    async def notify_task_created(self, task_id: str, task_title: str, project_id: str, project_name: str, creator_name: Optional[str] = None, creator_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Notify project team when a new task is created"""
+        try:
+            creator_text = f" bởi {creator_name}" if creator_name else ""
+            
+            title = f"Nhiệm vụ mới: {task_title}"
+            message = f"Nhiệm vụ '{task_title}' đã được tạo{creator_text} trong dự án {project_name}"
+            action_url = f"/projects/{project_id}/tasks/{task_id}" if project_id and task_id else None
+            
+            return await self.notify_project_team(
+                project_id=project_id,
+                title=title,
+                message=message,
+                notification_type="task_created",
+                entity_type="task",
+                entity_id=task_id,
+                action_url=action_url,
+                exclude_user_id=creator_user_id
+            )
+        except Exception as e:
+            print(f"Error notifying task creation: {e}")
+            return {"created": 0, "errors": [str(e)]}
+
 
 # Global notification service instance
 notification_service = NotificationService()

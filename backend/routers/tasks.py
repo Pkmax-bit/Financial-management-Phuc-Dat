@@ -1490,6 +1490,34 @@ async def create_task(
         except Exception as auto_add_err:
             print(f"Warning: failed to auto add project team to task participants: {auto_add_err}")
 
+        # Send notification to project team about new task
+        try:
+            if task_data.project_id:
+                # Get project name
+                project_result = supabase.table("projects").select("name").eq("id", task_data.project_id).single().execute()
+                project_name = project_result.data.get("name", "N/A") if project_result.data else "N/A"
+                
+                # Get creator name
+                creator_name = None
+                if current_user:
+                    user_result = supabase.table("users").select("full_name, email").eq("id", current_user.id).limit(1).execute()
+                    if user_result.data:
+                        creator_name = user_result.data[0].get("full_name") or user_result.data[0].get("email")
+                
+                # Send notification
+                await notification_service.notify_task_created(
+                    task_id=task["id"],
+                    task_title=task.get("title", "N/A"),
+                    project_id=task_data.project_id,
+                    project_name=project_name,
+                    creator_name=creator_name,
+                    creator_user_id=current_user.id if current_user else None
+                )
+                logger.info(f"✅ Notification sent for task creation: {task.get('title', 'N/A')}")
+        except Exception as notify_error:
+            # Log error but don't fail task creation
+            logger.warning(f"Failed to send task creation notification: {str(notify_error)}")
+
         return task
     except HTTPException:
         raise
