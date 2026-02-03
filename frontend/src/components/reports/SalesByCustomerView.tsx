@@ -153,7 +153,7 @@ export default function SalesByCustomerView({ data }: SalesByCustomerViewProps) 
         <div className="bg-white rounded-xl shadow-lg p-6 border border-green-200">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-green-900">Tổng hóa đơn</h3>
+              <h3 className="text-lg font-semibold text-green-900">Tổng đơn hàng</h3>
               <p className="text-3xl font-bold text-green-600">
                 {data.total_invoices}
               </p>
@@ -261,7 +261,7 @@ export default function SalesByCustomerView({ data }: SalesByCustomerViewProps) 
                     {formatCurrency(customer.total_sales)}
                   </div>
                   <div className="text-sm opacity-75">
-                    {customer.total_invoices} hóa đơn • {customer.total_sales_receipts} phiếu thu
+                    {customer.total_invoices} đơn hàng • {customer.total_sales_receipts} phiếu thu
                   </div>
                   <div className="text-sm opacity-75">
                     TB: {formatCurrency(customer.average_order_value)}

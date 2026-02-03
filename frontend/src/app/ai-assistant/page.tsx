@@ -84,7 +84,7 @@ export default function AIAssistantPage() {
     {
       icon: Camera,
       title: 'Phân tích hình ảnh chi phí',
-      description: 'AI đọc và phân tích hóa đơn, biên lai từ hình ảnh, tự động nhập dữ liệu chi phí',
+      description: 'AI đọc và phân tích đơn hàng, biên lai từ hình ảnh, tự động nhập dữ liệu chi phí',
       color: 'from-indigo-500 to-purple-500',
       bgColor: 'bg-indigo-50',
       iconColor: 'text-indigo-600'
@@ -92,7 +92,7 @@ export default function AIAssistantPage() {
     {
       icon: Scan,
       title: 'Quét tài liệu thông minh',
-      description: 'Quét và nhận diện thông tin từ hóa đơn, hợp đồng, báo cáo tài chính',
+      description: 'Quét và nhận diện thông tin từ đơn hàng, hợp đồng, báo cáo tài chính',
       color: 'from-teal-500 to-cyan-500',
       bgColor: 'bg-teal-50',
       iconColor: 'text-teal-600'
@@ -148,8 +148,8 @@ export default function AIAssistantPage() {
       color: 'from-orange-500 to-orange-600'
     },
     {
-      title: 'Quét hóa đơn tự động',
-      description: 'Chụp ảnh hóa đơn, AI tự động đọc và nhập dữ liệu chi phí vào hệ thống',
+      title: 'Quét đơn hàng tự động',
+      description: 'Chụp ảnh đơn hàng, AI tự động đọc và nhập dữ liệu chi phí vào hệ thống',
       icon: Camera,
       color: 'from-indigo-500 to-indigo-600'
     },

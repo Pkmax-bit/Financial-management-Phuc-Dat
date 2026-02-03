@@ -80,7 +80,7 @@ const quickGuides = [
       'Bước 3: Tạo báo giá chi tiết',
       'Bước 4: Thiết lập ngân sách dự án',
       'Bước 5: Duyệt báo giá (khách hàng)',
-      'Bước 6: Tạo hóa đơn và ghi nhận chi phí',
+      'Bước 6: Tạo đơn hàng và ghi nhận chi phí',
       'Bước 7: Tạo báo cáo tài chính',
       'Bước 8: Khách hàng xem tiến độ dự án'
     ],
@@ -102,10 +102,10 @@ const quickGuides = [
   {
     id: 'first-sale',
     title: 'Thực hiện giao dịch bán hàng đầu tiên',
-    description: 'Từ tạo hóa đơn đến thu tiền',
+    description: 'Từ tạo đơn hàng đến thu tiền',
     steps: [
       'Tạo khách hàng mới',
-      'Tạo hóa đơn bán hàng',
+      'Tạo đơn hàng bán hàng',
       'Ghi nhận thanh toán',
       'Xem báo cáo doanh thu'
     ],
@@ -164,7 +164,7 @@ const faqs = [
   {
     id: 6,
     question: "Khách hàng duyệt báo giá trong quy trình như thế nào?",
-    answer: "Bước 5: Duyệt báo giá. Khách hàng nhận email với link báo giá, xem chi tiết và quyết định chấp nhận/từ chối/yêu cầu sửa. Khi duyệt, hệ thống tự động tạo hóa đơn và cập nhật trạng thái dự án sang giai đoạn thực hiện.",
+    answer: "Bước 5: Duyệt báo giá. Khách hàng nhận email với link báo giá, xem chi tiết và quyết định chấp nhận/từ chối/yêu cầu sửa. Khi duyệt, hệ thống tự động tạo đơn hàng và cập nhật trạng thái dự án sang giai đoạn thực hiện.",
     category: "Quy trình",
     module: "workflow"
   },
@@ -225,7 +225,7 @@ const videoTutorials = [
     title: 'Bước 6: Đơn hàng & Chi phí Thực tế',
     duration: '7:20',
     thumbnail: '/videos/invoice-expenses-thumb.jpg',
-    description: 'Tạo hóa đơn và ghi nhận chi phí thực tế'
+    description: 'Tạo đơn hàng và ghi nhận chi phí thực tế'
   },
   {
     id: 5,
@@ -636,11 +636,11 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">5</div>
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900 mb-2">Duyệt Báo giá</h4>
-                        <p className="text-gray-600 text-sm mb-3">Khách hàng xem xét và duyệt báo giá, sau đó chuyển đổi thành hóa đơn</p>
+                        <p className="text-gray-600 text-sm mb-3">Khách hàng xem xét và duyệt báo giá, sau đó chuyển đổi thành đơn hàng</p>
                         <div className="bg-gray-50 p-3 rounded text-sm">
                           <p><strong>Đường dẫn:</strong> /customers/quotes (cho khách hàng)</p>
                           <p><strong>Quyền:</strong> Customer</p>
-                          <p><strong>Kết quả:</strong> Báo giá được duyệt, hóa đơn tự động được tạo</p>
+                          <p><strong>Kết quả:</strong> Báo giá được duyệt, đơn hàng tự động được tạo</p>
                         </div>
                       </div>
                     </div>
@@ -652,7 +652,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                       <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">6</div>
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900 mb-2">Đơn hàng & Chi phí Thực tế</h4>
-                        <p className="text-gray-600 text-sm mb-3">Tạo hóa đơn từ báo giá đã duyệt và theo dõi chi phí thực tế</p>
+                        <p className="text-gray-600 text-sm mb-3">Tạo đơn hàng từ báo giá đã duyệt và theo dõi chi phí thực tế</p>
                         <div className="bg-gray-50 p-3 rounded text-sm">
                           <p><strong>Đường dẫn:</strong> /sales/invoices, /projects/[id]/expenses</p>
                           <p><strong>Quyền:</strong> Admin, Manager, Accountant, Workshop, Worker, Transport</p>

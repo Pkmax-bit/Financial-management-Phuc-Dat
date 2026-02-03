@@ -395,14 +395,14 @@ export default function DashboardPage() {
                     <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
                     <span className="text-sm text-black">Đơn hàng chưa thanh toán</span>
                   </div>
-                  <span className="font-medium">{stats.stats?.openInvoices || 0} hóa đơn</span>
+                  <span className="font-medium">{stats.stats?.openInvoices || 0} đơn hàng</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
                     <span className="text-sm text-black">Đơn hàng quá hạn</span>
                   </div>
-                  <span className="font-medium text-red-600">{stats.stats?.overdueInvoices || 0} hóa đơn</span>
+                  <span className="font-medium text-red-600">{stats.stats?.overdueInvoices || 0} đơn hàng</span>
                 </div>
               </div>
               <button
@@ -511,7 +511,7 @@ export default function DashboardPage() {
                   <div className="flex items-center">
                     <AlertCircle className="h-5 w-5 text-red-500 mr-3" />
                     <span className="text-red-800">
-                      {stats.stats.overdueInvoices} hóa đơn đã quá hạn thanh toán
+                      {stats.stats.overdueInvoices} đơn hàng đã quá hạn thanh toán
                     </span>
                   </div>
                   <button
@@ -528,7 +528,7 @@ export default function DashboardPage() {
                   <div className="flex items-center">
                     <Clock className="h-5 w-5 text-orange-500 mr-3" />
                     <span className="text-orange-800">
-                      {stats.stats.pendingBills} hóa đơn phải trả cần xử lý
+                      {stats.stats.pendingBills} đơn hàng phải trả cần xử lý
                     </span>
                   </div>
                   <button

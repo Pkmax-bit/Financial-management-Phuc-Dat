@@ -115,7 +115,7 @@ export default function InvoiceDetailPage() {
   }
 
   if (!invoice) {
-    return <div className="p-6 text-gray-600">Không tìm thấy hóa đơn</div>
+    return <div className="p-6 text-gray-600">Không tìm thấy đơn hàng</div>
   }
 
   return (

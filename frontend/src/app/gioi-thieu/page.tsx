@@ -156,7 +156,7 @@ export default function IntroductionPage() {
       id: 'sales',
       icon: Receipt,
       title: 'Bán hàng & Báo giá',
-      description: 'Tạo và quản lý báo giá, hóa đơn khách hàng chuyên nghiệp',
+      description: 'Tạo và quản lý báo giá, đơn hàng khách hàng chuyên nghiệp',
       href: '/sales',
       color: 'from-red-500 to-red-600',
       bgColor: 'bg-red-50',
@@ -165,7 +165,7 @@ export default function IntroductionPage() {
         'Tạo báo giá nhanh chóng và chuyên nghiệp',
         'Tự động tính toán thuế và tổng tiền',
         'Quy trình duyệt báo giá tự động',
-        'Chuyển đổi báo giá thành hóa đơn',
+        'Chuyển đổi báo giá thành đơn hàng',
         'Theo dõi thanh toán chi tiết',
         'Gửi email báo giá tự động'
       ]
@@ -174,17 +174,17 @@ export default function IntroductionPage() {
       id: 'invoices',
       icon: FileText,
       title: 'Quản lý Đơn hàng',
-      description: 'Tạo và quản lý hóa đơn khách hàng chuyên nghiệp',
+      description: 'Tạo và quản lý đơn hàng khách hàng chuyên nghiệp',
       href: '/sales/invoices',
       color: 'from-pink-500 to-pink-600',
       bgColor: 'bg-pink-50',
       iconColor: 'text-pink-600',
       benefits: [
-        'Tạo hóa đơn từ báo giá đã duyệt',
+        'Tạo đơn hàng từ báo giá đã duyệt',
         'Theo dõi trạng thái thanh toán',
         'Quản lý công nợ khách hàng',
-        'Xuất hóa đơn PDF chuyên nghiệp',
-        'Gửi email hóa đơn tự động',
+        'Xuất đơn hàng PDF chuyên nghiệp',
+        'Gửi email đơn hàng tự động',
         'Tích hợp với báo cáo tài chính'
       ]
     },

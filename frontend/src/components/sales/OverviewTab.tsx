@@ -32,7 +32,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
   }
 
   // Calculate income tracker data (QuickBooks style)
-  const uninvoicedActivity = 0 // Các hoạt động chưa lập hóa đơn - chưa có trong API
+  const uninvoicedActivity = 0 // Các hoạt động chưa lập đơn hàng - chưa có trong API
   const unpaidInvoices = (revenue as Record<string, unknown>).pending as number || 0 // Đơn hàng chưa thanh toán
   const overdueAmount = (invoicesStats as Record<string, unknown>).overdue as number || 0 // Đơn hàng quá hạn
   const recentlyPaid = (revenue as Record<string, unknown>).paid as number || 0 // Đã thanh toán trong 30 ngày qua
@@ -49,8 +49,8 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
   // Shortcuts data
   const shortcuts = [
     {
-      title: 'Tạo hóa đơn',
-      description: 'Xuất hóa đơn cho khách hàng',
+      title: 'Tạo đơn hàng',
+      description: 'Xuất đơn hàng cho khách hàng',
       icon: FileText,
       color: 'bg-blue-500',
       onClick: () => router.push('/sales?tab=invoices&action=create')
@@ -198,11 +198,11 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <FileText className="h-5 w-5 text-blue-500 mr-3" />
-                <span className="text-black">Tổng hóa đơn</span>
+                <span className="text-black">Tổng đơn hàng</span>
               </div>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">{(invoicesStats as Record<string, unknown>).total as number || 0}</p>
-                <p className="text-sm text-black">hóa đơn</p>
+                <p className="text-sm text-black">đơn hàng</p>
               </div>
             </div>
             
@@ -224,7 +224,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
               </div>
               <div className="text-right">
                 <p className="font-semibold text-red-600">{(invoicesStats as { overdue: number }).overdue || 0}</p>
-                <p className="text-sm text-black">hóa đơn</p>
+                <p className="text-sm text-black">đơn hàng</p>
               </div>
             </div>
 
@@ -237,7 +237,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
                 <p className="font-semibold text-gray-900">
                   {(quotesStats as { total: number }).total > 0 ? (((invoicesStats as { total: number }).total / (quotesStats as { total: number }).total) * 100).toFixed(1) : 0}%
                 </p>
-                <p className="text-sm text-black">báo giá → hóa đơn</p>
+                <p className="text-sm text-black">báo giá → đơn hàng</p>
               </div>
             </div>
           </div>
@@ -265,7 +265,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{customer.name}</p>
-                    <p className="text-sm text-black">{customer.count} hóa đơn</p>
+                    <p className="text-sm text-black">{customer.count} đơn hàng</p>
                   </div>
                 </div>
                 <div className="text-right">

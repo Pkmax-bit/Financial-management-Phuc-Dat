@@ -30,13 +30,13 @@ export default function AIModelInfoPage() {
       capabilities: [
         "Phân tích hình ảnh (Image Analysis)",
         "OCR - Đọc văn bản từ hình ảnh (Optical Character Recognition)",
-        "Trích xuất thông tin từ hóa đơn (Receipt Information Extraction)",
+        "Trích xuất thông tin từ đơn hàng (Receipt Information Extraction)",
         "Nhận diện ngôn ngữ tiếng Việt",
         "Phân tích cấu trúc dữ liệu phức tạp",
         "Tự động phân loại chi phí (Expense Categorization)"
       ],
       cost: "$0.005 per 1K tokens (Input) + $0.015 per 1K tokens (Output)",
-      description: "GPT-4o (GPT-4 Omni) - Model AI mới nhất và mạnh nhất của OpenAI, có khả năng xử lý cả văn bản và hình ảnh với tốc độ nhanh hơn và chi phí thấp hơn. Được sử dụng để phân tích hóa đơn, trích xuất thông tin tài chính và tự động hóa quy trình quản lý chi phí.",
+      description: "GPT-4o (GPT-4 Omni) - Model AI mới nhất và mạnh nhất của OpenAI, có khả năng xử lý cả văn bản và hình ảnh với tốc độ nhanh hơn và chi phí thấp hơn. Được sử dụng để phân tích đơn hàng, trích xuất thông tin tài chính và tự động hóa quy trình quản lý chi phí.",
       icon: Eye
     }
     setModelInfo(info)
@@ -247,7 +247,7 @@ FormData:
           <h2 className="text-lg font-semibold text-blue-900 mb-4">Cách sử dụng</h2>
           <div className="space-y-3 text-blue-800">
             <p><strong>1. Upload hình ảnh:</strong> Chọn file hình ảnh từ thiết bị hoặc chụp ảnh trực tiếp</p>
-            <p><strong>2. AI phân tích:</strong> Model sẽ tự động đọc và trích xuất thông tin từ hóa đơn</p>
+            <p><strong>2. AI phân tích:</strong> Model sẽ tự động đọc và trích xuất thông tin từ đơn hàng</p>
             <p><strong>3. Kết quả:</strong> Hiển thị số tiền, nhà cung cấp, ngày, mô tả chi phí</p>
             <p><strong>4. Lưu chi phí:</strong> Tự động lưu vào hệ thống quản lý chi phí</p>
           </div>

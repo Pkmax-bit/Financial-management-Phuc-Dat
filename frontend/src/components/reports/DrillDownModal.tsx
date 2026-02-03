@@ -158,7 +158,7 @@ export default function DrillDownModal({
       'credit_memo': 'Credit Memo',
       'expense': 'Chi phí',
       'bill': 'Đơn hàng nhà cung cấp',
-      'bill_payment': 'Thanh toán hóa đơn',
+      'bill_payment': 'Thanh toán đơn hàng',
       'journal_entry': 'Bút toán kế toán',
       'purchase_order': 'Đơn đặt hàng',
       'expense_claim': 'Đề nghị hoàn ứng'

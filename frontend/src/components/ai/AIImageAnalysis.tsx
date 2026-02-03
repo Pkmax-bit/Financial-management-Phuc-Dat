@@ -179,7 +179,7 @@ export default function AIImageAnalysis() {
 
     } catch (error) {
       console.error('Error analyzing image:', error)
-      setError(`Lỗi phân tích hóa đơn: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setError(`Lỗi phân tích đơn hàng: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setAnalyzing(false)
     }
@@ -1070,7 +1070,7 @@ export default function AIImageAnalysis() {
                         {/* Bottom status */}
                         <div className="absolute bottom-4 left-4 right-4 text-center">
                           <div className="bg-black bg-opacity-50 text-white px-3 py-1 rounded text-xs">
-                            Đặt hóa đơn trong khung để chụp
+                            Đặt đơn hàng trong khung để chụp
                           </div>
                         </div>
                         

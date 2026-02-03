@@ -25,15 +25,15 @@ const faqs = [
   },
   {
     id: 3,
-    question: "Làm sao để tạo hóa đơn bán hàng?",
-    answer: "Vào mục Bán hàng > Đơn hàng > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
+    question: "Làm sao để tạo đơn hàng bán hàng?",
+    answer: "Vào mục Bán hàng > Đơn hàng > Tạo đơn hàng. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu đơn hàng.",
     category: "Bán hàng",
     module: "sales"
   },
   {
     id: 4,
     question: "Cách quản lý thanh toán của khách hàng?",
-    answer: "Vào mục Bán hàng > Thanh toán > Ghi nhận thanh toán. Chọn hóa đơn cần thanh toán, nhập số tiền và phương thức thanh toán.",
+    answer: "Vào mục Bán hàng > Thanh toán > Ghi nhận thanh toán. Chọn đơn hàng cần thanh toán, nhập số tiền và phương thức thanh toán.",
     category: "Bán hàng",
     module: "sales"
   },
@@ -60,8 +60,8 @@ const faqs = [
   },
   {
     id: 8,
-    question: "Cách chuyển đổi báo giá thành hóa đơn?",
-    answer: "Vào mục Bán hàng > Báo giá. Tìm báo giá đã được chấp nhận và nhấn 'Chuyển thành hóa đơn' để tạo hóa đơn mới.",
+    question: "Cách chuyển đổi báo giá thành đơn hàng?",
+    answer: "Vào mục Bán hàng > Báo giá. Tìm báo giá đã được chấp nhận và nhấn 'Chuyển thành đơn hàng' để tạo đơn hàng mới.",
     category: "Bán hàng",
     module: "sales"
   },
@@ -75,7 +75,7 @@ const faqs = [
   {
     id: 10,
     question: "Cách xử lý credit memo?",
-    answer: "Vào mục Bán hàng > Credit Memo > Tạo credit memo. Chọn hóa đơn gốc, nhập lý do và số tiền giảm trừ.",
+    answer: "Vào mục Bán hàng > Credit Memo > Tạo credit memo. Chọn đơn hàng gốc, nhập lý do và số tiền giảm trừ.",
     category: "Bán hàng",
     module: "sales"
   },
@@ -109,8 +109,8 @@ const faqs = [
   },
   {
     id: 15,
-    question: "Làm sao để tạo hóa đơn nhà cung cấp?",
-    answer: "Vào mục Chi phí > Đơn hàng > Tạo hóa đơn. Chọn nhà cung cấp, thêm sản phẩm/dịch vụ và lưu hóa đơn.",
+    question: "Làm sao để tạo đơn hàng nhà cung cấp?",
+    answer: "Vào mục Chi phí > Đơn hàng > Tạo đơn hàng. Chọn nhà cung cấp, thêm sản phẩm/dịch vụ và lưu đơn hàng.",
     category: "Chi phí",
     module: "expenses"
   }

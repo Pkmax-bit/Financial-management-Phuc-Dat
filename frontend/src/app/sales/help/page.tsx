@@ -35,7 +35,7 @@ export default function SalesHelpPage() {
             description: 'Trung tâm quản lý toàn bộ quy trình bán hàng từ báo giá đến thanh toán',
             features: [
               'Quản lý báo giá cho khách hàng tiềm năng',
-              'Tạo và gửi hóa đơn bán hàng',
+              'Tạo và gửi đơn hàng bán hàng',
               'Ghi nhận thanh toán từ khách hàng',
               'Bán hàng trực tiếp (phiếu thu)',
               'Xử lý trả hàng (credit memo)',
@@ -123,7 +123,7 @@ export default function SalesHelpPage() {
             description: 'Hướng dẫn chi tiết bằng văn bản',
             links: [
               { name: 'Tạo báo giá mới', url: '/sales/guide#quotes' },
-              { name: 'Gửi hóa đơn', url: '/sales/guide#invoices' },
+              { name: 'Gửi đơn hàng', url: '/sales/guide#invoices' },
               { name: 'Ghi nhận thanh toán', url: '/sales/guide#payments' },
               { name: 'Bán hàng trực tiếp', url: '/sales/guide#sales-receipts' },
               { name: 'Xử lý trả hàng', url: '/sales/guide#credit-memos' }
@@ -135,7 +135,7 @@ export default function SalesHelpPage() {
             links: [
               { name: 'Video tổng quan', url: '/sales/help#videos' },
               { name: 'Video tạo báo giá', url: '/sales/help#videos' },
-              { name: 'Video gửi hóa đơn', url: '/sales/help#videos' },
+              { name: 'Video gửi đơn hàng', url: '/sales/help#videos' },
               { name: 'Video bán hàng trực tiếp', url: '/sales/help#videos' }
             ]
           },
@@ -147,7 +147,7 @@ export default function SalesHelpPage() {
               'Nhấn F1 để mở hướng dẫn bất kỳ lúc nào',
               'Sử dụng bộ lọc để tìm kiếm nhanh',
               'Xuất báo cáo định kỳ để theo dõi hiệu suất',
-              'Sử dụng template để tạo nhanh báo giá/hóa đơn'
+              'Sử dụng template để tạo nhanh báo giá/đơn hàng'
             ]
           }
         ]
@@ -172,8 +172,8 @@ export default function SalesHelpPage() {
             ]
           },
           {
-            title: 'Lỗi tạo hóa đơn',
-            description: 'Không thể tạo hóa đơn mới',
+            title: 'Lỗi tạo đơn hàng',
+            description: 'Không thể tạo đơn hàng mới',
             solutions: [
               'Kiểm tra thông tin khách hàng có đầy đủ không',
               'Đảm bảo đã nhập đúng số tiền và thuế',
@@ -187,7 +187,7 @@ export default function SalesHelpPage() {
             description: 'Không thể ghi nhận thanh toán',
             solutions: [
               'Kiểm tra số tiền thanh toán có hợp lệ không',
-              'Đảm bảo không vượt quá số tiền hóa đơn',
+              'Đảm bảo không vượt quá số tiền đơn hàng',
               'Kiểm tra thông tin thanh toán',
               'Thử ghi nhận với số tiền nhỏ hơn',
               'Liên hệ hỗ trợ kỹ thuật'

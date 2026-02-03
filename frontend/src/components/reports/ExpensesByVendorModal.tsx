@@ -368,7 +368,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
                       {vendor.total_bills + vendor.total_expense_claims}
                     </div>
                     <div className="text-xs text-black">
-                      {vendor.total_bills} hóa đơn, {vendor.total_expense_claims} chi phí
+                      {vendor.total_bills} đơn hàng, {vendor.total_expense_claims} chi phí
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -548,7 +548,7 @@ export default function ExpensesByVendorModal({ isOpen, onClose, startDate, endD
                     <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
                   </div>
                   <div>
-                    <span className="font-medium">Tổng hóa đơn:</span> {report.total_bills}
+                    <span className="font-medium">Tổng đơn hàng:</span> {report.total_bills}
                   </div>
                   <div>
                     <span className="font-medium">Tổng chi phí:</span> {report.total_expense_claims}

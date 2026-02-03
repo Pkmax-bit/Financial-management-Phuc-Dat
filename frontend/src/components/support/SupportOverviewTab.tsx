@@ -54,7 +54,7 @@ export default function SupportOverviewTab({ searchTerm, onCreateGuide }: Suppor
               <DollarSign className="h-4 w-4 text-blue-500" />
               Bán hàng
             </h5>
-            <p className="text-sm text-black mb-3">Quản lý bán hàng, hóa đơn, thanh toán</p>
+            <p className="text-sm text-black mb-3">Quản lý bán hàng, đơn hàng, thanh toán</p>
             <Link href="/sales/guide" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
               Hướng dẫn Bán hàng →
             </Link>

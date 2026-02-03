@@ -24,10 +24,10 @@ const quickGuides = [
   {
     id: 'first-sale',
     title: 'Thực hiện giao dịch bán hàng đầu tiên',
-    description: 'Từ tạo hóa đơn đến thu tiền',
+    description: 'Từ tạo đơn hàng đến thu tiền',
     steps: [
       'Tạo khách hàng mới',
-      'Tạo hóa đơn bán hàng',
+      'Tạo đơn hàng bán hàng',
       'Ghi nhận thanh toán',
       'Xem báo cáo doanh thu'
     ],
@@ -51,8 +51,8 @@ const quickGuides = [
     description: 'Từ báo giá đến thu tiền',
     steps: [
       'Tạo báo giá cho khách hàng',
-      'Chuyển đổi báo giá thành hóa đơn',
-      'Gửi hóa đơn cho khách hàng',
+      'Chuyển đổi báo giá thành đơn hàng',
+      'Gửi đơn hàng cho khách hàng',
       'Ghi nhận thanh toán',
       'Tạo phiếu thu bán hàng (nếu cần)',
       'Xử lý credit memo (nếu có)'
@@ -66,7 +66,7 @@ const quickGuides = [
     steps: [
       'Thiết lập ngân sách cho các danh mục',
       'Tạo đơn đặt hàng (nếu cần)',
-      'Ghi nhận hóa đơn nhà cung cấp',
+      'Ghi nhận đơn hàng nhà cung cấp',
       'Xử lý đề nghị hoàn ứng',
       'Theo dõi chi phí so với ngân sách',
       'Tạo báo cáo chi phí'

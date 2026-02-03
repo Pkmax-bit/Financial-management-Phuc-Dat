@@ -197,8 +197,8 @@ const guideSteps = [
           <ul class="space-y-1 text-sm">
             <li>• Tên khách hàng</li>
             <li>• Tổng doanh thu</li>
-            <li>• Số lượng hóa đơn</li>
-            <li>• Giá trị trung bình mỗi hóa đơn</li>
+            <li>• Số lượng đơn hàng</li>
+            <li>• Giá trị trung bình mỗi đơn hàng</li>
             <li>• Tỷ lệ % so với tổng doanh thu</li>
           </ul>
         </div>
@@ -227,8 +227,8 @@ const guideSteps = [
           <ul class="space-y-1 text-sm">
             <li>• Tên nhà cung cấp</li>
             <li>• Tổng chi phí</li>
-            <li>• Số lượng hóa đơn</li>
-            <li>• Giá trị trung bình mỗi hóa đơn</li>
+            <li>• Số lượng đơn hàng</li>
+            <li>• Giá trị trung bình mỗi đơn hàng</li>
             <li>• Tỷ lệ % so với tổng chi phí</li>
           </ul>
         </div>

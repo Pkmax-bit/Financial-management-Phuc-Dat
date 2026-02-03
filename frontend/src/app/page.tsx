@@ -88,7 +88,7 @@ export default function HomePage() {
     {
       icon: FileText,
       title: 'Quản lý Đơn hàng',
-      description: 'Tạo và quản lý hóa đơn khách hàng chuyên nghiệp',
+      description: 'Tạo và quản lý đơn hàng khách hàng chuyên nghiệp',
       href: '/invoices',
       color: 'from-red-500 to-red-600',
       bgColor: 'bg-red-50',

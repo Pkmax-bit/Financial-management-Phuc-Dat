@@ -37,11 +37,24 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
   const [unpaidAmounts, setUnpaidAmounts] = useState<Record<string, number>>({})
   const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null)
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
     checkUser()
   }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenDropdownId(null)
+    }
+
+    if (openDropdownId) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [openDropdownId])
 
   const checkUser = async () => {
     try {
@@ -200,39 +213,39 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
   const handleDeleteCustomer = async (customer: Customer) => {
     const customerId = customer.id
     const customerName = customer.name
-    
-    // Show dialog with options: Soft delete or Hard delete
-    const deleteOption = window.confirm(
-      `Xóa khách hàng "${customerName}"?\n\n` +
-      `Chọn OK để xóa tạm thời (có thể khôi phục)\n` +
-      `Hoặc hủy và chọn "Xóa hoàn toàn" từ menu để xóa vĩnh viễn`
+
+    // Show confirmation dialog for soft delete
+    const confirmSoftDelete = window.confirm(
+      `Xóa tạm thời khách hàng "${customerName}"?\n\n` +
+      `Khách hàng sẽ được đánh dấu là "không hoạt động" và có thể khôi phục bằng cách đổi trạng thái.\n\n` +
+      `Bạn có chắc chắn muốn tiếp tục?`
     )
-    
-    if (!deleteOption) return
-    
+
+    if (!confirmSoftDelete) return
+
     try {
       setDeletingCustomerId(customerId)
       setDeleteMessage(null)
-      
-      // Soft delete by default
+
+      // Soft delete by setting status to inactive
       await customerApi.deleteCustomer(customerId, false)
-      
+
       // Show success message
-      setDeleteMessage({ 
-        type: 'success', 
-        text: '✅ Đã xóa khách hàng thành công (có thể khôi phục bằng cách đổi trạng thái)' 
+      setDeleteMessage({
+        type: 'success',
+        text: `✅ Đã xóa tạm thời khách hàng "${customerName}" thành công (có thể khôi phục bằng cách đổi trạng thái)`
       })
-      
+
       // Refresh customer list (no page reload)
       await fetchCustomers()
-      
+
       // Auto-hide message after 3 seconds
       setTimeout(() => setDeleteMessage(null), 3000)
     } catch (err: unknown) {
       console.error('Error deleting customer:', err)
-      setDeleteMessage({ 
-        type: 'error', 
-        text: (err as Error)?.message || 'Không thể xóa khách hàng' 
+      setDeleteMessage({
+        type: 'error',
+        text: `❌ ${(err as Error)?.message || 'Không thể xóa khách hàng'}`
       })
       setTimeout(() => setDeleteMessage(null), 5000)
     } finally {
@@ -243,44 +256,58 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
   const handleHardDeleteCustomer = async (customer: Customer) => {
     const customerId = customer.id
     const customerName = customer.name
-    
-    // Show warning for hard delete
+
+    // Show comprehensive warning for hard delete
     const confirmHardDelete = window.confirm(
-      `⚠️ CẢNH BÁO: Xóa vĩnh viễn khách hàng "${customerName}"\n\n` +
-      `Hành động này sẽ xóa vĩnh viễn khách hàng khỏi database và KHÔNG THỂ khôi phục!\n\n` +
-      `Lưu ý: Nếu khách hàng có dữ liệu liên quan (hóa đơn, báo giá, dự án), ` +
-      `hệ thống sẽ cố gắng xóa. Nếu database có ràng buộc foreign key, ` +
-      `việc xóa có thể thất bại và bạn sẽ nhận được thông báo lỗi chi tiết.\n\n` +
-      `Bạn có chắc chắn muốn tiếp tục?`
+      `🚨 CẢNH BÁO QUAN TRỌNG: Xóa vĩnh viễn khách hàng\n\n` +
+      `Khách hàng: "${customerName}"\n\n` +
+      `⚠️ HÀNH ĐỘNG NÀY KHÔNG THỂ HOÀN TÁC!\n\n` +
+      `Dữ liệu sẽ bị xóa vĩnh viễn khỏi database bao gồm:\n` +
+      `• Thông tin khách hàng\n` +
+      `• Tất cả đơn hàng và báo giá\n` +
+      `• Tất cả dự án liên quan\n` +
+      `• Lịch sử thanh toán\n\n` +
+      `Nếu có lỗi ràng buộc database, hệ thống sẽ thông báo chi tiết.\n\n` +
+      `Bạn có ABSOLUTELY chắc chắn muốn xóa vĩnh viễn?`
     )
-    
+
     if (!confirmHardDelete) return
-    
+
+    // Additional confirmation
+    const finalConfirm = window.confirm(
+      `🔴 XÁC NHẬN LẦN CUỐI\n\n` +
+      `Bạn đang thực hiện xóa VĨNH VIỂN khách hàng "${customerName}".\n\n` +
+      `KHÔNG CÓ CÁCH NÀO KHÔI PHỤC DỮ LIỆU SAU THAO TÁC NÀY!\n\n` +
+      `Nhập "XÓA" để xác nhận:`
+    )
+
+    if (!finalConfirm) return
+
     try {
       setDeletingCustomerId(customerId)
       setDeleteMessage(null)
-      
+
       await customerApi.deleteCustomer(customerId, true)
-      
+
       // Show success message
-      setDeleteMessage({ 
-        type: 'success', 
-        text: '✅ Đã xóa vĩnh viễn khách hàng khỏi database thành công' 
+      setDeleteMessage({
+        type: 'success',
+        text: `✅ Đã xóa vĩnh viễn khách hàng "${customerName}" và tất cả dữ liệu liên quan thành công`
       })
-      
+
       // Refresh customer list (no page reload)
       await fetchCustomers()
-      
-      // Auto-hide message after 3 seconds
-      setTimeout(() => setDeleteMessage(null), 3000)
+
+      // Auto-hide message after 5 seconds for important action
+      setTimeout(() => setDeleteMessage(null), 5000)
     } catch (err: unknown) {
       console.error('Error hard deleting customer:', err)
       const errorMessage = (err as Error)?.message || 'Không thể xóa vĩnh viễn khách hàng'
-      setDeleteMessage({ 
-        type: 'error', 
-        text: `❌ ${errorMessage}` 
+      setDeleteMessage({
+        type: 'error',
+        text: `❌ Lỗi xóa vĩnh viễn: ${errorMessage}`
       })
-      setTimeout(() => setDeleteMessage(null), 5000)
+      setTimeout(() => setDeleteMessage(null), 8000)
     } finally {
       setDeletingCustomerId(null)
     }
@@ -603,7 +630,7 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                       <button 
                         onClick={() => handleCreateInvoice(customer.id)}
                         className="text-green-600 hover:text-green-900 p-1"
-                        title="Tạo hóa đơn"
+                        title="Tạo đơn hàng"
                       >
                         <FileText className="h-4 w-4" />
                       </button>
@@ -614,37 +641,64 @@ export default function CustomersTab({ searchTerm }: CustomersTabProps) {
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      <div className="relative group">
-                        <button 
+                      <div className="relative">
+                        <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleDeleteCustomer(customer)
+                            setOpenDropdownId(openDropdownId === customer.id ? null : customer.id)
                           }}
-                          className="text-red-600 hover:text-red-900 p-1"
-                          title="Xóa"
+                          className="text-red-600 hover:text-red-900 p-1 flex items-center"
+                          title="Tùy chọn xóa"
                         >
                           <Trash2 className="h-4 w-4" />
+                          <svg
+                            className={`h-3 w-3 ml-1 transition-transform ${openDropdownId === customer.id ? 'rotate-180' : ''}`}
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
                         </button>
-                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteCustomer(customer)
-                            }}
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-md"
-                          >
-                            Xóa tạm thời (có thể khôi phục)
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleHardDeleteCustomer(customer)
-                            }}
-                            className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-md border-t border-gray-200"
-                          >
-                            Xóa hoàn toàn (không thể khôi phục)
-                          </button>
-                        </div>
+                        {openDropdownId === customer.id && (
+                          <div className="absolute right-0 mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteCustomer(customer)
+                                setOpenDropdownId(null)
+                              }}
+                              className="block w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 rounded-t-md flex items-center"
+                              disabled={deletingCustomerId === customer.id}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2 text-gray-500" />
+                              <div>
+                                <div className="font-medium">Xóa tạm thời</div>
+                                <div className="text-xs text-gray-500">Có thể khôi phục bằng cách đổi trạng thái</div>
+                              </div>
+                              {deletingCustomerId === customer.id && (
+                                <div className="ml-auto animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500"></div>
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleHardDeleteCustomer(customer)
+                                setOpenDropdownId(null)
+                              }}
+                              className="block w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 rounded-b-md border-t border-gray-200 flex items-center"
+                              disabled={deletingCustomerId === customer.id}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2 text-red-500" />
+                              <div>
+                                <div className="font-medium">Xóa hoàn toàn</div>
+                                <div className="text-xs text-red-400">Không thể khôi phục - xóa tất cả dữ liệu</div>
+                              </div>
+                              {deletingCustomerId === customer.id && (
+                                <div className="ml-auto animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>

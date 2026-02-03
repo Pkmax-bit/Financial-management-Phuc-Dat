@@ -71,26 +71,26 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
       ]
     },
     invoices: {
-      title: 'Hướng dẫn tạo hóa đơn',
-      description: 'Tạo hóa đơn từ báo giá hoặc tạo mới',
+      title: 'Hướng dẫn tạo đơn hàng',
+      description: 'Tạo đơn hàng từ báo giá hoặc tạo mới',
       steps: [
         {
-          title: 'Chọn cách tạo hóa đơn',
+          title: 'Chọn cách tạo đơn hàng',
           description: 'Tạo từ báo giá hoặc tạo mới',
           action: 'Chọn "Tạo từ báo giá" hoặc "Tạo mới"',
           hint: 'Nếu có báo giá, nên tạo từ báo giá để tiết kiệm thời gian',
           target: 'create-invoice-option'
         },
         {
-          title: 'Điền thông tin hóa đơn',
-          description: 'Nhập thông tin chi tiết hóa đơn',
-          action: 'Điền số hóa đơn, ngày phát hành, ngày đến hạn',
-          hint: 'Số hóa đơn thường tự động tạo, có thể chỉnh sửa',
+          title: 'Điền thông tin đơn hàng',
+          description: 'Nhập thông tin chi tiết đơn hàng',
+          action: 'Điền số đơn hàng, ngày phát hành, ngày đến hạn',
+          hint: 'Số đơn hàng thường tự động tạo, có thể chỉnh sửa',
           target: 'invoice-details'
         },
         {
           title: 'Thêm sản phẩm/dịch vụ',
-          description: 'Thêm các sản phẩm vào hóa đơn',
+          description: 'Thêm các sản phẩm vào đơn hàng',
           action: 'Thêm sản phẩm và kiểm tra số lượng, đơn giá',
           hint: 'Có thể copy từ báo giá nếu tạo từ báo giá',
           target: 'invoice-items'
@@ -103,9 +103,9 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
           target: 'payment-terms'
         },
         {
-          title: 'Gửi hóa đơn',
-          description: 'Gửi hóa đơn cho khách hàng',
-          action: 'Nhấn "Gửi hóa đơn" sau khi tạo xong',
+          title: 'Gửi đơn hàng',
+          description: 'Gửi đơn hàng cho khách hàng',
+          action: 'Nhấn "Gửi đơn hàng" sau khi tạo xong',
           hint: 'Đơn hàng sẽ chuyển từ "Draft" sang "Sent"',
           target: 'send-invoice-button'
         }
@@ -116,31 +116,31 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
       description: 'Ghi nhận thanh toán từ khách hàng',
       steps: [
         {
-          title: 'Tìm hóa đơn cần thanh toán',
-          description: 'Tìm hóa đơn trong danh sách',
+          title: 'Tìm đơn hàng cần thanh toán',
+          description: 'Tìm đơn hàng trong danh sách',
           action: 'Sử dụng bộ lọc hoặc tìm kiếm theo khách hàng',
           hint: 'Đơn hàng có trạng thái "Sent" mới có thể thanh toán',
           target: 'invoice-list'
         },
         {
           title: 'Mở form thanh toán',
-          description: 'Nhấn nút thanh toán trên hóa đơn',
+          description: 'Nhấn nút thanh toán trên đơn hàng',
           action: 'Tìm nút có biểu tượng tiền hoặc "Thanh toán"',
-          hint: 'Nút này chỉ hiện khi hóa đơn chưa thanh toán đầy đủ',
+          hint: 'Nút này chỉ hiện khi đơn hàng chưa thanh toán đầy đủ',
           target: 'payment-button'
         },
         {
           title: 'Nhập thông tin thanh toán',
           description: 'Điền số tiền và phương thức thanh toán',
           action: 'Nhập số tiền, chọn phương thức, thêm ghi chú',
-          hint: 'Số tiền không được vượt quá số tiền còn lại của hóa đơn',
+          hint: 'Số tiền không được vượt quá số tiền còn lại của đơn hàng',
           target: 'payment-form'
         },
         {
           title: 'Xác nhận thanh toán',
           description: 'Kiểm tra và xác nhận thông tin',
           action: 'Xem lại thông tin và nhấn "Xác nhận"',
-          hint: 'Sau khi xác nhận, hóa đơn sẽ được cập nhật trạng thái',
+          hint: 'Sau khi xác nhận, đơn hàng sẽ được cập nhật trạng thái',
           target: 'confirm-payment-button'
         }
       ]
@@ -160,7 +160,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
           title: 'Tạo phiếu thu mới',
           description: 'Nhấn nút tạo phiếu thu',
           action: 'Nhấn nút "Tạo phiếu thu" hoặc dấu +',
-          hint: 'Phiếu thu khác với hóa đơn vì thu tiền ngay',
+          hint: 'Phiếu thu khác với đơn hàng vì thu tiền ngay',
           target: 'create-receipt-button'
         },
         {
@@ -215,14 +215,14 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
           title: 'Chọn khách hàng',
           description: 'Chọn khách hàng cần tạo credit memo',
           action: 'Chọn khách hàng từ danh sách',
-          hint: 'Chỉ khách hàng có hóa đơn mới có thể tạo credit memo',
+          hint: 'Chỉ khách hàng có đơn hàng mới có thể tạo credit memo',
           target: 'customer-select'
         },
         {
-          title: 'Liên kết với hóa đơn gốc',
-          description: 'Chọn hóa đơn gốc (nếu có)',
-          action: 'Chọn hóa đơn gốc từ danh sách',
-          hint: 'Có thể bỏ trống nếu không liên quan đến hóa đơn cụ thể',
+          title: 'Liên kết với đơn hàng gốc',
+          description: 'Chọn đơn hàng gốc (nếu có)',
+          action: 'Chọn đơn hàng gốc từ danh sách',
+          hint: 'Có thể bỏ trống nếu không liên quan đến đơn hàng cụ thể',
           target: 'original-invoice'
         },
         {

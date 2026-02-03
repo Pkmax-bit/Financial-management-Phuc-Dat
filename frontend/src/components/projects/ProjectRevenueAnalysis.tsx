@@ -446,11 +446,11 @@ export default function ProjectRevenueAnalysis({ projectId, projectName }: Proje
         <div className="flex items-center justify-between">
           <div>
             <h4 className="font-medium text-green-900">Quản lý Doanh thu</h4>
-            <p className="text-sm text-green-700">Tạo hóa đơn và biên lai bán hàng</p>
+            <p className="text-sm text-green-700">Tạo đơn hàng và biên lai bán hàng</p>
           </div>
           <div className="flex items-center gap-2">
             <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-              Tạo hóa đơn
+              Tạo đơn hàng
             </button>
             <button className="px-4 py-2 bg-white text-green-600 border border-green-600 rounded-lg hover:bg-green-50 transition-colors">
               Biên lai bán hàng

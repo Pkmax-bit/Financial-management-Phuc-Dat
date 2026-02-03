@@ -271,7 +271,7 @@ export default function CreditMemosTab({
                             <button
                               onClick={() => onShowApplyModal(memo)}
                               className="text-green-600 hover:text-green-900 p-1"
-                              title="Áp dụng vào hóa đơn"
+                              title="Áp dụng vào đơn hàng"
                             >
                               <CheckCircle className="w-4 h-4" />
                             </button>

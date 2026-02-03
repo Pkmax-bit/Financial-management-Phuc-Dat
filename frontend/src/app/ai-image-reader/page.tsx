@@ -102,11 +102,11 @@ export default function AIImageReaderPage() {
         setEditedData(result.analysis)
         setSuccess('AI đã phân tích thành công!')
       } else {
-        setError('Lỗi phân tích hóa đơn: ' + result.error)
+        setError('Lỗi phân tích đơn hàng: ' + result.error)
       }
     } catch (error) {
       console.error('Error analyzing receipt:', error)
-      setError('Có lỗi xảy ra khi phân tích hóa đơn')
+      setError('Có lỗi xảy ra khi phân tích đơn hàng')
     } finally {
       setUploading(false)
       setAnalyzing(false)

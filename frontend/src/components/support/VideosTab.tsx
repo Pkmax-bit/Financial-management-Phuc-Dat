@@ -16,7 +16,7 @@ const videoTutorials = [
     title: 'Hướng dẫn Bán hàng',
     duration: '8:15',
     thumbnail: '/videos/sales-thumb.jpg',
-    description: 'Từ tạo hóa đơn đến thu tiền'
+    description: 'Từ tạo đơn hàng đến thu tiền'
   },
   {
     id: 3,

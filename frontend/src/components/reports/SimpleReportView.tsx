@@ -236,7 +236,7 @@ export default function SimpleReportView({ reportType, data, onBack }: SimpleRep
         <div className="bg-orange-50 rounded-lg p-6 border border-orange-200">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-orange-900">Tổng hóa đơn</h3>
+              <h3 className="text-lg font-semibold text-orange-900">Tổng đơn hàng</h3>
               <p className="text-3xl font-bold text-orange-600">
                 {data.total_invoices || 0}
               </p>
@@ -270,7 +270,7 @@ export default function SimpleReportView({ reportType, data, onBack }: SimpleRep
               </div>
               <div className="text-right">
                 <div className="font-bold">{formatCurrency(customer.total_sales)}</div>
-                <div className="text-sm text-black">{customer.total_invoices} hóa đơn</div>
+                <div className="text-sm text-black">{customer.total_invoices} đơn hàng</div>
               </div>
             </div>
           ))}

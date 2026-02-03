@@ -22,7 +22,7 @@ const modules = [
     name: 'Bán hàng',
     icon: DollarSign,
     color: 'blue',
-    description: 'Quản lý bán hàng, hóa đơn, thanh toán',
+    description: 'Quản lý bán hàng, đơn hàng, thanh toán',
     guides: [
       { title: 'Tổng quan Bán hàng', url: '/sales/guide' },
       { title: 'Hướng dẫn Tạo Đơn hàng', url: '/sales/guide#invoices' },
@@ -34,15 +34,15 @@ const modules = [
       { title: 'Credit Memo', url: '/sales/guide#credit-memos' }
     ],
     quickActions: [
-      { title: 'Tạo hóa đơn mới', action: 'create-invoice' },
+      { title: 'Tạo đơn hàng mới', action: 'create-invoice' },
       { title: 'Xem báo cáo doanh thu', action: 'view-reports' },
       { title: 'Quản lý khách hàng', action: 'manage-customers' }
     ],
     features: [
-      'Tạo và quản lý hóa đơn bán hàng',
+      'Tạo và quản lý đơn hàng bán hàng',
       'Theo dõi thanh toán từ khách hàng',
       'Quản lý thông tin khách hàng',
-      'Tạo báo giá và chuyển đổi thành hóa đơn',
+      'Tạo báo giá và chuyển đổi thành đơn hàng',
       'Xử lý phiếu thu bán hàng',
       'Quản lý credit memo và hoàn tiền',
       'Báo cáo doanh thu chi tiết'
@@ -71,7 +71,7 @@ const modules = [
     features: [
       'Ghi nhận và quản lý chi phí',
       'Thiết lập và theo dõi ngân sách',
-      'Quản lý hóa đơn nhà cung cấp',
+      'Quản lý đơn hàng nhà cung cấp',
       'Xử lý đề nghị hoàn ứng nhân viên',
       'Tạo đơn đặt hàng và phê duyệt',
       'Quản lý thông tin nhà cung cấp',

@@ -356,7 +356,7 @@ export default function PurchaseOrdersTab({ searchTerm, onCreatePurchaseOrder }:
                         <button 
                           onClick={() => handleConvertToBill(po.id)}
                           className="text-black hover:text-blue-600" 
-                          title="Chuyển thành hóa đơn"
+                          title="Chuyển thành đơn hàng"
                         >
                           <ArrowRight className="h-4 w-4" />
                         </button>

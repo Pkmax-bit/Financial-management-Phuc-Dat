@@ -355,7 +355,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                       {customer.total_invoices + customer.total_sales_receipts}
                     </div>
                     <div className="text-xs text-black">
-                      {customer.total_invoices} hóa đơn, {customer.total_sales_receipts} phiếu thu
+                      {customer.total_invoices} đơn hàng, {customer.total_sales_receipts} phiếu thu
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -529,7 +529,7 @@ export default function SalesByCustomerModal({ isOpen, onClose, startDate, endDa
                         <span className="font-medium">Tổng giao dịch:</span> {report.total_transactions}
                       </div>
                       <div>
-                        <span className="font-medium">Tổng hóa đơn:</span> {report.total_invoices}
+                        <span className="font-medium">Tổng đơn hàng:</span> {report.total_invoices}
                       </div>
                       <div>
                         <span className="font-medium">Tổng phiếu thu:</span> {report.total_sales_receipts}

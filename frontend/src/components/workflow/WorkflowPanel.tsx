@@ -669,7 +669,7 @@ export default function WorkflowPanel({ isOpen, onClose }: WorkflowPanelProps) {
     {
       id: 4,
       title: 'Xuất PDF và Duyệt thành Đơn hàng',
-      description: 'Xuất báo giá ra PDF hoặc duyệt để chuyển thành hóa đơn',
+      description: 'Xuất báo giá ra PDF hoặc duyệt để chuyển thành đơn hàng',
       icon: FileText,
       checkStatus: checkStep4,
       actions: [
@@ -726,7 +726,7 @@ export default function WorkflowPanel({ isOpen, onClose }: WorkflowPanelProps) {
     {
       id: 7,
       title: 'Ghi nhận thanh toán',
-      description: 'Khi khách hàng thanh toán, ghi nhận số tiền đã thanh toán vào hóa đơn',
+      description: 'Khi khách hàng thanh toán, ghi nhận số tiền đã thanh toán vào đơn hàng',
       icon: CreditCard,
       checkStatus: checkStep7,
       actions: [

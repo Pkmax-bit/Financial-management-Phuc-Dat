@@ -78,7 +78,7 @@ export default function CameraSetupGuide({ onClose }: CameraSetupGuideProps) {
               <Camera className="h-8 w-8" />
               <div>
                 <h2 className="text-2xl font-bold">Hướng Dẫn Kích Hoạt Camera</h2>
-                <p className="text-blue-100">Cài đặt camera cho AI phân tích hóa đơn</p>
+                <p className="text-blue-100">Cài đặt camera cho AI phân tích đơn hàng</p>
               </div>
             </div>
             <button

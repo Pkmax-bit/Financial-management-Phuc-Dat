@@ -54,7 +54,7 @@ export default function ExpensesHelpPage() {
     },
     {
       id: 4,
-      question: "Đơn đặt hàng khác gì với hóa đơn nhà cung cấp?",
+      question: "Đơn đặt hàng khác gì với đơn hàng nhà cung cấp?",
       answer: "Đơn đặt hàng (PO) là yêu cầu mua hàng trước khi thực hiện giao dịch, không tạo bút toán kế toán. Đơn hàng nhà cung cấp là chứng từ thanh toán thực tế, tạo bút toán kế toán."
     },
     {
@@ -214,7 +214,7 @@ export default function ExpensesHelpPage() {
                         Đơn hàng NCC
                       </h3>
                       <p className="text-sm text-orange-800">
-                        Quản lý hóa đơn từ nhà cung cấp và theo dõi thanh toán
+                        Quản lý đơn hàng từ nhà cung cấp và theo dõi thanh toán
                       </p>
                     </div>
                     
@@ -354,7 +354,7 @@ export default function ExpensesHelpPage() {
                         <FileTextIcon className="h-5 w-5 text-red-600" />
                         Đơn hàng NCC
                       </h3>
-                      <p className="text-black text-sm mb-3">Hướng dẫn quản lý hóa đơn nhà cung cấp</p>
+                      <p className="text-black text-sm mb-3">Hướng dẫn quản lý đơn hàng nhà cung cấp</p>
                       <Link 
                         href="/expenses/guide#bills"
                         className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"

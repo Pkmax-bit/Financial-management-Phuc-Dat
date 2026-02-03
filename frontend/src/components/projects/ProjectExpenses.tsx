@@ -265,7 +265,7 @@ export default function ProjectExpenses({ projectId, projectName }: ProjectExpen
                       className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
                     >
                       <CreditCard className="h-4 w-4" />
-                      Xem hóa đơn
+                      Xem đơn hàng
                     </a>
                   </div>
                 )}

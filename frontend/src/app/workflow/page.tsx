@@ -121,7 +121,7 @@ export default function WorkflowPage() {
     {
       id: 4,
       title: 'Xuất PDF và Duyệt thành Đơn hàng',
-      description: 'Xuất báo giá ra PDF hoặc duyệt để chuyển thành hóa đơn',
+      description: 'Xuất báo giá ra PDF hoặc duyệt để chuyển thành đơn hàng',
       icon: FileText,
       route: '/sales',
       actions: [
@@ -178,7 +178,7 @@ export default function WorkflowPage() {
     {
       id: 7,
       title: 'Ghi nhận thanh toán',
-      description: 'Khi khách hàng thanh toán, ghi nhận số tiền đã thanh toán vào hóa đơn',
+      description: 'Khi khách hàng thanh toán, ghi nhận số tiền đã thanh toán vào đơn hàng',
       icon: CreditCard,
       route: '/sales',
       actions: [
@@ -296,7 +296,7 @@ export default function WorkflowPage() {
                 <p className="font-medium mb-2">Quy trình bán hàng:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li>Tạo khách hàng → Tạo dự án → Tạo báo giá</li>
-                  <li>Xuất PDF báo giá hoặc duyệt thành hóa đơn</li>
+                  <li>Xuất PDF báo giá hoặc duyệt thành đơn hàng</li>
                   <li>Ghi nhận thanh toán khi khách trả tiền</li>
                 </ul>
               </div>

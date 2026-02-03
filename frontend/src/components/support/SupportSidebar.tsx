@@ -49,7 +49,7 @@ const modules = [
     name: 'Bán hàng',
     icon: DollarSign,
     color: 'blue',
-    description: 'Quản lý bán hàng, hóa đơn, thanh toán',
+    description: 'Quản lý bán hàng, đơn hàng, thanh toán',
     guides: [
       { title: 'Tổng quan Bán hàng', url: '/sales/guide' },
       { title: 'Hướng dẫn Tạo Đơn hàng', url: '/sales/guide#invoices' },
@@ -108,7 +108,7 @@ const quickGuides = [
   {
     id: 'first-sale',
     title: 'Thực hiện giao dịch bán hàng đầu tiên',
-    description: 'Từ tạo hóa đơn đến thu tiền',
+    description: 'Từ tạo đơn hàng đến thu tiền',
     estimatedTime: '10 phút'
   },
   {
@@ -130,7 +130,7 @@ const videoTutorials = [
     id: 2,
     title: 'Hướng dẫn Bán hàng',
     duration: '8:15',
-    description: 'Từ tạo hóa đơn đến thu tiền'
+    description: 'Từ tạo đơn hàng đến thu tiền'
   },
   {
     id: 3,
@@ -163,15 +163,15 @@ const faqs = [
   },
   {
     id: 3,
-    question: "Làm sao để tạo hóa đơn bán hàng?",
-    answer: "Vào mục Bán hàng > Đơn hàng > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
+    question: "Làm sao để tạo đơn hàng bán hàng?",
+    answer: "Vào mục Bán hàng > Đơn hàng > Tạo đơn hàng. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu đơn hàng.",
     category: "Bán hàng",
     module: "sales"
   },
   {
     id: 4,
     question: "Cách quản lý thanh toán của khách hàng?",
-    answer: "Vào mục Bán hàng > Thanh toán > Ghi nhận thanh toán. Chọn hóa đơn cần thanh toán, nhập số tiền và phương thức thanh toán.",
+    answer: "Vào mục Bán hàng > Thanh toán > Ghi nhận thanh toán. Chọn đơn hàng cần thanh toán, nhập số tiền và phương thức thanh toán.",
     category: "Bán hàng",
     module: "sales"
   },

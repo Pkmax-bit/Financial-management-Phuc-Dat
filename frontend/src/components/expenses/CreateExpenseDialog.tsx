@@ -609,7 +609,7 @@ export default function CreateExpenseDialog({ isOpen, onClose, onSuccess, defaul
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-900">URL hóa đơn</label>
+              <label className="block text-sm font-semibold text-gray-900">URL đơn hàng</label>
               <input
                 type="url"
                 value={formData.receipt_url}

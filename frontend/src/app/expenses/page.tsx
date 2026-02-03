@@ -229,7 +229,7 @@ function ExpensesPageContent() {
         {/* Sticky Top Navigation */}
         <StickyTopNav
           title="Quản lý Chi phí"
-          subtitle="Theo dõi và quản lý chi phí, hóa đơn nhà cung cấp"
+          subtitle="Theo dõi và quản lý chi phí, đơn hàng nhà cung cấp"
         >
           <div className="flex space-x-2">
             <button
@@ -320,7 +320,7 @@ function ExpensesPageContent() {
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency(((expensesStats as Record<string, unknown>).total_bills as number) || 0)}
                     </p>
-                    <p className="text-sm text-gray-500">{((expensesStats as Record<string, unknown>).bills_count as number) || 0} hóa đơn</p>
+                    <p className="text-sm text-gray-500">{((expensesStats as Record<string, unknown>).bills_count as number) || 0} đơn hàng</p>
                   </div>
                 </div>
               </div>
@@ -423,7 +423,7 @@ function ExpensesPageContent() {
                           activeTab === 'expenses'
                             ? 'Tìm kiếm chi phí...'
                             : activeTab === 'bills'
-                              ? 'Tìm kiếm hóa đơn NCC...'
+                              ? 'Tìm kiếm đơn hàng NCC...'
                               : activeTab === 'vendors'
                                 ? 'Tìm kiếm nhà cung cấp...'
                                 : 'Tìm kiếm...'
@@ -473,7 +473,7 @@ function ExpensesPageContent() {
                           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
                         >
                           <Plus className="h-4 w-4 mr-2" />
-                          Tạo hóa đơn NCC
+                          Tạo đơn hàng NCC
                         </button>
                       )}
                       {activeTab === 'vendors' && (

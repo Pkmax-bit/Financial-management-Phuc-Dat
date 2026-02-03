@@ -37,12 +37,12 @@ export default function VideoGuideModal({ isOpen, onClose }: VideoGuideModalProp
       ]
     },
     {
-      title: 'Gửi hóa đơn',
-      description: 'Cách gửi hóa đơn và ghi nhận thanh toán',
+      title: 'Gửi đơn hàng',
+      description: 'Cách gửi đơn hàng và ghi nhận thanh toán',
       duration: '3:15',
       steps: [
-        'Chuyển báo giá thành hóa đơn',
-        'Gửi hóa đơn cho khách hàng',
+        'Chuyển báo giá thành đơn hàng',
+        'Gửi đơn hàng cho khách hàng',
         'Ghi nhận thanh toán',
         'Theo dõi trạng thái'
       ]
@@ -66,7 +66,7 @@ export default function VideoGuideModal({ isOpen, onClose }: VideoGuideModalProp
       steps: [
         'Chọn tab Credit Memos',
         'Tạo credit memo',
-        'Áp dụng vào hóa đơn',
+        'Áp dụng vào đơn hàng',
         'Hoặc hoàn tiền trực tiếp'
       ]
     }

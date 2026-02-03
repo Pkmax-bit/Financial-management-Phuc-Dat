@@ -33,7 +33,7 @@ export default function SalesGuidePage() {
         description: 'Hệ thống Sales giúp bạn quản lý toàn bộ quy trình bán hàng từ báo giá đến thanh toán.',
         features: [
           'Quản lý báo giá cho khách hàng',
-          'Tạo và gửi hóa đơn',
+          'Tạo và gửi đơn hàng',
           'Ghi nhận thanh toán',
           'Bán hàng trực tiếp (phiếu thu)',
           'Xử lý trả hàng (credit memo)',
@@ -73,7 +73,7 @@ export default function SalesGuidePage() {
             details: [
               'Tab Overview: Tổng quan thống kê',
               'Tab Quotes: Quản lý báo giá',
-              'Tab Invoices: Quản lý hóa đơn',
+              'Tab Invoices: Quản lý đơn hàng',
               'Tab Payments: Quản lý thanh toán',
               'Tab Sales Receipts: Phiếu thu bán hàng',
               'Tab Credit Memos: Giấy báo có'
@@ -112,13 +112,13 @@ export default function SalesGuidePage() {
             ]
           },
           {
-            title: 'Chuyển đổi thành hóa đơn',
+            title: 'Chuyển đổi thành đơn hàng',
             description: 'Khi khách hàng chấp nhận báo giá',
             details: [
               'Tìm báo giá đã được chấp nhận',
               'Nhấn nút "Chuyển đổi"',
-              'Kiểm tra thông tin hóa đơn',
-              'Nhấn "Tạo hóa đơn"'
+              'Kiểm tra thông tin đơn hàng',
+              'Nhấn "Tạo đơn hàng"'
             ]
           }
         ]
@@ -129,27 +129,27 @@ export default function SalesGuidePage() {
       title: 'Quản lý Đơn hàng',
       icon: Receipt,
       content: {
-        description: 'Tạo, gửi và theo dõi hóa đơn bán hàng.',
+        description: 'Tạo, gửi và theo dõi đơn hàng bán hàng.',
         steps: [
           {
-            title: 'Tạo hóa đơn mới',
-            description: 'Tạo hóa đơn cho khách hàng',
+            title: 'Tạo đơn hàng mới',
+            description: 'Tạo đơn hàng cho khách hàng',
             details: [
-              'Nhấn nút "Tạo hóa đơn" (dấu +)',
+              'Nhấn nút "Tạo đơn hàng" (dấu +)',
               'Chọn khách hàng từ danh sách',
               'Thêm sản phẩm/dịch vụ',
               'Nhập thông tin thanh toán',
               'Kiểm tra tổng tiền và thuế',
-              'Nhấn "Lưu" để tạo hóa đơn'
+              'Nhấn "Lưu" để tạo đơn hàng'
             ]
           },
           {
-            title: 'Gửi hóa đơn',
-            description: 'Gửi hóa đơn cho khách hàng',
+            title: 'Gửi đơn hàng',
+            description: 'Gửi đơn hàng cho khách hàng',
             details: [
-              'Tìm hóa đơn cần gửi',
+              'Tìm đơn hàng cần gửi',
               'Nhấn nút "Gửi" (biểu tượng gửi)',
-              'Xác nhận gửi hóa đơn',
+              'Xác nhận gửi đơn hàng',
               'Trạng thái chuyển thành "Sent"',
               'Hệ thống tự động tạo bút toán kế toán'
             ]
@@ -158,7 +158,7 @@ export default function SalesGuidePage() {
             title: 'Ghi nhận thanh toán',
             description: 'Ghi nhận khi khách hàng thanh toán',
             details: [
-              'Tìm hóa đơn cần ghi nhận thanh toán',
+              'Tìm đơn hàng cần ghi nhận thanh toán',
               'Nhấn nút "Thanh toán" (biểu tượng tiền)',
               'Nhập số tiền thanh toán',
               'Chọn phương thức thanh toán',
@@ -190,10 +190,10 @@ export default function SalesGuidePage() {
             title: 'Ghi nhận thanh toán mới',
             description: 'Ghi nhận thanh toán từ khách hàng',
             details: [
-              'Từ hóa đơn, nhấn nút "Thanh toán"',
+              'Từ đơn hàng, nhấn nút "Thanh toán"',
               'Hoặc tạo thanh toán mới từ tab Payments',
               'Nhập thông tin thanh toán',
-              'Chọn hóa đơn để áp dụng',
+              'Chọn đơn hàng để áp dụng',
               'Xác nhận ghi nhận thanh toán'
             ]
           },
@@ -267,19 +267,19 @@ export default function SalesGuidePage() {
               'Chọn tab "Credit Memos"',
               'Nhấn nút "Tạo Credit Memo"',
               'Chọn khách hàng',
-              'Liên kết với hóa đơn gốc (nếu có)',
+              'Liên kết với đơn hàng gốc (nếu có)',
               'Thêm sản phẩm/dịch vụ trả lại',
               'Nhập lý do trả hàng',
               'Nhấn "Lưu" để tạo credit memo'
             ]
           },
           {
-            title: 'Áp dụng vào hóa đơn',
+            title: 'Áp dụng vào đơn hàng',
             description: 'Giảm trừ công nợ khách hàng',
             details: [
               'Tìm credit memo cần áp dụng',
               'Nhấn nút "Áp dụng"',
-              'Chọn hóa đơn để áp dụng',
+              'Chọn đơn hàng để áp dụng',
               'Nhập số tiền áp dụng',
               'Xác nhận áp dụng',
               'Hệ thống tự động cập nhật công nợ'
@@ -314,7 +314,7 @@ export default function SalesGuidePage() {
               'Doanh thu tổng cộng',
               'Doanh thu đã thu',
               'Doanh thu chưa thu',
-              'Số lượng hóa đơn',
+              'Số lượng đơn hàng',
               'Đơn hàng quá hạn',
               'Biểu đồ xu hướng'
             ]
@@ -362,8 +362,8 @@ export default function SalesGuidePage() {
             ]
           },
           {
-            title: 'Lỗi tạo hóa đơn',
-            description: 'Không thể tạo hóa đơn mới',
+            title: 'Lỗi tạo đơn hàng',
+            description: 'Không thể tạo đơn hàng mới',
             details: [
               'Kiểm tra thông tin khách hàng',
               'Đảm bảo đã nhập đầy đủ thông tin',
@@ -376,7 +376,7 @@ export default function SalesGuidePage() {
             description: 'Không thể ghi nhận thanh toán',
             details: [
               'Kiểm tra số tiền thanh toán',
-              'Đảm bảo không vượt quá số tiền hóa đơn',
+              'Đảm bảo không vượt quá số tiền đơn hàng',
               'Kiểm tra thông tin thanh toán',
               'Liên hệ hỗ trợ kỹ thuật'
             ]

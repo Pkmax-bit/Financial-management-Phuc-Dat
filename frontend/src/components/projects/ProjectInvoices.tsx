@@ -85,13 +85,13 @@ export default function ProjectInvoices({ projectId, projectName }: ProjectInvoi
         const data = await response.json()
         setInvoices(data.transactions?.invoices || [])
       } else if (response.status === 403) {
-        setError('Bạn không có quyền xem dữ liệu hóa đơn')
+        setError('Bạn không có quyền xem dữ liệu đơn hàng')
       } else {
-        setError('Không thể tải dữ liệu hóa đơn')
+        setError('Không thể tải dữ liệu đơn hàng')
       }
     } catch (error) {
       console.error('Error fetching invoices:', error)
-      setError('Lỗi khi tải dữ liệu hóa đơn')
+      setError('Lỗi khi tải dữ liệu đơn hàng')
     } finally {
       setLoading(false)
     }
@@ -133,7 +133,7 @@ export default function ProjectInvoices({ projectId, projectName }: ProjectInvoi
     return (
       <div className="text-center py-8">
         <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-500">Chưa có hóa đơn nào cho dự án này</p>
+        <p className="text-gray-500">Chưa có đơn hàng nào cho dự án này</p>
       </div>
     )
   }
@@ -147,12 +147,12 @@ export default function ProjectInvoices({ projectId, projectName }: ProjectInvoi
             <div className="p-2 bg-blue-50 rounded-lg">
               <Receipt className="h-5 w-5 text-blue-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">Tổng hóa đơn</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Tổng đơn hàng</h3>
           </div>
           <p className="text-2xl font-bold text-blue-600">
             {formatCurrency(invoices.reduce((sum, inv) => sum + inv.total_amount, 0))}
           </p>
-          <p className="text-sm text-gray-600">{invoices.length} hóa đơn</p>
+          <p className="text-sm text-gray-600">{invoices.length} đơn hàng</p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border p-6">
@@ -166,7 +166,7 @@ export default function ProjectInvoices({ projectId, projectName }: ProjectInvoi
             {formatCurrency(invoices.reduce((sum, inv) => sum + inv.paid_amount, 0))}
           </p>
           <p className="text-sm text-gray-600">
-            {invoices.filter(inv => inv.payment_status === 'paid').length} hóa đơn
+            {invoices.filter(inv => inv.payment_status === 'paid').length} đơn hàng
           </p>
         </div>
 
@@ -181,7 +181,7 @@ export default function ProjectInvoices({ projectId, projectName }: ProjectInvoi
             {formatCurrency(invoices.reduce((sum, inv) => sum + (inv.total_amount - inv.paid_amount), 0))}
           </p>
           <p className="text-sm text-gray-600">
-            {invoices.filter(inv => inv.payment_status !== 'paid').length} hóa đơn
+            {invoices.filter(inv => inv.payment_status !== 'paid').length} đơn hàng
           </p>
         </div>
       </div>
@@ -189,7 +189,7 @@ export default function ProjectInvoices({ projectId, projectName }: ProjectInvoi
       {/* Invoices List */}
       <div className="bg-white rounded-lg shadow-sm border">
         <div className="px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">Danh sách hóa đơn</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Danh sách đơn hàng</h3>
         </div>
         <div className="divide-y">
           {invoices.map((invoice) => {

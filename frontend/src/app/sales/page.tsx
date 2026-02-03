@@ -324,7 +324,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                         className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Tạo hóa đơn
+                        Tạo đơn hàng
                       </button>
                     )}
                     {activeTab === 'receipts' && (
@@ -433,7 +433,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency((revenue as Record<string, unknown>).total as number || 0)}
                     </p>
-                    <p className="text-sm text-black">{(invoicesStats as Record<string, unknown>).total as number || 0} hóa đơn</p>
+                    <p className="text-sm text-black">{(invoicesStats as Record<string, unknown>).total as number || 0} đơn hàng</p>
                   </div>
                 </div>
               </div>
@@ -542,7 +542,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                 >
                   Khách hàng
                 </button> */}
-                {/* Tạm thời ẩn nút Chênh lệch trước hóa đơn */}
+                {/* Tạm thời ẩn nút Chênh lệch trước đơn hàng */}
                 {/* <button
                   onClick={() => setActiveTab('variance')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'variance'
@@ -550,7 +550,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                       : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
-                  Chênh lệch trước hóa đơn
+                  Chênh lệch trước đơn hàng
                 </button> */}
                 <button
                   onClick={() => setActiveTab('products')}
@@ -658,7 +658,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                   searchTerm={searchTerm}
                 />
               )} */}
-              {/* Tạm thời ẩn tab Chênh lệch trước hóa đơn */}
+              {/* Tạm thời ẩn tab Chênh lệch trước đơn hàng */}
               {/* {activeTab === 'variance' && (
                 <VarianceTab
                   searchTerm={searchTerm}

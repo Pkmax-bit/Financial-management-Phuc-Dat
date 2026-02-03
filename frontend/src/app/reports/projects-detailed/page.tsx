@@ -175,7 +175,7 @@ export default function ProjectsDetailedReportPage() {
             console.log('Invoices found for project:', project.name, invoices)
           }
           
-          // Đếm số hóa đơn chưa thanh toán
+          // Đếm số đơn hàng chưa thanh toán
           const unpaidInvoices = invoices?.filter(i => i.payment_status === 'pending').length || 0
           const partialInvoices = invoices?.filter(i => i.payment_status === 'partial').length || 0
 
@@ -365,7 +365,7 @@ export default function ProjectsDetailedReportPage() {
     tour.addStep({
       id: 'report-summary-revenue',
       title: 'Tổng doanh thu',
-      text: 'Tổng số tiền đã xuất hóa đơn (đã gửi/đã thanh toán) cho các dự án. Dựa trên dữ liệu hóa đơn thực tế.',
+      text: 'Tổng số tiền đã xuất đơn hàng (đã gửi/đã thanh toán) cho các dự án. Dựa trên dữ liệu đơn hàng thực tế.',
       attachTo: { element: '[data-tour-id="report-summary-revenue"]', on: 'bottom' },
       buttons: [
         {
@@ -639,7 +639,7 @@ export default function ProjectsDetailedReportPage() {
         'Chi phí thực tế (VND)': project.actual_costs,
         'Lợi nhuận (VND)': project.actual_profit,
         'Biên lợi nhuận (%)': Number(project.profit_margin.toFixed(2)),
-        'Số hóa đơn': project.invoice_count,
+        'Số đơn hàng': project.invoice_count,
         'Số chi phí': project.expense_count
       }))
 
@@ -654,7 +654,7 @@ export default function ProjectsDetailedReportPage() {
         'Chi phí thực tế (VND)': totalActualCosts,
         'Lợi nhuận (VND)': totalActualProfit,
         'Biên lợi nhuận (%)': totalActualRevenue > 0 ? Number(((totalActualProfit / totalActualRevenue) * 100).toFixed(2)) : 0,
-        'Số hóa đơn': filteredProjects.reduce((sum, p) => sum + p.invoice_count, 0),
+        'Số đơn hàng': filteredProjects.reduce((sum, p) => sum + p.invoice_count, 0),
         'Số chi phí': filteredProjects.reduce((sum, p) => sum + p.expense_count, 0)
       })
 
@@ -895,11 +895,11 @@ export default function ProjectsDetailedReportPage() {
             'A': 'TỔNG DOANH THU THỰC TẾ', 
             'B': '', 
             'C': invoices.reduce((sum, inv) => sum + inv.total_amount, 0), 
-            'D': `${invoices.length} hóa đơn`,
+            'D': `${invoices.length} đơn hàng`,
             'E': '' 
           })
         } else {
-          detailData.push({ 'A': 'Chưa có hóa đơn', 'B': '', 'C': '', 'D': '', 'E': '' })
+          detailData.push({ 'A': 'Chưa có đơn hàng', 'B': '', 'C': '', 'D': '', 'E': '' })
         }
         detailData.push({ 'A': '', 'B': '', 'C': '', 'D': '', 'E': '' })
 
@@ -1352,7 +1352,7 @@ export default function ProjectsDetailedReportPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-semibold text-blue-600">{formatCurrency(project.actual_revenue)}</div>
                           <div className="text-xs text-gray-500">
-                            {project.invoice_count} hóa đơn
+                            {project.invoice_count} đơn hàng
                             {project.unpaid_invoice_count > 0 && (
                               <span className="ml-1 text-orange-600 font-semibold">
                                 ({project.unpaid_invoice_count} chưa TT)

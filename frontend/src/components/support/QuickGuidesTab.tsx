@@ -19,10 +19,10 @@ const quickGuides = [
   {
     id: 'first-sale',
     title: 'Thực hiện giao dịch bán hàng đầu tiên',
-    description: 'Từ tạo hóa đơn đến thu tiền',
+    description: 'Từ tạo đơn hàng đến thu tiền',
     steps: [
       'Tạo khách hàng mới',
-      'Tạo hóa đơn bán hàng',
+      'Tạo đơn hàng bán hàng',
       'Ghi nhận thanh toán',
       'Xem báo cáo doanh thu'
     ],

@@ -392,7 +392,7 @@ export default function CreateExpenseSidebar({ isOpen, onClose, onSuccess }: Cre
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-black mb-1">URL hóa đơn</label>
+                      <label className="block text-xs font-semibold text-black mb-1">URL đơn hàng</label>
                       <input
                         type="url"
                         value={formData.receipt_url}

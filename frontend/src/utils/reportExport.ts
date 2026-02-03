@@ -82,7 +82,7 @@ export const exportToExcel = (data: ProjectReportData) => {
     ['Trạng thái', getStatusText(data.project.status)],
     [],
     ['TÓM TẮT TÀI CHÍNH'],
-    ['Tổng hóa đơn (VND)', data.summary.totalInvoices],
+    ['Tổng đơn hàng (VND)', data.summary.totalInvoices],
     ['  - Chưa thanh toán', data.summary.unpaidInvoices],
     ['  - Thanh toán 1 phần', data.summary.partialInvoices],
     ['Tổng chi phí (VND)', data.summary.totalExpenses],
@@ -90,7 +90,7 @@ export const exportToExcel = (data: ProjectReportData) => {
     ['Biên lợi nhuận (%)', data.summary.profitMargin],
     [],
     ['PHÂN TÍCH'],
-    ['Số lượng hóa đơn', data.invoices.length],
+    ['Số lượng đơn hàng', data.invoices.length],
     ['Số lượng chi phí', data.expenses.length],
     ['Đơn hàng chưa thanh toán', data.summary.unpaidInvoices],
   ]

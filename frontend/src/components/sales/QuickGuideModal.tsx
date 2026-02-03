@@ -47,24 +47,24 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
       ]
     },
     {
-      title: 'Tạo hóa đơn',
+      title: 'Tạo đơn hàng',
       icon: Receipt,
-      description: 'Chuyển báo giá thành hóa đơn',
+      description: 'Chuyển báo giá thành đơn hàng',
       actions: [
         'Từ báo giá đã gửi',
         'Nhấn "Chuyển đổi"',
         'Kiểm tra thông tin',
-        'Nhấn "Tạo hóa đơn"'
+        'Nhấn "Tạo đơn hàng"'
       ]
     },
     {
-      title: 'Gửi hóa đơn',
+      title: 'Gửi đơn hàng',
       icon: Play,
-      description: 'Gửi hóa đơn cho khách hàng',
+      description: 'Gửi đơn hàng cho khách hàng',
       actions: [
-        'Tìm hóa đơn cần gửi',
+        'Tìm đơn hàng cần gửi',
         'Nhấn nút "Gửi"',
-        'Xác nhận gửi hóa đơn',
+        'Xác nhận gửi đơn hàng',
         'Hệ thống tự động tạo bút toán kế toán'
       ]
     },
@@ -73,7 +73,7 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
       icon: CreditCard,
       description: 'Ghi nhận khi khách hàng thanh toán',
       actions: [
-        'Tìm hóa đơn cần thanh toán',
+        'Tìm đơn hàng cần thanh toán',
         'Nhấn nút "Thanh toán"',
         'Nhập số tiền thanh toán',
         'Chọn phương thức thanh toán',
@@ -114,7 +114,7 @@ export default function QuickGuideModal({ isOpen, onClose }: QuickGuideModalProp
         'Chọn tab "Overview"',
         'Xem thống kê tổng quan',
         'Theo dõi doanh thu',
-        'Kiểm tra hóa đơn quá hạn',
+        'Kiểm tra đơn hàng quá hạn',
         'Xuất báo cáo chi tiết'
       ]
     }

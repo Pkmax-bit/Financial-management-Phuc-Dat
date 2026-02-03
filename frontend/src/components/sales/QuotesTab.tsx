@@ -7,12 +7,10 @@ import {
   Search,
   Edit,
   Trash2,
-  Eye,
   Send,
   CheckCircle,
   XCircle,
   Calendar,
-  DollarSign,
   Clock,
   HelpCircle,
   X,
@@ -744,239 +742,61 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
   const convertToInvoice = async (quoteId: string) => {
     try {
-      console.log('🔍 Converting quote to invoice:', quoteId)
+      console.log('🔍 Converting quote to invoice via backend API:', quoteId)
 
-      // First, get the quote details with items
-      const { data: quote, error: quoteError } = await supabase
-        .from('quotes')
-        .select(`
-          *,
-          customers:customer_id(name, email),
-          projects:project_id(name, project_code),
-          quote_items(*)
-        `)
-        .eq('id', quoteId)
-        .single()
+      const {
+        data: { session }
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
 
-      if (quoteError || !quote) {
-        console.error('❌ Error fetching quote:', quoteError)
-        throw new Error('Không thể tìm thấy báo giá')
-      }
-
-      console.log('🔍 Quote data:', quote)
-
-      // Check if quote can be converted
-      if (quote.status === 'closed' || quote.status === 'converted') {
-        throw new Error('Báo giá này đã được chuyển thành hóa đơn rồi')
-      }
-
-      if (quote.status === 'declined') {
-        throw new Error('Không thể chuyển báo giá đã bị từ chối')
-      }
-
-      if (quote.status === 'expired') {
-        throw new Error('Không thể chuyển báo giá đã hết hạn')
-      }
-
-      // Generate invoice number
-      const now = new Date()
-      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
-      const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase()
-      const invoiceNumber = `INV-${dateStr}-${randomStr}`
-
-      // Calculate due date (30 days from issue date)
-      const issueDate = new Date(quote.issue_date)
-      const dueDate = new Date(issueDate)
-      dueDate.setDate(dueDate.getDate() + 30)
-
-      // Convert quote items to invoice items
-      const convertedItems = []
-
-      if (quote.quote_items && Array.isArray(quote.quote_items)) {
-        // Get all unique product_service_ids from quote items to validate them
-        const productServiceIds = quote.quote_items
-          .map((item: any) => item.product_service_id)
-          .filter((id: any) => id != null)
-
-        // Validate product_service_ids exist in products_services table
-        // Note: invoice_items.product_service_id references products_services(id), not products(id)
-        let validProductIds = new Set<string>()
-        if (productServiceIds.length > 0) {
-          try {
-            // Validate against products_services table (as per foreign key constraint)
-            const { data: validProductsServices, error: productsServicesError } = await supabase
-              .from('products_services')
-              .select('id')
-              .in('id', productServiceIds)
-
-            if (!productsServicesError && validProductsServices) {
-              validProductIds = new Set(validProductsServices.map((p: any) => p.id))
-              console.log(`✅ Validated ${validProductIds.size} out of ${productServiceIds.length} product_service_ids`)
-            } else {
-              console.warn('⚠️ Error validating product_service_ids in products_services:', productsServicesError)
-              // If validation fails, all IDs will be set to null to avoid foreign key error
-            }
-          } catch (error) {
-            console.warn('⚠️ Error validating product_service_ids:', error)
-            // Continue anyway, will set to null if invalid
-          }
-        }
-
-        for (const item of quote.quote_items) {
-          // Get product_components from quote_item (copy to invoice_item, not invoice)
-          const productComponents = item.product_components && Array.isArray(item.product_components)
-            ? item.product_components
-            : []
-
-          // Format product_components as JSONB array (same format as CreateInvoiceSidebarFullscreen)
-          const formattedComponents = productComponents.length > 0
-            ? productComponents.map((comp: any) => ({
-              expense_object_id: comp.expense_object_id || null,
-              name: comp.name || null,
-              unit: comp.unit || '',
-              unit_price: Number(comp.unit_price || 0),
-              quantity: Number(comp.quantity || 0),
-              total_price: Number(comp.total_price || 0)
-            }))
-            : []
-
-          // Validate product_service_id - only use if it exists in products table
-          let productServiceId = null
-          if (item.product_service_id) {
-            if (validProductIds.has(item.product_service_id)) {
-              productServiceId = item.product_service_id
-            } else {
-              console.warn(`⚠️ Invalid product_service_id ${item.product_service_id} for item "${item.name_product}", setting to null`)
-            }
-          }
-
-          const invoiceItem = {
-            // Don't include id - let database generate it
-            invoice_id: '', // Will be set after invoice creation
-            product_service_id: productServiceId, // Only set if valid, otherwise null
-            name_product: item.name_product || '',
-            description: item.description || '',
-            quantity: Number(item.quantity || 0),
-            unit: item.unit || '',
-            unit_price: Number(item.unit_price || 0),
-            total_price: Number(item.total_price || 0),
-            tax_rate: item.tax_rate != null ? Number(item.tax_rate) : (quote.tax_rate != null ? Number(quote.tax_rate) : 10),  // Copy tax_rate from quote_item (including 0) or use quote default
-            area: item.area != null ? Number(item.area) : null,
-            volume: item.volume != null ? Number(item.volume) : null,
-            height: item.height != null ? Number(item.height) : null,
-            length: item.length != null ? Number(item.length) : null,
-            depth: item.depth != null ? Number(item.depth) : null,
-            product_components: formattedComponents // JSONB array format
-            // Don't include created_at - let database use DEFAULT NOW()
-          }
-          convertedItems.push(invoiceItem)
-        }
-      }
-
-      // Create invoice from quote data
-      const invoiceData = {
-        invoice_number: invoiceNumber,
-        customer_id: quote.customer_id,
-        project_id: quote.project_id,
-        quote_id: quoteId, // Link to original quote
-        issue_date: issueDate.toISOString().split('T')[0],
-        due_date: dueDate.toISOString().split('T')[0],
-        subtotal: quote.subtotal,
-        tax_rate: quote.tax_rate,
-        tax_amount: quote.tax_amount,
-        total_amount: quote.total_amount,
-        currency: quote.currency,
-        status: 'draft',
-        payment_status: 'pending',
-        paid_amount: 0.0,
-        items: [], // Empty JSONB field, items will be in invoice_items table
-        notes: `Đơn hàng được tạo từ báo giá ${quote.quote_number}`,
-        created_by: quote.created_by
-      }
-
-      console.log('🔍 Creating invoice with data:', invoiceData)
-
-      // Create the invoice
-      const { data: newInvoice, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert(invoiceData)
-        .select()
-        .single()
-
-      if (invoiceError) {
-        console.error('❌ Error creating invoice:', invoiceError)
-        throw new Error('Không thể tạo hóa đơn')
-      }
-
-      console.log('🔍 Invoice created successfully:', newInvoice)
-
-      // Create invoice items in invoice_items table
-      if (convertedItems.length > 0) {
-        // Update invoice_id for all converted items
-        const invoiceItemsData = convertedItems.map(item => ({
-          ...item,
-          invoice_id: newInvoice.id
-        }))
-
-        console.log('🔍 Creating invoice items with data:', {
-          count: invoiceItemsData.length,
-          sample: invoiceItemsData[0],
-          allData: invoiceItemsData
-        })
-
-        const { data: invoiceItems, error: invoiceItemsError } = await supabase
-          .from('invoice_items')
-          .insert(invoiceItemsData)
-          .select()
-
-        if (invoiceItemsError) {
-          console.error('❌ Error creating invoice items:', {
-            error: invoiceItemsError,
-            message: invoiceItemsError.message,
-            details: invoiceItemsError.details,
-            hint: invoiceItemsError.hint,
-            code: invoiceItemsError.code,
-            data: invoiceItemsData
-          })
-          // Don't throw error here as invoice was created successfully
-          // But show a warning to user
-          alert(`⚠️ Đơn hàng đã được tạo nhưng có lỗi khi thêm sản phẩm: ${invoiceItemsError.message || 'Lỗi không xác định'}`)
-        } else {
-          console.log('✅ Invoice items created successfully:', invoiceItems)
-        }
-      } else {
-        console.log('⚠️ No items to convert to invoice items')
-      }
-
-      // Update quote status to 'closed' (following backend logic)
-      const { error: updateError } = await supabase
-        .from('quotes')
-        .update({
-          status: 'closed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', quoteId)
-
-      if (updateError) {
-        console.error('❌ Error updating quote status:', updateError)
-        // Don't throw error here as invoice was created successfully
-      }
-
-      console.log('🔍 Quote converted to invoice successfully')
-      fetchQuotes() // Refresh list
-
-      // Set conversion data for success modal
-      setConversionData({
-        invoiceNumber,
-        totalAmount: quote.total_amount,
-        dueDate: dueDate.toLocaleDateString('vi-VN'),
-        convertedItems
+      const response = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}/convert-to-invoice`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({})
       })
-      setShowConversionSuccess(true)
 
+      if (!response.ok) {
+        let errorDetail = 'Không thể tạo đơn hàng'
+        try {
+          const errorData = await response.json()
+          errorDetail = errorData.detail || errorData.error || errorDetail
+          console.error('❌ Backend convert-to-invoice error:', errorData)
+        } catch {
+          console.error('❌ Backend convert-to-invoice error (non-JSON response)')
+        }
+        throw new Error(errorDetail)
+      }
+
+      const result = await response.json()
+      console.log('✅ Quote converted to invoice via backend:', result)
+
+      // Refresh quotes list
+      fetchQuotes()
+
+      // Show success toast
+      const successMessage = document.createElement('div')
+      successMessage.textContent = '✅ Đã tạo đơn hàng từ báo giá thành công!'
+      successMessage.style.position = 'fixed'
+      successMessage.style.top = '20px'
+      successMessage.style.right = '20px'
+      successMessage.style.padding = '10px 15px'
+      successMessage.style.backgroundColor = '#4caf50'
+      successMessage.style.color = 'white'
+      successMessage.style.borderRadius = '4px'
+      successMessage.style.zIndex = '9999'
+      document.body.appendChild(successMessage)
+
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage)
+        }
+      }, 4000)
     } catch (error) {
-      console.error('❌ Error converting quote:', error)
-      alert(`Lỗi khi chuyển báo giá: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
+      console.error('❌ Error converting quote to invoice:', error)
+      alert(`Không thể tạo đơn hàng từ báo giá: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`)
     }
   }
 
@@ -1045,8 +865,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
 
     tour.addStep({
       id: 'quote-convert-intro',
-      title: 'Hướng dẫn duyệt báo giá thành hóa đơn',
-      text: 'Sau khi khách hàng chấp nhận báo giá, bạn có thể chuyển báo giá đó thành hóa đơn để tiến hành thanh toán.',
+      title: 'Hướng dẫn duyệt báo giá thành đơn hàng',
+      text: 'Sau khi khách hàng chấp nhận báo giá, bạn có thể chuyển báo giá đó thành đơn hàng để tiến hành thanh toán.',
       attachTo: { element: '[data-tour-id="quotes-list-header"]', on: 'bottom' },
       buttons: [
         {
@@ -1064,8 +884,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     if (hasConvertButton && acceptedQuote) {
       tour.addStep({
         id: 'quote-convert-button',
-        title: 'Nút chuyển thành hóa đơn',
-        text: `Khi báo giá có trạng thái "Đã chấp nhận", "Đã gửi" hoặc "Đã xem", bạn sẽ thấy nút "Chuyển thành hóa đơn" (biểu tượng $). Nhấn vào nút này để tạo hóa đơn từ báo giá.`,
+        title: 'Nút chuyển thành đơn hàng',
+        text: `Khi báo giá có trạng thái "Đã chấp nhận", "Đã xuất PDF" hoặc "Đã xem", bạn sẽ thấy nút "Chuyển thành đơn hàng". Nhấn vào nút này để tạo đơn hàng từ báo giá.`,
         attachTo: { element: `[data-tour-id="quote-convert-button-${acceptedQuote.id}"]`, on: 'left' },
         buttons: [
           {
@@ -1156,8 +976,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
     if (hasConvertButton && acceptedQuote) {
       tour.addStep({
         id: 'quote-button-convert',
-        title: 'Nút Chuyển thành hóa đơn',
-        text: '💰 Chuyển thành hóa đơn: Nhấn nút này để chuyển báo giá đã chấp nhận thành hóa đơn. Nút này chỉ hiển thị khi báo giá ở trạng thái "Đã chấp nhận", "Đã gửi" hoặc "Đã xem". Hệ thống sẽ tự động tạo hóa đơn mới và sao chép tất cả thông tin từ báo giá.',
+        title: 'Nút Chuyển thành đơn hàng',
+        text: 'Chuyển thành đơn hàng: Nhấn nút này để chuyển báo giá thành đơn hàng. Nút hiển thị khi báo giá ở trạng thái "Đã chấp nhận", "Đã xuất PDF" hoặc "Đã xem". Hệ thống sẽ tự động tạo đơn hàng mới và sao chép thông tin từ báo giá.',
         attachTo: { element: `[data-tour-id="quote-convert-button-${acceptedQuote.id}"]`, on: 'bottom' },
         buttons: [
           {
@@ -1264,7 +1084,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       case 'draft':
         return 'Nháp'
       case 'sent':
-        return 'Đã gửi'
+        return 'Đã xuất PDF'
       case 'viewed':
         return 'Đã xem'
       case 'accepted':
@@ -1492,7 +1312,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
               : 'text-white bg-blue-600 hover:bg-blue-700'
               } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-            title="Hướng dẫn chuyển báo giá thành hóa đơn"
+            title="Hướng dẫn chuyển báo giá thành đơn hàng"
           >
             <CircleHelp className="h-4 w-4" />
           </button>
@@ -1534,7 +1354,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
           >
-            Đã gửi
+            Đã xuất PDF
           </button>
           <button
             onClick={() => setFilter('accepted')}
@@ -1668,24 +1488,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2" data-tour-id="quote-actions-buttons">
-                    <button
-                      className="text-black hover:text-black"
-                      title="Xem chi tiết"
-                      data-tour-id="quote-button-view"
-                      onClick={() => {
-                        window.open(`/sales/quotes/${quote.id}`, '_blank')
-                      }}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-
                     <>
                       <button
                         onClick={() => {
                           setEditingQuoteId(quote.id)
                           setShowCreateModal(true)
                         }}
-                        className="text-black hover:text-blue-600"
+                        className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100"
                         title="Chỉnh sửa"
                         data-tour-id="quote-button-edit"
                       >
@@ -1693,7 +1502,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       </button>
                       <button
                         onClick={() => sendQuote(quote.id)}
-                        className="text-black hover:text-green-600"
+                        className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 border border-green-100"
                         title="Gửi báo giá"
                         data-tour-id="quote-button-send"
                       >
@@ -1701,20 +1510,20 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       </button>
                     </>
 
-                    {(quote.status === 'accepted' || quote.status === 'sent' || quote.status === 'viewed') && quote.status !== 'closed' && quote.status !== 'converted' && (
+                    {quote.status !== 'closed' && quote.status !== 'converted' && (
                       <button
                         onClick={() => convertToInvoice(quote.id)}
-                        className="text-black hover:text-purple-600"
-                        title="Chuyển thành hóa đơn"
+                        className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100"
+                        title="Chuyển thành đơn hàng"
                         data-tour-id={`quote-convert-button-${quote.id}`}
                       >
-                        <DollarSign className="h-4 w-4" />
+                        <CheckCircle className="h-4 w-4" />
                       </button>
                     )}
 
                     <button
                       onClick={() => deleteQuote(quote.id)}
-                      className="text-black hover:text-red-600"
+                      className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-100"
                       title="Xóa"
                       data-tour-id="quote-button-delete"
                     >
@@ -1868,26 +1677,19 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
               {/* Card Actions */}
               <div className="mt-4 pt-3 border-t border-gray-200 flex flex-wrap gap-2">
                 <button
-                  onClick={() => window.open(`/sales/quotes/${quote.id}`, '_blank')}
-                  className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
-                >
-                  <Eye className="h-3 w-3 mr-1" />
-                  Xem
-                </button>
-                <button
                   onClick={() => sendQuote(quote.id)}
                   className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100"
                 >
                   <Send className="h-3 w-3 mr-1" />
                   Gửi
                 </button>
-                {(quote.status === 'accepted' || quote.status === 'sent' || quote.status === 'viewed') && quote.status !== 'closed' && quote.status !== 'converted' && (
+                {quote.status !== 'closed' && quote.status !== 'converted' && (
                   <button
                     onClick={() => convertToInvoice(quote.id)}
                     className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-purple-600 bg-purple-50 rounded-md hover:bg-purple-100"
                     data-tour-id={`quote-convert-button-${quote.id}`}
                   >
-                    <DollarSign className="h-3 w-3 mr-1" />
+                    <CheckCircle className="h-3 w-3 mr-1" />
                     Đơn hàng
                   </button>
                 )}
@@ -1959,7 +1761,6 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           setPreviewQuoteId(null)
         }}
         quoteId={previewQuoteId || ''}
-        onConfirmSend={confirmSendQuote}
         onQuoteStatusUpdated={() => {
           // Refresh quotes list when status is updated
           fetchQuotes()
@@ -1997,7 +1798,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                 <div>
                   <h4 className="text-md font-semibold text-gray-800 mb-2">🎯 Tổng quan</h4>
                   <p className="text-sm text-gray-600">
-                    Module Báo giá giúp bạn tạo và quản lý các báo giá cho khách hàng, theo dõi trạng thái và chuyển đổi thành hóa đơn khi cần thiết.
+                    Module Báo giá giúp bạn tạo và quản lý các báo giá cho khách hàng, theo dõi trạng thái và chuyển đổi thành đơn hàng khi cần thiết.
                   </p>
                 </div>
 
@@ -2021,21 +1822,14 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
-                        <DollarSign className="h-4 w-4 text-purple-600 mt-0.5" />
+                        <CheckCircle className="h-4 w-4 text-purple-600 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Chuyển thành hóa đơn</p>
-                          <p className="text-xs text-gray-500">Chuyển báo giá đã chấp nhận thành hóa đơn</p>
+                          <p className="text-sm font-medium text-gray-700">Chuyển thành đơn hàng</p>
+                          <p className="text-xs text-gray-500">Chuyển báo giá đã chấp nhận thành đơn hàng</p>
                         </div>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <div className="flex items-start space-x-2">
-                        <Eye className="h-4 w-4 text-purple-600 mt-0.5" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">Xem chi tiết</p>
-                          <p className="text-xs text-gray-500">Xem thông tin chi tiết báo giá</p>
-                        </div>
-                      </div>
                       <div className="flex items-start space-x-2">
                         <Edit className="h-4 w-4 text-orange-600 mt-0.5" />
                         <div>
@@ -2063,8 +1857,8 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <span className="text-sm text-gray-600">Báo giá đang được soạn thảo, có thể chỉnh sửa</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Đã gửi</span>
-                      <span className="text-sm text-gray-600">Đã gửi cho khách hàng, chờ phản hồi</span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Đã xuất PDF</span>
+                      <span className="text-sm text-gray-600">Đã xuất PDF, chờ phản hồi</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Đã chấp nhận</span>
@@ -2080,7 +1874,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Đã đóng</span>
-                      <span className="text-sm text-gray-600">Báo giá đã được chuyển thành hóa đơn</span>
+                      <span className="text-sm text-gray-600">Báo giá đã được chuyển thành đơn hàng</span>
                     </div>
                   </div>
                 </div>
@@ -2094,7 +1888,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <li><strong>Kiểm tra thông tin:</strong> Xem lại thông tin khách hàng, sản phẩm, giá cả</li>
                       <li><strong>Gửi báo giá:</strong> Gửi báo giá cho khách hàng qua email</li>
                       <li><strong>Theo dõi phản hồi:</strong> Chờ khách hàng phản hồi (chấp nhận/từ chối)</li>
-                      <li><strong>Chuyển thành hóa đơn:</strong> Khi khách hàng chấp nhận, chuyển thành hóa đơn</li>
+                      <li><strong>Chuyển thành đơn hàng:</strong> Khi khách hàng chấp nhận, chuyển thành đơn hàng</li>
                     </ol>
                   </div>
                 </div>
@@ -2107,7 +1901,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                       <li>Sử dụng bộ lọc để tìm báo giá theo trạng thái</li>
                       <li>Kiểm tra báo giá hết hạn thường xuyên</li>
                       <li>Gửi nhắc nhở cho khách hàng về báo giá</li>
-                      <li>Chuyển báo giá đã chấp nhận thành hóa đơn ngay</li>
+                      <li>Chuyển báo giá đã chấp nhận thành đơn hàng ngay</li>
                       <li>Lưu trữ báo giá đã đóng để tham khảo</li>
                     </ul>
                   </div>
@@ -2118,13 +1912,13 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                   <h4 className="text-md font-semibold text-gray-800 mb-3">🔄 Chuyển đổi báo giá</h4>
                   <div className="bg-green-50 p-4 rounded-lg">
                     <p className="text-sm text-gray-700 mb-2">
-                      <strong>Khi nào có thể chuyển:</strong> Báo giá có trạng thái "Đã chấp nhận", "Đã gửi", hoặc "Đã xem"
+                      <strong>Khi nào có thể chuyển:</strong> Báo giá có trạng thái "Đã chấp nhận", "Đã xuất PDF", hoặc "Đã xem"
                     </p>
                     <p className="text-sm text-gray-700 mb-2">
                       <strong>Khi nào không thể chuyển:</strong> Báo giá đã bị từ chối, hết hạn, hoặc đã được chuyển rồi
                     </p>
                     <p className="text-sm text-gray-700">
-                      <strong>Kết quả:</strong> Tạo hóa đơn mới và cập nhật trạng thái báo giá thành "Đã đóng"
+                      <strong>Kết quả:</strong> Tạo đơn hàng mới và cập nhật trạng thái báo giá thành "Đã đóng"
                     </p>
                   </div>
                 </div>
@@ -2159,7 +1953,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     Chuyển đổi thành công!
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Báo giá đã được chuyển thành hóa đơn
+                    Báo giá đã được chuyển thành đơn hàng
                   </p>
                 </div>
               </div>
@@ -2175,10 +1969,10 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
             <div className="p-6">
               {/* Invoice Info */}
               <div className="bg-blue-50 rounded-lg p-4 mb-6">
-                <h4 className="font-semibold text-gray-900 mb-3">Thông tin hóa đơn</h4>
+                <h4 className="font-semibold text-gray-900 mb-3">Thông tin đơn hàng</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600">Số hóa đơn</p>
+                    <p className="text-sm text-gray-600">Số đơn hàng</p>
                     <p className="font-medium text-gray-900">{conversionData.invoiceNumber}</p>
                   </div>
                   <div>
@@ -2263,7 +2057,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                 }}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                Xem hóa đơn
+                Xem đơn hàng
               </button>
             </div>
           </div>

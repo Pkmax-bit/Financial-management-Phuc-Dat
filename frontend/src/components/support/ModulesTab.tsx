@@ -17,7 +17,7 @@ const modules = [
     name: 'Bán hàng',
     icon: DollarSign,
     color: 'blue',
-    description: 'Quản lý bán hàng, hóa đơn, thanh toán',
+    description: 'Quản lý bán hàng, đơn hàng, thanh toán',
     guides: [
       { title: 'Tổng quan Bán hàng', url: '/sales/guide' },
       { title: 'Hướng dẫn Tạo Đơn hàng', url: '/sales/guide#invoices' },
@@ -25,7 +25,7 @@ const modules = [
       { title: 'Báo cáo Doanh thu', url: '/sales/guide#reports' }
     ],
     quickActions: [
-      { title: 'Tạo hóa đơn mới', action: 'create-invoice' },
+      { title: 'Tạo đơn hàng mới', action: 'create-invoice' },
       { title: 'Xem báo cáo doanh thu', action: 'view-reports' },
       { title: 'Quản lý khách hàng', action: 'manage-customers' }
     ]

@@ -445,8 +445,8 @@ export default function ProjectDetailedReportDetailPage() {
 
     tour.addStep({
       id: 'report-detail-summary-invoices',
-      title: 'Tổng hóa đơn',
-      text: 'Tổng doanh thu thực tế từ hóa đơn đã phát hành và số lượng hóa đơn. Có cảnh báo cho hóa đơn chưa thanh toán.',
+      title: 'Tổng đơn hàng',
+      text: 'Tổng doanh thu thực tế từ đơn hàng đã phát hành và số lượng đơn hàng. Có cảnh báo cho đơn hàng chưa thanh toán.',
       attachTo: { element: '[data-tour-id="report-detail-summary-invoices"]', on: 'bottom' },
       buttons: [
         {
@@ -482,7 +482,7 @@ export default function ProjectDetailedReportDetailPage() {
     tour.addStep({
       id: 'report-detail-summary-profit',
       title: 'Lợi nhuận thực tế',
-      text: 'Lợi nhuận = Tổng hóa đơn - Tổng chi phí. Biên lợi nhuận (%) giúp đánh giá hiệu quả dự án.',
+      text: 'Lợi nhuận = Tổng đơn hàng - Tổng chi phí. Biên lợi nhuận (%) giúp đánh giá hiệu quả dự án.',
       attachTo: { element: '[data-tour-id="report-detail-summary-profit"]', on: 'bottom' },
       buttons: [
         {
@@ -572,7 +572,7 @@ export default function ProjectDetailedReportDetailPage() {
     tour.addStep({
       id: 'report-detail-actual-overview',
       title: 'Cột Thực tế',
-      text: 'Cột bên phải (màu xanh lá) thể hiện dữ liệu thực tế phát sinh: hóa đơn đã lập và chi phí đã duyệt.',
+      text: 'Cột bên phải (màu xanh lá) thể hiện dữ liệu thực tế phát sinh: đơn hàng đã lập và chi phí đã duyệt.',
       attachTo: { element: '[data-tour-id="report-detail-actual-overview"]', on: 'top' },
       buttons: [
         {
@@ -590,7 +590,7 @@ export default function ProjectDetailedReportDetailPage() {
     tour.addStep({
       id: 'report-detail-actual-invoices',
       title: 'Đơn hàng thực tế',
-      text: 'Danh sách hóa đơn đã phát hành, trạng thái thanh toán và sản phẩm chi tiết. Sử dụng để đối chiếu doanh thu.',
+      text: 'Danh sách đơn hàng đã phát hành, trạng thái thanh toán và sản phẩm chi tiết. Sử dụng để đối chiếu doanh thu.',
       attachTo: { element: '[data-tour-id="report-detail-actual-invoices"]', on: 'top' },
       buttons: [
         {
@@ -770,7 +770,7 @@ export default function ProjectDetailedReportDetailPage() {
     tour.addStep({
       id: 'report-chart-revenue-expense-profit',
       title: 'Biểu đồ: Doanh thu – Chi phí – Lợi nhuận',
-      text: 'Biểu đồ này hiển thị tỷ lệ giữa doanh thu, chi phí và lợi nhuận thực tế:\n\n• Màu xanh dương = Doanh thu (từ hóa đơn)\n• Màu đỏ = Chi phí (đã duyệt)\n• Màu xanh lá = Lợi nhuận (chênh lệch)\n\nDi chuột vào từng phần để xem số tiền chi tiết. Biểu đồ giúp bạn nhanh chóng đánh giá tỷ lệ giữa các thành phần tài chính.',
+      text: 'Biểu đồ này hiển thị tỷ lệ giữa doanh thu, chi phí và lợi nhuận thực tế:\n\n• Màu xanh dương = Doanh thu (từ đơn hàng)\n• Màu đỏ = Chi phí (đã duyệt)\n• Màu xanh lá = Lợi nhuận (chênh lệch)\n\nDi chuột vào từng phần để xem số tiền chi tiết. Biểu đồ giúp bạn nhanh chóng đánh giá tỷ lệ giữa các thành phần tài chính.',
       attachTo: { element: '[data-tour-id="report-chart-revenue-expense-profit"]', on: 'bottom' },
       buttons: [
         {
@@ -824,7 +824,7 @@ export default function ProjectDetailedReportDetailPage() {
     tour.addStep({
       id: 'report-summary-total-revenue',
       title: 'Tổng Doanh thu',
-      text: 'Tổng số tiền từ các hóa đơn đã phát hành (doanh thu thực tế). Hiển thị số lượng hóa đơn đã tạo.',
+      text: 'Tổng số tiền từ các đơn hàng đã phát hành (doanh thu thực tế). Hiển thị số lượng đơn hàng đã tạo.',
       attachTo: { element: '[data-tour-id="report-summary-total-revenue"]', on: 'bottom' },
       buttons: [
         {
@@ -878,7 +878,7 @@ export default function ProjectDetailedReportDetailPage() {
     tour.addStep({
       id: 'report-summary-total-quotes',
       title: 'Tổng báo giá',
-      text: 'Tổng số tiền từ các báo giá (doanh thu dự kiến). Dùng để so sánh với doanh thu thực tế từ hóa đơn.',
+      text: 'Tổng số tiền từ các báo giá (doanh thu dự kiến). Dùng để so sánh với doanh thu thực tế từ đơn hàng.',
       attachTo: { element: '[data-tour-id="report-summary-total-quotes"]', on: 'bottom' },
       buttons: [
         {
@@ -1591,9 +1591,9 @@ export default function ProjectDetailedReportDetailPage() {
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-lg"></div>
                 <div>
-                  <p className="text-sm text-gray-600">Tổng hóa đơn</p>
+                  <p className="text-sm text-gray-600">Tổng đơn hàng</p>
                   <p className="text-xl font-bold text-gray-900">{formatCurrency(totalInvoices)}</p>
-                  <p className="text-xs text-gray-500">{invoices.length} hóa đơn</p>
+                  <p className="text-xs text-gray-500">{invoices.length} đơn hàng</p>
                   {invoices.filter(i => i.payment_status === 'pending').length > 0 && (
                     <p className="text-xs text-orange-600 font-semibold mt-1">
                       ⚠️ {invoices.filter(i => i.payment_status === 'pending').length} chưa thanh toán
@@ -1801,7 +1801,7 @@ export default function ProjectDetailedReportDetailPage() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-gray-500 text-center py-4">Chưa có hóa đơn</p>
+                      <p className="text-sm text-gray-500 text-center py-4">Chưa có đơn hàng</p>
                     )}
                   </div>
                 </div>
@@ -2370,7 +2370,7 @@ export default function ProjectDetailedReportDetailPage() {
               <div className="bg-white rounded-lg p-4" data-tour-id="report-summary-total-revenue">
                 <p className="text-sm text-gray-600 mb-1">Tổng Doanh thu</p>
                 <p className="text-xl font-bold text-blue-600">{formatCurrency(totalInvoices)}</p>
-                <p className="text-xs text-gray-500">Từ {invoices.length} hóa đơn</p>
+                <p className="text-xs text-gray-500">Từ {invoices.length} đơn hàng</p>
               </div>
               
               <div className="bg-white rounded-lg p-4" data-tour-id="report-summary-total-cost">

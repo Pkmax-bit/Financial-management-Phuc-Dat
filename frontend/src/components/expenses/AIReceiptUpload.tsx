@@ -69,11 +69,11 @@ export default function AIReceiptUpload({ onExpenseCreated }: AIReceiptUploadPro
         // Load available projects for manual selection
         await loadAvailableProjects()
       } else {
-        alert('Lỗi phân tích hóa đơn: ' + result.error)
+        alert('Lỗi phân tích đơn hàng: ' + result.error)
       }
     } catch (error) {
       console.error('Error analyzing receipt:', error)
-      alert('Có lỗi xảy ra khi phân tích hóa đơn')
+      alert('Có lỗi xảy ra khi phân tích đơn hàng')
     } finally {
       setUploading(false)
       setAnalyzing(false)
@@ -191,7 +191,7 @@ export default function AIReceiptUpload({ onExpenseCreated }: AIReceiptUploadPro
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        AI Phân tích hóa đơn + Liên kết dự án
+        AI Phân tích đơn hàng + Liên kết dự án
       </h3>
       
       {/* Upload Area */}
@@ -202,7 +202,7 @@ export default function AIReceiptUpload({ onExpenseCreated }: AIReceiptUploadPro
             {analyzing && (
               <div className="flex items-center justify-center gap-2 text-blue-600">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>AI đang phân tích hóa đơn...</span>
+                <span>AI đang phân tích đơn hàng...</span>
               </div>
             )}
           </div>
@@ -237,7 +237,7 @@ export default function AIReceiptUpload({ onExpenseCreated }: AIReceiptUploadPro
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 <Upload className="h-4 w-4" />
-                Tải lên hóa đơn
+                Tải lên đơn hàng
               </button>
               
               <button

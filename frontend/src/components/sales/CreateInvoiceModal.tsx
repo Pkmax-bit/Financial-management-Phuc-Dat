@@ -155,7 +155,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
       resetForm()
     } catch (error) {
       console.error('Error creating invoice:', error)
-      alert('Có lỗi xảy ra khi tạo hóa đơn: ' + (error as Error).message)
+      alert('Có lỗi xảy ra khi tạo đơn hàng: ' + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -196,7 +196,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Tạo Đơn hàng mới</h2>
-            <p className="text-sm text-black">Tạo và gửi hóa đơn cho khách hàng</p>
+            <p className="text-sm text-black">Tạo và gửi đơn hàng cho khách hàng</p>
           </div>
           <button
             onClick={onClose}
@@ -211,7 +211,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Số hóa đơn</label>
+              <label className="block text-sm font-medium text-gray-700">Số đơn hàng</label>
               <input
                 type="text"
                 value={formData.invoice_number}
@@ -262,7 +262,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
           {/* Items */}
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Chi tiết hóa đơn</h3>
+              <h3 className="text-lg font-medium text-gray-900">Chi tiết đơn hàng</h3>
               <button
                 type="button"
                 onClick={addItem}

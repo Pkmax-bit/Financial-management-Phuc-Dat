@@ -2952,7 +2952,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     tour.addStep({
       id: 'planned-expense-amounts',
       title: 'Phân bổ số tiền',
-      text: 'Các cách phân bổ:\n1. Phân bổ theo tỷ lệ phần trăm: Nhập % cho từng đối tượng chi phí\n2. Phân bổ theo số tiền cụ thể: Nhập số tiền trực tiếp cho từng đối tượng\n\nThông tin hiển thị:\n• Bảng chi tiết hóa đơn với các cột: STT, Tên sản phẩm, Mô tả, Đơn giá, Số lượng, Đơn vị, Thành tiền\n• Các cột đối tượng chi phí (%, Số lượng, Đơn giá, VND)\n• Tổng phân bổ\n\nThao tác:\n• Nhập số tiền cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Có thể thêm hóa đơn/đơn hàng từ báo giá nếu có',
+      text: 'Các cách phân bổ:\n1. Phân bổ theo tỷ lệ phần trăm: Nhập % cho từng đối tượng chi phí\n2. Phân bổ theo số tiền cụ thể: Nhập số tiền trực tiếp cho từng đối tượng\n\nThông tin hiển thị:\n• Bảng chi tiết đơn hàng với các cột: STT, Tên sản phẩm, Mô tả, Đơn giá, Số lượng, Đơn vị, Thành tiền\n• Các cột đối tượng chi phí (%, Số lượng, Đơn giá, VND)\n• Tổng phân bổ\n\nThao tác:\n• Nhập số tiền cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Có thể thêm đơn hàng/đơn hàng từ báo giá nếu có',
       attachTo: { element: '[data-tour-id="planned-expense-amounts"]', on: 'top' },
       buttons: [
         {
@@ -3283,7 +3283,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     tour.addStep({
       id: 'actual-expense-objects',
       title: 'Đối tượng chi phí',
-      text: 'Chọn đối tượng chi phí (có thể chọn nhiều):\n• Nhấn vào ô chọn để mở danh sách đối tượng chi phí\n• Chọn một hoặc nhiều đối tượng chi phí để phân bổ chi phí thực tế\n• Hệ thống sẽ tự động tải đối tượng chi phí từ hóa đơn nếu có\n• Bạn có thể chọn đối tượng chi phí cấp 1, 2, hoặc 3',
+      text: 'Chọn đối tượng chi phí (có thể chọn nhiều):\n• Nhấn vào ô chọn để mở danh sách đối tượng chi phí\n• Chọn một hoặc nhiều đối tượng chi phí để phân bổ chi phí thực tế\n• Hệ thống sẽ tự động tải đối tượng chi phí từ đơn hàng nếu có\n• Bạn có thể chọn đối tượng chi phí cấp 1, 2, hoặc 3',
       attachTo: { element: '[data-tour-id="actual-expense-objects"]', on: 'top' },
       buttons: [
         {
@@ -3301,7 +3301,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
     tour.addStep({
       id: 'actual-expense-amounts',
       title: 'Phân bổ số tiền',
-      text: 'Các cách phân bổ:\n1. Phân bổ theo tỷ lệ phần trăm: Nhập % cho từng đối tượng chi phí\n2. Phân bổ theo số tiền cụ thể: Nhập số tiền trực tiếp cho từng đối tượng\n\nThông tin hiển thị:\n• Bảng chi tiết hóa đơn với các cột: STT, Tên sản phẩm, Mô tả, Đơn giá, Số lượng, Đơn vị, Thành tiền\n• Các cột đối tượng chi phí (%, Số lượng, Đơn giá, VND)\n• Tổng phân bổ\n\nThao tác:\n• Nhập số tiền thực tế đã chi cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Có thể thêm hóa đơn/đơn hàng từ hóa đơn nếu có',
+      text: 'Các cách phân bổ:\n1. Phân bổ theo tỷ lệ phần trăm: Nhập % cho từng đối tượng chi phí\n2. Phân bổ theo số tiền cụ thể: Nhập số tiền trực tiếp cho từng đối tượng\n\nThông tin hiển thị:\n• Bảng chi tiết đơn hàng với các cột: STT, Tên sản phẩm, Mô tả, Đơn giá, Số lượng, Đơn vị, Thành tiền\n• Các cột đối tượng chi phí (%, Số lượng, Đơn giá, VND)\n• Tổng phân bổ\n\nThao tác:\n• Nhập số tiền thực tế đã chi cho từng đối tượng chi phí đã chọn\n• Tổng số tiền sẽ được tự động tính\n• Có thể thêm đơn hàng/đơn hàng từ đơn hàng nếu có',
       attachTo: { element: '[data-tour-id="actual-expense-amounts"]', on: 'top' },
       buttons: [
         {
@@ -5010,7 +5010,7 @@ export default function CreateProjectExpenseDialog({ isOpen, onClose, onSuccess,
               <div className="h-full overflow-auto bg-white border border-gray-200 rounded-lg" data-tour-id={category === 'planned' ? 'planned-expense-amounts' : 'actual-expense-amounts'}>
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Chi tiết hóa đơn</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Chi tiết đơn hàng</h3>
                     <div className="flex items-center space-x-2">
                       <div className="text-sm text-gray-600">100% Đối tượng chi phí</div>
                       {/* Load lại chi phí button - chỉ hiển thị khi đang edit và có project_id */}

@@ -42,7 +42,7 @@ export default function SalesLearningPage() {
           completed: false
         },
         {
-          title: 'Gửi hóa đơn',
+          title: 'Gửi đơn hàng',
           duration: '25 phút',
           type: 'interactive',
           completed: false
@@ -176,8 +176,8 @@ export default function SalesLearningPage() {
       progress: 30
     },
     {
-      title: 'Quản lý hóa đơn',
-      description: 'Gửi được 20 hóa đơn',
+      title: 'Quản lý đơn hàng',
+      description: 'Gửi được 20 đơn hàng',
       icon: BookOpen,
       unlocked: false,
       progress: 15
@@ -275,7 +275,7 @@ export default function SalesLearningPage() {
                         </div>
                       </div>
                       <p className="text-green-800 text-sm mb-4">
-                        Học cách tạo báo giá, gửi hóa đơn và ghi nhận thanh toán
+                        Học cách tạo báo giá, gửi đơn hàng và ghi nhận thanh toán
                       </p>
                       <button className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
                         Bắt đầu học

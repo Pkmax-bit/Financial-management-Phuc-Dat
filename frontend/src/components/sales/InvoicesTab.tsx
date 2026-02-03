@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { 
-  Receipt, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye,
+import {
+  Receipt,
+  Plus,
+  Edit,
+  Trash2,
   Send,
   DollarSign,
   Calendar,
@@ -14,11 +13,13 @@ import {
   AlertTriangle,
   CheckCircle,
   HelpCircle,
-  X
+  X,
+  FileText
 } from 'lucide-react'
 import CreateInvoiceSidebarFullscreen from './CreateInvoiceSidebarFullscreen'
 import EditInvoiceModal from './EditInvoiceModal'
 import PaymentModal from './PaymentModal'
+import InvoiceExportModal from './InvoiceExportModal'
 import { TableCard, TableCardRow } from '@/components/ui/MobileTableCard'
 import { apiGet, apiPost, apiPut } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -89,6 +90,8 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportInvoice, setExportInvoice] = useState<Invoice | null>(null)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; project_code?: string; status?: string }>>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all') // Mặc định: Tất cả
@@ -459,7 +462,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       alert('✅ Đơn hàng đã được gửi thành công!')
     } catch (error) {
       console.error('❌ Error sending invoice:', error)
-      alert('❌ Lỗi khi gửi hóa đơn. Vui lòng thử lại.')
+      alert('❌ Lỗi khi gửi đơn hàng. Vui lòng thử lại.')
     }
   }
 
@@ -475,7 +478,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         .single()
       
       if (fetchError || !invoice) {
-        throw new Error('Không thể tìm thấy hóa đơn')
+        throw new Error('Không thể tìm thấy đơn hàng')
       }
       
       const newPaidAmount = invoice.paid_amount + amount
@@ -541,12 +544,27 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
     closePaymentModal()
   }
 
+  const openExportModal = (invoice: Invoice) => {
+    setExportInvoice(invoice)
+    setShowExportModal(true)
+  }
+
+  const closeExportModal = () => {
+    setShowExportModal(false)
+    setExportInvoice(null)
+  }
+
+  const handleExportSuccess = () => {
+    fetchInvoices() // Refresh the invoices list
+    closeExportModal()
+  }
+
   const deleteInvoice = async (invoiceId: string) => {
     try {
       console.log('🔍 Deleting invoice:', invoiceId)
       
       // Show confirmation dialog
-      const confirmed = window.confirm('Bạn có chắc chắn muốn xóa hóa đơn này? Hành động này không thể hoàn tác.')
+      const confirmed = window.confirm('Bạn có chắc chắn muốn xóa đơn hàng này? Hành động này không thể hoàn tác.')
       if (!confirmed) {
         return
       }
@@ -565,7 +583,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           z-index: 10000;
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         ">
-          🗑️ Đang xóa hóa đơn...
+          🗑️ Đang xóa đơn hàng...
         </div>
       `
       document.body.appendChild(loadingMessage)
@@ -651,7 +669,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           animation: slideIn 0.3s ease-out;
         ">
-          ❌ Lỗi khi xóa hóa đơn: ${error instanceof Error ? error.message : 'Lỗi không xác định'}
+          ❌ Lỗi khi xóa đơn hàng: ${error instanceof Error ? error.message : 'Lỗi không xác định'}
         </div>
         <style>
           @keyframes slideIn {
@@ -835,12 +853,12 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
     <div className="space-y-4">
       {/* Invoice Status Bar - QuickBooks Style */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Trạng thái hóa đơn</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Trạng thái đơn hàng</h3>
         
         {/* Visual Status Bar */}
         <div className="mb-4">
           <div className="flex items-center justify-between text-sm text-black mb-2">
-            <span>Tổng giá trị hóa đơn</span>
+            <span>Tổng giá trị đơn hàng</span>
             <span>Tổng: {formatCurrency(overdueAmount + notDueYetAmount + paidAmount)}</span>
           </div>
           <div className="flex h-8 rounded-lg overflow-hidden">
@@ -1006,7 +1024,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Tạo hóa đơn
+          Tạo đơn hàng
         </button>
       </div>
 
@@ -1093,53 +1111,45 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex space-x-2">
-                    <button 
-                      className="text-black hover:text-black" 
-                      title="Xem chi tiết"
-                      onClick={() => window.open(`/sales/invoices/${invoice.id}`, '_blank')}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    
+                  <div className="flex space-x-2" data-tour-id="invoice-actions-buttons">
                     {invoice.status === 'draft' && (
                       <>
-                        <button 
+                        <button
                           onClick={() => openEditModal(invoice)}
-                          className="text-black hover:text-blue-600" 
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100"
                           title="Chỉnh sửa"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button 
-                          onClick={() => sendInvoice(invoice.id)}
-                          className="text-black hover:text-green-600" 
-                          title="Gửi hóa đơn"
+                        <button
+                          onClick={() => openExportModal(invoice)}
+                          className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 border border-green-100"
+                          title="Xuất hóa đơn"
                         >
-                          <Send className="h-4 w-4" />
+                          <FileText className="h-4 w-4" />
                         </button>
                       </>
                     )}
-                    
+
                     {(invoice.payment_status === 'pending' || invoice.payment_status === 'partial') && (
-                      <button 
+                      <button
                         onClick={() => openPaymentModal(invoice)}
-                        className="text-black hover:text-green-600" 
+                        className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-100"
                         title="Ghi nhận thanh toán"
                       >
                         <DollarSign className="h-4 w-4" />
                       </button>
                     )}
-                    
+
                     {invoice.payment_status === 'paid' && (
-                      <div title="Đã thanh toán">
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      <div className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-green-100 text-green-800 border border-green-200" title="Đã thanh toán">
+                        <CheckCircle className="h-4 w-4" />
                       </div>
                     )}
-                    
-                    <button 
+
+                    <button
                       onClick={() => deleteInvoice(invoice.id)}
-                      className="text-black hover:text-red-600" 
+                      className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-100"
                       title="Xóa"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1157,9 +1167,9 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         {paginatedInvoices.length === 0 ? (
           <div className="text-center py-8">
             <Receipt className="mx-auto h-12 w-12 text-black" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có hóa đơn</h3>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có đơn hàng</h3>
             <p className="mt-1 text-sm text-black">
-              Bắt đầu bằng cách tạo hóa đơn mới.
+              Bắt đầu bằng cách tạo đơn hàng mới.
             </p>
           </div>
         ) : (
@@ -1228,13 +1238,6 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
 
               {/* Card Actions */}
               <div className="mt-4 pt-3 border-t border-gray-200 flex flex-wrap gap-2">
-                <button
-                  onClick={() => window.open(`/sales/invoices/${invoice.id}`, '_blank')}
-                  className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
-                >
-                  <Eye className="h-3 w-3 mr-1" />
-                  Xem
-                </button>
                 {invoice.status === 'draft' && (
                   <>
                     <button
@@ -1245,11 +1248,11 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                       Sửa
                     </button>
                     <button
-                      onClick={() => sendInvoice(invoice.id)}
+                      onClick={() => openExportModal(invoice)}
                       className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100"
                     >
-                      <Send className="h-3 w-3 mr-1" />
-                      Gửi
+                      <FileText className="h-3 w-3 mr-1" />
+                      Xuất HĐ
                     </button>
                   </>
                 )}
@@ -1278,7 +1281,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
               <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
                 <div className="flex items-center text-sm text-gray-700">
                   <span>
-                    Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredInvoices.length)} trong tổng số {filteredInvoices.length} hóa đơn
+                    Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredInvoices.length)} trong tổng số {filteredInvoices.length} đơn hàng
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -1326,7 +1329,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         <div className="hidden md:flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
           <div className="flex items-center text-sm text-gray-700">
             <span>
-              Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredInvoices.length)} trong tổng số {filteredInvoices.length} hóa đơn
+              Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredInvoices.length)} trong tổng số {filteredInvoices.length} đơn hàng
             </span>
           </div>
           <div className="flex items-center space-x-2">
@@ -1408,7 +1411,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                 <div>
                   <h4 className="text-md font-semibold text-gray-800 mb-2">🎯 Tổng quan</h4>
                   <p className="text-sm text-gray-600">
-                    Module Đơn hàng giúp bạn quản lý các hóa đơn bán hàng, theo dõi thanh toán và tình trạng thu tiền từ khách hàng.
+                    Module Đơn hàng giúp bạn quản lý các đơn hàng bán hàng, theo dõi thanh toán và tình trạng thu tiền từ khách hàng.
                   </p>
                 </div>
 
@@ -1420,15 +1423,15 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                       <div className="flex items-start space-x-2">
                         <Plus className="h-4 w-4 text-green-600 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Tạo hóa đơn</p>
-                          <p className="text-xs text-gray-500">Tạo hóa đơn mới từ báo giá hoặc từ đầu</p>
+                          <p className="text-sm font-medium text-gray-700">Tạo đơn hàng</p>
+                          <p className="text-xs text-gray-500">Tạo đơn hàng mới từ báo giá hoặc từ đầu</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
                         <Send className="h-4 w-4 text-blue-600 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Gửi hóa đơn</p>
-                          <p className="text-xs text-gray-500">Gửi hóa đơn qua email cho khách hàng</p>
+                          <p className="text-sm font-medium text-gray-700">Gửi đơn hàng</p>
+                          <p className="text-xs text-gray-500">Gửi đơn hàng qua email cho khách hàng</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
@@ -1444,21 +1447,21 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                         <Eye className="h-4 w-4 text-purple-600 mt-0.5" />
                         <div>
                           <p className="text-sm font-medium text-gray-700">Xem chi tiết</p>
-                          <p className="text-xs text-gray-500">Xem thông tin chi tiết hóa đơn</p>
+                          <p className="text-xs text-gray-500">Xem thông tin chi tiết đơn hàng</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
                         <Edit className="h-4 w-4 text-orange-600 mt-0.5" />
                         <div>
                           <p className="text-sm font-medium text-gray-700">Chỉnh sửa</p>
-                          <p className="text-xs text-gray-500">Chỉnh sửa hóa đơn (chỉ khi ở trạng thái nháp)</p>
+                          <p className="text-xs text-gray-500">Chỉnh sửa đơn hàng (chỉ khi ở trạng thái nháp)</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
                         <Trash2 className="h-4 w-4 text-red-600 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Xóa hóa đơn</p>
-                          <p className="text-xs text-gray-500">Xóa hóa đơn (chỉ khi ở trạng thái nháp)</p>
+                          <p className="text-sm font-medium text-gray-700">Xóa đơn hàng</p>
+                          <p className="text-xs text-gray-500">Xóa đơn hàng (chỉ khi ở trạng thái nháp)</p>
                         </div>
                       </div>
                     </div>
@@ -1467,7 +1470,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
 
                 {/* Status Guide */}
                 <div>
-                  <h4 className="text-md font-semibold text-gray-800 mb-3">📊 Trạng thái hóa đơn</h4>
+                  <h4 className="text-md font-semibold text-gray-800 mb-3">📊 Trạng thái đơn hàng</h4>
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Nháp</span>
@@ -1493,11 +1496,11 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                   <h4 className="text-md font-semibold text-gray-800 mb-3">🔄 Quy trình làm việc</h4>
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
-                      <li><strong>Tạo hóa đơn:</strong> Tạo hóa đơn mới hoặc chuyển từ báo giá</li>
+                      <li><strong>Tạo đơn hàng:</strong> Tạo đơn hàng mới hoặc chuyển từ báo giá</li>
                       <li><strong>Kiểm tra thông tin:</strong> Xem lại thông tin khách hàng, sản phẩm, giá cả</li>
-                      <li><strong>Gửi hóa đơn:</strong> Gửi hóa đơn cho khách hàng qua email</li>
+                      <li><strong>Gửi đơn hàng:</strong> Gửi đơn hàng cho khách hàng qua email</li>
                       <li><strong>Theo dõi thanh toán:</strong> Cập nhật trạng thái khi khách hàng thanh toán</li>
-                      <li><strong>Hoàn tất:</strong> Đánh dấu hóa đơn đã thanh toán đầy đủ</li>
+                      <li><strong>Hoàn tất:</strong> Đánh dấu đơn hàng đã thanh toán đầy đủ</li>
                     </ol>
                   </div>
                 </div>
@@ -1507,10 +1510,10 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                   <h4 className="text-md font-semibold text-gray-800 mb-3">💡 Mẹo sử dụng</h4>
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-                      <li>Sử dụng bộ lọc để tìm hóa đơn theo trạng thái</li>
-                      <li>Kiểm tra hóa đơn quá hạn thường xuyên</li>
+                      <li>Sử dụng bộ lọc để tìm đơn hàng theo trạng thái</li>
+                      <li>Kiểm tra đơn hàng quá hạn thường xuyên</li>
                       <li>Gửi nhắc nhở thanh toán cho khách hàng</li>
-                      <li>Lưu trữ hóa đơn đã thanh toán để báo cáo</li>
+                      <li>Lưu trữ đơn hàng đã thanh toán để báo cáo</li>
                     </ul>
                   </div>
                 </div>
@@ -1544,6 +1547,15 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           onClose={closePaymentModal}
           onSuccess={handlePaymentSuccess}
           invoice={paymentInvoice}
+        />
+      )}
+
+      {exportInvoice && (
+        <InvoiceExportModal
+          isOpen={showExportModal}
+          onClose={closeExportModal}
+          onSuccess={handleExportSuccess}
+          invoice={exportInvoice}
         />
       )}
     </div>

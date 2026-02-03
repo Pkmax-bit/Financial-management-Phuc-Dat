@@ -537,7 +537,7 @@ export default function ProductCreateForm({ onCreated }: { onCreated?: () => voi
     tour.addStep({
       id: 'product-form-submit',
       title: 'Tạo sản phẩm',
-      text: 'Sau khi điền đầy đủ thông tin (ít nhất Loại sản phẩm và Tên sản phẩm), nhấn "Tạo sản phẩm" để lưu. Sản phẩm sẽ được thêm vào danh sách và có thể sử dụng khi tạo báo giá hoặc hóa đơn.',
+      text: 'Sau khi điền đầy đủ thông tin (ít nhất Loại sản phẩm và Tên sản phẩm), nhấn "Tạo sản phẩm" để lưu. Sản phẩm sẽ được thêm vào danh sách và có thể sử dụng khi tạo báo giá hoặc đơn hàng.',
       attachTo: { element: '[data-tour-id="product-form-submit"]', on: 'top' },
       buttons: [
         {

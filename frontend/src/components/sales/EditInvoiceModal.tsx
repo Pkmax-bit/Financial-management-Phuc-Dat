@@ -330,7 +330,7 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
       onClose()
     } catch (error) {
       console.error('Error updating invoice:', error)
-      alert('Có lỗi xảy ra khi cập nhật hóa đơn: ' + (error as Error).message)
+      alert('Có lỗi xảy ra khi cập nhật đơn hàng: ' + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -348,7 +348,7 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
             <div className="flex items-center space-x-2">
               <Receipt className="h-5 w-5 text-green-600" />
               <h3 className="text-lg font-semibold text-gray-900">
-                Chỉnh sửa hóa đơn - {invoice.invoice_number}
+                Chỉnh sửa đơn hàng - {invoice.invoice_number}
               </h3>
             </div>
             <button
@@ -382,7 +382,7 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
                 {expandedSections.basic && (
                   <div className="px-4 pb-4 space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold text-black mb-1">Số hóa đơn</label>
+                      <label className="block text-xs font-semibold text-black mb-1">Số đơn hàng</label>
                       <input
                         type="text"
                         value={formData.invoice_number}
@@ -667,7 +667,7 @@ export default function EditInvoiceModal({ isOpen, onClose, onSuccess, invoice }
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                         className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-1 focus:ring-green-500"
                         rows={3}
-                        placeholder="Ghi chú thêm cho hóa đơn..."
+                        placeholder="Ghi chú thêm cho đơn hàng..."
                       />
                     </div>
                     <div>

@@ -21,8 +21,6 @@ import {
   Camera,
   Menu,
   X,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   Palette,
   Lock,
@@ -31,6 +29,17 @@ import {
   MessageSquare,
   Smartphone
 } from 'lucide-react'
+// Slider GIF icons (stored in repo /icon/slider)
+import dashboardSlider from '../../../icon/slider/dashboard.gif'
+import addCustomerSlider from '../../../icon/slider/add-customer.gif'
+import openBookGearSlider from '../../../icon/slider/open-book-gear.gif'
+import expenseSlider from '../../../icon/slider/expense.gif'
+import quoteSlider from '../../../icon/slider/quote.gif'
+import projectSlider from '../../../icon/slider/project.gif'
+import reportSlider from '../../../icon/slider/report.gif'
+import hrSlider from '../../../icon/slider/hr.gif'
+import feedbackSlider from '../../../icon/slider/feedback.gif'
+import managerFeedbackSlider from '../../../icon/slider/manager-feedback.gif'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
 import BackgroundSettings from './BackgroundSettings'
@@ -269,12 +278,12 @@ function BackgroundRenderer() {
 export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWithSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [forceHideSidebar, setForceHideSidebar] = useState(false)
   const [showBackgroundSettings, setShowBackgroundSettings] = useState(false)
   const [showQRLogin, setShowQRLogin] = useState(false)
   const [showQRScanner, setShowQRScanner] = useState(false)
+  const [showAppLauncher, setShowAppLauncher] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [accessToken, setAccessToken] = useState<string>('')
 
@@ -346,6 +355,33 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     Smartphone
   }
 
+  // Slider GIF icon mapping for app launcher (left panel)
+  const sliderIconMap: Record<string, any> = {
+    // Chính
+    'Dashboard': dashboardSlider,
+    'Quy trình': openBookGearSlider,
+
+    // Khách hàng / Bán hàng
+    'Khách hàng': addCustomerSlider,
+    'Bán hàng & Báo giá': quoteSlider,
+
+    // Dự án
+    'Dự án': projectSlider,
+
+    // Chi phí & Ngân sách
+    'Chi phí & Ngân sách': expenseSlider,
+
+    // Nhân sự
+    'Nhân viên': hrSlider,
+
+    // Phản hồi / hệ thống
+    'Góp ý & Hỗ trợ': feedbackSlider,
+    'Đánh giá nhân sự': managerFeedbackSlider,
+
+    // Báo cáo
+    'Báo cáo & Phân tích': reportSlider
+  }
+
   const handleNavigation = (href: string) => {
     router.push(href)
   }
@@ -354,9 +390,6 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     setSidebarOpen(!sidebarOpen)
   }
 
-  const toggleCollapse = () => {
-    setSidebarCollapsed(!sidebarCollapsed)
-  }
 
   const hideSidebar = (hide: boolean) => {
     setForceHideSidebar(hide)
@@ -370,7 +403,6 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
   // Sidebar is hidden if forceHideSidebar is true
   const shouldShowSidebar = sidebarOpen && !forceHideSidebar
-  const isCollapsed = sidebarCollapsed && shouldShowSidebar
 
   return (
     <SidebarContext.Provider value={sidebarContextValue}>
@@ -389,10 +421,10 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
         {/* Sidebar */}
         <aside className={`fixed top-0 left-0 bottom-0 z-50 bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ${shouldShowSidebar ? 'translate-x-0' : '-translate-x-full'
           } lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:self-start ${!sidebarOpen && 'lg:hidden'
-          } ${isCollapsed ? 'w-16' : 'w-64'} flex flex-col`}>
+          } w-64 flex flex-col`}>
           {/* Logo & Toggle Button */}
-          <div className={`flex items-center h-16 border-b border-gray-200 ${isCollapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
-            {!isCollapsed && (
+          <div className="flex items-center h-16 border-b border-gray-200 justify-between px-4">
+            {true && (
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Package className="w-5 h-5 text-white" />
@@ -403,29 +435,12 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                 </div>
               </div>
             )}
-            {isCollapsed && (
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Package className="w-5 h-5 text-white" />
-              </div>
-            )}
-            {/* Collapse Toggle Button - Desktop only */}
-            <button
-              onClick={toggleCollapse}
-              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
-              title={isCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-4 w-4 text-gray-600" />
-              ) : (
-                <ChevronLeft className="h-4 w-4 text-gray-600" />
-              )}
-            </button>
           </div>
 
           {/* Navigation Menu */}
-          <nav className={`flex-1 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 max-h-[calc(100vh-8rem)] relative ${isCollapsed ? 'px-2' : 'px-4'}`}>
+          <nav className="flex-1 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 max-h-[calc(100vh-8rem)] relative px-4">
             {/* Scroll indicator */}
-            {!isCollapsed && (
+            {true && (
               <>
                 <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-white to-transparent pointer-events-none z-10"></div>
                 <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
@@ -436,8 +451,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
             <div className="pt-1 pb-1">
               {Object.entries(navigationByCategory).map(([category, items]) => (
                 <div key={category} className="mb-2">
-                  {/* Category header - Hidden when collapsed */}
-                  {!isCollapsed && (
+                  {/* Category header */}
+                  {true && (
                     <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       {getCategoryDisplayName(category)}
                     </div>
@@ -458,17 +473,14 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                             setSidebarOpen(false)
                           }
                         }}
-                        className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-1.5'} text-sm font-medium rounded-lg transition-all duration-200 group ${isActive
+                        className={`w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group ${isActive
                             ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
                             : 'text-gray-700 hover:bg-gray-50'
                           }`}
-                        title={isCollapsed ? item.name : item.description}
+                        title={item.description}
                       >
-                        <Icon className={`${isCollapsed ? 'h-5 w-5' : 'mr-3 h-4 w-4'} flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'
-                          }`} />
-                        {!isCollapsed && (
-                          <span className="truncate">{item.name}</span>
-                        )}
+                        <Icon className={`mr-3 h-4 w-4 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <span className="truncate">{item.name}</span>
                       </button>
                     )
                   })}
@@ -477,41 +489,33 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
               {/* Settings */}
               <div className="mt-4 mb-2 space-y-1">
-                {!isCollapsed && (
-                  <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Cài đặt
-                  </div>
-                )}
+                <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Cài đặt
+                </div>
                 <button
                   onClick={() => router.push('/settings')}
-                  className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-1.5'} text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50`}
-                  title={isCollapsed ? 'Cài đặt' : undefined}
+                  className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50"
+                  title="Cài đặt"
                 >
-                  <Settings className={`${isCollapsed ? 'h-5 w-5' : 'mr-3 h-4 w-4'} flex-shrink-0 text-gray-400`} />
-                  {!isCollapsed && (
-                    <span className="truncate">Cài đặt</span>
-                  )}
+                  <Settings className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
+                  <span className="truncate">Cài đặt</span>
                 </button>
               </div>
 
               {/* Support Center - Moved into scrollable area */}
               <div className="mt-2 mb-2 space-y-2">
-                {!isCollapsed && (
-                  <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Hỗ trợ
-                  </div>
-                )}
-                <div className={`${isCollapsed ? 'px-2' : 'px-3'} space-y-2`}>
-                  {!isCollapsed && <SupportCenterButton />}
+                <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Hỗ trợ
+                </div>
+                <div className="px-3 space-y-2">
+                  <SupportCenterButton />
                   <button
                     onClick={() => handleNavigation('/change-password')}
-                    className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-1.5'} text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50 border border-gray-200`}
-                    title={isCollapsed ? 'Đổi mật khẩu' : undefined}
+                    className="w-full flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 group text-gray-700 hover:bg-gray-50 border border-gray-200"
+                    title="Đổi mật khẩu"
                   >
-                    <Lock className={`${isCollapsed ? 'h-5 w-5' : 'mr-3 h-4 w-4'} flex-shrink-0 text-gray-400`} />
-                    {!isCollapsed && (
-                      <span className="truncate">Đổi mật khẩu</span>
-                    )}
+                    <Lock className="mr-3 h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <span className="truncate">Đổi mật khẩu</span>
                   </button>
                 </div>
               </div>
@@ -520,76 +524,59 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
           {/* User Section - Moved down */}
           {user && (
-            <div className={`border-t border-gray-200 bg-gray-50 shrink-0 ${isCollapsed ? 'p-2' : 'p-3'}`}>
-              {isCollapsed ? (
-                <div className="flex flex-col items-center space-y-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
-                    <span className="text-xs font-bold text-white">
-                      {user.full_name?.charAt(0) || 'U'}
+            <div className="border-t border-gray-200 bg-gray-50 shrink-0 p-3">
+              <div className="flex items-start space-x-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md shrink-0">
+                  <span className="text-xs font-bold text-white">
+                    {user.full_name?.charAt(0) || 'U'}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-900 truncate">
+                    {user.full_name || 'User'}
+                  </p>
+                  <div className="flex items-center space-x-1 mt-0.5">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(userRole)} text-white shadow-sm`}>
+                      {getRoleDisplayName(userRole)}
                     </span>
                   </div>
+                </div>
+                <div className="flex items-center space-x-2 shrink-0">
                   <div className="relative">
                     <NotificationBell />
                   </div>
                   {onLogout && (
                     <button
                       onClick={onLogout}
-                      className="flex items-center justify-center w-8 h-8 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200"
+                      className="flex items-center justify-center px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200"
                       title="Đăng xuất"
                     >
-                      <LogOut className="h-4 w-4" />
+                      <LogOut className="h-3 w-3" />
                     </button>
                   )}
                 </div>
-              ) : (
-                <div className="flex items-start space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md shrink-0">
-                    <span className="text-xs font-bold text-white">
-                      {user.full_name?.charAt(0) || 'U'}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-gray-900 truncate">
-                      {user.full_name || 'User'}
-                    </p>
-                    <div className="flex items-center space-x-1 mt-0.5">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(userRole)} text-white shadow-sm`}>
-                        {getRoleDisplayName(userRole)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <div className="relative">
-                      <NotificationBell />
-                    </div>
-                    {onLogout && (
-                      <button
-                        onClick={onLogout}
-                        className="flex items-center justify-center px-2 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200"
-                        title="Đăng xuất"
-                      >
-                        <LogOut className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           )}
         </aside>
 
-        {/* Mobile Toggle Button - Only show on mobile */}
+        {/* App Launcher Button (9-dot icon) - Always visible */}
         <button
-          onClick={toggleSidebar}
-          className={`fixed top-4 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 transition-all duration-300 hover:bg-gray-50 ${shouldShowSidebar ? 'left-64' : 'left-4'
-            } lg:hidden`}
-          title={shouldShowSidebar ? 'Đóng sidebar' : 'Mở sidebar'}
+          onClick={() => setShowAppLauncher(true)}
+          className="fixed top-4 left-4 z-50 bg-white/95 border border-gray-200 rounded-xl shadow-lg p-3 transition-all duration-300 hover:bg-gray-50"
+          title="Mở danh sách chức năng"
         >
-          {shouldShowSidebar ? (
-            <ChevronLeft className="h-5 w-5 text-gray-600" />
-          ) : (
-            <ChevronRight className="h-5 w-5 text-gray-600" />
-          )}
+          <div className="grid grid-cols-3 gap-1.5">
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
+          </div>
         </button>
 
 
@@ -618,6 +605,90 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           isOpen={showQRScanner}
           onClose={() => setShowQRScanner(false)}
         />
+
+        {/* App Launcher Overlay */}
+        {showAppLauncher && (
+          <div
+            className="fixed inset-0 z-[60] bg-black/40 flex items-stretch justify-start"
+            onClick={() => setShowAppLauncher(false)}
+          >
+            <div
+              className="bg-white rounded-r-2xl shadow-2xl w-[35%] min-w-[260px] h-full flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header with search */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm chức năng..."
+                  className="flex-1 mr-3 px-3 py-2 rounded-lg border border-gray-300 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button
+                  onClick={() => setShowAppLauncher(false)}
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
+                  aria-label="Đóng"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Content: grouped navigation items */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+                {Object.entries(navigationByCategory).map(([category, items]) => (
+                  <div key={category} className="space-y-2">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      {getCategoryDisplayName(category)}
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {items.map((item) => {
+                        const Icon = iconMap[item.icon] || Home
+                        const sliderSrc = sliderIconMap[item.name]
+                        const isActive = pathname === item.href
+
+                        return (
+                          <button
+                            key={item.name}
+                            onClick={() => {
+                              handleNavigation(item.href)
+                              setShowAppLauncher(false)
+                            }}
+                            className={`flex flex-col items-start rounded-xl border px-2.5 py-2 text-left transition-colors ${
+                              isActive
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50/40'
+                            }`}
+                          >
+                            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 mb-1.5 overflow-hidden">
+                              {sliderSrc ? (
+                                // Slider GIF icon
+                                // NOTE: Đảm bảo các file tồn tại tại đường dẫn /icon/slider/*.gif
+                                <img
+                                  src={sliderSrc}
+                                  alt={item.name}
+                                  className="h-6 w-6 object-contain"
+                                />
+                              ) : (
+                                <Icon className="h-4 w-4 text-blue-600" />
+                              )}
+                            </div>
+                            <div className="text-[13px] font-medium text-gray-900 truncate">
+                              {item.name}
+                            </div>
+                            {item.description && (
+                              <div className="mt-0.5 text-[11px] text-gray-500 line-clamp-2">
+                                {item.description}
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Floating Actions Button - Combined Workflow and Chat */}
         {currentUserId && <FloatingActionsButton currentUserId={currentUserId} />}

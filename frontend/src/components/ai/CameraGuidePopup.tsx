@@ -144,7 +144,7 @@ export default function CameraGuidePopup({ isOpen, onClose }: CameraGuidePopupPr
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Hướng Dẫn Camera</h2>
-                <p className="text-sm text-gray-600">Setup camera cho AI phân tích hóa đơn</p>
+                <p className="text-sm text-gray-600">Setup camera cho AI phân tích đơn hàng</p>
               </div>
             </div>
             <button

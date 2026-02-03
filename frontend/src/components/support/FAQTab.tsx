@@ -20,15 +20,15 @@ const faqs = [
   },
   {
     id: 3,
-    question: "Làm sao để tạo hóa đơn bán hàng?",
-    answer: "Vào mục Bán hàng > Đơn hàng > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
+    question: "Làm sao để tạo đơn hàng bán hàng?",
+    answer: "Vào mục Bán hàng > Đơn hàng > Tạo đơn hàng. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu đơn hàng.",
     category: "Bán hàng",
     module: "sales"
   },
   {
     id: 4,
     question: "Cách quản lý thanh toán của khách hàng?",
-    answer: "Vào mục Bán hàng > Thanh toán > Ghi nhận thanh toán. Chọn hóa đơn cần thanh toán, nhập số tiền và phương thức thanh toán.",
+    answer: "Vào mục Bán hàng > Thanh toán > Ghi nhận thanh toán. Chọn đơn hàng cần thanh toán, nhập số tiền và phương thức thanh toán.",
     category: "Bán hàng",
     module: "sales"
   },

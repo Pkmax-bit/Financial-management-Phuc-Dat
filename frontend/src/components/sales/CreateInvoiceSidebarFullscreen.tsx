@@ -467,8 +467,8 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
     tour.addStep({
       id: 'invoice-form-intro',
-      title: 'Hướng dẫn tạo hóa đơn',
-      text: 'Form này giúp bạn tạo hóa đơn với tính năng tự động tính diện tích và điều chỉnh vật tư khi thay đổi kích thước sản phẩm.',
+      title: 'Hướng dẫn tạo đơn hàng',
+      text: 'Form này giúp bạn tạo đơn hàng với tính năng tự động tính diện tích và điều chỉnh vật tư khi thay đổi kích thước sản phẩm.',
       attachTo: { element: '[data-tour-id="invoice-form-header"]', on: 'bottom' },
       buttons: [
         {
@@ -486,7 +486,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.addStep({
       id: 'invoice-form-basic-info',
       title: 'Thông tin cơ bản',
-      text: 'Điền các trường sau:\n• Số hóa đơn: Nhập số hóa đơn (có thể tự động tạo)\n• Khách hàng (bắt buộc *): Chọn khách hàng từ danh sách\n• Dự án (tùy chọn): Chọn dự án liên quan (tự động tải khi chọn khách hàng)\n• Loại hóa đơn: Chọn loại (Tiêu chuẩn, ...)\n• Ngày phát hành: Ngày phát hành hóa đơn\n• Ngày đến hạn: Ngày đến hạn thanh toán\n• Ghi chú: Ghi chú bổ sung\n\nLưu ý: Hệ thống sẽ tự động tải danh sách dự án khi bạn chọn khách hàng.',
+      text: 'Điền các trường sau:\n• Số đơn hàng: Nhập số đơn hàng (có thể tự động tạo)\n• Khách hàng (bắt buộc *): Chọn khách hàng từ danh sách\n• Dự án (tùy chọn): Chọn dự án liên quan (tự động tải khi chọn khách hàng)\n• Loại đơn hàng: Chọn loại (Tiêu chuẩn, ...)\n• Ngày phát hành: Ngày phát hành đơn hàng\n• Ngày đến hạn: Ngày đến hạn thanh toán\n• Ghi chú: Ghi chú bổ sung\n\nLưu ý: Hệ thống sẽ tự động tải danh sách dự án khi bạn chọn khách hàng.',
       attachTo: { element: '[data-tour-id="invoice-form-basic-info"]', on: 'top' },
       buttons: [
         {
@@ -504,7 +504,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.addStep({
       id: 'invoice-form-items',
       title: 'Thêm sản phẩm',
-      text: 'Các cách thêm sản phẩm:\n1. Chọn từ danh sách: Nhấn "Chọn từ danh sách" để chọn sản phẩm có sẵn\n2. Thêm sản phẩm tự do: Nhấn "Thêm sản phẩm tự do" để nhập thủ công\n\nThông tin sản phẩm cần điền:\n• Tên sản phẩm: Tên sản phẩm\n• Mô tả: Mô tả chi tiết\n• Số lượng: Số lượng sản phẩm\n• Đơn vị: Đơn vị tính (cái, bộ, m², ...)\n• Đơn giá: Giá bán một đơn vị\n• Thành tiền: Tự động tính = Đơn giá × Số lượng × Diện tích\n\nLưu ý: Bạn có thể thêm nhiều sản phẩm vào hóa đơn.',
+      text: 'Các cách thêm sản phẩm:\n1. Chọn từ danh sách: Nhấn "Chọn từ danh sách" để chọn sản phẩm có sẵn\n2. Thêm sản phẩm tự do: Nhấn "Thêm sản phẩm tự do" để nhập thủ công\n\nThông tin sản phẩm cần điền:\n• Tên sản phẩm: Tên sản phẩm\n• Mô tả: Mô tả chi tiết\n• Số lượng: Số lượng sản phẩm\n• Đơn vị: Đơn vị tính (cái, bộ, m², ...)\n• Đơn giá: Giá bán một đơn vị\n• Thành tiền: Tự động tính = Đơn giá × Số lượng × Diện tích\n\nLưu ý: Bạn có thể thêm nhiều sản phẩm vào đơn hàng.',
       attachTo: { element: '[data-tour-id="invoice-form-items"]', on: 'top' },
       buttons: [
         {
@@ -540,7 +540,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     tour.addStep({
       id: 'invoice-form-totals',
       title: 'Tổng tiền và lưu',
-      text: 'Thông tin hiển thị:\n• Tổng tiền: Tự động tính dựa trên đơn giá và diện tích\n• Thuế VAT: Tự động tính (nếu có)\n• Tổng cộng: Tổng tiền sau thuế\n\nCác nút hành động:\n• Lưu nháp: Lưu hóa đơn ở trạng thái nháp (có thể chỉnh sửa sau)\n• Gửi ngay: Lưu và gửi hóa đơn cho khách hàng ngay lập tức\n\nLưu ý: Sau khi kiểm tra, nhấn "Lưu nháp" để lưu hoặc "Gửi ngay" để gửi hóa đơn cho khách hàng.',
+      text: 'Thông tin hiển thị:\n• Tổng tiền: Tự động tính dựa trên đơn giá và diện tích\n• Thuế VAT: Tự động tính (nếu có)\n• Tổng cộng: Tổng tiền sau thuế\n\nCác nút hành động:\n• Lưu nháp: Lưu đơn hàng ở trạng thái nháp (có thể chỉnh sửa sau)\n• Gửi ngay: Lưu và gửi đơn hàng cho khách hàng ngay lập tức\n\nLưu ý: Sau khi kiểm tra, nhấn "Lưu nháp" để lưu hoặc "Gửi ngay" để gửi đơn hàng cho khách hàng.',
       attachTo: { element: '[data-tour-id="invoice-form-totals"]', on: 'top' },
       buttons: [
         {
@@ -932,7 +932,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
       if (invoiceError) {
         console.error('❌ Error loading invoice:', invoiceError)
-        alert('Không thể tải hóa đơn: ' + invoiceError.message)
+        alert('Không thể tải đơn hàng: ' + invoiceError.message)
         return
       }
 
@@ -1085,7 +1085,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       }
     } catch (error) {
       console.error('❌ Error loading invoice data:', error)
-      alert('Không thể tải dữ liệu hóa đơn: ' + (error as Error).message)
+      alert('Không thể tải dữ liệu đơn hàng: ' + (error as Error).message)
     } finally {
       setLoading(false)
     }
@@ -1558,7 +1558,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     if (idx >= 0) comps[idx] = comp
     else comps.push(comp)
       ; (updated[itemIndex] as any).components = comps
-    // Cập nhật lại thành tiền dòng hóa đơn sau khi thay đổi vật tư
+    // Cập nhật lại thành tiền dòng đơn hàng sau khi thay đổi vật tư
     updated[itemIndex].total_price = computeItemTotal(updated[itemIndex])
     setItems(updated)
   }
@@ -1876,7 +1876,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
 
         if (invoiceError) {
           console.error('Invoice update error:', invoiceError)
-          throw new Error(`Lỗi cập nhật hóa đơn: ${invoiceError.message}`)
+          throw new Error(`Lỗi cập nhật đơn hàng: ${invoiceError.message}`)
         }
 
         invoice = updatedInvoice
@@ -2005,7 +2005,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       resetForm()
     } catch (error) {
       console.error(`Error ${invoiceId ? 'updating' : 'creating'} invoice:`, error)
-      alert(`Có lỗi xảy ra khi ${invoiceId ? 'cập nhật' : 'tạo'} hóa đơn: ` + (error as Error).message)
+      alert(`Có lỗi xảy ra khi ${invoiceId ? 'cập nhật' : 'tạo'} đơn hàng: ` + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -2065,7 +2065,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-white flex-shrink-0" data-tour-id="invoice-form-header">
           <div className="flex items-center">
             <FileText className="h-6 w-6 text-black mr-3" />
-            <h1 className="text-xl font-semibold text-black">{invoiceId ? 'Chỉnh sửa hóa đơn' : 'Tạo hóa đơn mới'}</h1>
+            <h1 className="text-xl font-semibold text-black">{invoiceId ? 'Chỉnh sửa đơn hàng' : 'Tạo đơn hàng mới'}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -2075,7 +2075,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
                 : 'text-white bg-blue-600 hover:bg-blue-700'
                 }`}
-              title="Bắt đầu hướng dẫn tạo hóa đơn"
+              title="Bắt đầu hướng dẫn tạo đơn hàng"
             >
               <CircleHelp className="h-4 w-4" />
             </button>
@@ -2096,7 +2096,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               <h2 className="text-lg font-medium text-black mb-4">Thông tin cơ bản</h2>
               <div className="grid grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-black mb-1">Số hóa đơn</label>
+                  <label className="block text-sm font-medium text-black mb-1">Số đơn hàng</label>
                   <input
                     type="text"
                     value={formData.invoice_number}
@@ -2156,7 +2156,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-black mb-1">Loại hóa đơn</label>
+                  <label className="block text-sm font-medium text-black mb-1">Loại đơn hàng</label>
                   <select
                     value={formData.invoice_type}
                     onChange={(e) => setFormData({ ...formData, invoice_type: e.target.value })}
@@ -2240,13 +2240,6 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                     Thêm sản phẩm tự do
                   </button>
                   <button
-                    onClick={() => setShowProductModal(true)}
-                    className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-                  >
-                    <Search className="h-4 w-4 mr-1" />
-                    Chọn từ danh sách
-                  </button>
-                  <button
                     onClick={() => setShowCustomProductModal(true)}
                     className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
                   >
@@ -2289,14 +2282,6 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                 className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="Tên sản phẩm"
                               />
-                              <button
-                                type="button"
-                                onClick={() => openProductModal(index)}
-                                className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center"
-                                title="Chọn sản phẩm từ danh sách"
-                              >
-                                <Search className="h-4 w-4" />
-                              </button>
                             </div>
                           </div>
                         )}
@@ -2397,7 +2382,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                                   />
                                   <span className="text-xs text-gray-500">%</span>
                                   <span className="text-xs text-gray-500">
-                                    = {formatCurrency(item.total_price * ((item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 0)) / 100))}&nbsp;VND \u003cbr /\u003e
+                                    = {formatCurrency(item.total_price * ((item.tax_rate != null ? item.tax_rate : (formData.tax_rate != null ? formData.tax_rate : 0)) / 100))}
                                   </span>
                                 </div>
                               </div>
@@ -2721,7 +2706,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
               disabled={submitting}
               className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
             >
-              {submitting ? 'Đang gửi...' : 'Gửi hóa đơn'}
+              {submitting ? 'Đang gửi...' : 'Gửi đơn hàng'}
             </button>
           </div>
         </div>

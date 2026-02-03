@@ -320,7 +320,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
       resetForm()
     } catch (error) {
       console.error('❌ Error creating invoice:', error)
-      alert('Có lỗi xảy ra khi tạo hóa đơn: ' + (error as Error).message)
+      alert('Có lỗi xảy ra khi tạo đơn hàng: ' + (error as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -384,8 +384,8 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
               <Receipt className="h-7 w-7 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Tạo hóa đơn mới</h2>
-              <p className="text-green-100 mt-1">Tạo và gửi hóa đơn chuyên nghiệp cho khách hàng</p>
+              <h2 className="text-2xl font-bold text-white">Tạo đơn hàng mới</h2>
+              <p className="text-green-100 mt-1">Tạo và gửi đơn hàng chuyên nghiệp cho khách hàng</p>
             </div>
           </div>
           <button
@@ -424,7 +424,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
               <div className="px-4 pb-4 space-y-3">
                 <div className="grid grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-black mb-1">Số hóa đơn</label>
+                    <label className="block text-xs font-semibold text-black mb-1">Số đơn hàng</label>
                     <input
                       type="text"
                       value={formData.invoice_number}
@@ -462,7 +462,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-black mb-1">Loại hóa đơn</label>
+                    <label className="block text-xs font-semibold text-black mb-1">Loại đơn hàng</label>
                     <select
                       value={formData.invoice_type}
                       onChange={(e) => setFormData({ ...formData, invoice_type: e.target.value })}
@@ -539,7 +539,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
             >
               <h3 className="text-lg font-medium text-gray-900 flex items-center">
                 <Receipt className="h-5 w-5 mr-2 text-indigo-600" />
-                Chi tiết hóa đơn
+                Chi tiết đơn hàng
               </h3>
               {expandedSections.items ? (
                 <ChevronDown className="h-5 w-5 text-black" />
@@ -858,7 +858,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
             ) : (
               <>
                 <Send className="w-4 h-4 mr-2" />
-                Tạo và gửi hóa đơn
+                Tạo và gửi đơn hàng
               </>
             )}
           </button>

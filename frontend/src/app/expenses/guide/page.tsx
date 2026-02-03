@@ -115,7 +115,7 @@ export default function ExpensesGuidePage() {
                     <h3 className="font-semibold text-blue-900 mb-2">🎯 Mục tiêu chính</h3>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• Theo dõi chi phí thực tế</li>
-                      <li>• Quản lý hóa đơn nhà cung cấp</li>
+                      <li>• Quản lý đơn hàng nhà cung cấp</li>
                       <li>• Kiểm soát ngân sách</li>
                       <li>• Tối ưu hóa chi phí</li>
                     </ul>
@@ -162,7 +162,7 @@ export default function ExpensesGuidePage() {
                   <li>Nhấn <strong>&quot;Tạo chi phí&quot;</strong> trong tab Chi phí</li>
                   <li>Điền thông tin cơ bản: ngày, mô tả, số tiền</li>
                   <li>Chọn danh mục chi phí phù hợp</li>
-                  <li>Đính kèm hóa đơn/chứng từ (nếu có)</li>
+                  <li>Đính kèm đơn hàng/chứng từ (nếu có)</li>
                   <li>Chọn người phê duyệt</li>
                   <li>Nhấn <strong>&quot;Tạo chi phí&quot;</strong></li>
                 </ol>
@@ -197,7 +197,7 @@ export default function ExpensesGuidePage() {
                     <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 mr-3" />
                     <div>
                       <p className="text-sm text-green-800">
-                        <strong>Lưu ý:</strong> Luôn đính kèm hóa đơn/chứng từ để đảm bảo tính minh bạch và tuân thủ quy định kế toán.
+                        <strong>Lưu ý:</strong> Luôn đính kèm đơn hàng/chứng từ để đảm bảo tính minh bạch và tuân thủ quy định kế toán.
                       </p>
                     </div>
                   </div>
@@ -214,18 +214,18 @@ export default function ExpensesGuidePage() {
               
               <div className="prose max-w-none">
                 <p className="text-gray-700 mb-4">
-                  Đơn hàng nhà cung cấp là các hóa đơn mà doanh nghiệp nhận được từ nhà cung cấp hàng hóa/dịch vụ. Cần được ghi nhận và theo dõi để thanh toán đúng hạn.
+                  Đơn hàng nhà cung cấp là các đơn hàng mà doanh nghiệp nhận được từ nhà cung cấp hàng hóa/dịch vụ. Cần được ghi nhận và theo dõi để thanh toán đúng hạn.
                 </p>
 
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">📋 Quy trình xử lý hóa đơn:</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">📋 Quy trình xử lý đơn hàng:</h3>
                 <div className="space-y-4">
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                       <span className="text-sm font-semibold text-blue-600">1</span>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-900">Nhận hóa đơn</h4>
-                      <p className="text-black text-sm">Nhận hóa đơn từ nhà cung cấp và kiểm tra tính hợp lệ</p>
+                      <h4 className="font-semibold text-gray-900">Nhận đơn hàng</h4>
+                      <p className="text-black text-sm">Nhận đơn hàng từ nhà cung cấp và kiểm tra tính hợp lệ</p>
                     </div>
                   </div>
                   
@@ -235,7 +235,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Nhập vào hệ thống</h4>
-                      <p className="text-black text-sm">Tạo hóa đơn mới với đầy đủ thông tin</p>
+                      <p className="text-black text-sm">Tạo đơn hàng mới với đầy đủ thông tin</p>
                     </div>
                   </div>
                   
@@ -245,7 +245,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Phê duyệt</h4>
-                      <p className="text-black text-sm">Người có thẩm quyền phê duyệt hóa đơn</p>
+                      <p className="text-black text-sm">Người có thẩm quyền phê duyệt đơn hàng</p>
                     </div>
                   </div>
                   
@@ -265,7 +265,7 @@ export default function ExpensesGuidePage() {
                     <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 mr-3" />
                     <div>
                       <p className="text-sm text-red-800">
-                        <strong>Quan trọng:</strong> Luôn kiểm tra kỹ thông tin trên hóa đơn trước khi phê duyệt để tránh sai sót trong thanh toán.
+                        <strong>Quan trọng:</strong> Luôn kiểm tra kỹ thông tin trên đơn hàng trước khi phê duyệt để tránh sai sót trong thanh toán.
                       </p>
                     </div>
                   </div>
@@ -323,7 +323,7 @@ export default function ExpensesGuidePage() {
                     </div>
                     <div>
                       <span className="font-medium text-gray-900">Closed</span>
-                      <span className="text-sm text-black ml-2">- Chuyển thành hóa đơn</span>
+                      <span className="text-sm text-black ml-2">- Chuyển thành đơn hàng</span>
                     </div>
                   </div>
                 </div>
@@ -333,7 +333,7 @@ export default function ExpensesGuidePage() {
                     <Lightbulb className="h-5 w-5 text-blue-400 mt-0.5 mr-3" />
                     <div>
                       <p className="text-sm text-blue-800">
-                        <strong>Mẹo:</strong> Đơn đặt hàng không tạo bút toán kế toán. Chỉ khi chuyển thành hóa đơn mới ghi nhận vào sổ sách kế toán.
+                        <strong>Mẹo:</strong> Đơn đặt hàng không tạo bút toán kế toán. Chỉ khi chuyển thành đơn hàng mới ghi nhận vào sổ sách kế toán.
                       </p>
                     </div>
                   </div>
@@ -359,7 +359,7 @@ export default function ExpensesGuidePage() {
                     <h4 className="font-semibold text-gray-900">1. Tạo đề nghị</h4>
                     <p className="text-black text-sm">Nhân viên tạo đề nghị với các chi phí đã chi</p>
                     <ul className="text-sm text-black mt-1 space-y-1">
-                      <li>• Đính kèm hóa đơn/chứng từ</li>
+                      <li>• Đính kèm đơn hàng/chứng từ</li>
                       <li>• Mô tả chi tiết từng khoản chi</li>
                       <li>• Chọn danh mục chi phí</li>
                     </ul>
@@ -450,7 +450,7 @@ export default function ExpensesGuidePage() {
                       <p className="text-black text-sm">Hệ thống tự động cập nhật chi tiêu thực tế</p>
                       <ul className="text-sm text-black mt-1 space-y-1">
                         <li>• Từ chi phí đã ghi nhận</li>
-                        <li>• Từ hóa đơn đã thanh toán</li>
+                        <li>• Từ đơn hàng đã thanh toán</li>
                         <li>• Tính toán chênh lệch</li>
                       </ul>
                     </div>

@@ -86,7 +86,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
       setBills(mockBills)
     } catch (error) {
       console.error('Error fetching bills:', error)
-      setError('Không thể tải danh sách hóa đơn')
+      setError('Không thể tải danh sách đơn hàng')
     } finally {
       setLoading(false)
     }
@@ -142,7 +142,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Đang tải hóa đơn...</p>
+            <p className="text-gray-600">Đang tải đơn hàng...</p>
           </div>
         </div>
       ) : error ? (
@@ -160,14 +160,14 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
       ) : filteredBills.length === 0 ? (
         <div className="text-center py-12">
           <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có hóa đơn nào</h3>
-          <p className="text-gray-600 mb-4">Bắt đầu bằng cách tạo hóa đơn đầu tiên</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có đơn hàng nào</h3>
+          <p className="text-gray-600 mb-4">Bắt đầu bằng cách tạo đơn hàng đầu tiên</p>
           <button
             onClick={onCreateBill}
             className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 flex items-center space-x-2 mx-auto"
           >
             <Plus className="h-4 w-4" />
-            <span>Tạo hóa đơn đầu tiên</span>
+            <span>Tạo đơn hàng đầu tiên</span>
           </button>
         </div>
       ) : (
@@ -176,7 +176,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Số hóa đơn
+                  Số đơn hàng
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Nhà cung cấp
@@ -185,7 +185,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
                   Số tiền
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ngày hóa đơn
+                  Ngày đơn hàng
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Hạn thanh toán

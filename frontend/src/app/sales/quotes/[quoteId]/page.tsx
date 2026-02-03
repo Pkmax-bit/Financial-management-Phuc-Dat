@@ -239,18 +239,6 @@ export default function QuoteDetailPage() {
           isOpen={showPreviewModal}
           onClose={() => setShowPreviewModal(false)}
           quoteId={quoteId}
-          onConfirmSend={async () => {
-            // Refresh quote data after sending
-            const token = (await supabase.auth.getSession()).data.session?.access_token
-            const qRes = await fetch(getApiEndpoint(`/api/sales/quotes/${quoteId}`), {
-              headers: { Authorization: `Bearer ${token || ''}` }
-            })
-            if (qRes.ok) {
-              const qData = await qRes.json()
-              setQuote(qData)
-            }
-            setShowPreviewModal(false)
-          }}
           onQuoteStatusUpdated={() => {
             // Refresh quote data
             const fetchData = async () => {

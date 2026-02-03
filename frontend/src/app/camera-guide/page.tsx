@@ -140,7 +140,7 @@ export default function CameraGuidePage() {
               <Camera className="h-8 w-8 text-blue-600" />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Hướng Dẫn Camera</h1>
-                <p className="text-sm text-gray-600">Cài đặt camera cho AI phân tích hóa đơn</p>
+                <p className="text-sm text-gray-600">Cài đặt camera cho AI phân tích đơn hàng</p>
               </div>
             </div>
           </div>

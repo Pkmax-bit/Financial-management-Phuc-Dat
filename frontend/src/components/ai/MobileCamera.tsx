@@ -217,7 +217,7 @@ export default function MobileCamera({
             {/* Instructions */}
             <div className="absolute bottom-20 left-0 right-0 text-center text-white">
               <p className="text-sm bg-black bg-opacity-50 px-4 py-2 rounded-full inline-block">
-                Đặt hóa đơn trong khung để chụp
+                Đặt đơn hàng trong khung để chụp
               </p>
             </div>
           </div>

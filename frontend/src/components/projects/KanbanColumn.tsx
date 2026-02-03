@@ -119,7 +119,7 @@ export default function KanbanColumn({
         {(isQuoteStatus ? totalQuoteAmount : totalInvoiceAmount) > 0 && (
           <div className="px-4 pb-2 text-xs text-gray-600 border-t border-white/20">
             <span className="font-medium">
-              {isQuoteStatus ? 'Tổng báo giá: ' : 'Tổng hóa đơn: '}
+              {isQuoteStatus ? 'Tổng báo giá: ' : 'Tổng đơn hàng: '}
             </span>
             <span className="font-semibold text-gray-800">
               {formatCurrency(isQuoteStatus ? totalQuoteAmount : totalInvoiceAmount)}

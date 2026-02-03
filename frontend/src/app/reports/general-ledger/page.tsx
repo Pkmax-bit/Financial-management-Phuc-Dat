@@ -154,7 +154,7 @@ export default function GeneralLedgerPage() {
           ledgerEntries.push({
             id: `invoice_${invoice.id}`,
             date: invoice.created_at,
-            description: `Doanh thu từ hóa đơn ${invoice.invoice_number} - ${invoice.customers?.name}`,
+            description: `Doanh thu từ đơn hàng ${invoice.invoice_number} - ${invoice.customers?.name}`,
             account: 'Doanh thu bán hàng',
             debit: 0,
             credit: invoice.total_amount || 0,
@@ -187,7 +187,7 @@ export default function GeneralLedgerPage() {
           ledgerEntries.push({
             id: `bill_${bill.id}`,
             date: bill.created_at,
-            description: `Chi phí từ hóa đơn ${bill.bill_number} - ${bill.vendors?.name}`,
+            description: `Chi phí từ đơn hàng ${bill.bill_number} - ${bill.vendors?.name}`,
             account: 'Chi phí mua hàng',
             debit: bill.amount || 0,
             credit: 0,

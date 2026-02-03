@@ -98,7 +98,7 @@ async function analyzeReceiptWithProject(imageBase64: string): Promise<AIAnalysi
             content: [
                      {
                        type: "text",
-                       text: `Phân tích hóa đơn này và trích xuất thông tin sau. Trả về CHỈ JSON thuần túy, không có markdown formatting, code blocks, hoặc text thừa:
+                       text: `Phân tích đơn hàng này và trích xuất thông tin sau. Trả về CHỈ JSON thuần túy, không có markdown formatting, code blocks, hoặc text thừa:
 
 {
   "amount": number,

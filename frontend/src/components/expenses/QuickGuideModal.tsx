@@ -53,14 +53,14 @@ const steps = [
   {
     id: 4,
     title: "Quản lý Đơn hàng NCC",
-    description: "Xử lý hóa đơn từ nhà cung cấp và theo dõi thanh toán",
+    description: "Xử lý đơn hàng từ nhà cung cấp và theo dõi thanh toán",
     icon: FileText,
     color: "red",
     details: [
       "Vào tab 'Đơn hàng NCC'",
-      "Nhấn 'Tạo hóa đơn NCC'",
-      "Nhập thông tin hóa đơn",
-      "Phê duyệt hóa đơn",
+      "Nhấn 'Tạo đơn hàng NCC'",
+      "Nhập thông tin đơn hàng",
+      "Phê duyệt đơn hàng",
       "Thực hiện thanh toán"
     ]
   },
@@ -88,7 +88,7 @@ const steps = [
       "Vào tab 'Đề nghị hoàn ứng'",
       "Nhấn 'Tạo đề nghị hoàn ứng'",
       "Thêm các chi phí đã chi",
-      "Đính kèm hóa đơn/chứng từ",
+      "Đính kèm đơn hàng/chứng từ",
       "Gửi phê duyệt"
     ]
   },
@@ -309,7 +309,7 @@ function getStepTip(step: number): string {
     "Thông tin nhà cung cấp càng chi tiết càng tốt để dễ dàng quản lý sau này.",
     "Thiết lập ngân sách thực tế dựa trên kinh nghiệm và kế hoạch kinh doanh.",
     "Ghi nhận chi phí ngay khi phát sinh để đảm bảo tính chính xác.",
-    "Kiểm tra kỹ thông tin hóa đơn trước khi phê duyệt để tránh sai sót.",
+    "Kiểm tra kỹ thông tin đơn hàng trước khi phê duyệt để tránh sai sót.",
     "Sử dụng đơn đặt hàng để kiểm soát chi tiêu trước khi thực hiện mua hàng.",
     "Đính kèm đầy đủ chứng từ để đảm bảo tính minh bạch trong đề nghị hoàn ứng.",
     "Thường xuyên xem báo cáo để phát hiện xu hướng và điều chỉnh kịp thời.",

@@ -382,7 +382,7 @@ export default function CustomersPage() {
   }
 
   const deleteCustomer = async (customer: Customer) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa khách hàng "${customer.name}"?\n\nHành động này sẽ xóa vĩnh viễn khách hàng khỏi hệ thống và không thể hoàn tác!\n\nLưu ý: Không thể xóa khách hàng có dự án đang hoạt động hoặc có hóa đơn.`)) return
+    if (!confirm(`Bạn có chắc chắn muốn xóa khách hàng "${customer.name}"?\n\nHành động này sẽ xóa vĩnh viễn khách hàng khỏi hệ thống và không thể hoàn tác!\n\nLưu ý: Không thể xóa khách hàng có dự án đang hoạt động hoặc có đơn hàng.`)) return
     try {
       await customerApi.deleteCustomer(customer.id)
       setNotice({ type: 'success', text: 'Đã xóa khách hàng khỏi hệ thống' })
@@ -2115,7 +2115,7 @@ export default function CustomersPage() {
                   Khách hàng: <span className="font-medium">{selectedCustomer.name}</span>
                 </p>
                 <p className="text-sm text-black">
-                  Form {quickActionType === 'invoice' ? 'tạo hóa đơn' :
+                  Form {quickActionType === 'invoice' ? 'tạo đơn hàng' :
                         quickActionType === 'payment' ? 'ghi nhận thanh toán' :
                         quickActionType === 'estimate' ? 'tạo báo giá' : 'gửi email nhắc nợ'} sẽ được phát triển.
                 </p>
@@ -2129,7 +2129,7 @@ export default function CustomersPage() {
                   Hủy
                 </button>
                 <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
-                  {quickActionType === 'invoice' ? 'Tạo hóa đơn' :
+                  {quickActionType === 'invoice' ? 'Tạo đơn hàng' :
                    quickActionType === 'payment' ? 'Ghi nhận' :
                    quickActionType === 'estimate' ? 'Tạo báo giá' : 'Gửi email'}
                 </button>

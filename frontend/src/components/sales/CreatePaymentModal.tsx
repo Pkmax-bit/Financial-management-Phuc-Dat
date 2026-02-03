@@ -241,7 +241,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
           {formData.customer_id && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Chọn hóa đơn cần thanh toán *
+                Chọn đơn hàng cần thanh toán *
               </label>
               <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
                 {invoices.length > 0 ? (
@@ -270,7 +270,7 @@ export default function CreatePaymentModal({ isOpen, onClose, onSuccess }: Creat
                   </div>
                 ) : (
                   <div className="p-3 text-center text-black">
-                    Không có hóa đơn nào cần thanh toán
+                    Không có đơn hàng nào cần thanh toán
                   </div>
                 )}
               </div>

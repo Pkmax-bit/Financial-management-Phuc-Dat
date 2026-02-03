@@ -309,11 +309,11 @@ export default function ComparisonTab({ searchTerm }: ComparisonTabProps) {
               <Receipt className="h-5 w-5 text-white" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Tổng hóa đơn</p>
+              <p className="text-sm font-medium text-gray-600">Tổng đơn hàng</p>
               <p className="text-lg font-bold text-gray-900">
                 {formatCurrency(totalInvoiceAmount)}
               </p>
-              <p className="text-sm text-gray-500">{convertedQuotes} hóa đơn</p>
+              <p className="text-sm text-gray-500">{convertedQuotes} đơn hàng</p>
             </div>
           </div>
         </div>
@@ -411,7 +411,7 @@ export default function ComparisonTab({ searchTerm }: ComparisonTabProps) {
         <div className="text-center py-12">
           <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có dữ liệu so sánh</h3>
-          <p className="text-gray-600 mb-4">Không có báo giá hoặc hóa đơn để so sánh</p>
+          <p className="text-gray-600 mb-4">Không có báo giá hoặc đơn hàng để so sánh</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -470,7 +470,7 @@ export default function ComparisonTab({ searchTerm }: ComparisonTabProps) {
                       </div>
                     ) : (
                       <div className="text-sm text-gray-400 italic">
-                        Chưa có hóa đơn
+                        Chưa có đơn hàng
                       </div>
                     )}
                   </td>
@@ -515,14 +515,14 @@ export default function ComparisonTab({ searchTerm }: ComparisonTabProps) {
                       {comparison.invoice ? (
                         <button 
                           className="text-gray-600 hover:text-gray-900 p-1"
-                          title="Chỉnh sửa hóa đơn"
+                          title="Chỉnh sửa đơn hàng"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                       ) : (
                         <button 
                           className="text-green-600 hover:text-green-900 p-1"
-                          title="Tạo hóa đơn"
+                          title="Tạo đơn hàng"
                         >
                           <Plus className="h-4 w-4" />
                         </button>

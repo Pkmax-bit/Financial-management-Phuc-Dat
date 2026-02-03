@@ -623,7 +623,7 @@ export default function PaymentMethodsTab({ searchTerm = '' }: PaymentMethodsTab
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Số hóa đơn</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Số đơn hàng</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Ngày phát hành</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Hạn thanh toán</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Tổng tiền</th>
@@ -656,7 +656,7 @@ export default function PaymentMethodsTab({ searchTerm = '' }: PaymentMethodsTab
                 ) : (
                   <div className="text-center py-8 bg-gray-50 rounded-lg">
                     <FileText className="mx-auto h-8 w-8 text-gray-400" />
-                    <p className="mt-2 text-sm text-black">Chưa có hóa đơn</p>
+                    <p className="mt-2 text-sm text-black">Chưa có đơn hàng</p>
                   </div>
                 )}
               </div>
