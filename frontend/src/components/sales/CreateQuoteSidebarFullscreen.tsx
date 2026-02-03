@@ -17,7 +17,7 @@ import {
   CircleHelp,
   Package
 } from 'lucide-react'
-import { apiPost, apiGet } from '@/lib/api'
+import { apiPost, apiGet, customerApi, projectApi } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import ColumnVisibilityDialog from './ColumnVisibilityDialog'
 import CustomProductSelectionModal from './CustomProductSelectionModal'
@@ -1039,8 +1039,62 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
     setSubmitting(true)
     try {
       const created_by = formData.created_by || null
-      const customerId = formData.customer_id || null
-      const projectId = formData.project_id || null
+      let customerId: string | null = formData.customer_id || null
+      let projectId: string | null = formData.project_id || null
+
+      // Tạo khách hàng mới nếu người dùng nhập thông tin khách hàng mới (chưa chọn từ danh sách)
+      if (!customerId && newCustomer.name?.trim() && newCustomer.address?.trim()) {
+        try {
+          const codeRes = await apiGet('/api/customers/next-customer-code')
+          const customerCode = (codeRes?.next_customer_code as string) || ''
+          const createdCustomer = await customerApi.createCustomer({
+            customer_code: customerCode,
+            name: newCustomer.name.trim(),
+            type: newCustomer.type,
+            address: newCustomer.address.trim(),
+            city: newCustomer.city || undefined,
+            country: newCustomer.country || 'Vietnam',
+            phone: newCustomer.phone || undefined,
+            email: newCustomer.email || undefined,
+            tax_id: newCustomer.tax_id || undefined,
+            credit_limit: newCustomer.credit_limit ?? 0,
+            payment_terms: newCustomer.payment_terms ?? 30,
+            notes: newCustomer.notes || undefined
+          })
+          customerId = (createdCustomer as { id?: string })?.id ?? null
+          if (!customerId) throw new Error('Không nhận được ID khách hàng sau khi tạo')
+        } catch (err) {
+          console.error('Error creating customer:', err)
+          throw new Error('Không thể tạo khách hàng mới: ' + (err as Error).message)
+        }
+      }
+
+      // Tạo dự án mới nếu người dùng nhập tên dự án mới (chưa chọn từ danh sách) và đã có customer_id
+      if (!projectId && newProject.name?.trim() && customerId) {
+        try {
+          const codeRes = await apiGet('/api/projects/generate-code')
+          const projectCode = (codeRes?.project_code as string) || `PRJ${Date.now().toString(36).toUpperCase()}`
+          const today = new Date().toISOString().split('T')[0]
+          const createdProject = await projectApi.createProject({
+            name: newProject.name.trim(),
+            project_code: projectCode,
+            customer_id: customerId,
+            start_date: today,
+            status: 'planning',
+            priority: 'medium'
+          })
+          const raw = createdProject as { id?: string; data?: { id?: string }; project?: { id?: string } }
+          projectId = raw?.id ?? raw?.data?.id ?? raw?.project?.id ?? null
+          if (!projectId) {
+            console.error('Project create response:', createdProject)
+            throw new Error('Không nhận được ID dự án sau khi tạo')
+          }
+        } catch (err) {
+          console.error('Error creating project:', err)
+          throw new Error('Không thể tạo dự án mới: ' + (err as Error).message)
+        }
+      }
+
       const quoteData = {
         quote_number: formData.quote_number,
         customer_id: customerId,
@@ -1072,8 +1126,10 @@ export default function CreateQuoteSidebarFullscreen({ isOpen, onClose, onSucces
       if (quoteId) {
         await supabase.from('quote_items').delete().eq('quote_id', currentQuoteId)
       }
-      if (items.length > 0) {
-        const quoteItems = items.map(item => ({
+      // Chỉ lưu các dòng có tên sản phẩm; bỏ qua dòng trống
+      const itemsToSave = items.filter(item => (item.name_product ?? '').trim() !== '')
+      if (itemsToSave.length > 0) {
+        const quoteItems = itemsToSave.map(item => ({
           quote_id: currentQuoteId,
           product_service_id: item.product_service_id || null,
           name_product: item.name_product,
