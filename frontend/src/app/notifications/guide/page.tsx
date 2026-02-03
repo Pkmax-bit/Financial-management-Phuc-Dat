@@ -50,7 +50,7 @@ const guideSteps = [
         <div class="bg-purple-50 p-4 rounded-lg">
           <h4 class="font-semibold text-purple-800 mb-2">Thông báo tài chính</h4>
           <ul class="space-y-1 text-sm text-purple-700">
-            <li>• Hóa đơn đến hạn</li>
+            <li>• Đơn hàng đến hạn</li>
             <li>• Thanh toán thành công</li>
             <li>• Cảnh báo ngân sách</li>
             <li>• Báo cáo tài chính</li>

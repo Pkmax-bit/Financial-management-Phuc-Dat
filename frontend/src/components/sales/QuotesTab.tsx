@@ -890,7 +890,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
         payment_status: 'pending',
         paid_amount: 0.0,
         items: [], // Empty JSONB field, items will be in invoice_items table
-        notes: `Hóa đơn được tạo từ báo giá ${quote.quote_number}`,
+        notes: `Đơn hàng được tạo từ báo giá ${quote.quote_number}`,
         created_by: quote.created_by
       }
 
@@ -940,7 +940,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
           })
           // Don't throw error here as invoice was created successfully
           // But show a warning to user
-          alert(`⚠️ Hóa đơn đã được tạo nhưng có lỗi khi thêm sản phẩm: ${invoiceItemsError.message || 'Lỗi không xác định'}`)
+          alert(`⚠️ Đơn hàng đã được tạo nhưng có lỗi khi thêm sản phẩm: ${invoiceItemsError.message || 'Lỗi không xác định'}`)
         } else {
           console.log('✅ Invoice items created successfully:', invoiceItems)
         }
@@ -1888,7 +1888,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
                     data-tour-id={`quote-convert-button-${quote.id}`}
                   >
                     <DollarSign className="h-3 w-3 mr-1" />
-                    Hóa đơn
+                    Đơn hàng
                   </button>
                 )}
                 <button

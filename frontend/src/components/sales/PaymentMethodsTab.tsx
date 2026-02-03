@@ -578,7 +578,7 @@ export default function PaymentMethodsTab({ searchTerm = '' }: PaymentMethodsTab
                           <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Ngày</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Số tiền</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Phương thức</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Hóa đơn</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase">Đơn hàng</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -612,7 +612,7 @@ export default function PaymentMethodsTab({ searchTerm = '' }: PaymentMethodsTab
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                   <FileText className="h-5 w-5 mr-2" />
-                  Hóa đơn ({projectInvoices.length})
+                  Đơn hàng ({projectInvoices.length})
                 </h3>
                 {loadingDetails ? (
                   <div className="flex items-center justify-center p-8">

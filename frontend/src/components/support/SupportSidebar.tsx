@@ -52,7 +52,7 @@ const modules = [
     description: 'Quản lý bán hàng, hóa đơn, thanh toán',
     guides: [
       { title: 'Tổng quan Bán hàng', url: '/sales/guide' },
-      { title: 'Hướng dẫn Tạo Hóa đơn', url: '/sales/guide#invoices' },
+      { title: 'Hướng dẫn Tạo Đơn hàng', url: '/sales/guide#invoices' },
       { title: 'Quản lý Thanh toán', url: '/sales/guide#payments' },
       { title: 'Báo cáo Doanh thu', url: '/sales/guide#reports' }
     ]
@@ -66,7 +66,7 @@ const modules = [
     guides: [
       { title: 'Tổng quan Chi phí', url: '/expenses/guide' },
       { title: 'Quản lý Ngân sách', url: '/expenses/guide#budgeting' },
-      { title: 'Hóa đơn Nhà cung cấp', url: '/expenses/guide#bills' },
+      { title: 'Đơn hàng Nhà cung cấp', url: '/expenses/guide#bills' },
       { title: 'Đề nghị Hoàn ứng', url: '/expenses/guide#expense-claims' }
     ]
   },
@@ -164,7 +164,7 @@ const faqs = [
   {
     id: 3,
     question: "Làm sao để tạo hóa đơn bán hàng?",
-    answer: "Vào mục Bán hàng > Hóa đơn > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
+    answer: "Vào mục Bán hàng > Đơn hàng > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
     category: "Bán hàng",
     module: "sales"
   },

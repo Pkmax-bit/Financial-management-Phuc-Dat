@@ -195,7 +195,7 @@ export default function CreateInvoiceModal({ isOpen, onClose, onSuccess }: Creat
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Tạo Hóa đơn mới</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Tạo Đơn hàng mới</h2>
             <p className="text-sm text-black">Tạo và gửi hóa đơn cho khách hàng</p>
           </div>
           <button

@@ -8,7 +8,7 @@ import QueryProvider from '@/providers/QueryProvider'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import StickySliderProvider from '@/components/common/StickySliderProvider'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin', 'vietnamese'] })
 
 export const metadata: Metadata = {
   title: 'QuickBooks - Hệ thống quản lý tài chính',

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -316,7 +316,7 @@ function ExpensesPageContent() {
                     <FileText className="h-6 w-6 text-white" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Hóa đơn NCC</p>
+                    <p className="text-sm font-medium text-gray-600">Đơn hàng NCC</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency(((expensesStats as Record<string, unknown>).total_bills as number) || 0)}
                     </p>
@@ -393,7 +393,7 @@ function ExpensesPageContent() {
                         }`}
                     >
                       <FileText className="w-4 h-4 inline mr-1" />
-                      Hóa đơn NCC ({((expensesStats as Record<string, unknown>).bills_count as number) || 0})
+                      Đơn hàng NCC ({((expensesStats as Record<string, unknown>).bills_count as number) || 0})
                     </button>
                     <button
                       onClick={() => setActiveTab('vendors')}

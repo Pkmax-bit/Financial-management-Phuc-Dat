@@ -20,7 +20,7 @@ const modules = [
     description: 'Quản lý bán hàng, hóa đơn, thanh toán',
     guides: [
       { title: 'Tổng quan Bán hàng', url: '/sales/guide' },
-      { title: 'Hướng dẫn Tạo Hóa đơn', url: '/sales/guide#invoices' },
+      { title: 'Hướng dẫn Tạo Đơn hàng', url: '/sales/guide#invoices' },
       { title: 'Quản lý Thanh toán', url: '/sales/guide#payments' },
       { title: 'Báo cáo Doanh thu', url: '/sales/guide#reports' }
     ],
@@ -39,7 +39,7 @@ const modules = [
     guides: [
       { title: 'Tổng quan Chi phí', url: '/expenses/guide' },
       { title: 'Quản lý Ngân sách', url: '/expenses/guide#budgeting' },
-      { title: 'Hóa đơn Nhà cung cấp', url: '/expenses/guide#bills' },
+      { title: 'Đơn hàng Nhà cung cấp', url: '/expenses/guide#bills' },
       { title: 'Đề nghị Hoàn ứng', url: '/expenses/guide#expense-claims' }
     ],
     quickActions: [
@@ -168,7 +168,7 @@ export default function ModulesTab() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">Bán hàng</p>
-              <p className="text-xs text-black">Hóa đơn & Thanh toán</p>
+              <p className="text-xs text-black">Đơn hàng & Thanh toán</p>
             </div>
           </Link>
           

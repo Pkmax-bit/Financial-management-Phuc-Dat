@@ -63,7 +63,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
           bill_date: '2024-12-01',
           due_date: '2024-12-31',
           status: 'pending',
-          description: 'Hóa đơn dịch vụ tư vấn',
+          description: 'Đơn hàng dịch vụ tư vấn',
           created_at: '2024-12-01T09:00:00Z',
           updated_at: '2024-12-01T09:00:00Z'
         },
@@ -77,7 +77,7 @@ export default function BillsTab({ searchTerm, onCreateBill }: BillsTabProps) {
           bill_date: '2024-12-01',
           due_date: '2024-12-15',
           status: 'paid',
-          description: 'Hóa đơn dịch vụ marketing',
+          description: 'Đơn hàng dịch vụ marketing',
           created_at: '2024-12-01T10:00:00Z',
           updated_at: '2024-12-01T10:00:00Z'
         }

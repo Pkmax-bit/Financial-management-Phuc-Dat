@@ -126,7 +126,7 @@ export default function SalesGuidePage() {
     },
     {
       id: 'invoices',
-      title: 'Quản lý Hóa đơn',
+      title: 'Quản lý Đơn hàng',
       icon: Receipt,
       content: {
         description: 'Tạo, gửi và theo dõi hóa đơn bán hàng.',
@@ -315,7 +315,7 @@ export default function SalesGuidePage() {
               'Doanh thu đã thu',
               'Doanh thu chưa thu',
               'Số lượng hóa đơn',
-              'Hóa đơn quá hạn',
+              'Đơn hàng quá hạn',
               'Biểu đồ xu hướng'
             ]
           },

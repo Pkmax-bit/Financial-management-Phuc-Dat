@@ -390,7 +390,7 @@ export default function ProjectFinancialDashboard({ projectId, projectName }: Pr
                 {Object.entries(financialData.revenue_breakdown).map(([source, amount]) => {
                   const percentage = (amount / financialData.actual_revenue) * 100
                   const sourceNames = {
-                    invoices: 'Hóa đơn',
+                    invoices: 'Đơn hàng',
                     sales_receipts: 'Biên lai bán hàng',
                     other: 'Khác'
                   }

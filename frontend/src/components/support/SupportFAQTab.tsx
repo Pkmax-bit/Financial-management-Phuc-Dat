@@ -26,7 +26,7 @@ const faqs = [
   {
     id: 3,
     question: "Làm sao để tạo hóa đơn bán hàng?",
-    answer: "Vào mục Bán hàng > Hóa đơn > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
+    answer: "Vào mục Bán hàng > Đơn hàng > Tạo hóa đơn. Chọn khách hàng, thêm sản phẩm/dịch vụ, điền thông tin và lưu hóa đơn.",
     category: "Bán hàng",
     module: "sales"
   },
@@ -110,7 +110,7 @@ const faqs = [
   {
     id: 15,
     question: "Làm sao để tạo hóa đơn nhà cung cấp?",
-    answer: "Vào mục Chi phí > Hóa đơn > Tạo hóa đơn. Chọn nhà cung cấp, thêm sản phẩm/dịch vụ và lưu hóa đơn.",
+    answer: "Vào mục Chi phí > Đơn hàng > Tạo hóa đơn. Chọn nhà cung cấp, thêm sản phẩm/dịch vụ và lưu hóa đơn.",
     category: "Chi phí",
     module: "expenses"
   }

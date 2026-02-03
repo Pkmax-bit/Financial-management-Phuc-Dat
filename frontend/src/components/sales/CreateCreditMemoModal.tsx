@@ -214,7 +214,7 @@ export default function CreateCreditMemoModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hóa đơn gốc (tùy chọn)
+                Đơn hàng gốc (tùy chọn)
               </label>
               <select
                 value={formData.original_invoice_id}
