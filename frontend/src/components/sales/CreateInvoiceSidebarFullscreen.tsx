@@ -188,7 +188,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
     payment_status: 'pending',
     payment_terms: 'Thanh toán trong vòng 30 ngày',
     notes: '',
-    terms_and_conditions: 'Hóa đơn có hiệu lực từ ngày phát hành.',
+    terms_and_conditions: 'Đơn hàng có hiệu lực từ ngày phát hành.',
     created_by: ''
   })
 
@@ -1051,7 +1051,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
         payment_status: invoice.payment_status || 'pending',
         payment_terms: invoice.payment_terms || 'Thanh toán trong vòng 30 ngày',
         notes: invoice.notes || '',
-        terms_and_conditions: invoice.terms_and_conditions || 'Hóa đơn có hiệu lực từ ngày phát hành.',
+        terms_and_conditions: invoice.terms_and_conditions || 'Đơn hàng có hiệu lực từ ngày phát hành.',
         created_by: invoice.created_by || ''
       })
 
@@ -1982,7 +1982,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           animation: slideIn 0.3s ease-out;
         ">
-          ✅ Hóa đơn đã được ${invoiceId ? 'cập nhật' : 'tạo'} thành công!
+          ✅ Đơn hàng đã được ${invoiceId ? 'cập nhật' : 'tạo'} thành công!
         </div>
         <style>
           @keyframes slideIn {
@@ -2029,7 +2029,7 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
       payment_status: 'pending',
       payment_terms: 'Thanh toán trong vòng 30 ngày',
       notes: '',
-      terms_and_conditions: 'Hóa đơn có hiệu lực từ ngày phát hành.',
+      terms_and_conditions: 'Đơn hàng có hiệu lực từ ngày phát hành.',
       created_by: ''
     })
     setItems([{
@@ -2162,9 +2162,9 @@ export default function CreateInvoiceSidebarFullscreen({ isOpen, onClose, onSucc
                     onChange={(e) => setFormData({ ...formData, invoice_type: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-black focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="standard">Hóa đơn thường</option>
-                    <option value="proforma">Hóa đơn proforma</option>
-                    <option value="credit">Hóa đơn tín dụng</option>
+                    <option value="standard">Đơn hàng thường</option>
+                    <option value="proforma">Đơn hàng proforma</option>
+                    <option value="credit">Đơn hàng tín dụng</option>
                   </select>
                 </div>
               </div>

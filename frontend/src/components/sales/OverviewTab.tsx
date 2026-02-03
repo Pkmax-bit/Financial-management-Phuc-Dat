@@ -33,8 +33,8 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
 
   // Calculate income tracker data (QuickBooks style)
   const uninvoicedActivity = 0 // Các hoạt động chưa lập hóa đơn - chưa có trong API
-  const unpaidInvoices = (revenue as Record<string, unknown>).pending as number || 0 // Hóa đơn chưa thanh toán
-  const overdueAmount = (invoicesStats as Record<string, unknown>).overdue as number || 0 // Hóa đơn quá hạn
+  const unpaidInvoices = (revenue as Record<string, unknown>).pending as number || 0 // Đơn hàng chưa thanh toán
+  const overdueAmount = (invoicesStats as Record<string, unknown>).overdue as number || 0 // Đơn hàng quá hạn
   const recentlyPaid = (revenue as Record<string, unknown>).paid as number || 0 // Đã thanh toán trong 30 ngày qua
   
   // Add fallback data if no real data
@@ -220,7 +220,7 @@ export default function OverviewTab({ quotesStats, invoicesStats, revenue }: Ove
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Clock className="h-5 w-5 text-orange-500 mr-3" />
-                <span className="text-black">Hóa đơn quá hạn</span>
+                <span className="text-black">Đơn hàng quá hạn</span>
               </div>
               <div className="text-right">
                 <p className="font-semibold text-red-600">{(invoicesStats as { overdue: number }).overdue || 0}</p>

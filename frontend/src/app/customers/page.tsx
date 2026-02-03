@@ -1328,10 +1328,11 @@ export default function CustomersPage() {
               <CustomerKanbanBoard
                 ref={kanbanBoardRef}
                 onViewCustomer={(customer) => {
-                  // Navigate to projects page filtered by customer
                   router.push(`/projects?customer_id=${customer.id}`)
                 }}
                 onAddCustomer={() => setShowAddModal(true)}
+                onEditCustomer={openEditModal}
+                onDeleteCustomer={deleteCustomer}
               />
             </div>
           ) : (
@@ -1522,7 +1523,7 @@ export default function CustomersPage() {
                   className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >
                   <FileText className="h-5 w-5 mr-2" />
-                  Tạo Hóa đơn
+                  Tạo Đơn hàng
                 </button>
                 <button
                   onClick={() => handleQuickAction('payment')}
@@ -1883,7 +1884,7 @@ export default function CustomersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Contact & Billing Info */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Thông tin liên hệ & Hóa đơn</h4>
+                  <h4 className="font-medium text-gray-900">Thông tin liên hệ & Đơn hàng</h4>
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="space-y-3">
                       <div>
@@ -2034,7 +2035,7 @@ export default function CustomersPage() {
                         <tr key={transaction.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTransactionTypeColor(transaction.type)}`}>
-                              {transaction.type === 'invoice' ? 'Hóa đơn' :
+                              {transaction.type === 'invoice' ? 'Đơn hàng' :
                                transaction.type === 'payment' ? 'Thanh toán' :
                                transaction.type === 'estimate' ? 'Báo giá' :
                                transaction.type === 'receipt' ? 'Phiếu bán hàng' :
@@ -2094,7 +2095,7 @@ export default function CustomersPage() {
             <div className="mt-3">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">
-                  {quickActionType === 'invoice' ? 'Tạo Hóa đơn' :
+                  {quickActionType === 'invoice' ? 'Tạo Đơn hàng' :
                    quickActionType === 'payment' ? 'Ghi nhận Thanh toán' :
                    quickActionType === 'estimate' ? 'Tạo Báo giá' : 'Gửi email nhắc nợ'}
                 </h3>

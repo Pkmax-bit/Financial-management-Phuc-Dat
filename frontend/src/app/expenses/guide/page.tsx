@@ -83,7 +83,7 @@ export default function ExpensesGuidePage() {
                 <ul className="space-y-2 text-sm">
                   <li><a href="#overview" className="text-blue-600 hover:text-blue-800">Tổng quan</a></li>
                   <li><a href="#expenses" className="text-blue-600 hover:text-blue-800">Chi phí</a></li>
-                  <li><a href="#bills" className="text-blue-600 hover:text-blue-800">Hóa đơn NCC</a></li>
+                  <li><a href="#bills" className="text-blue-600 hover:text-blue-800">Đơn hàng NCC</a></li>
                   <li><a href="#purchase-orders" className="text-blue-600 hover:text-blue-800">Đơn đặt hàng</a></li>
                   <li><a href="#expense-claims" className="text-blue-600 hover:text-blue-800">Đề nghị hoàn ứng</a></li>
                   <li><a href="#budgeting" className="text-blue-600 hover:text-blue-800">Quản lý ngân sách</a></li>
@@ -209,12 +209,12 @@ export default function ExpensesGuidePage() {
             <section id="bills" className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <FileText className="h-6 w-6 text-red-600" />
-                Quản lý Hóa đơn Nhà cung cấp
+                Quản lý Đơn hàng Nhà cung cấp
               </h2>
               
               <div className="prose max-w-none">
                 <p className="text-gray-700 mb-4">
-                  Hóa đơn nhà cung cấp là các hóa đơn mà doanh nghiệp nhận được từ nhà cung cấp hàng hóa/dịch vụ. Cần được ghi nhận và theo dõi để thanh toán đúng hạn.
+                  Đơn hàng nhà cung cấp là các hóa đơn mà doanh nghiệp nhận được từ nhà cung cấp hàng hóa/dịch vụ. Cần được ghi nhận và theo dõi để thanh toán đúng hạn.
                 </p>
 
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">📋 Quy trình xử lý hóa đơn:</h3>

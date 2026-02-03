@@ -421,7 +421,7 @@ export default function VarianceTab({ searchTerm }: VarianceTabProps) {
                   Báo giá
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Hóa đơn
+                  Đơn hàng
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Chênh lệch

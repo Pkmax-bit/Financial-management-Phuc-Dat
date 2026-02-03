@@ -347,7 +347,7 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-black">Hóa đơn chưa thu</p>
+                  <p className="text-sm font-medium text-black">Đơn hàng chưa thu</p>
                   <p className="text-2xl font-bold text-blue-600">
                     {stats.stats?.openInvoices || 0}
                   </p>
@@ -363,7 +363,7 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-black">Hóa đơn phải trả</p>
+                  <p className="text-sm font-medium text-black">Đơn hàng phải trả</p>
                   <p className="text-2xl font-bold text-orange-600">
                     {stats.stats?.pendingBills || 0}
                   </p>
@@ -393,14 +393,14 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                    <span className="text-sm text-black">Hóa đơn chưa thanh toán</span>
+                    <span className="text-sm text-black">Đơn hàng chưa thanh toán</span>
                   </div>
                   <span className="font-medium">{stats.stats?.openInvoices || 0} hóa đơn</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                    <span className="text-sm text-black">Hóa đơn quá hạn</span>
+                    <span className="text-sm text-black">Đơn hàng quá hạn</span>
                   </div>
                   <span className="font-medium text-red-600">{stats.stats?.overdueInvoices || 0} hóa đơn</span>
                 </div>

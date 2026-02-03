@@ -152,12 +152,12 @@ export default function DrillDownModal({
 
   const getTransactionTypeLabel = (type: string) => {
     const typeLabels: Record<string, string> = {
-      'invoice': 'Hóa đơn',
+      'invoice': 'Đơn hàng',
       'payment': 'Thanh toán',
       'sales_receipt': 'Phiếu thu bán hàng',
       'credit_memo': 'Credit Memo',
       'expense': 'Chi phí',
-      'bill': 'Hóa đơn nhà cung cấp',
+      'bill': 'Đơn hàng nhà cung cấp',
       'bill_payment': 'Thanh toán hóa đơn',
       'journal_entry': 'Bút toán kế toán',
       'purchase_order': 'Đơn đặt hàng',

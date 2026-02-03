@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -502,7 +502,7 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
                       : 'border-transparent text-black hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
-                  Hóa đơn ({(invoicesStats as Record<string, unknown>).total as number || 0})
+                  Đơn hàng ({(invoicesStats as Record<string, unknown>).total as number || 0})
                 </button>
                 <button
                   onClick={() => setActiveTab('quotes')}

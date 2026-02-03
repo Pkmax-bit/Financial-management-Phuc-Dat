@@ -126,7 +126,7 @@ export default function InvoiceDetailPage() {
         <nav className="space-y-1 text-sm">
           <a className="block px-3 py-2 rounded-md hover:bg-gray-100 text-gray-700" href="/sales">Tổng quan</a>
           <a className="block px-3 py-2 rounded-md hover:bg-gray-100 text-gray-700" href="/sales?tab=quotes">Báo giá</a>
-          <a className="block px-3 py-2 rounded-md bg-blue-50 text-blue-700" href="/sales?tab=invoices">Hóa đơn</a>
+          <a className="block px-3 py-2 rounded-md bg-blue-50 text-blue-700" href="/sales?tab=invoices">Đơn hàng</a>
           <a className="block px-3 py-2 rounded-md hover:bg-gray-100 text-gray-700" href="/sales?tab=sales-receipts">Phiếu bán hàng</a>
         </nav>
       </aside>
@@ -142,7 +142,7 @@ export default function InvoiceDetailPage() {
         <div className="flex items-center gap-3">
           <Receipt className="h-6 w-6 text-gray-700" />
           <div>
-            <div className="text-xl font-semibold text-gray-900">Hóa đơn {invoice.invoice_number ? `- ${invoice.invoice_number}` : ''}</div>
+            <div className="text-xl font-semibold text-gray-900">Đơn hàng {invoice.invoice_number ? `- ${invoice.invoice_number}` : ''}</div>
             <div className="text-sm text-gray-600">
               Dự án: {invoice.project_name || '—'} {invoice.project_code ? `(${invoice.project_code})` : ''}
             </div>

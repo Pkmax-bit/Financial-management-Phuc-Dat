@@ -1964,7 +1964,7 @@ export default function InternalChat({ currentUserId, currentUserName }: Interna
                     <strong>💡 Mẹo:</strong> Khi liên kết với dự án, thành viên có thể bấm <code className="bg-blue-100 px-1.5 py-0.5 rounded text-xs">@dự án</code> để xem:
                   </p>
                   <ul className="text-xs text-blue-700 mt-2 ml-4 list-disc space-y-1">
-                    <li>Hóa đơn của dự án</li>
+                    <li>Đơn hàng của dự án</li>
                     <li>Báo giá đã gửi</li>
                     <li>Chi phí thực tế</li>
                     <li>Danh sách nhiệm vụ</li>

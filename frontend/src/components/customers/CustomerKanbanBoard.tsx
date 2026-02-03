@@ -6,21 +6,7 @@ import CustomerStatusManagementModal from './CustomerStatusManagementModal'
 import { supabase } from '@/lib/supabase'
 import { apiGet, apiPut, apiDelete } from '@/lib/api'
 import { Plus, Settings, Filter, Tag, Edit2, Trash2 } from 'lucide-react'
-
-interface Customer {
-  id: string
-  customer_code?: string
-  name: string
-  email?: string
-  phone?: string
-  address?: string
-  type?: 'individual' | 'company' | 'government'
-  credit_limit?: number
-  status?: 'prospect' | 'active' | 'inactive'
-  status_id?: string
-  created_at?: string
-  updated_at?: string
-}
+import type { Customer } from '@/types'
 
 interface CustomerStatus {
   id: string
@@ -36,6 +22,8 @@ interface CustomerStatus {
 interface CustomerKanbanBoardProps {
   onViewCustomer?: (customer: Customer) => void
   onAddCustomer?: () => void
+  onEditCustomer?: (customer: Customer) => void
+  onDeleteCustomer?: (customer: Customer) => void
 }
 
 export interface CustomerKanbanBoardRef {
@@ -43,7 +31,7 @@ export interface CustomerKanbanBoardRef {
 }
 
 const CustomerKanbanBoard = forwardRef<CustomerKanbanBoardRef, CustomerKanbanBoardProps>(
-  ({ onViewCustomer, onAddCustomer }, ref) => {
+  ({ onViewCustomer, onAddCustomer, onEditCustomer, onDeleteCustomer }, ref) => {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [statuses, setStatuses] = useState<CustomerStatus[]>([])
     const [loading, setLoading] = useState(true)
@@ -344,6 +332,8 @@ const CustomerKanbanBoard = forwardRef<CustomerKanbanBoardRef, CustomerKanbanBoa
                         }
                       }}
                       onDragStart={handleDragStart}
+                      onCardEdit={onEditCustomer}
+                      onCardDelete={onDeleteCustomer}
                       onDragOver={(e) => handleDragOver(e, status.id)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, status.id)}

@@ -3,20 +3,7 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
 import CustomerKanbanCard from './CustomerKanbanCard'
-
-interface Customer {
-  id: string
-  customer_code?: string
-  name: string
-  email?: string
-  phone?: string
-  address?: string
-  type?: 'individual' | 'company' | 'government'
-  credit_limit?: number
-  status?: 'prospect' | 'active' | 'inactive'
-  created_at?: string
-  updated_at?: string
-}
+import type { Customer } from '@/types'
 
 interface CustomerKanbanColumnProps {
   title: string
@@ -25,6 +12,8 @@ interface CustomerKanbanColumnProps {
   customers: Customer[]
   onCardClick?: (customer: Customer) => void
   onDragStart?: (customer: Customer) => void
+  onCardEdit?: (customer: Customer) => void
+  onCardDelete?: (customer: Customer) => void
   onDragOver?: (e: React.DragEvent) => void
   onDragLeave?: () => void
   onDrop?: (e: React.DragEvent) => void
@@ -56,6 +45,8 @@ export default function CustomerKanbanColumn({
   customers,
   onCardClick,
   onDragStart,
+  onCardEdit,
+  onCardDelete,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -104,6 +95,8 @@ export default function CustomerKanbanColumn({
             statusColor={colorClass.startsWith('#') ? colorClass : undefined}
             onClick={() => onCardClick?.(customer)}
             onDragStart={() => onDragStart?.(customer)}
+            onEdit={onCardEdit}
+            onDelete={onCardDelete}
           />
         ))}
         {customers.length === 0 && (

@@ -93,7 +93,7 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
       case 'estimate':
         return 'Báo giá'
       case 'invoice':
-        return 'Hóa đơn'
+        return 'Đơn hàng'
       case 'sales_receipt':
         return 'Phiếu bán hàng'
       case 'credit_memo':
@@ -230,7 +230,7 @@ export default function AllSalesTab({ searchTerm }: AllSalesTabProps) {
           >
             <option value="all">Tất cả loại giao dịch</option>
             <option value="estimate">Báo giá</option>
-            <option value="invoice">Hóa đơn</option>
+            <option value="invoice">Đơn hàng</option>
             <option value="sales_receipt">Phiếu bán hàng</option>
             <option value="payment">Thanh toán</option>
           </select>

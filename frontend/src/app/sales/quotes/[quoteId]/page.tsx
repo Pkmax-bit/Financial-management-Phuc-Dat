@@ -155,7 +155,7 @@ export default function QuoteDetailPage() {
         <nav className="space-y-1 text-sm">
           <a className="block px-3 py-2 rounded-md hover:bg-gray-100 text-gray-700" href="/sales">Tổng quan</a>
           <a className="block px-3 py-2 rounded-md bg-blue-50 text-blue-700" href="/sales?tab=quotes">Báo giá</a>
-          <a className="block px-3 py-2 rounded-md hover:bg-gray-100 text-gray-700" href="/sales?tab=invoices">Hóa đơn</a>
+          <a className="block px-3 py-2 rounded-md hover:bg-gray-100 text-gray-700" href="/sales?tab=invoices">Đơn hàng</a>
           <a className="block px-3 py-2 rounded-md hover:bg-gray-100 text-gray-700" href="/sales?tab=sales-receipts">Phiếu bán hàng</a>
         </nav>
       </aside>

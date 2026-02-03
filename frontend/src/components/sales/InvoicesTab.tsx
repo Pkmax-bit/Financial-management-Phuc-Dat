@@ -456,7 +456,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       
       console.log('🔍 Invoice sent successfully')
       fetchInvoices() // Refresh list
-      alert('✅ Hóa đơn đã được gửi thành công!')
+      alert('✅ Đơn hàng đã được gửi thành công!')
     } catch (error) {
       console.error('❌ Error sending invoice:', error)
       alert('❌ Lỗi khi gửi hóa đơn. Vui lòng thử lại.')
@@ -501,7 +501,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
         fetchInvoices() // Refresh list
       
       if (isFullyPaid) {
-        alert('✅ Hóa đơn đã được thanh toán đầy đủ!')
+        alert('✅ Đơn hàng đã được thanh toán đầy đủ!')
       } else {
         alert(`✅ Đã ghi nhận thanh toán ${formatCurrency(amount)}. Còn lại: ${formatCurrency(invoice.total_amount - newPaidAmount)}`)
       }
@@ -612,7 +612,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           animation: slideIn 0.3s ease-out;
         ">
-          ✅ Hóa đơn đã được xóa thành công!
+          ✅ Đơn hàng đã được xóa thành công!
         </div>
         <style>
           @keyframes slideIn {
@@ -888,7 +888,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       {/* Header with Help Button */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-4">
-          <h2 className="text-xl font-semibold text-gray-900">Hóa đơn</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Đơn hàng</h2>
           <button
             onClick={() => setShowHelpModal(true)}
             className="inline-flex items-center justify-center w-9 h-9 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -1392,7 +1392,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
               {/* Header */}
               <div className="flex items-center justify-between mb-6 border-b pb-4">
                 <h3 className="text-lg font-medium text-gray-900">
-                  📚 Hướng dẫn sử dụng Hóa đơn
+                  📚 Hướng dẫn sử dụng Đơn hàng
                 </h3>
                 <button
                   onClick={() => setShowHelpModal(false)}
@@ -1408,7 +1408,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                 <div>
                   <h4 className="text-md font-semibold text-gray-800 mb-2">🎯 Tổng quan</h4>
                   <p className="text-sm text-gray-600">
-                    Module Hóa đơn giúp bạn quản lý các hóa đơn bán hàng, theo dõi thanh toán và tình trạng thu tiền từ khách hàng.
+                    Module Đơn hàng giúp bạn quản lý các hóa đơn bán hàng, theo dõi thanh toán và tình trạng thu tiền từ khách hàng.
                   </p>
                 </div>
 
@@ -1471,7 +1471,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Nháp</span>
-                      <span className="text-sm text-gray-600">Hóa đơn đang được soạn thảo, có thể chỉnh sửa</span>
+                      <span className="text-sm text-gray-600">Đơn hàng đang được soạn thảo, có thể chỉnh sửa</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Đã gửi</span>
@@ -1483,7 +1483,7 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Quá hạn</span>
-                      <span className="text-sm text-gray-600">Hóa đơn đã quá hạn thanh toán</span>
+                      <span className="text-sm text-gray-600">Đơn hàng đã quá hạn thanh toán</span>
                     </div>
                   </div>
                 </div>

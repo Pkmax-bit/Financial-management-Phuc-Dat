@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from typing import List, Optional, Dict, Any
 from services.supabase_client import get_supabase_client
 from models.user import User
@@ -678,14 +678,29 @@ async def reorder_columns(
 
     return {"message": "Columns reordered successfully"}
 
+def _parse_selected_options_from_query(request: Request) -> Dict[str, str]:
+    """Parse selected_options from query string (e.g. selected_options[col_id]=opt_id)."""
+    selected_options: Dict[str, str] = {}
+    for key, value in request.query_params.items():
+        if key.startswith("selected_options[") and key.endswith("]"):
+            col_id = key[len("selected_options[") : -1]
+            if col_id and value:
+                selected_options[col_id] = value
+    return selected_options
+
+
 @router.get("/generate-name")
 async def generate_product_name(
-    category_id: str,
-    selected_options: Dict[str, str],  # column_id -> option_id
+    request: Request,
+    category_id: str = Query(...),
     structure_id: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user_dev_mode)
+    current_user: User = Depends(get_current_user_dev_mode),
 ):
-    """Generate product name from selected options"""
+    """Generate product name from selected options (query: selected_options[column_id]=option_id)."""
+    selected_options = _parse_selected_options_from_query(request)
+    if not selected_options:
+        raise HTTPException(status_code=400, detail="Missing or invalid selected_options")
+
     supabase = get_supabase_client()
 
     # Get structure (default or specified)
@@ -698,8 +713,8 @@ async def generate_product_name(
         raise HTTPException(status_code=400, detail="No structure found for category")
 
     structure = structure_result.data[0]
-    column_order = structure["column_order"]
-    separator = structure["separator"]
+    column_order = structure.get("column_order") or []
+    separator = structure.get("separator") or " "
 
     # Get detailed information for each column
     option_details = []

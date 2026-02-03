@@ -52,12 +52,12 @@ const steps = [
   },
   {
     id: 4,
-    title: "Quản lý Hóa đơn NCC",
+    title: "Quản lý Đơn hàng NCC",
     description: "Xử lý hóa đơn từ nhà cung cấp và theo dõi thanh toán",
     icon: FileText,
     color: "red",
     details: [
-      "Vào tab 'Hóa đơn NCC'",
+      "Vào tab 'Đơn hàng NCC'",
       "Nhấn 'Tạo hóa đơn NCC'",
       "Nhập thông tin hóa đơn",
       "Phê duyệt hóa đơn",

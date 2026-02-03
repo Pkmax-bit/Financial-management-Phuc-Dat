@@ -92,7 +92,7 @@ export const exportToExcel = (data: ProjectReportData) => {
     ['PHÂN TÍCH'],
     ['Số lượng hóa đơn', data.invoices.length],
     ['Số lượng chi phí', data.expenses.length],
-    ['Hóa đơn chưa thanh toán', data.summary.unpaidInvoices],
+    ['Đơn hàng chưa thanh toán', data.summary.unpaidInvoices],
   ]
 
   const ws1 = XLSX.utils.aoa_to_sheet(summaryData)
@@ -154,7 +154,7 @@ export const exportToExcel = (data: ProjectReportData) => {
   // AutoFilter for data block
   ws2['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: rows2 - 3, c: 5 } }) }
   
-  XLSX.utils.book_append_sheet(wb, ws2, 'Hóa đơn')
+  XLSX.utils.book_append_sheet(wb, ws2, 'Đơn hàng')
   
   // ========== SHEET 3: CHI PHÍ ==========
   const expenseData = [

@@ -76,7 +76,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
     payment_status: 'pending',
     payment_terms: 'Thanh toán trong vòng 30 ngày',
     notes: '',
-    terms_and_conditions: 'Hóa đơn có hiệu lực từ ngày phát hành.',
+    terms_and_conditions: 'Đơn hàng có hiệu lực từ ngày phát hành.',
     created_by: ''
   })
 
@@ -314,7 +314,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
       }
       
       console.log('🔍 Invoice items created successfully:', itemsResult)
-      alert('Hóa đơn đã được tạo thành công trong database!')
+      alert('Đơn hàng đã được tạo thành công trong database!')
       onSuccess()
       onClose()
       resetForm()
@@ -344,7 +344,7 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
       payment_status: 'pending',
       payment_terms: 'Thanh toán trong vòng 30 ngày',
       notes: '',
-      terms_and_conditions: 'Hóa đơn có hiệu lực từ ngày phát hành.',
+      terms_and_conditions: 'Đơn hàng có hiệu lực từ ngày phát hành.',
       created_by: ''
     })
     setItems([{ description: '', quantity: 1, unit_price: 0, total_price: 0, name_product: '' }])
@@ -468,9 +468,9 @@ export default function CreateInvoiceSidebar({ isOpen, onClose, onSuccess }: Cre
                       onChange={(e) => setFormData({ ...formData, invoice_type: e.target.value })}
                       className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-1 focus:ring-green-500"
                     >
-                      <option value="standard">Hóa đơn thường</option>
-                      <option value="recurring">Hóa đơn định kỳ</option>
-                      <option value="proforma">Hóa đơn tạm</option>
+                      <option value="standard">Đơn hàng thường</option>
+                      <option value="recurring">Đơn hàng định kỳ</option>
+                      <option value="proforma">Đơn hàng tạm</option>
                       <option value="credit_note">Phiếu ghi có</option>
                     </select>
                   </div>

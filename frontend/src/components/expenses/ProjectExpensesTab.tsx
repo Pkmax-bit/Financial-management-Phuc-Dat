@@ -502,7 +502,7 @@ export default function ProjectExpensesTab({ searchTerm, onCreateExpense, should
     tour.addStep({
       id: 'approve-expense-process',
       title: 'Quy trình duyệt',
-      text: 'Khi nhấn nút duyệt, hệ thống sẽ tự động:\n\n1. Tạo chi phí thực tế mới: Tạo chi phí thực tế mới từ chi phí kế hoạch\n2. Sao chép thông tin: Tất cả thông tin sẽ được sao chép:\n   - Dự án\n   - Đối tượng chi phí\n   - Số tiền\n   - Hóa đơn/đơn hàng\n   - Ghi chú\n3. Cập nhật trạng thái: Trạng thái chi phí kế hoạch sẽ được cập nhật thành "Đã duyệt"\n4. Hiển thị kết quả:\n   - Chi phí thực tế sẽ xuất hiện trong tab "Thực tế"\n   - Bạn có thể so sánh chi phí kế hoạch và thực tế trong tab "Tất cả"\n\nLưu ý:\n• Quá trình này không thể hoàn tác\n• Chi phí kế hoạch vẫn giữ nguyên trong danh sách với trạng thái "Đã duyệt"',
+      text: 'Khi nhấn nút duyệt, hệ thống sẽ tự động:\n\n1. Tạo chi phí thực tế mới: Tạo chi phí thực tế mới từ chi phí kế hoạch\n2. Sao chép thông tin: Tất cả thông tin sẽ được sao chép:\n   - Dự án\n   - Đối tượng chi phí\n   - Số tiền\n   - Đơn hàng/đơn hàng\n   - Ghi chú\n3. Cập nhật trạng thái: Trạng thái chi phí kế hoạch sẽ được cập nhật thành "Đã duyệt"\n4. Hiển thị kết quả:\n   - Chi phí thực tế sẽ xuất hiện trong tab "Thực tế"\n   - Bạn có thể so sánh chi phí kế hoạch và thực tế trong tab "Tất cả"\n\nLưu ý:\n• Quá trình này không thể hoàn tác\n• Chi phí kế hoạch vẫn giữ nguyên trong danh sách với trạng thái "Đã duyệt"',
       attachTo: { element: '[data-tour-id="expenses-list"]', on: 'top' },
       buttons: [
         {

@@ -203,7 +203,7 @@ export default function ProjectInvoices({ projectId, projectName }: ProjectInvoi
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h4 className="text-lg font-semibold text-gray-900">
-                        Hóa đơn #{invoice.invoice_number}
+                        Đơn hàng #{invoice.invoice_number}
                       </h4>
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}>
                         {statusInfo.label}
