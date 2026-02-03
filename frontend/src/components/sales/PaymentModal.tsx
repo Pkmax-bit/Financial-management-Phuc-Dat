@@ -164,7 +164,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, invoice }: Pa
         {/* Invoice Info */}
         <div className="p-6 border-b bg-gray-50">
           <div className="text-sm text-black">
-            <p><strong>Hóa đơn:</strong> {invoice.invoice_number}</p>
+            <p><strong>Đơn hàng:</strong> {invoice.invoice_number}</p>
             {invoice.customer_name && (
               <p><strong>Khách hàng:</strong> {invoice.customer_name}</p>
             )}

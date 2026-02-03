@@ -164,7 +164,7 @@ export default function ProjectsDetailedReportPage() {
               .lte('issue_date', endDate.toISOString())
           }
           
-          // Fetch invoices (actual revenue) - Hóa đơn đã phát hành
+          // Fetch invoices (actual revenue) - Đơn hàng đã phát hành
           const { data: invoices, error: invoicesError } = await invoicesQuery
           
           // Debug log
@@ -203,7 +203,7 @@ export default function ProjectsDetailedReportPage() {
           const actual_revenue = invoices?.reduce((sum, i) => sum + (i.total_amount || 0), 0) || 0
           const actual_costs = projectExpenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0
           
-          // Lợi nhuận = Hóa đơn - Chi phí dự án đã duyệt
+          // Lợi nhuận = Đơn hàng - Chi phí dự án đã duyệt
           const actual_profit = actual_revenue - actual_costs
           
           // Biên lợi nhuận = (Lợi nhuận / Doanh thu) * 100

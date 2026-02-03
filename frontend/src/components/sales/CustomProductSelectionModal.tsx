@@ -559,8 +559,8 @@ export default function CustomProductSelectionModal({
     console.log('Selected combination objects count:', selectedCombinationObjects.length)
     console.log('Selected combination objects:', selectedCombinationObjects)
 
-    // Add each selected combination to quote
-    selectedCombinationObjects.forEach((combination, index) => {
+    // Thêm theo thứ tự chọn: sản phẩm chọn trước lên đầu danh sách (prepend từng cái nên loop ngược)
+    selectedCombinationObjects.slice().reverse().forEach((combination, index) => {
       console.log(`➕ Adding product ${index + 1}:`, combination)
       const productName = generateProductNameFromCombination(combination)
       console.log(`📝 Generated name: ${productName}`)
@@ -936,63 +936,15 @@ export default function CustomProductSelectionModal({
                                         }).format(combination.totalPrice)}
                                       </td>
 
-                                      {/* Select button - supports multiple selection */}
+                                      {/* Ô tích chọn sản phẩm */}
                                       <td className="px-4 py-3 border-b border-gray-200 text-center">
-                                        <div className="flex items-center justify-center space-x-2">
-                                          {/* Single selection button */}
-                                          <button
-                                            onClick={() => {
-                                              // Set all selected options from this combination
-                                              const newSelectedOptions: Record<string, SelectedOption> = {}
-                                              sortedColumns.forEach(column => {
-                                                const option = combination.options[column.id]
-                                                if (option) {
-                                                  newSelectedOptions[column.id] = {
-                                                    column_id: column.id,
-                                                    column_name: column.name,
-                                                    option_id: option.id,
-                                                    option_name: option.name,
-                                                    quantity: 1,
-                                                    unit_price: option.unit_price || 0
-                                                  }
-                                                }
-                                              })
-                                              setSelectedOptions(newSelectedOptions)
-
-                                              // Auto-fill dimensions from first option that has dimensions
-                                              const firstOptionWithDimensions = Object.values(combination.options).find(opt => opt.has_dimensions)
-                                              if (firstOptionWithDimensions) {
-                                                setDimensions(prev => ({
-                                                  width: firstOptionWithDimensions.width || prev.width,
-                                                  height: firstOptionWithDimensions.height || prev.height,
-                                                  depth: firstOptionWithDimensions.depth || prev.depth
-                                                }))
-                                              }
-
-                                              // Set unit price from combination total (per unit area if dimensions available)
-                                              const area = calculateArea()
-                                              setUnitPrice(area > 0 ? combination.totalPrice / area : combination.totalPrice)
-                                            }}
-                                            className={`px-2 py-1 rounded text-xs font-medium ${Object.keys(selectedOptions).length === sortedColumns.length &&
-                                              sortedColumns.every(col => selectedOptions[col.id]?.option_id === combination.options[col.id]?.id)
-                                              ? 'bg-green-600 text-white'
-                                              : 'bg-blue-600 text-white hover:bg-blue-700'
-                                              }`}
-                                            title="Chọn để điền thông tin sản phẩm"
-                                          >
-                                            {Object.keys(selectedOptions).length === sortedColumns.length &&
-                                              sortedColumns.every(col => selectedOptions[col.id]?.option_id === combination.options[col.id]?.id)
-                                              ? '✓ Đã chọn'
-                                              : 'Chọn'}
-                                          </button>
-
-                                          {/* Multiple selection checkbox */}
+                                        <div className="flex items-center justify-center">
                                           <input
                                             type="checkbox"
                                             checked={selectedCombinations.has(combination.id)}
                                             onChange={() => toggleCombinationSelection(combination.id)}
                                             className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
-                                            title="Chọn để thêm vào danh sách"
+                                            title="Chọn để thêm vào báo giá"
                                           />
                                         </div>
                                       </td>
@@ -1192,74 +1144,7 @@ export default function CustomProductSelectionModal({
           )}
         </div>
 
-        {/* Multiple Selection Actions */}
-        {selectedCombinations.size > 0 && (
-          <div className="border-t border-gray-200 p-4 bg-blue-50">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-blue-600" />
-                <span className="text-sm text-blue-700">
-                  Đã chọn {selectedCombinations.size} tổ hợp sản phẩm
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={clearAllSelections}
-                  className="px-3 py-1 text-xs border border-gray-300 text-gray-600 rounded hover:bg-gray-50"
-                >
-                  Bỏ chọn tất cả
-                </button>
-                <button
-                  onClick={handleAddMultipleToQuote}
-                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Thêm tất cả vào báo giá
-                </button>
-              </div>
-            </div>
-
-            {/* Preview of selected products */}
-            <div className="bg-white rounded border p-3">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Sản phẩm sẽ được thêm:</h4>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {currentCombinations
-                  .filter(combo => selectedCombinations.has(combo.id))
-                  .map((combo, index) => {
-                    // Get dimensions for this combination
-                    const firstOptionWithDimensions = Object.values(combo.options).find(opt => opt.has_dimensions)
-                    const height = firstOptionWithDimensions?.height || 0
-                    const depth = firstOptionWithDimensions?.depth || 0
-                    const width = firstOptionWithDimensions?.width || 0
-                    const area = width && height ? (width * height) / 1000000 : 0 // Convert mm² to m²
-
-                    return (
-                      <div key={combo.id} className="text-xs text-gray-600 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-blue-500 font-medium">{index + 1}.</span>
-                          <span className="flex-1">{generateProductNameFromCombination(combo)}</span>
-                          <span className="text-green-600 font-medium">
-                            {new Intl.NumberFormat('vi-VN', {
-                              style: 'currency',
-                              currency: 'VND'
-                            }).format(combo.totalPrice)}
-                          </span>
-                        </div>
-                        {(height > 0 || depth > 0 || area > 0) && (
-                          <div className="ml-4 text-gray-500 flex gap-4">
-                            {height > 0 && <span>Cao: {height}mm</span>}
-                            {depth > 0 && <span>Sâu: {depth}mm</span>}
-                            {area > 0 && <span>DT: {area.toFixed(3)}m²</span>}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
+        {/* Footer: một nút Thêm vào báo giá (thêm 1 sản phẩm từ form hoặc nhiều từ bảng) */}
         <div className="border-t border-gray-200 p-6 flex justify-end gap-3">
           <button
             onClick={handleClose}
@@ -1269,7 +1154,7 @@ export default function CustomProductSelectionModal({
           </button>
           <button
             onClick={handleAddToQuote}
-            disabled={!generatedName}
+            disabled={!generatedName && selectedCombinations.size === 0}
             className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Check className="h-4 w-4" />

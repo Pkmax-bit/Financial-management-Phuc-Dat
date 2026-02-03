@@ -382,7 +382,7 @@ export default function SalesByCustomerPage() {
                         Khách hàng
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Hóa đơn
+                        Đơn hàng
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Tổng giá trị
@@ -400,7 +400,7 @@ export default function SalesByCustomerPage() {
                         Ngân sách dự án
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Hóa đơn cuối
+                        Đơn hàng cuối
                       </th>
                     </tr>
                   </thead>

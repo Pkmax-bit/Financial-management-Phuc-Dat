@@ -55,7 +55,7 @@ const guideSteps = [
           <h4 class="font-semibold text-purple-800 mb-2">Theo dõi giao dịch</h4>
           <ul class="space-y-1 text-sm text-purple-700">
             <li>• Lịch sử mua hàng</li>
-            <li>• Hóa đơn chưa thanh toán</li>
+            <li>• Đơn hàng chưa thanh toán</li>
             <li>• Tổng giá trị giao dịch</li>
             <li>• Tần suất mua hàng</li>
           </ul>
@@ -151,7 +151,7 @@ const guideSteps = [
           <ul class="space-y-1 text-sm text-green-700">
             <li>• Thông tin cơ bản</li>
             <li>• Lịch sử giao dịch</li>
-            <li>• Hóa đơn chưa thanh toán</li>
+            <li>• Đơn hàng chưa thanh toán</li>
             <li>• Ghi chú và lịch sử</li>
           </ul>
         </div>
@@ -237,7 +237,7 @@ const guideSteps = [
         </div>
         
         <div class="bg-blue-50 p-4 rounded-lg">
-          <h4 class="font-semibold text-blue-800 mb-2">Hóa đơn chưa thanh toán:</h4>
+          <h4 class="font-semibold text-blue-800 mb-2">Đơn hàng chưa thanh toán:</h4>
           <ul class="space-y-1 text-sm text-blue-700">
             <li>• Danh sách hóa đơn chưa trả</li>
             <li>• Tổng số tiền nợ</li>

@@ -668,7 +668,7 @@ export default function WorkflowPanel({ isOpen, onClose }: WorkflowPanelProps) {
     },
     {
       id: 4,
-      title: 'Xuất PDF và Duyệt thành Hóa đơn',
+      title: 'Xuất PDF và Duyệt thành Đơn hàng',
       description: 'Xuất báo giá ra PDF hoặc duyệt để chuyển thành hóa đơn',
       icon: FileText,
       checkStatus: checkStep4,
@@ -680,7 +680,7 @@ export default function WorkflowPanel({ isOpen, onClose }: WorkflowPanelProps) {
           color: 'bg-indigo-500 hover:bg-indigo-600'
         },
         {
-          label: 'Duyệt thành Hóa đơn',
+          label: 'Duyệt thành Đơn hàng',
           icon: DollarSign,
           href: `/sales?tab=quotes&action=approve${selectedProjectId ? `&project=${selectedProjectId}` : ''}`,
           color: 'bg-green-500 hover:bg-green-600'

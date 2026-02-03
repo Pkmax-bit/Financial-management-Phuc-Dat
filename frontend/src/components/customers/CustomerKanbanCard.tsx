@@ -1,28 +1,16 @@
 "use client"
 
 import React from 'react'
-import { Building2, Mail, Phone, DollarSign, MoreVertical, MapPin } from 'lucide-react'
-
-interface Customer {
-  id: string
-  customer_code?: string
-  name: string
-  email?: string
-  phone?: string
-  address?: string
-  type?: 'individual' | 'company' | 'government'
-  credit_limit?: number
-  status?: 'prospect' | 'active' | 'inactive'
-  created_at?: string
-  updated_at?: string
-}
+import { Building2, Mail, Phone, DollarSign, Edit, Trash2, MapPin } from 'lucide-react'
+import type { Customer } from '@/types'
 
 interface CustomerKanbanCardProps {
   customer: Customer
   statusColor: string
   onClick?: () => void
   onDragStart?: () => void
-  onMenuClick?: (e: React.MouseEvent) => void
+  onEdit?: (customer: Customer) => void
+  onDelete?: (customer: Customer) => void
 }
 
 export default function CustomerKanbanCard({
@@ -30,7 +18,8 @@ export default function CustomerKanbanCard({
   statusColor,
   onClick,
   onDragStart,
-  onMenuClick
+  onEdit,
+  onDelete
 }: CustomerKanbanCardProps) {
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move'
@@ -93,16 +82,31 @@ export default function CustomerKanbanCard({
             )}
           </div>
         </div>
-        {/* Menu button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onMenuClick?.(e)
-          }}
-          className="flex-shrink-0 text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </button>
+        {/* Edit & Delete buttons */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit?.(customer)
+            }}
+            className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+            title="Sửa"
+          >
+            <Edit className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete?.(customer)
+            }}
+            className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+            title="Xóa"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Type badge */}

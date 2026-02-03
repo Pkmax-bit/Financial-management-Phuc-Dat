@@ -106,7 +106,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
           title: 'Gửi hóa đơn',
           description: 'Gửi hóa đơn cho khách hàng',
           action: 'Nhấn "Gửi hóa đơn" sau khi tạo xong',
-          hint: 'Hóa đơn sẽ chuyển từ "Draft" sang "Sent"',
+          hint: 'Đơn hàng sẽ chuyển từ "Draft" sang "Sent"',
           target: 'send-invoice-button'
         }
       ]
@@ -119,7 +119,7 @@ export default function InteractiveGuide({ isOpen, onClose, guideType }: Interac
           title: 'Tìm hóa đơn cần thanh toán',
           description: 'Tìm hóa đơn trong danh sách',
           action: 'Sử dụng bộ lọc hoặc tìm kiếm theo khách hàng',
-          hint: 'Hóa đơn có trạng thái "Sent" mới có thể thanh toán',
+          hint: 'Đơn hàng có trạng thái "Sent" mới có thể thanh toán',
           target: 'invoice-list'
         },
         {

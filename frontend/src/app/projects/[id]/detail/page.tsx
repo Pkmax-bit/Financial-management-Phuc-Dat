@@ -28,7 +28,7 @@ import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
 import ProjectTeam from '@/components/projects/ProjectTeam'
 import ProjectTimeline from '@/components/projects/ProjectTimeline'
-// Đã ẩn tab Hóa đơn & Chi phí trên giao diện chi tiết dự án
+// Đã ẩn tab Đơn hàng & Chi phí trên giao diện chi tiết dự án
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
 import { apiGet, apiPut } from '@/lib/api'
 import ProjectTasksTab from '@/components/projects/ProjectTasksTab'

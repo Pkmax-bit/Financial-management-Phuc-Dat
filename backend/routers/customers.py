@@ -13,9 +13,8 @@ from pydantic import BaseModel
 
 from models.customer import Customer, CustomerCreate, CustomerUpdate
 from models.user import User
-from utils.auth import get_current_user
+from utils.auth import get_current_user, require_manager_or_admin
 from utils.rbac_middleware import (
-    require_manager_or_admin, 
     require_customer_management,
     require_financial_access,
     get_user_role_info,
@@ -596,11 +595,8 @@ async def get_customer(
         )
 
 @router.post("/", response_model=Customer)
-async def create_customer(
-    customer_data: CustomerCreate,
-    current_user: User = Depends(require_manager_or_admin)
-):
-    """Create a new customer with auto-generated customer code"""
+async def create_customer(customer_data: CustomerCreate):
+    """Create a new customer with auto-generated customer code (no auth required)"""
     try:
         supabase = get_supabase_client()
         

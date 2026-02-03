@@ -173,7 +173,7 @@ export default function IntroductionPage() {
     {
       id: 'invoices',
       icon: FileText,
-      title: 'Quản lý Hóa đơn',
+      title: 'Quản lý Đơn hàng',
       description: 'Tạo và quản lý hóa đơn khách hàng chuyên nghiệp',
       href: '/sales/invoices',
       color: 'from-pink-500 to-pink-600',

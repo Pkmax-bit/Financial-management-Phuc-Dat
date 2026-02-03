@@ -57,7 +57,7 @@ const modules = [
       { title: 'Bước 3: Tạo Báo giá', url: '/support#workflow-step-3' },
       { title: 'Bước 4: Ngân sách Dự án', url: '/support#workflow-step-4' },
       { title: 'Bước 5: Duyệt Báo giá', url: '/support#workflow-step-5' },
-      { title: 'Bước 6: Hóa đơn & Chi phí', url: '/support#workflow-step-6' },
+      { title: 'Bước 6: Đơn hàng & Chi phí', url: '/support#workflow-step-6' },
       { title: 'Bước 7: Báo cáo Tài chính', url: '/support#workflow-step-7' },
       { title: 'Bước 8: Khách hàng Xem Tiến độ', url: '/support#workflow-step-8' }
     ],
@@ -129,7 +129,7 @@ const faqs = [
   {
     id: 1,
     question: "Quy trình quản lý tài chính hoàn chỉnh gồm những bước nào?",
-    answer: "Quy trình gồm 8 bước: 1) Tạo khách hàng, 2) Tạo dự án, 3) Tạo báo giá, 4) Ngân sách dự án, 5) Duyệt báo giá, 6) Hóa đơn & Chi phí, 7) Báo cáo tài chính, 8) Khách hàng xem tiến độ. Xem tab 'Quy trình hoàn chỉnh' để biết chi tiết.",
+    answer: "Quy trình gồm 8 bước: 1) Tạo khách hàng, 2) Tạo dự án, 3) Tạo báo giá, 4) Ngân sách dự án, 5) Duyệt báo giá, 6) Đơn hàng & Chi phí, 7) Báo cáo tài chính, 8) Khách hàng xem tiến độ. Xem tab 'Quy trình hoàn chỉnh' để biết chi tiết.",
     category: "Quy trình",
     module: "workflow"
   },
@@ -171,7 +171,7 @@ const faqs = [
   {
     id: 7,
     question: "Ghi nhận chi phí thực tế trong quy trình?",
-    answer: "Bước 6: Hóa đơn & Chi phí. Vào mục Chi phí & Ngân sách > Chi phí thực tế. Ghi nhận chi phí theo loại (vật liệu/nhân công/máy móc), số tiền, ngày phát sinh, đính kèm chứng từ. Manager/Admin sẽ phê duyệt chi phí trước khi cập nhật vào dự án.",
+    answer: "Bước 6: Đơn hàng & Chi phí. Vào mục Chi phí & Ngân sách > Chi phí thực tế. Ghi nhận chi phí theo loại (vật liệu/nhân công/máy móc), số tiền, ngày phát sinh, đính kèm chứng từ. Manager/Admin sẽ phê duyệt chi phí trước khi cập nhật vào dự án.",
     category: "Quy trình",
     module: "workflow"
   },
@@ -222,7 +222,7 @@ const videoTutorials = [
   },
   {
     id: 4,
-    title: 'Bước 6: Hóa đơn & Chi phí Thực tế',
+    title: 'Bước 6: Đơn hàng & Chi phí Thực tế',
     duration: '7:20',
     thumbnail: '/videos/invoice-expenses-thumb.jpg',
     description: 'Tạo hóa đơn và ghi nhận chi phí thực tế'
@@ -552,7 +552,7 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                     </div>
                     <div className="text-center">
                       <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">6</div>
-                      <p className="text-xs text-gray-600">Hóa đơn & Chi phí</p>
+                      <p className="text-xs text-gray-600">Đơn hàng & Chi phí</p>
                     </div>
                     <div className="text-center">
                       <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-2">7</div>
@@ -651,12 +651,12 @@ export default function SupportCenter({ isOpen, onClose }: SupportCenterProps) {
                     <div className="flex items-start gap-4">
                       <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0">6</div>
                       <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 mb-2">Hóa đơn & Chi phí Thực tế</h4>
+                        <h4 className="font-semibold text-gray-900 mb-2">Đơn hàng & Chi phí Thực tế</h4>
                         <p className="text-gray-600 text-sm mb-3">Tạo hóa đơn từ báo giá đã duyệt và theo dõi chi phí thực tế</p>
                         <div className="bg-gray-50 p-3 rounded text-sm">
                           <p><strong>Đường dẫn:</strong> /sales/invoices, /projects/[id]/expenses</p>
                           <p><strong>Quyền:</strong> Admin, Manager, Accountant, Workshop, Worker, Transport</p>
-                          <p><strong>Kết quả:</strong> Hóa đơn được tạo, chi phí thực tế được ghi nhận</p>
+                          <p><strong>Kết quả:</strong> Đơn hàng được tạo, chi phí thực tế được ghi nhận</p>
                         </div>
                       </div>
                     </div>

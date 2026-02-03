@@ -42,7 +42,7 @@ interface ProjectRevenueAnalysisProps {
 
 const typeConfig = {
   invoices: {
-    label: 'Hóa đơn',
+    label: 'Đơn hàng',
     icon: FileText,
     color: 'bg-blue-500',
     bgColor: 'bg-blue-50',
@@ -378,7 +378,7 @@ export default function ProjectRevenueAnalysis({ projectId, projectName }: Proje
               className="px-3 py-1 border border-gray-300 rounded-lg text-sm"
             >
               <option value="all">Tất cả</option>
-              <option value="invoice">Hóa đơn</option>
+              <option value="invoice">Đơn hàng</option>
               <option value="sales_receipt">Biên lai</option>
               <option value="other">Khác</option>
             </select>

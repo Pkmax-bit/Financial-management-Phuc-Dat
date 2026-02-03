@@ -589,7 +589,7 @@ export default function ProjectDetailedReportDetailPage() {
 
     tour.addStep({
       id: 'report-detail-actual-invoices',
-      title: 'Hóa đơn thực tế',
+      title: 'Đơn hàng thực tế',
       text: 'Danh sách hóa đơn đã phát hành, trạng thái thanh toán và sản phẩm chi tiết. Sử dụng để đối chiếu doanh thu.',
       attachTo: { element: '[data-tour-id="report-detail-actual-invoices"]', on: 'top' },
       buttons: [
@@ -1099,7 +1099,7 @@ export default function ProjectDetailedReportDetailPage() {
   // THỰC TẾ (dùng để tính lợi nhuận cuối)
   const totalInvoices = invoices.reduce((sum, i) => sum + (i.total_amount || 0), 0)
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
-  const actualProfit = totalInvoices - totalExpenses  // Lợi nhuận = Hóa đơn - Chi phí dự án
+  const actualProfit = totalInvoices - totalExpenses  // Lợi nhuận = Đơn hàng - Chi phí dự án
   
   const profitVariance = actualProfit - plannedProfit
 
@@ -1755,14 +1755,14 @@ export default function ProjectDetailedReportDetailPage() {
                   <div className="p-2 bg-green-600 rounded-lg"></div>
                   <div>
                     <h2 className="text-xl font-bold text-green-900">THỰC TẾ</h2>
-                    <p className="text-sm text-green-700">Hóa đơn & Chi phí phát sinh</p>
+                    <p className="text-sm text-green-700">Đơn hàng & Chi phí phát sinh</p>
                   </div>
                 </div>
 
                 {/* Actual Revenue - Invoices */}
                 <div className="bg-white rounded-lg p-4 mb-4 flex flex-col flex-1" data-tour-id="report-detail-actual-invoices">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-gray-900">Hóa đơn (Doanh thu thực tế)</h3>
+                    <h3 className="font-semibold text-gray-900">Đơn hàng (Doanh thu thực tế)</h3>
                     <span className="text-lg font-bold text-green-600">{formatCurrency(totalInvoices)}</span>
                   </div>
                   
@@ -1860,7 +1860,7 @@ export default function ProjectDetailedReportDetailPage() {
                       {formatCurrency(actualProfit)}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      = Hóa đơn ({formatCurrency(totalInvoices)}) - Chi phí ({formatCurrency(totalExpenses)})
+                      = Đơn hàng ({formatCurrency(totalInvoices)}) - Chi phí ({formatCurrency(totalExpenses)})
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
                       Chênh lệch với kế hoạch: 
