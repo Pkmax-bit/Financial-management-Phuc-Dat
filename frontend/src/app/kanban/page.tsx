@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import StickyTopNav from '@/components/StickyTopNav'
 import SimpleKanbanBoard from '@/components/sales/SimpleKanbanBoard'
 
 interface Task {
@@ -237,19 +236,15 @@ export default function KanbanPage() {
       onLogout={() => router.push('/login')}
     >
       <div className="w-full">
-        <StickyTopNav 
-          title="Kanban Board" 
-          subtitle="Quản lý dự án và theo dõi tiến độ"
-        >
-          <button
-            onClick={() => router.push('/projects')}
-            className="rounded-lg bg-gray-100 px-4 py-2 font-medium text-black transition-colors hover:bg-gray-200"
-          >
-            Quay lại dự án
-          </button>
-        </StickyTopNav>
-
         <div className="px-2 py-6 sm:px-4 lg:px-6 xl:px-8">
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => router.push('/projects')}
+              className="rounded-lg bg-gray-100 px-4 py-2 font-medium text-black transition-colors hover:bg-gray-200"
+            >
+              Quay lại dự án
+            </button>
+          </div>
           <SimpleKanbanBoard
             tasks={tasks}
             users={users}

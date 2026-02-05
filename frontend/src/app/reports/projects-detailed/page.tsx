@@ -20,7 +20,6 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import StickyTopNav from '@/components/StickyTopNav'
 import * as XLSX from 'xlsx'
 import { PROJECT_STATUS_FILTER_OPTIONS, getProjectStatusBadgeClass, getProjectStatusLabel } from '@/config/projectStatus'
 
@@ -1126,21 +1125,17 @@ export default function ProjectsDetailedReportPage() {
   return (
     <LayoutWithSidebar user={user} onLogout={handleLogout}>
       <div className="w-full">
-        <StickyTopNav 
-          title="Báo cáo Dự án Chi tiết" 
-          subtitle="Phân tích chi tiết kế hoạch và thực tế của từng dự án"
-        >
-          <button
-            onClick={startReportListTour}
-            disabled={isReportListTourRunning}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Hướng dẫn xem báo cáo"
-          >
-            <CircleHelp className="h-4 w-4" />
-          </button>
-        </StickyTopNav>
-
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={startReportListTour}
+              disabled={isReportListTourRunning}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Hướng dẫn xem báo cáo"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </button>
+          </div>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour-id="report-summary-cards">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6" data-tour-id="report-summary-projects">

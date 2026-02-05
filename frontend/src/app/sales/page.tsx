@@ -24,7 +24,6 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import StickyTopNav from '@/components/StickyTopNav'
 import OverviewTab from '@/components/sales/OverviewTab'
 import ProductCatalog, { ProductCatalogRef } from '@/components/sales/ProductCatalog'
 import ProductCategoriesTab from '@/components/sales/ProductCategoriesTab'
@@ -275,16 +274,6 @@ function SalesPageContent({ activeTab, setActiveTab }: { activeTab: string, setA
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full">
-        {/* Top navigation */}
-        <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
-          <div className="flex h-16 items-center justify-between px-6">
-            <div className="flex items-center">
-              <h2 className="text-2xl font-semibold text-gray-900">Sales Center</h2>
-            </div>
-          </div>
-        </div>
-
-        {/* Page content */}
         <div className="p-6">
           {/* Header */}
           <div className="mb-6">

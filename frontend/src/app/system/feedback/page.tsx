@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import StickyTopNav from '@/components/StickyTopNav'
 import SystemFeedbackWrapper from '@/components/system/SystemFeedbackWrapper'
 
 interface User {
@@ -70,7 +69,6 @@ export default function SystemFeedbackPage() {
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full">
-        <StickyTopNav title="Góp ý hệ thống" subtitle="Nhân viên gửi góp ý và theo dõi xử lý" />
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           <SystemFeedbackWrapper />
         </div>

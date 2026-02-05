@@ -23,6 +23,7 @@ import CreateQuoteSidebarFullscreen from './CreateQuoteSidebarFullscreen'
 import QuoteEmailPreviewModal from './QuoteEmailPreviewModal'
 import { useRouter } from 'next/navigation'
 import { apiGet, apiPost } from '@/lib/api'
+import { salesApi } from '@/lib/api/salesApi'
 import { supabase } from '@/lib/supabase'
 import { getApiEndpoint } from '@/lib/apiUrl'
 import { PROJECT_STATUS_FILTER_OPTIONS } from '@/config/projectStatus'
@@ -1150,60 +1151,33 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
   }
 
   const deleteQuote = async (quoteId: string) => {
+    const loadingMessage = document.createElement('div')
+    loadingMessage.innerHTML = `
+      <div style="
+        position: fixed; 
+        top: 20px; 
+        right: 20px; 
+        background: #e74c3c; 
+        color: white; 
+        padding: 15px 20px; 
+        border-radius: 5px; 
+        z-index: 10000;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      ">
+        🗑️ Đang xóa báo giá...
+      </div>
+    `
+
     try {
-      console.log('🔍 Deleting quote:', quoteId)
-
-      // Show confirmation dialog
       const confirmed = window.confirm('Bạn có chắc chắn muốn xóa báo giá này? Hành động này không thể hoàn tác.')
-      if (!confirmed) {
-        return
-      }
+      if (!confirmed) return
 
-      // Show loading state
-      const loadingMessage = document.createElement('div')
-      loadingMessage.innerHTML = `
-        <div style="
-          position: fixed; 
-          top: 20px; 
-          right: 20px; 
-          background: #e74c3c; 
-          color: white; 
-          padding: 15px 20px; 
-          border-radius: 5px; 
-          z-index: 10000;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        ">
-          🗑️ Đang xóa báo giá...
-        </div>
-      `
       document.body.appendChild(loadingMessage)
 
-      // Delete quote items first
-      const { error: itemsError } = await supabase
-        .from('quote_items')
-        .delete()
-        .eq('quote_id', quoteId)
+      // Gọi API backend (có quyền xóa, kiểm tra ràng buộc invoice)
+      await salesApi.deleteQuote(quoteId)
 
-      if (itemsError) {
-        console.error('❌ Error deleting quote items:', itemsError)
-        throw new Error('Failed to delete quote items')
-      }
-
-      // Delete quote
-      const { error: quoteError } = await supabase
-        .from('quotes')
-        .delete()
-        .eq('id', quoteId)
-
-      // Remove loading message
-      document.body.removeChild(loadingMessage)
-
-      if (quoteError) {
-        console.error('❌ Error deleting quote:', quoteError)
-        throw new Error(quoteError.message || 'Failed to delete quote')
-      }
-
-      console.log('🔍 Quote deleted successfully')
+      if (document.body.contains(loadingMessage)) document.body.removeChild(loadingMessage)
 
       // Show success notification
       const successMessage = document.createElement('div')
@@ -1242,6 +1216,7 @@ export default function QuotesTab({ searchTerm, onCreateQuote, shouldOpenCreateM
       await fetchQuotes()
 
     } catch (error) {
+      if (document.body.contains(loadingMessage)) document.body.removeChild(loadingMessage)
       console.error('❌ Error deleting quote:', error)
 
       // Show error notification

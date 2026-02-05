@@ -19,7 +19,6 @@ import {
 import { supabase } from '@/lib/supabase'
 import { apiGet } from '@/lib/api'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import StickyTopNav from '@/components/StickyTopNav'
 import ProjectsTab, { ProjectsTabRef } from '@/components/projects/ProjectsTab'
 import CreateProjectModal from '@/components/projects/CreateProjectModal'
 import EditProjectSidebar from '@/components/projects/EditProjectSidebar'
@@ -854,80 +853,72 @@ export default function ProjectsPage() {
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={() => router.push('/login')}>
       <div className="w-full">
-        {/* Sticky Top Navigation */}
-        <div data-tour-id="projects-header">
-          <StickyTopNav
-            title="Dự án"
-            subtitle={
-              customerId && customerName
+        <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6" data-tour-id="projects-header">
+            <p className="text-sm text-gray-500">
+              {customerId && customerName
                 ? `Dự án của khách hàng ${customerName}`
-                : "Quản lý và theo dõi dự án"
-            }
-          >
-            <button
-              onClick={() => startProjectsTour()}
-              disabled={isTourRunning}
-              data-tour-id="projects-guide-button"
-              className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors font-medium ${
-                isTourRunning
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-              title="Bắt đầu tour hướng dẫn tạo dự án"
-            >
-              <CircleHelp className="h-5 w-5" />
-            </button>
-            {/* View toggle: Kanban | List (Bitrix24 style) */}
-            <div className="ml-4 inline-flex rounded-[2px] border border-gray-300 overflow-hidden">
+                : "Quản lý và theo dõi dự án"}
+            </p>
+            <div className="flex items-center gap-3">
               <button
-                type="button"
-                aria-label="Chuyển sang xem Kanban"
-                onClick={() => setViewMode('kanban')}
-                className={`flex h-8 w-10 items-center justify-center border-r border-gray-300 text-xs transition-colors ${
-                  viewMode === 'kanban'
-                    ? 'bg-[#E8F4FD] text-[#2066B0] border-[#2066B0]'
-                    : 'bg-white text-[#535C69] hover:bg-[#F5F7F8]'
+                onClick={() => startProjectsTour()}
+                disabled={isTourRunning}
+                data-tour-id="projects-guide-button"
+                className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors font-medium ${
+                  isTourRunning
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
+                title="Bắt đầu tour hướng dẫn tạo dự án"
               >
-                {/* Kanban icon: 4 columns */}
-                <div className="grid grid-cols-2 gap-[2px]">
-                  <span className="h-2 w-2 rounded-[2px] border border-current" />
-                  <span className="h-2 w-2 rounded-[2px] border border-current" />
-                  <span className="h-2 w-2 rounded-[2px] border border-current" />
-                  <span className="h-2 w-2 rounded-[2px] border border-current" />
-                </div>
+                <CircleHelp className="h-5 w-5" />
               </button>
+              <div className="inline-flex rounded-[2px] border border-gray-300 overflow-hidden">
+                <button
+                  type="button"
+                  aria-label="Chuyển sang xem Kanban"
+                  onClick={() => setViewMode('kanban')}
+                  className={`flex h-8 w-10 items-center justify-center border-r border-gray-300 text-xs transition-colors ${
+                    viewMode === 'kanban'
+                      ? 'bg-[#E8F4FD] text-[#2066B0] border-[#2066B0]'
+                      : 'bg-white text-[#535C69] hover:bg-[#F5F7F8]'
+                  }`}
+                >
+                  <div className="grid grid-cols-2 gap-[2px]">
+                    <span className="h-2 w-2 rounded-[2px] border border-current" />
+                    <span className="h-2 w-2 rounded-[2px] border border-current" />
+                    <span className="h-2 w-2 rounded-[2px] border border-current" />
+                    <span className="h-2 w-2 rounded-[2px] border border-current" />
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Chuyển sang xem danh sách"
+                  onClick={() => setViewMode('list')}
+                  className={`flex h-8 w-10 items-center justify-center text-xs transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-[#E8F4FD] text-[#2066B0] border-l border-[#2066B0]'
+                      : 'bg-white text-[#535C69] hover:bg-[#F5F7F8]'
+                  }`}
+                >
+                  <div className="flex flex-col gap-[2px]">
+                    <span className="h-[2px] w-4 rounded-full bg-current" />
+                    <span className="h-[2px] w-4 rounded-full bg-current" />
+                    <span className="h-[2px] w-4 rounded-full bg-current" />
+                  </div>
+                </button>
+              </div>
               <button
-                type="button"
-                aria-label="Chuyển sang xem danh sách"
-                onClick={() => setViewMode('list')}
-                className={`flex h-8 w-10 items-center justify-center text-xs transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-[#E8F4FD] text-[#2066B0] border-l border-[#2066B0]'
-                    : 'bg-white text-[#535C69] hover:bg-[#F5F7F8]'
-                }`}
+                onClick={handleCreateProject}
+                data-tour-id="projects-create-button"
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl font-medium"
               >
-                {/* List icon: 3 rows */}
-                <div className="flex flex-col gap-[2px]">
-                  <span className="h-[2px] w-4 rounded-full bg-current" />
-                  <span className="h-[2px] w-4 rounded-full bg-current" />
-                  <span className="h-[2px] w-4 rounded-full bg-current" />
-                </div>
+                <Plus className="h-5 w-5" />
+                Dự án mới
               </button>
             </div>
-            <button
-              onClick={handleCreateProject}
-              data-tour-id="projects-create-button"
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl font-medium"
-            >
-              <Plus className="h-5 w-5" />
-              Dự án mới
-            </button>
-          </StickyTopNav>
-        </div>
-
-        {/* Page content */}
-        <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
+          </div>
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-tour-id="projects-stats">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">

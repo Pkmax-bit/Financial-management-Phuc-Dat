@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import StickyTopNav from '@/components/StickyTopNav'
 import FeedbackManagementTab from '@/components/system/FeedbackManagementTab'
 
 interface User {
@@ -75,10 +74,6 @@ export default function FeedbackManagementPage() {
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full">
-        <StickyTopNav 
-          title="Quản lý góp ý hệ thống" 
-          subtitle="Xác nhận và xử lý góp ý từ nhân viên" 
-        />
         <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           <FeedbackManagementTab />
         </div>

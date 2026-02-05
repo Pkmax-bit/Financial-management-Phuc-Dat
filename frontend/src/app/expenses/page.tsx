@@ -20,7 +20,6 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import LayoutWithSidebar from '@/components/LayoutWithSidebar'
-import StickyTopNav from '@/components/StickyTopNav'
 import ExpensesTab from '@/components/expenses/ExpensesTab'
 import BillsTab from '@/components/expenses/BillsTab'
 import VendorsTab from '@/components/expenses/VendorsTab'
@@ -226,12 +225,8 @@ function ExpensesPageContent() {
   return (
     <LayoutWithSidebar user={user || undefined} onLogout={handleLogout}>
       <div className="w-full">
-        {/* Sticky Top Navigation */}
-        <StickyTopNav
-          title="Quản lý Chi phí"
-          subtitle="Theo dõi và quản lý chi phí, đơn hàng nhà cung cấp"
-        >
-          <div className="flex space-x-2">
+        <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
+          <div className="flex flex-wrap items-center justify-end gap-2 mb-4">
             <button
               onClick={() => router.push('/ai-analysis')}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
@@ -251,10 +246,6 @@ function ExpensesPageContent() {
               {loading ? 'Đang tải...' : 'Làm mới'}
             </button>
           </div>
-        </StickyTopNav>
-
-        {/* Page content */}
-        <div className="px-2 sm:px-4 lg:px-6 xl:px-8 py-6">
           <div className="space-y-8">
 
             {/* Error Message */}

@@ -22,6 +22,7 @@ import PaymentModal from './PaymentModal'
 import InvoiceExportModal from './InvoiceExportModal'
 import { TableCard, TableCardRow } from '@/components/ui/MobileTableCard'
 import { apiGet, apiPost, apiPut } from '@/lib/api'
+import { salesApi } from '@/lib/api/salesApi'
 import { supabase } from '@/lib/supabase'
 import { PROJECT_STATUS_FILTER_OPTIONS } from '@/config/projectStatus'
 
@@ -560,60 +561,33 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
   }
 
   const deleteInvoice = async (invoiceId: string) => {
+    const loadingMessage = document.createElement('div')
+    loadingMessage.innerHTML = `
+      <div style="
+        position: fixed; 
+        top: 20px; 
+        right: 20px; 
+        background: #e74c3c; 
+        color: white; 
+        padding: 15px 20px; 
+        border-radius: 5px; 
+        z-index: 10000;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      ">
+        🗑️ Đang xóa đơn hàng...
+      </div>
+    `
+
     try {
-      console.log('🔍 Deleting invoice:', invoiceId)
-      
-      // Show confirmation dialog
       const confirmed = window.confirm('Bạn có chắc chắn muốn xóa đơn hàng này? Hành động này không thể hoàn tác.')
-      if (!confirmed) {
-        return
-      }
-      
-      // Show loading state
-      const loadingMessage = document.createElement('div')
-      loadingMessage.innerHTML = `
-        <div style="
-          position: fixed; 
-          top: 20px; 
-          right: 20px; 
-          background: #e74c3c; 
-          color: white; 
-          padding: 15px 20px; 
-          border-radius: 5px; 
-          z-index: 10000;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        ">
-          🗑️ Đang xóa đơn hàng...
-        </div>
-      `
+      if (!confirmed) return
+
       document.body.appendChild(loadingMessage)
-      
-      // Delete invoice items first
-      const { error: itemsError } = await supabase
-        .from('invoice_items')
-        .delete()
-        .eq('invoice_id', invoiceId)
-      
-      if (itemsError) {
-        console.error('❌ Error deleting invoice items:', itemsError)
-        throw new Error('Failed to delete invoice items')
-      }
-      
-      // Delete invoice
-      const { error: invoiceError } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', invoiceId)
-      
-      // Remove loading message
-      document.body.removeChild(loadingMessage)
-      
-      if (invoiceError) {
-        console.error('❌ Error deleting invoice:', invoiceError)
-        throw new Error(invoiceError.message || 'Failed to delete invoice')
-      }
-      
-      console.log('🔍 Invoice deleted successfully')
+
+      // Gọi API backend (có quyền xóa, kiểm tra thanh toán/allocations)
+      await salesApi.deleteInvoice(invoiceId)
+
+      if (document.body.contains(loadingMessage)) document.body.removeChild(loadingMessage)
       
       // Show success notification
       const successMessage = document.createElement('div')
@@ -652,8 +626,9 @@ export default function InvoicesTab({ searchTerm, onCreateInvoice, shouldOpenCre
       await fetchInvoices()
       
     } catch (error) {
+      if (document.body.contains(loadingMessage)) document.body.removeChild(loadingMessage)
       console.error('❌ Error deleting invoice:', error)
-      
+
       // Show error notification
       const errorMessage = document.createElement('div')
       errorMessage.innerHTML = `

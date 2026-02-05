@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, createContext, useContext, useEffect } from 'react'
+import { useState, createContext, useContext, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   Home,
@@ -27,19 +27,23 @@ import {
   CheckSquare,
   PlayCircle,
   MessageSquare,
-  Smartphone
+  Smartphone,
+  ChevronDown
 } from 'lucide-react'
-// Slider GIF icons (stored in repo /icon/slider)
-import dashboardSlider from '../../../icon/slider/dashboard.gif'
-import addCustomerSlider from '../../../icon/slider/add-customer.gif'
-import openBookGearSlider from '../../../icon/slider/open-book-gear.gif'
-import expenseSlider from '../../../icon/slider/expense.gif'
-import quoteSlider from '../../../icon/slider/quote.gif'
-import projectSlider from '../../../icon/slider/project.gif'
+// Slider icons (PNG from /icon/icon slider)
+import dashboardSlider from '../../../icon/icon slider/dashboard.png'
+import customerSlider from '../../../icon/icon slider/customer.png'
+import waySlider from '../../../icon/icon slider/way.png'
+import saleSlider from '../../../icon/icon slider/sale.png'
+import projectSlider from '../../../icon/icon slider/project.png'
+import expenseSlider from '../../../icon/icon slider/expense.png'
+import hrSlider from '../../../icon/icon slider/hr.png'
+import notificationSlider from '../../../icon/icon slider/notification.png'
+import taskSlider from '../../../icon/icon slider/task.png'
+import feedbackSlider from '../../../icon/icon slider/feedback.png'
+import manaderFeedbackSlider from '../../../icon/icon slider/manader-feedback.png'
+import mobileAppsSlider from '../../../icon/icon slider/mobile-apps.png'
 import reportSlider from '../../../icon/slider/report.gif'
-import hrSlider from '../../../icon/slider/hr.gif'
-import feedbackSlider from '../../../icon/slider/feedback.gif'
-import managerFeedbackSlider from '../../../icon/slider/manager-feedback.gif'
 import SupportCenterButton from './SupportCenterButton'
 import NotificationBell from './notifications/NotificationBell'
 import BackgroundSettings from './BackgroundSettings'
@@ -284,8 +288,23 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
   const [showQRLogin, setShowQRLogin] = useState(false)
   const [showQRScanner, setShowQRScanner] = useState(false)
   const [showAppLauncher, setShowAppLauncher] = useState(false)
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false)
+  const settingsDropdownRef = useRef<HTMLDivElement>(null)
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [accessToken, setAccessToken] = useState<string>('')
+
+  // Đóng dropdown Cài đặt khi click bên ngoài
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (settingsDropdownRef.current && !settingsDropdownRef.current.contains(e.target as Node)) {
+        setShowSettingsDropdown(false)
+      }
+    }
+    if (showSettingsDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showSettingsDropdown])
 
   // Get current user ID and access token
   useEffect(() => {
@@ -355,31 +374,21 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
     Smartphone
   }
 
-  // Slider GIF icon mapping for app launcher (left panel)
+  // Slider icon mapping for app launcher - tên phải khớp NAVIGATION_ITEMS (rolePermissions.ts)
   const sliderIconMap: Record<string, any> = {
-    // Chính
     'Dashboard': dashboardSlider,
-    'Quy trình': openBookGearSlider,
-
-    // Khách hàng / Bán hàng
-    'Khách hàng': addCustomerSlider,
-    'Bán hàng & Báo giá': quoteSlider,
-
-    // Dự án
+    'Quy trình': waySlider,
+    'Khách hàng': customerSlider,
+    'Bán hàng & Báo giá': saleSlider,
     'Dự án': projectSlider,
-
-    // Chi phí & Ngân sách
     'Chi phí & Ngân sách': expenseSlider,
-
-    // Nhân sự
+    'Báo cáo & Phân tích': reportSlider,
     'Nhân viên': hrSlider,
-
-    // Phản hồi / hệ thống
-    'Góp ý & Hỗ trợ': feedbackSlider,
-    'Đánh giá nhân sự': managerFeedbackSlider,
-
-    // Báo cáo
-    'Báo cáo & Phân tích': reportSlider
+    'Nhiệm vụ': taskSlider,
+    'Thông báo': notificationSlider,
+    'Góp ý hệ thống': feedbackSlider,
+    'Quản lý góp ý': manaderFeedbackSlider,
+    'Link tải App Android': mobileAppsSlider
   }
 
   const handleNavigation = (href: string) => {
@@ -403,6 +412,41 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
 
   // Sidebar is hidden if forceHideSidebar is true
   const shouldShowSidebar = sidebarOpen && !forceHideSidebar
+
+  // Tiêu đề trang theo pathname (dùng cho thanh sticky toàn cục)
+  const getPageTitle = (path: string): string => {
+    const map: Record<string, string> = {
+      '/dashboard': 'Dashboard',
+      '/sales': 'Sales Center',
+      '/customers': 'Trung tâm Khách hàng',
+      '/projects': 'Dự án',
+      '/expenses': 'Quản lý Chi phí',
+      '/reports': 'Báo cáo & Phân tích',
+      '/employees': 'Quản lý nhân viên',
+      '/tasks': 'Nhiệm vụ',
+      '/notifications': 'Thông báo',
+      '/workflow': 'Quy trình',
+      '/system/feedback': 'Góp ý hệ thống',
+      '/system/feedback/management': 'Quản lý góp ý',
+      '/system/app-download': 'Link tải App Android',
+      '/projects/kanban': 'Kanban dự án',
+      '/chat': 'Chat nội bộ',
+      '/settings': 'Cài đặt',
+      '/customer-view': 'Góc nhìn khách hàng',
+      '/sales/upload-quote': 'Tải báo giá',
+      '/reports/projects-detailed': 'Báo cáo Dự án Chi tiết',
+      '/kanban': 'Kanban',
+      '/subjects': 'Chủ đề',
+      '/expense-objects': 'Đối tượng chi phí',
+      '/ai-analysis': 'Phân tích AI'
+    }
+    if (map[path]) return map[path]
+    if (path.startsWith('/reports/projects-detailed/')) return 'Báo cáo dự án'
+    if (path.startsWith('/projects/') && path.includes('/detail')) return 'Chi tiết dự án'
+    if (path.startsWith('/sales/')) return 'Bán hàng'
+    return 'QuickBooks'
+  }
+  const pageTitle = getPageTitle(pathname)
 
   return (
     <SidebarContext.Provider value={sidebarContextValue}>
@@ -560,29 +604,109 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
           )}
         </aside>
 
-        {/* App Launcher Button (9-dot icon) - Always visible */}
-        <button
-          onClick={() => setShowAppLauncher(true)}
-          className="fixed top-4 left-4 z-50 bg-white/95 border border-gray-200 rounded-xl shadow-lg p-3 transition-all duration-300 hover:bg-gray-50"
-          title="Mở danh sách chức năng"
-        >
-          <div className="grid grid-cols-3 gap-1.5">
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-gray-700 rounded-full" />
-          </div>
-        </button>
-
-
-        {/* Content Area */}
+        {/* Content Area: thanh sticky toàn cục + nội dung trang */}
         <main className="flex-1 min-w-0 overflow-auto transition-all duration-300">
-          {children}
+          <div className="w-full">
+            {/* Thanh sticky: App Launcher + tiêu đề trái; user + thông báo + đăng xuất phải */}
+            <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
+              <div className="flex h-16 items-center justify-between px-6">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setShowAppLauncher(true)}
+                    className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-white/95 shadow-sm hover:bg-gray-50 transition-colors"
+                    title="Mở danh sách chức năng"
+                  >
+                    <div className="grid grid-cols-3 gap-1">
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                      <div className="w-1 h-1 bg-gray-700 rounded-full" />
+                    </div>
+                  </button>
+                  <h2 className="text-xl font-semibold text-gray-900 truncate">
+                    {pageTitle}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-3">
+                  {user && (
+                    <>
+                      <div className="hidden sm:flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shrink-0">
+                          <span className="text-xs font-bold text-white">
+                            {user.full_name?.charAt(0) || 'U'}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {user.full_name || 'User'}
+                          </p>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${getRoleColor(userRole)} text-white`}>
+                            {getRoleDisplayName(userRole)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <NotificationBell />
+                      </div>
+                      <div className="relative" ref={settingsDropdownRef}>
+                        <button
+                          onClick={() => setShowSettingsDropdown((v) => !v)}
+                          className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg border border-gray-200 transition-colors"
+                          title="Cài đặt"
+                        >
+                          <Settings className="h-4 w-4" />
+                          <span className="hidden sm:inline">Cài đặt</span>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${showSettingsDropdown ? 'rotate-180' : ''}`} />
+                        </button>
+                        {showSettingsDropdown && (
+                          <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-gray-200 bg-white py-1 shadow-lg z-50">
+                            <button
+                              onClick={() => {
+                                setShowSettingsDropdown(false)
+                                setShowBackgroundSettings(true)
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Palette className="h-4 w-4 text-gray-500" />
+                              Chỉnh nền
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowSettingsDropdown(false)
+                                router.push('/system/app-download')
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Smartphone className="h-4 w-4 text-gray-500" />
+                              Link tải Android
+                            </button>
+                            {onLogout && (
+                              <button
+                                onClick={() => {
+                                  setShowSettingsDropdown(false)
+                                  onLogout()
+                                }}
+                                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 border-t border-gray-100"
+                              >
+                                <LogOut className="h-4 w-4" />
+                                Đăng xuất
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            {children}
+          </div>
         </main>
 
         {/* Background Settings Modal */}
@@ -660,10 +784,8 @@ export default function LayoutWithSidebar({ children, user, onLogout }: LayoutWi
                           >
                             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 mb-1.5 overflow-hidden">
                               {sliderSrc ? (
-                                // Slider GIF icon
-                                // NOTE: Đảm bảo các file tồn tại tại đường dẫn /icon/slider/*.gif
                                 <img
-                                  src={sliderSrc}
+                                  src={sliderSrc.src ?? sliderSrc}
                                   alt={item.name}
                                   className="h-6 w-6 object-contain"
                                 />
