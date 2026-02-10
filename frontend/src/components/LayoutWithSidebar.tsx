@@ -80,6 +80,11 @@ export const useSidebar = () => {
   return context
 }
 
+/** Dùng khi component có thể render ngoài LayoutWithSidebar (vd. modal trên trang không có layout). Trả về undefined khi không có provider. */
+export const useSidebarOptional = (): SidebarContextType | undefined => {
+  return useContext(SidebarContext)
+}
+
 // Helper component to render background based on config
 function BackgroundRenderer() {
   const { background } = useBackground()

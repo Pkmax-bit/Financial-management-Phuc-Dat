@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Bell, BellRing } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import NotificationCenter from './NotificationCenter'
@@ -11,7 +11,7 @@ export default function NotificationBell() {
   const [isLoading, setIsLoading] = useState(false)
   const [hasError, setHasError] = useState(false)
 
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     try {
       setIsLoading(true)
       setHasError(false)
@@ -82,16 +82,19 @@ export default function NotificationBell() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
+
+  // Callback khi user bấm "Đánh dấu đã đọc": cập nhật số ngay (optimistic) rồi refetch để đồng bộ server
+  const handleNotificationRead = useCallback(() => {
+    setUnreadCount(prev => Math.max(0, prev - 1))
+    fetchUnreadCount()
+  }, [fetchUnreadCount])
 
   useEffect(() => {
     fetchUnreadCount()
-    
-    // Poll for new notifications every 30 seconds
     const interval = setInterval(fetchUnreadCount, 30000)
-    
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchUnreadCount])
 
   return (
     <>
@@ -129,10 +132,8 @@ export default function NotificationBell() {
       <NotificationCenter 
         isOpen={isOpen} 
         onClose={() => setIsOpen(false)}
-        onNotificationRead={() => {
-          // Refresh count when notification is marked as read
-          fetchUnreadCount()
-        }}
+        onNotificationRead={handleNotificationRead}
+        onRefetchUnreadCount={fetchUnreadCount}
       />
     </>
   )

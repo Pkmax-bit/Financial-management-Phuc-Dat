@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { X, Loader2, Save, Plus, Trash2, Image as ImageIcon, File, Paperclip, CircleHelp, Download, Eye, EyeOff, ChevronRight, ChevronLeft } from 'lucide-react'
 import { getApiEndpoint } from '@/lib/apiUrl'
-import { useSidebar } from '@/components/LayoutWithSidebar'
+import { useSidebarOptional } from '@/components/LayoutWithSidebar'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
@@ -94,7 +94,8 @@ export default function QuoteEmailPreviewModal({
   type EmailShepherdType = EmailShepherdModule & { Tour: new (...args: any[]) => any }
   type EmailShepherdTour = InstanceType<EmailShepherdType['Tour']>
 
-  const { hideSidebar } = useSidebar()
+  const sidebar = useSidebarOptional()
+  const hideSidebar = sidebar?.hideSidebar
 
   // Handle resize functionality
   useEffect(() => {
@@ -137,12 +138,12 @@ export default function QuoteEmailPreviewModal({
   }, [isResizing])
 
   useEffect(() => {
+    if (!hideSidebar) return
     if (isOpen) {
       hideSidebar(true)
     } else {
       hideSidebar(false)
     }
-
     return () => {
       hideSidebar(false)
     }

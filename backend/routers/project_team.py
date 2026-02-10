@@ -75,12 +75,34 @@ async def get_project_team(
         if not members_raw:
             return {"team_members": []}
 
-        # Preload employees to avoid N+1 queries when mapping user/email to employee_id
+        # Preload employees: by user_id, by email (include both original and lowercased for case-insensitive match), and by employee_id (when project_team has it)
         user_ids = list({member.get("user_id") for member in members_raw if member.get("user_id")})
-        emails = list({(member.get("email") or "").lower() for member in members_raw if member.get("email")})
+        emails_set = set()
+        for m in members_raw:
+            e = m.get("email")
+            if e:
+                emails_set.add(e)
+                emails_set.add((e or "").lower())
+        emails = list(emails_set) if emails_set else []
+        employee_ids_from_team = list({m.get("employee_id") for m in members_raw if m.get("employee_id")})
 
         employees_by_user_id = {}
         employees_by_email = {}
+        employees_by_id = {}
+
+        if employee_ids_from_team:
+            try:
+                by_id_result = supabase.table("employees").select("id, user_id, email, first_name, last_name").in_("id", employee_ids_from_team).execute()
+                for employee in by_id_result.data or []:
+                    if employee.get("id"):
+                        employees_by_id[employee["id"]] = employee
+                    if employee.get("user_id"):
+                        employees_by_user_id[employee["user_id"]] = employee
+                    email_value = (employee.get("email") or "").lower()
+                    if email_value:
+                        employees_by_email[email_value] = employee
+            except Exception as e:
+                logger.warning(f"Error loading employees by id: {str(e)}")
 
         if user_ids:
             try:
@@ -88,6 +110,8 @@ async def get_project_team(
                 for employee in employees_result.data or []:
                     if employee.get("user_id"):
                         employees_by_user_id[employee["user_id"]] = employee
+                    if employee.get("id"):
+                        employees_by_id[employee["id"]] = employee
                     email_value = (employee.get("email") or "").lower()
                     if email_value:
                         employees_by_email[email_value] = employee
@@ -101,7 +125,8 @@ async def get_project_team(
                     email_value = (employee.get("email") or "").lower()
                     if email_value and email_value not in employees_by_email:
                         employees_by_email[email_value] = employee
-                    # Also add to user_id map if has user_id
+                    if employee.get("id"):
+                        employees_by_id[employee["id"]] = employee
                     if employee.get("user_id") and employee["user_id"] not in employees_by_user_id:
                         employees_by_user_id[employee["user_id"]] = employee
             except Exception as e:
@@ -115,11 +140,14 @@ async def get_project_team(
         team_members = []
         for member in members_raw:
             linked_employee = None
-
+            eid = member.get("employee_id")
             user_id = member.get("user_id")
             email = (member.get("email") or "").lower() if member.get("email") else None
 
-            if user_id and user_id in employees_by_user_id:
+            # 1) Use project_team.employee_id if present and we have that employee loaded
+            if eid and eid in employees_by_id:
+                linked_employee = employees_by_id[eid]
+            elif user_id and user_id in employees_by_user_id:
                 linked_employee = employees_by_user_id[user_id]
             elif email and email in employees_by_email:
                 linked_employee = employees_by_email[email]
@@ -130,12 +158,14 @@ async def get_project_team(
                     generated_name = build_employee_name(linked_employee)
                     if generated_name:
                         member["name"] = generated_name
+            elif eid:
+                # Keep existing employee_id from DB even if we didn't load it (e.g. RLS); ensure name if missing
+                if not member.get("name") or not member.get("name").strip():
+                    member["name"] = member.get("email") or "Thành viên"
             else:
-                # If no linked employee found, try one more time with a broader search
-                # This handles cases where the link might have been missed
+                # Try direct lookup by user_id once more
                 if user_id:
                     try:
-                        # Try direct lookup by user_id
                         direct_emp_result = supabase.table("employees").select("id, first_name, last_name").eq("user_id", user_id).limit(1).execute()
                         if direct_emp_result.data and len(direct_emp_result.data) > 0:
                             linked_employee = direct_emp_result.data[0]
@@ -145,7 +175,7 @@ async def get_project_team(
                                 if generated_name:
                                     member["name"] = generated_name
                     except Exception:
-                        pass  # If lookup fails, continue without employee_id
+                        pass
 
             # Normalize nullable fields from DB
             if member.get("skills") is None:
@@ -320,6 +350,20 @@ async def add_team_member(
                 else:
                     print(f"ℹ️  No notifications created (no team members to notify)")
                     logger.info(f"ℹ️  No notifications created (no team members to notify)")
+
+                # Thông báo cho chính thành viên mới: bạn đã được thêm vào đội ngũ
+                if new_member_user_id:
+                    try:
+                        r2 = await notification_service.notify_user_added_to_team(
+                            project_id=project_id,
+                            project_name=project_name,
+                            new_member_user_id=new_member_user_id,
+                            added_by_name=added_by_name
+                        )
+                        if r2.get("created"):
+                            logger.info(f"✅ Notification sent to new member: added to project {project_name}")
+                    except Exception as e2:
+                        logger.warning(f"Failed to notify new member: {e2}")
                     
             except Exception as notify_err:
                 print(f"❌ Failed to send team member addition notification: {str(notify_err)}")

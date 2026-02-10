@@ -138,10 +138,21 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [teamDialogOpen, setTeamDialogOpen] = useState(false)
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [editForm, setEditForm] = useState<{ role: string; responsibility_type: string }>({ role: 'other', responsibility_type: '' })
 
   useEffect(() => {
     fetchTeamMembers()
   }, [projectId])
+
+  useEffect(() => {
+    if (editingMember) {
+      setEditForm({
+        role: editingMember.role || 'other',
+        responsibility_type: editingMember.responsibility_type || '',
+      })
+    }
+  }, [editingMember])
 
   const fetchTeamMembers = async () => {
     try {
@@ -168,7 +179,7 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
     }
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/team/${memberId}`, {
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/team/${memberId}`), {
         method: 'DELETE',
       })
 
@@ -179,6 +190,30 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
       await fetchTeamMembers()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
+    }
+  }
+
+  const handleUpdateMemberRole = async (memberId: string, role: string, responsibility_type: string | null) => {
+    try {
+      const body: { role: string; responsibility_type?: string | null } = { role }
+      if (responsibility_type != null && responsibility_type !== '') {
+        body.responsibility_type = responsibility_type
+      } else {
+        body.responsibility_type = null
+      }
+      const response = await fetch(getApiEndpoint(`/api/projects/${projectId}/team/${memberId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(text || 'Cập nhật vai trò thất bại')
+      }
+      setEditingMember(null)
+      await fetchTeamMembers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Cập nhật vai trò thất bại')
     }
   }
 
@@ -420,6 +455,7 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
                       <div className="flex gap-1">
                         <button
                           onClick={() => setEditingMember(member)}
+                          title="Đổi vai trò"
                           className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <Edit className="h-4 w-4" />
@@ -452,6 +488,61 @@ export default function ProjectTeam({ projectId, projectName, currentUser }: Pro
           fetchTeamMembers();
         }}
       />
+
+      {/* Modal đổi vai trò thành viên */}
+      {editingMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setEditingMember(null)}>
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="text-lg font-semibold text-gray-900">Đổi vai trò – {editingMember.name}</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Vai trò</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {Object.entries(roleConfig).map(([key, cfg]) => (
+                    <option key={key} value={key}>{cfg.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Loại trách nhiệm (RACI)</label>
+                <select
+                  value={editForm.responsibility_type}
+                  onChange={(e) => setEditForm((f) => ({ ...f, responsibility_type: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Không dùng RACI</option>
+                  {Object.entries(RESPONSIBILITY_TYPES).map(([key, cfg]) => (
+                    <option key={key} value={key}>{cfg.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingMember(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateMemberRole(editingMember.id, editForm.role, editForm.responsibility_type || null)}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                Lưu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

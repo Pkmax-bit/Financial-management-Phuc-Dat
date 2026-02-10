@@ -444,7 +444,154 @@ class NotificationService:
         except Exception as e:
             print(f"Error notifying team member addition: {e}")
             return {"created": 0, "errors": [str(e)]}
-    
+
+    async def notify_user_added_to_team(self, project_id: str, project_name: str, new_member_user_id: str, added_by_name: Optional[str] = None) -> Dict[str, Any]:
+        """Thông báo cho thành viên mới: bạn đã được thêm vào đội ngũ dự án"""
+        if not new_member_user_id:
+            return {"created": 0, "errors": ["No user_id for new member"]}
+        try:
+            added_by_text = f" bởi {added_by_name}" if added_by_name else ""
+            title = "Bạn đã được thêm vào đội ngũ dự án"
+            message = f"Bạn đã được thêm vào đội ngũ dự án {project_name}{added_by_text}"
+            action_url = f"/projects/{project_id}" if project_id else None
+            notification_data = {
+                "user_id": new_member_user_id,
+                "title": title,
+                "message": message,
+                "type": "added_to_team",
+                "entity_type": "project",
+                "entity_id": project_id,
+                "is_read": False,
+                "action_url": action_url,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            result = self.supabase.table("notifications").insert(notification_data).execute()
+            if result.data:
+                print(f"Notification created for new team member {new_member_user_id}")
+                return {"created": 1, "errors": []}
+            return {"created": 0, "errors": ["Insert returned no data"]}
+        except Exception as e:
+            print(f"Error notifying user added to team: {e}")
+            return {"created": 0, "errors": [str(e)]}
+
+    async def notify_assigned_to_task(self, task_id: str, task_title: str, project_id: str, project_name: str, assignee_user_ids: List[str], assigned_by_name: Optional[str] = None) -> Dict[str, Any]:
+        """Thông báo cho người được gán: bạn có nhiệm vụ mới"""
+        if not assignee_user_ids:
+            return {"created": 0, "errors": []}
+        try:
+            assigned_by_text = f" (gán bởi {assigned_by_name})" if assigned_by_name else ""
+            title = f"Nhiệm vụ mới: {task_title}"
+            message = f"Bạn có nhiệm vụ mới '{task_title}' trong dự án {project_name}{assigned_by_text}"
+            action_url = f"/tasks/{task_id}" if task_id else None
+            notifications_payload = []
+            for uid in assignee_user_ids:
+                if not uid:
+                    continue
+                notifications_payload.append({
+                    "user_id": uid,
+                    "title": title,
+                    "message": message,
+                    "type": "task_assigned",
+                    "entity_type": "task",
+                    "entity_id": task_id,
+                    "is_read": False,
+                    "action_url": action_url,
+                    "created_at": datetime.utcnow().isoformat()
+                })
+            if not notifications_payload:
+                return {"created": 0, "errors": []}
+            result = self.supabase.table("notifications").insert(notifications_payload).execute()
+            if result.data:
+                return {"created": len(result.data), "errors": []}
+            return {"created": 0, "errors": ["Insert returned no data"]}
+        except Exception as e:
+            print(f"Error notifying assigned to task: {e}")
+            return {"created": 0, "errors": [str(e)]}
+
+    async def notify_checklist_created(self, task_id: str, task_title: str, checklist_title: str, project_id: str, project_name: str, creator_name: Optional[str] = None, creator_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Thông báo đội ngũ: checklist mới trong nhiệm vụ"""
+        creator_text = f" bởi {creator_name}" if creator_name else ""
+        title = f"Checklist mới: {checklist_title}"
+        message = f"Checklist '{checklist_title}' đã được thêm vào nhiệm vụ '{task_title}' trong dự án {project_name}{creator_text}"
+        action_url = f"/tasks/{task_id}" if task_id else None
+        return await self.notify_project_team(
+            project_id=project_id,
+            title=title,
+            message=message,
+            notification_type="checklist_created",
+            entity_type="task",
+            entity_id=task_id,
+            action_url=action_url,
+            exclude_user_id=creator_user_id
+        )
+
+    async def notify_checklist_updated(self, task_id: str, task_title: str, checklist_title: str, project_id: str, project_name: str, updated_by_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Thông báo đội ngũ: checklist đã được cập nhật"""
+        title = f"Checklist đã cập nhật: {checklist_title}"
+        message = f"Checklist '{checklist_title}' trong nhiệm vụ '{task_title}' (dự án {project_name}) đã được cập nhật"
+        action_url = f"/tasks/{task_id}" if task_id else None
+        return await self.notify_project_team(
+            project_id=project_id,
+            title=title,
+            message=message,
+            notification_type="checklist_updated",
+            entity_type="task",
+            entity_id=task_id,
+            action_url=action_url,
+            exclude_user_id=updated_by_user_id
+        )
+
+    async def notify_checklist_deleted(self, task_id: str, task_title: str, checklist_title: str, project_id: str, project_name: str, deleted_by_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Thông báo đội ngũ: checklist đã bị xóa"""
+        title = f"Checklist đã xóa: {checklist_title}"
+        message = f"Checklist '{checklist_title}' trong nhiệm vụ '{task_title}' (dự án {project_name}) đã bị xóa"
+        action_url = f"/tasks/{task_id}" if task_id else None
+        return await self.notify_project_team(
+            project_id=project_id,
+            title=title,
+            message=message,
+            notification_type="checklist_deleted",
+            entity_type="task",
+            entity_id=task_id,
+            action_url=action_url,
+            exclude_user_id=deleted_by_user_id
+        )
+
+    async def notify_checklist_item_changed(self, task_id: str, task_title: str, item_content: str, project_id: str, project_name: str, assignee_user_ids: List[str], change_type: str, changed_by_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Thông báo cho người được gán checklist item: thêm/sửa/xóa item. change_type: 'created'|'updated'|'deleted'"""
+        if not assignee_user_ids:
+            return {"created": 0, "errors": []}
+        labels = {"created": "đã thêm", "updated": "đã cập nhật", "deleted": "đã xóa"}
+        label = labels.get(change_type, change_type)
+        title = f"Công việc {label}: {item_content[:50]}{'...' if len(item_content) > 50 else ''}"
+        message = f"Công việc '{item_content}' trong nhiệm vụ '{task_title}' (dự án {project_name}) {label}"
+        action_url = f"/tasks/{task_id}" if task_id else None
+        notifications_payload = []
+        for uid in assignee_user_ids:
+            if not uid or uid == changed_by_user_id:
+                continue
+            notifications_payload.append({
+                "user_id": uid,
+                "title": title,
+                "message": message,
+                "type": f"checklist_item_{change_type}",
+                "entity_type": "task",
+                "entity_id": task_id,
+                "is_read": False,
+                "action_url": action_url,
+                "created_at": datetime.utcnow().isoformat()
+            })
+        if not notifications_payload:
+            return {"created": 0, "errors": []}
+        try:
+            result = self.supabase.table("notifications").insert(notifications_payload).execute()
+            if result.data:
+                return {"created": len(result.data), "errors": []}
+            return {"created": 0, "errors": ["Insert returned no data"]}
+        except Exception as e:
+            print(f"Error notifying checklist item change: {e}")
+            return {"created": 0, "errors": [str(e)]}
+
     async def notify_employee_assigned_to_task(self, task_id: str, task_title: str, project_id: str, project_name: str, employee_id: str, employee_name: str, assigned_by_name: Optional[str] = None, assigned_by_user_id: Optional[str] = None, checklist_title: Optional[str] = None, responsibility_type: Optional[str] = None) -> Dict[str, Any]:
         """Notify project team when an employee is assigned to a task"""
         try:

@@ -96,7 +96,7 @@ export default function EmotionsComments({
 
   const loadEmotionTypes = async () => {
     try {
-      const response = await fetch(getApiEndpoint('/api/emotions-comments/emotion-types');
+      const response = await fetch(getApiEndpoint('/api/emotions-comments/emotion-types'));
       if (response.ok) {
         const data = await response.json();
         setEmotionTypes(data);
@@ -109,7 +109,7 @@ export default function EmotionsComments({
   const loadComments = async () => {
     try {
       setLoading(true);
-      const response = await fetch(getApiEndpoint(`/api/emotions-comments/comments/${entityType}/${entityId}`);
+      const response = await fetch(getApiEndpoint(`/api/emotions-comments/comments/${entityType}/${entityId}`));
       if (response.ok) {
         const data = await response.json();
         setComments(data);

@@ -56,7 +56,7 @@ from models.task import (
     ReactionSummary,
 )
 from models.user import User
-from utils.auth import get_current_user, require_manager_or_admin
+from utils.auth import get_current_user, get_current_user_optional, require_manager_or_admin
 from services.supabase_client import get_supabase_client
 from services.notification_service import notification_service
 import asyncio
@@ -1504,7 +1504,7 @@ async def create_task(
                     if user_result.data:
                         creator_name = user_result.data[0].get("full_name") or user_result.data[0].get("email")
                 
-                # Send notification
+                # Send notification to project team
                 await notification_service.notify_task_created(
                     task_id=task["id"],
                     task_title=task.get("title", "N/A"),
@@ -1514,6 +1514,31 @@ async def create_task(
                     creator_user_id=current_user.id if current_user else None
                 )
                 logger.info(f"✅ Notification sent for task creation: {task.get('title', 'N/A')}")
+
+                # Thông báo cho người được gán nhiệm vụ: bạn có nhiệm vụ mới
+                assignee_employee_ids = []
+                if task_data.assigned_to:
+                    assignee_employee_ids.append(task_data.assigned_to)
+                if task_data.assignee_ids:
+                    for eid in task_data.assignee_ids:
+                        if eid not in assignee_employee_ids:
+                            assignee_employee_ids.append(eid)
+                if assignee_employee_ids:
+                    try:
+                        emp_result = supabase.table("employees").select("user_id").in_("id", assignee_employee_ids).execute()
+                        assignee_user_ids = [e["user_id"] for e in (emp_result.data or []) if e.get("user_id")]
+                        if assignee_user_ids:
+                            await notification_service.notify_assigned_to_task(
+                                task_id=task["id"],
+                                task_title=task.get("title", "N/A"),
+                                project_id=task_data.project_id,
+                                project_name=project_name,
+                                assignee_user_ids=assignee_user_ids,
+                                assigned_by_name=creator_name
+                            )
+                            logger.info(f"✅ Notified {len(assignee_user_ids)} assignee(s) for new task")
+                    except Exception as assign_notify_err:
+                        logger.warning(f"Failed to notify assignees: {assign_notify_err}")
         except Exception as notify_error:
             # Log error but don't fail task creation
             logger.warning(f"Failed to send task creation notification: {str(notify_error)}")
@@ -2726,6 +2751,28 @@ async def create_task_checklist(
         checklist = result.data[0]
         checklist["items"] = []
         checklist["progress"] = 0.0
+
+        # Thông báo đội ngũ: checklist mới
+        try:
+            task_row = supabase.table("tasks").select("title, project_id").eq("id", task_id).single().execute()
+            if task_row.data and task_row.data.get("project_id"):
+                proj = supabase.table("projects").select("name").eq("id", task_row.data["project_id"]).single().execute()
+                creator_name = None
+                ur = supabase.table("users").select("full_name").eq("id", current_user.id).limit(1).execute()
+                if ur.data:
+                    creator_name = ur.data[0].get("full_name")
+                await notification_service.notify_checklist_created(
+                    task_id=task_id,
+                    task_title=task_row.data.get("title", "N/A"),
+                    checklist_title=checklist_data.title,
+                    project_id=task_row.data["project_id"],
+                    project_name=proj.data.get("name", "N/A") if proj.data else "N/A",
+                    creator_name=creator_name,
+                    creator_user_id=current_user.id
+                )
+        except Exception as notif_err:
+            logger.warning(f"Failed to send checklist created notification: {notif_err}")
+
         return checklist
     except HTTPException:
         raise
@@ -2761,8 +2808,27 @@ async def update_task_checklist(
                 detail="Checklist not found"
             )
         task_id = result.data[0]["task_id"]
+        checklist_title = result.data[0].get("title", checklist_data.title)
         refreshed = _fetch_task_checklists(supabase, task_id)
         updated = next((c for c in refreshed if c["id"] == checklist_id), None)
+
+        # Thông báo đội ngũ: checklist đã cập nhật
+        try:
+            task_row = supabase.table("tasks").select("project_id").eq("id", task_id).single().execute()
+            if task_row.data and task_row.data.get("project_id"):
+                proj = supabase.table("projects").select("name").eq("id", task_row.data["project_id"]).single().execute()
+                task_title = supabase.table("tasks").select("title").eq("id", task_id).single().execute()
+                await notification_service.notify_checklist_updated(
+                    task_id=task_id,
+                    task_title=task_title.data.get("title", "N/A") if task_title.data else "N/A",
+                    checklist_title=checklist_title,
+                    project_id=task_row.data["project_id"],
+                    project_name=proj.data.get("name", "N/A") if proj.data else "N/A",
+                    updated_by_user_id=current_user.id
+                )
+        except Exception as notif_err:
+            logger.warning(f"Failed to send checklist updated notification: {notif_err}")
+
         return updated or result.data[0]
     except HTTPException:
         raise
@@ -2780,7 +2846,29 @@ async def delete_task_checklist(
 ):
     try:
         supabase = get_supabase_client()
+        # Lấy thông tin trước khi xóa để gửi thông báo
+        cl = supabase.table("task_checklists").select("task_id, title").eq("id", checklist_id).single().execute()
+        task_id = cl.data.get("task_id") if cl.data else None
+        checklist_title = cl.data.get("title", "N/A") if cl.data else "N/A"
+
         supabase.table("task_checklists").delete().eq("id", checklist_id).execute()
+
+        if task_id:
+            try:
+                task_row = supabase.table("tasks").select("title, project_id").eq("id", task_id).single().execute()
+                if task_row.data and task_row.data.get("project_id"):
+                    proj = supabase.table("projects").select("name").eq("id", task_row.data["project_id"]).single().execute()
+                    await notification_service.notify_checklist_deleted(
+                        task_id=task_id,
+                        task_title=task_row.data.get("title", "N/A"),
+                        checklist_title=checklist_title,
+                        project_id=task_row.data["project_id"],
+                        project_name=proj.data.get("name", "N/A") if proj.data else "N/A",
+                        deleted_by_user_id=current_user.id
+                    )
+            except Exception as notif_err:
+                logger.warning(f"Failed to send checklist deleted notification: {notif_err}")
+
         return {"message": "Checklist deleted"}
     except Exception as e:
         raise HTTPException(
@@ -3073,6 +3161,34 @@ async def create_checklist_item(
                     assignment_data["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
                 assignments.append(assignment_data)
             item["assignments"] = assignments
+
+        # Thông báo cho người được gán item: công việc mới
+        try:
+            cl_row = supabase.table("task_checklists").select("task_id").eq("id", checklist_id).single().execute()
+            if cl_row.data:
+                task_id = cl_row.data["task_id"]
+                task_row = supabase.table("tasks").select("title, project_id").eq("id", task_id).single().execute()
+                if task_row.data and task_row.data.get("project_id"):
+                    proj = supabase.table("projects").select("name").eq("id", task_row.data["project_id"]).single().execute()
+                    emp_ids = list({a["employee_id"] for a in assignments if a.get("employee_id")})
+                    if item.get("assignee_id") and item["assignee_id"] not in emp_ids:
+                        emp_ids.append(item["assignee_id"])
+                    if emp_ids:
+                        emp_users = supabase.table("employees").select("user_id").in_("id", emp_ids).execute()
+                        assignee_user_ids = [e["user_id"] for e in (emp_users.data or []) if e.get("user_id")]
+                        if assignee_user_ids:
+                            await notification_service.notify_checklist_item_changed(
+                                task_id=task_id,
+                                task_title=task_row.data.get("title", "N/A"),
+                                item_content=item.get("content", "N/A"),
+                                project_id=task_row.data["project_id"],
+                                project_name=proj.data.get("name", "N/A") if proj.data else "N/A",
+                                assignee_user_ids=assignee_user_ids,
+                                change_type="created",
+                                changed_by_user_id=current_user.id
+                            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to send checklist item created notification: {notif_err}")
         
         return item
     except HTTPException:
@@ -3275,6 +3391,36 @@ async def update_checklist_item(
                     assignment_data["employee_name"] = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
                 assignments.append(assignment_data)
             item["assignments"] = assignments
+
+            # Thông báo cho người được gán item: công việc đã cập nhật
+            try:
+                checklist_id = item.get("checklist_id")
+                if checklist_id:
+                    cl_row = supabase.table("task_checklists").select("task_id").eq("id", checklist_id).single().execute()
+                    if cl_row.data:
+                        task_id = cl_row.data["task_id"]
+                        task_row = supabase.table("tasks").select("title, project_id").eq("id", task_id).single().execute()
+                        if task_row.data and task_row.data.get("project_id"):
+                            proj = supabase.table("projects").select("name").eq("id", task_row.data["project_id"]).single().execute()
+                            emp_ids = list({a["employee_id"] for a in assignments if a.get("employee_id")})
+                            if item.get("assignee_id") and item["assignee_id"] not in emp_ids:
+                                emp_ids.append(item["assignee_id"])
+                            if emp_ids:
+                                emp_users = supabase.table("employees").select("user_id").in_("id", emp_ids).execute()
+                                assignee_user_ids = [e["user_id"] for e in (emp_users.data or []) if e.get("user_id")]
+                                if assignee_user_ids:
+                                    await notification_service.notify_checklist_item_changed(
+                                        task_id=task_id,
+                                        task_title=task_row.data.get("title", "N/A"),
+                                        item_content=item.get("content", "N/A"),
+                                        project_id=task_row.data["project_id"],
+                                        project_name=proj.data.get("name", "N/A") if proj.data else "N/A",
+                                        assignee_user_ids=assignee_user_ids,
+                                        change_type="updated",
+                                        changed_by_user_id=current_user.id
+                                    )
+            except Exception as notif_err:
+                logger.warning(f"Failed to send checklist item updated notification: {notif_err}")
         
         return item
     except HTTPException:
@@ -3300,9 +3446,50 @@ async def delete_checklist_item(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Bạn không có quyền xóa checklist item này. Chỉ người chịu trách nhiệm cho trạng thái hiện tại mới có quyền."
             )
+
+        # Lấy thông tin trước khi xóa để gửi thông báo
+        item_row = supabase.table("task_checklist_items").select("content, checklist_id").eq("id", item_id).single().execute()
+        item_content = item_row.data.get("content", "N/A") if item_row.data else "N/A"
+        checklist_id = item_row.data.get("checklist_id") if item_row.data else None
+        assignee_user_ids = []
+        task_id = project_id = None
+        task_title = project_name = "N/A"
+        if checklist_id:
+            cl_row = supabase.table("task_checklists").select("task_id").eq("id", checklist_id).single().execute()
+            if cl_row.data:
+                task_id = cl_row.data["task_id"]
+                task_row = supabase.table("tasks").select("title, project_id").eq("id", task_id).single().execute()
+                if task_row.data and task_row.data.get("project_id"):
+                    project_id = task_row.data["project_id"]
+                    task_title = task_row.data.get("title", "N/A")
+                    proj = supabase.table("projects").select("name").eq("id", project_id).single().execute()
+                    project_name = proj.data.get("name", "N/A") if proj.data else "N/A"
+                    assign_result = supabase.table("task_checklist_item_assignments").select("employee_id").eq("checklist_item_id", item_id).execute()
+                    emp_ids = list({a["employee_id"] for a in (assign_result.data or []) if a.get("employee_id")})
+                    if emp_ids:
+                        emp_users = supabase.table("employees").select("user_id").in_("id", emp_ids).execute()
+                        assignee_user_ids = [e["user_id"] for e in (emp_users.data or []) if e.get("user_id")]
         
         supabase.table("task_checklist_items").delete().eq("id", item_id).execute()
+
+        if assignee_user_ids and task_id and project_id:
+            try:
+                await notification_service.notify_checklist_item_changed(
+                    task_id=task_id,
+                    task_title=task_title,
+                    item_content=item_content,
+                    project_id=project_id,
+                    project_name=project_name,
+                    assignee_user_ids=assignee_user_ids,
+                    change_type="deleted",
+                    changed_by_user_id=current_user.id
+                )
+            except Exception as notif_err:
+                logger.warning(f"Failed to send checklist item deleted notification: {notif_err}")
+
         return {"message": "Checklist item deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4329,63 +4516,50 @@ async def get_message_reactions(
 
 @router.get("/checklist-status-mapping")
 async def get_checklist_status_mapping(
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get mapping between checklist status and responsible person"""
+    """Get mapping between checklist status and responsible person. Returns [] if table missing or on any error."""
     try:
+        if not current_user:
+            return []
         supabase = get_supabase_client()
-        
-        # Query the table without join first to avoid RLS issues
-        try:
-            result = supabase.table("checklist_status_responsible_mapping").select(
-                "status, employee_id, responsibility_type, is_active"
-            ).eq("is_active", True).execute()
-        except Exception as query_error:
-            logger.error(f"Error querying checklist_status_responsible_mapping: {str(query_error)}")
-            # Return empty array if table doesn't exist or RLS blocks access
+        result = supabase.table("checklist_status_responsible_mapping").select(
+            "status, employee_id, responsibility_type, is_active"
+        ).eq("is_active", True).execute()
+        if not result or not getattr(result, "data", None):
             return []
-        
-        if not result.data:
+        data = result.data if isinstance(result.data, list) else []
+        if not data:
             return []
-        
-        # Get unique employee IDs
-        employee_ids = list(set([item.get("employee_id") for item in result.data if item.get("employee_id")]))
-        
-        # Fetch employees separately
+        employee_ids = list({str(item.get("employee_id")) for item in data if item.get("employee_id")})
         employees_map = {}
         if employee_ids:
             try:
-                employees_result = supabase.table("employees").select(
+                emp_result = supabase.table("employees").select(
                     "id, first_name, last_name"
                 ).in_("id", employee_ids).execute()
-                
-                if employees_result.data:
-                    for emp in employees_result.data:
-                        employees_map[emp["id"]] = emp
+                if getattr(emp_result, "data", None) and isinstance(emp_result.data, list):
+                    for emp in emp_result.data:
+                        if emp.get("id") is not None:
+                            employees_map[emp["id"]] = emp
             except Exception as emp_error:
                 logger.warning(f"Error fetching employees for mapping: {str(emp_error)}")
-                # Continue without employee names
-        
         mapping = []
-        for item in result.data:
+        for item in data:
             employee_id = item.get("employee_id")
             employee = employees_map.get(employee_id) if employee_id else None
-            
             employee_name = None
             if employee:
-                employee_name = f"{employee.get('first_name', '')} {employee.get('last_name', '')}".strip()
-            
+                employee_name = f"{employee.get('first_name', '') or ''} {employee.get('last_name', '') or ''}".strip()
             mapping.append({
                 "status": item.get("status"),
                 "employee_id": employee_id,
-                "employee_name": employee_name,
-                "responsibility_type": item.get("responsibility_type", "accountable")
+                "employee_name": employee_name or None,
+                "responsibility_type": item.get("responsibility_type") or "accountable"
             })
-        
         return mapping
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error getting checklist status mapping: {str(e)}", exc_info=True)
-        # Return empty array instead of raising error to prevent frontend crashes
+    except BaseException as e:
+        logger.warning(f"Checklist status mapping error (returning []): {type(e).__name__}: {e}", exc_info=True)
         return []
